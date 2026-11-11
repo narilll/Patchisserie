@@ -46,10 +46,46 @@ $: s("bd*4")
   `a.setBins()`, also stays global for Strudel's code). Its URL is a plain string, double quotes too. A failed fetch or
   script fails the evaluate.
 - `a.fft` (`a.setBins`, `setSmooth`, `setCutoff`, `setScale`) listens to the AUDIO input, unpatched to Filo's L+R.
-- Not in Icing: the sources `s0`-`s3` (`initCam`, `initVideo`, `initImage`, `initScreen`, `initStream` fail with an
-  error), the mouse (always 0), `a.show()` (draws nothing), Strudel's canvas visuals.
 - The panel shows a preview; the menu opens an output window (borderless "Fullscreen", Esc leaves it), whose
   position is saved in the patch. Closing the window hides it.
+- What Icing doesn't do: see [Not supported](#not-supported).
+
+## Not supported
+
+Strudel and Hydra run unmodified, so most code from strudel.cc and hydra.ojack.xyz runs as is. What doesn't:
+
+**Strudel**
+- Canvas visuals: `.scope()`, `.tscope()`, `.fscope()`, `.spectrum()`, `.pianoroll()`, `.spiral()`, `.pitchwheel()`,
+  `.punchcard()` and `.wordfall()` play on but draw nothing (one log line); `.animate()` is silence. The editor's inline
+  widgets `._scope()`, `._pianoroll()`, `._punchcard()`, `._spiral()`, `._pitchwheel()`, `.markcss()` and `slider()`
+  are not defined, so code using them doesn't evaluate.
+- Sound: the `stretch` effect (phase vocoder) and kabelsalat are off; no microphone/audio input into Strudel; no
+  `dough` engine or multichannel orbits (Filo's output is stereo L/R).
+- Outputs other than audio and `.midi()`: `.osc()` (SuperDirt), `.serial()`, `.csound()`, `.mqtt()`; inputs
+  `gamepad()`, `motion` / `acceleration`.
+- `.midi()` sends notes, triggers and CCs only: `midicmd`, pitch bend, aftertouch, program change, NRPN, sysex and
+  the port argument (`.midi('port')`) are ignored. `.midichan()` picks the output channel only in the MPE polyphony
+  mode (Rotate, Reuse and Reset ignore it, like Rack's MIDI-CV).
+- `midin('name')`: the device is the one in Filo's menu, the name selects nothing; CC values aren't kept between
+  sessions or sent back to the controller.
+- Network: samples, soundfonts and scripts load over https only (`http://` is upgraded); `localhost`, `.local`, LAN
+  and IP addresses are refused, so Strudel's local sample server (`@strudel/sampler`) doesn't work — use Filo's local
+  samples folder instead.
+- With a cable in CLOCK, `setcps()` / `setcpm()` are ignored: the clock sets the tempo.
+- Code that takes longer to evaluate than the lookahead (~120 ms; QuickJS is slower than a browser's JIT) drops the
+  notes due meanwhile.
+- strudel.cc's site: sharing links, the pattern library, the sounds and reference panels, settings, themes, vim/emacs
+  key bindings. The editor has no IME (composed input), and wide characters (CJK, emoji) take one cell.
+
+**Hydra**
+- Sources `s0`-`s3`: `initCam()`, `initVideo()`, `initImage()`, `initScreen()`, `initStream()` and `init({src})` fail
+  with an error. (A camera on macOS would also need VCV Rack itself to declare camera access.)
+- `initHydra({feedStrudel})`: Strudel's canvas isn't drawn, so `s0` stays empty.
+- The mouse (`mouse.x`, `mouse.y`) is always 0; `a.show()` draws nothing.
+- `prev()` reads the previous frame, not the buffer being drawn.
+- Extensions through `loadScript()` that need a browser (DOM, p5.js, three.js) fail; GLSL extensions (`setFunction`)
+  work.
+- The canvas is 1280×720 unless `setResolution()` changes it (strudel.cc uses the window size).
 
 ## Build
 
