@@ -2,17 +2,49 @@ name: build
 on: [push, pull_request]
 
 jobs:
-  mac:
-    runs-on: macos-15
+  build:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: mac-arm64, os: macos-15, shell: bash }
+          - { platform: mac-x64, os: macos-15-intel, shell: bash }
+          - { platform: lin-x64, os: ubuntu-24.04, shell: bash }
+          - { platform: win-x64, os: windows-2025, shell: "msys2 {0}" }
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
     steps:
+      - if: runner.os == 'Windows'
+        shell: bash
+        run: git config --global core.autocrlf false
       - uses: actions/checkout@v5
         with:
           submodules: recursive
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y jq zstd xxd
+      - if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          # VCV Rack manual, "Building" / Windows; vim for xxd, curl for the SDK.
+          install: >-
+            git wget make tar unzip zip mingw-w64-x86_64-gcc mingw-w64-x86_64-gdb mingw-w64-x86_64-cmake
+            autoconf automake libtool mingw-w64-x86_64-jq python zstd mingw-w64-x86_64-pkgconf vim curl
       - name: Rack SDK
-        run: curl -fsSL -o sdk.zip https://vcvrack.com/downloads/Rack-SDK-latest-mac-arm64.zip && unzip -q sdk.zip -d "$HOME"
+        run: curl -fsSL -o sdk.zip https://vcvrack.com/downloads/Rack-SDK-latest-${{ matrix.platform }}.zip && unzip -q sdk.zip -d "$HOME"
       - run: make -j3 RACK_DIR="$HOME/Rack-SDK"
       - run: make test RACK_DIR="$HOME/Rack-SDK"
-      - run: make test-js RACK_DIR="$HOME/Rack-SDK"
+      - if: matrix.platform == 'mac-arm64'
+        run: make test-js RACK_DIR="$HOME/Rack-SDK"
+      - run: make dist RACK_DIR="$HOME/Rack-SDK"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Patchisserie-${{ matrix.platform }}
+          path: dist/*.vcvplugin
+          if-no-files-found: error
 
   lint:
     runs-on: ubuntu-latest
