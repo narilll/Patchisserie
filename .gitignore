@@ -1,0 +1,8 @@
+build/
+dist/
+plugin.dylib
+plugin.so
+plugin.dll
+*.vcvplugin
+node_modules/
+.DS_Store

@@ -1,0 +1,22 @@
+name: build
+on: [push, pull_request]
+
+jobs:
+  mac:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Rack SDK
+        run: curl -fsSL -o sdk.zip https://vcvrack.com/downloads/Rack-SDK-latest-mac-arm64.zip && unzip -q sdk.zip -d "$HOME"
+      - run: make -j3 RACK_DIR="$HOME/Rack-SDK"
+      - run: make test RACK_DIR="$HOME/Rack-SDK"
+      - run: make test-js RACK_DIR="$HOME/Rack-SDK"
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get install -y clang-format
+      - run: clang-format --dry-run -Werror $(git ls-files 'src/*.cpp' 'src/*.hpp' 'test/*.cpp' 'test/*.hpp')

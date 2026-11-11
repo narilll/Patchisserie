@@ -1,0 +1,6 @@
+[submodule "vendor/quickjs-ng"]
+	path = vendor/quickjs-ng
+	url = https://github.com/quickjs-ng/quickjs.git
+[submodule "vendor/dr_libs"]
+	path = vendor/dr_libs
+	url = https://github.com/mackron/dr_libs.git

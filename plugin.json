@@ -1,0 +1,23 @@
+{
+  "slug": "Patchisserie",
+  "name": "Patchisserie",
+  "version": "2.0.0",
+  "license": "AGPL-3.0-or-later",
+  "brand": "Patchisserie",
+  "author": "Tomáš Prokop",
+  "authorEmail": "",
+  "authorUrl": "",
+  "pluginUrl": "",
+  "manualUrl": "",
+  "sourceUrl": "",
+  "donateUrl": "",
+  "changelogUrl": "",
+  "modules": [
+    {
+      "slug": "Icing",
+      "name": "Icing",
+      "description": "Hydra visuals with panel preview and output window",
+      "tags": ["Visual"]
+    }
+  ]
+}

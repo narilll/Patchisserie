@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Pins Strudel to a ref (default: main), rebuilds res/engine.js and runs the regression.
+# Usage: scripts/update-engine [ref]
+# Third-party code stays under build/ (gitignored); Strudel sources are never modified.
+set -euo pipefail
+
+ref="${1:-main}"
+root="$(cd "$(dirname "$0")/.." && pwd)"
+src="$root/build/engine-src/strudel"
+repo=https://codeberg.org/uzu/strudel.git
+
+if [ ! -d "$src/.git" ]; then
+  mkdir -p "$src"
+  git -C "$src" init -q
+  git -C "$src" remote add origin "$repo"
+fi
+git -C "$src" fetch -q --depth 1 origin "$ref"
+git -C "$src" checkout -q --force --detach FETCH_HEAD
+
+# Only the bundled packages' runtime deps, at Strudel's lockfile versions, without install scripts.
+# CI=true: non-interactive (pnpm would otherwise prompt before purging a stale node_modules).
+(cd "$src" && CI=true pnpm install --prod --frozen-lockfile --ignore-scripts \
+  --filter @strudel/core --filter @strudel/mini --filter @strudel/tonal \
+  --filter @strudel/transpiler --filter @strudel/xen --filter @strudel/edo)
+(cd "$root" && npm ci --ignore-scripts --no-audit --no-fund)
+
+node "$root/scripts/build-engine.mjs"
+
+{
+  echo "# Written by scripts/update-engine: res/engine.js is built from exactly these sources."
+  echo "strudel $(git -C "$src" log -1 --format='%H %cI') $repo (ref: $ref)"
+} >"$root/res/ENGINE_VERSIONS"
+
+# Upstream tune regression fixtures, pinned together with the engine (see test/tunes.mjs).
+cp "$src/website/src/repl/tunes.mjs" "$src/website/src/repl/piano.mjs" "$src/test/runtime.mjs" \
+  "$src/test/__snapshots__/tunes.test.mjs.snap" "$root/test/upstream/"
+
+make -C "$root" test-js
+cat "$root/res/ENGINE_VERSIONS"
