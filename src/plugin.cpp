@@ -242,24 +242,63 @@ struct Filo : Module {
 };
 
 // Panel layout (mm), matching res/Filo.svg: the editor with its status line at the bottom.
-static const math::Rect kEditorMm = math::Rect(3, 3, 95.6, 85);
+static const math::Rect kEditorMm = math::Rect(3, 12, 95.6, 76);
+static const NVGcolor kInk = nvgRGB(0x1b, 0x1c, 0x1e), kBlue = nvgRGB(0x2f, 0x4f, 0xd1); // the panels' text
 
 // Row 1: three buttons then four inputs, evenly spaced.
 static float kRow1X(int i) {
 	return 10.3f + 13.5f * i;
 }
 
-/** The port labels. */
+/** The panel's text (res/fonts, IBM Plex): the band, the foot and the port labels. Sizes and spacing in mm. */
 struct PanelText : widget::Widget {
-	std::vector<std::pair<math::Vec, std::string>> labels; // px, centered
+	enum Face { Mono, MonoBold, Condensed };
+	struct Item {
+		Vec pos; // px
+		std::string text;
+		Face face;
+		float size, spacing; // mm
+		NVGcolor color;
+		int align;
+	};
+	std::vector<Item> items;
+
+	void add(Vec mm, const std::string& text, Face face, float size, float spacing, NVGcolor color,
+			 int align = NVG_ALIGN_LEFT) {
+		items.push_back({mm2px(mm), text, face, size, spacing, color, align | NVG_ALIGN_BASELINE});
+	}
+
+	/** A port's label, centred above it. */
+	void label(Vec mm, const char* text, bool output = false) {
+		add(Vec(mm.x, mm.y - 5.3f), text, Condensed, 2.15f, 0.1f, output ? kBlue : kInk, NVG_ALIGN_CENTER);
+	}
+
+	/** The top band and the foot: "N°01", the name, the HP, PATCHISSERIE. */
+	void band(const char* number, const char* name, const char* sub, float width) {
+		add(Vec(3.2f, 4.2f), number, MonoBold, 2.1f, 0, kBlue);
+		add(Vec(3.2f, 9.2f), name, MonoBold, 5.f, 0.4f, kInk);
+		add(Vec(width - 3.2f, 9.f), sub, Mono, 2.f, 0, nvgRGB(0x55, 0x57, 0x5c), NVG_ALIGN_RIGHT);
+		add(Vec(3.2f, 127.4f), "PATCHISSERIE", Condensed, 1.9f, 0.7f, kInk);
+	}
 
 	void draw(const DrawArgs& args) override {
-		nvgFontFaceId(args.vg, APP->window->uiFont->handle);
-		nvgFontSize(args.vg, 9);
-		nvgFillColor(args.vg, nvgRGB(0x4a, 0x33, 0x22));
-		nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_BOTTOM);
-		for (auto& l : labels)
-			nvgText(args.vg, l.first.x, l.first.y, l.second.c_str(), nullptr);
+		static const char* const files[] = {"IBMPlexMono-Regular", "IBMPlexMono-SemiBold",
+											"IBMPlexSansCondensed-SemiBold"};
+		std::shared_ptr<window::Font> fonts[3];
+		for (int i = 0; i < 3; i++) // as Rack recommends: loaded on every draw (cached by the window)
+			fonts[i] =
+				APP->window->loadFont(asset::plugin(pluginInstance, std::string("res/fonts/") + files[i] + ".ttf"));
+		for (const Item& it : items) {
+			if (!fonts[it.face])
+				continue;
+			nvgFontFaceId(args.vg, fonts[it.face]->handle);
+			nvgFontSize(args.vg, mm2px(it.size));
+			nvgTextLetterSpacing(args.vg, mm2px(it.spacing));
+			nvgFillColor(args.vg, it.color);
+			nvgTextAlign(args.vg, it.align);
+			nvgText(args.vg, it.pos.x, it.pos.y, it.text.c_str(), nullptr);
+		}
+		nvgTextLetterSpacing(args.vg, 0);
 	}
 };
 
@@ -280,7 +319,10 @@ struct FiloWidget : ModuleWidget {
 		auto* text = createWidget<PanelText>(Vec());
 		text->box.size = box.size;
 		addChild(text);
-		auto label = [&](float x, float y, const char* name) { text->labels.push_back({mm2px(Vec(x, y - 5)), name}); };
+		text->band("N°01", "FILO", "pâte filo · 20 HP", 101.6f);
+		auto label = [&](float x, float y, const char* name, bool output = false) {
+			text->label(Vec(x, y), name, output);
+		};
 		const char* names[] = {"PLAY", "STOP", "FULL"};
 		for (int i = 0; i < Filo::PARAMS_LEN; i++) {
 			Vec pos = mm2px(Vec(kRow1X(i), 100));
@@ -298,7 +340,7 @@ struct FiloWidget : ModuleWidget {
 		const char* outputs[] = {"L", "R", "V/OCT", "GATE", "VEL", "TRIG", "CC", "CLK", "RESET"};
 		for (int i = 0; i < Filo::OUTPUTS_LEN; i++) {
 			addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7 + 10.95f * i, 117)), module, i));
-			label(7 + 10.95f * i, 117, outputs[i]);
+			label(7 + 10.95f * i, 117, outputs[i], true);
 		}
 		if (module) // (destroyed before the module, which holds its doc and geometry)
 			editorWindow.reset(
@@ -419,8 +461,8 @@ struct Icing : Module {
 	void dataFromJson(json_t* root) override { geometryFromJson(json_object_get(root, "window"), window); }
 };
 
-// Matches res/Icing.svg (mm): a strip on the left for the jack, the preview from there to the right edge.
-static const math::Rect kPreviewMm = math::Rect(12, 2, 138.4, 124.5);
+// Matches res/Icing.svg (mm): the jack's band on the left, the preview from there to the right edge.
+static const math::Rect kPreviewMm = math::Rect(12, 12, 138.4, 111.6); // ends above the footer rule (124.6)
 static const Vec kAudioMm = Vec(5.5, 118);
 
 struct IcingWidget;
@@ -448,8 +490,8 @@ struct IcingWidget : ModuleWidget {
 		addInput(createInputCentered<PJ301MPort>(mm2px(kAudioMm), module, Icing::AUDIO_INPUT));
 		auto* text = createWidget<PanelText>(Vec());
 		text->box.size = box.size;
-		text->labels.push_back({mm2px(kAudioMm.minus(Vec(0, 5))), "AUDIO"});
-		text->labels.push_back({mm2px(Vec(kAudioMm.x, 8)), "ICING"});
+		text->band("N°02", "ICING", "glaçage · 30 HP", 152.4f);
+		text->add(Vec(kAudioMm.x, 112.6f), "AUDIO", PanelText::Condensed, 2.15f, 0.1f, kInk, NVG_ALIGN_CENTER);
 		addChild(text);
 		preview = new IcingPreview(this);
 		preview->box = math::Rect(mm2px(kPreviewMm.pos), mm2px(kPreviewMm.size));
@@ -534,9 +576,14 @@ struct IcingWidget : ModuleWidget {
 void IcingPreview::draw(const DrawArgs& args) {
 	if (icing->filoId >= 0)
 		return;
-	nvgFontFaceId(args.vg, APP->window->uiFont->handle);
+	std::shared_ptr<window::Font> font =
+		APP->window->loadFont(asset::plugin(pluginInstance, "res/fonts/IBMPlexSansCondensed-SemiBold.ttf"));
+	if (!font)
+		return;
+	nvgFontFaceId(args.vg, font->handle);
 	nvgFontSize(args.vg, 11);
-	nvgFillColor(args.vg, nvgRGB(0xe8, 0xa7, 0xc3));
+	nvgTextLetterSpacing(args.vg, 0);
+	nvgFillColor(args.vg, nvgRGB(0xc6, 0xc7, 0xc2));
 	nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 	nvgText(args.vg, box.size.x / 2, box.size.y / 2, "Place directly right of a Filo", nullptr);
 }

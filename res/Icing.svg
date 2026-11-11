@@ -1,9 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Icing, 30 HP. Placeholder panel (M5): the preview frame matches kPreviewMm in src/plugin.cpp; the AUDIO and ICING
-labels and the hint are drawn by the widget. -->
+<!-- Icing, 30 HP, "Receptura". The preview frame matches kPreviewMm in src/plugin.cpp; all text is drawn by the widget. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="152.4mm" height="128.5mm" viewBox="0 0 152.4 128.5">
-  <rect width="152.4" height="128.5" fill="#f4d8e4"/>
-  <rect width="11" height="128.5" fill="#e8a7c3"/>
-  <rect x="11" y="1" width="140.4" height="126.5" fill="#2b1d24"/>
-  <rect x="12" y="2" width="138.4" height="124.5" fill="#000000"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e6e6e0"/>
+      <stop offset="1" stop-color="#cdcec7"/>
+    </linearGradient>
+  </defs>
+  <rect width="152.4" height="128.5" fill="url(#bg)"/>
+  <line x1="3" y1="10.6" x2="149.4" y2="10.6" stroke="#1b1c1e" stroke-width="0.3"/>
+  <rect x="12" y="12" width="138.4" height="111.6" rx="0.4" fill="#000000"/>
+  <rect x="1.2" y="113.4" width="8.6" height="9.6" rx="0.4" fill="#1b1c1e"/>
+  <line x1="3" y1="124.6" x2="149.4" y2="124.6" stroke="#1b1c1e" stroke-width="0.2"/>
 </svg>

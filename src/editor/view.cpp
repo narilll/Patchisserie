@@ -13,38 +13,40 @@ namespace editor {
 
 namespace {
 
-constexpr float kPad = 4;                                        // px around the text
-const char* const kFont = "res/fonts/ShareTechMono-Regular.ttf"; // Rack's monospace font
-const char* const kUiFont = "res/fonts/DejaVuSans.ttf";          // Rack's UI font (APP->window->uiFont)
+constexpr float kPad = 4;                                      // px around the text
+const char* const kFont = "res/fonts/IBMPlexMono-Regular.ttf"; // the plugin's (IBM Plex Mono, OFL)
+const char* const kUiFont = "res/fonts/DejaVuSans.ttf";        // Rack's UI font (APP->window->uiFont)
 
-// On the panel's dark brown (res/Filo.svg).
-const NVGcolor kBackground = nvgRGB(0x2a, 0x1f, 0x17);
-const NVGcolor kAccent = nvgRGB(0xc9, 0x8b, 0x4f);
-const NVGcolor kText = nvgRGB(0xf3, 0xe6, 0xd3);
-const NVGcolor kMessage = nvgRGB(0xf3, 0xc8, 0x8e);
-const NVGcolor kDim = nvgRGB(0x8a, 0x75, 0x60);
+// "Receptura" (res/Filo.svg): ink on the panel's black, cobalt for what plays.
+const NVGcolor kBackground = nvgRGB(0x1b, 0x1c, 0x1e);
+const NVGcolor kGutter = nvgRGB(0x23, 0x24, 0x27); // also the status line and the popups
+const NVGcolor kBorder = nvgRGB(0x3a, 0x3b, 0x3f);
+const NVGcolor kAccent = nvgRGB(0x8f, 0xa6, 0xff); // keywords, the cursor
+const NVGcolor kText = nvgRGB(0xee, 0xee, 0xe8);   // identifiers called, popup text
+const NVGcolor kPlain = nvgRGB(0xc6, 0xc7, 0xc2);  // punctuation, the current line number, messages
+const NVGcolor kDim = nvgRGB(0x76, 0x78, 0x7e);
 const NVGcolor kError = nvgRGB(0xff, 0x6b, 0x5b);
-const NVGcolor kSelection = nvgRGBA(0xc9, 0x8b, 0x4f, 0x60);
-const NVGcolor kPlaying = nvgRGBA(0xf3, 0xe6, 0xd3, 0x24);
+const NVGcolor kSelection = nvgRGBA(0x8f, 0xa6, 0xff, 0x4d);
+const NVGcolor kPlaying = nvgRGBA(0x8f, 0xa6, 0xff, 0); // outline only
+const NVGcolor kPlayRow = nvgRGB(0x2f, 0x3a, 0x66);     // the popup's selected row
 
 NVGcolor color(Token::Kind k) {
 	switch (k) {
 	case Token::Comment:
 		return kDim;
 	case Token::String:
-		return nvgRGB(0xe8, 0xb8, 0x6a);
+		return nvgRGB(0xb8, 0xd9, 0x8a);
 	case Token::Number:
-		return nvgRGB(0xf0, 0x8a, 0x5d);
+		return nvgRGB(0xff, 0xb0, 0x7a);
 	case Token::Keyword:
-		return nvgRGB(0xd5, 0x8f, 0xc9);
-	case Token::Call:
-		return nvgRGB(0x7f, 0xc6, 0xe8);
 	case Token::Label:
-		return kMessage;
-	case Token::Operator:
 		return kAccent;
+	case Token::Call:
+		return kText;
+	case Token::Operator:
+		return kPlain;
 	}
-	return kText;
+	return kPlain;
 }
 
 #if defined ARCH_MAC
@@ -124,9 +126,9 @@ void Tip::draw(const DrawArgs& args) {
 	auto frame = [&](math::Rect r) {
 		nvgBeginPath(vg);
 		nvgRoundedRect(vg, r.pos.x, r.pos.y, r.size.x, r.size.y, 3);
-		nvgFillColor(vg, kBackground);
+		nvgFillColor(vg, kGutter);
 		nvgFill(vg);
-		nvgStrokeColor(vg, kAccent);
+		nvgStrokeColor(vg, kBorder);
 		nvgStrokeWidth(vg, 1);
 		nvgStroke(vg);
 	};
@@ -153,7 +155,7 @@ void Tip::draw(const DrawArgs& args) {
 			if (top + i == sel) {
 				nvgBeginPath(vg);
 				nvgRect(vg, list.pos.x + 1, y, list.size.x - 2, rh);
-				nvgFillColor(vg, kSelection);
+				nvgFillColor(vg, kPlayRow);
 				nvgFill(vg);
 			}
 			nvgFillColor(vg, kText);
@@ -214,11 +216,11 @@ void Tip::draw(const DrawArgs& args) {
 					cut--;
 				t = t.substr(0, cut) + "...";
 			}
-			ls.push_back({t, kText, Text});
+			ls.push_back({t, kPlain, Text});
 		}
 		for (size_t a = 0, k = 0; a < e.example.size(); k++) {
 			size_t b = std::min(e.example.find('\n', a), e.example.size());
-			ls.push_back({k < (size_t)kExampleLines ? e.example.substr(a, b - a) : "...", kText, Example});
+			ls.push_back({k < (size_t)kExampleLines ? e.example.substr(a, b - a) : "...", kPlain, Example});
 			a = k < (size_t)kExampleLines ? b + 1 : e.example.size();
 		}
 		for (const Line& l : ls)
@@ -259,7 +261,7 @@ void Tip::draw(const DrawArgs& args) {
 			} else
 				for (size_t a = 0; a <= l.text.size();) { // `code` toggles at each backtick (not drawn)
 					size_t b = std::min(l.text.find('`', a), l.text.size());
-					nvgFillColor(vg, code ? kMessage : l.color);
+					nvgFillColor(vg, code ? kAccent : l.color);
 					if (b > a)
 						x = nvgText(vg, x, y + rh / 2, l.text.data() + a, l.text.data() + b);
 					if (b < l.text.size())
@@ -375,7 +377,7 @@ int View::mods() const {
 int View::monoFont() const {
 	if (host)
 		return host->mono;
-	std::shared_ptr<window::Font> font = APP->window->loadFont(asset::system(kFont));
+	std::shared_ptr<window::Font> font = APP->window->loadFont(asset::plugin(pluginInstance, kFont));
 	return font ? font->handle : -1;
 }
 
@@ -430,6 +432,10 @@ void View::paint(NVGcontext* vg) {
 		return;
 	const std::string& s = doc->text();
 	float lh = lineH(), th = textH(), w = box.size.x;
+	nvgBeginPath(vg); // the panel has no editor background of its own under this (the window clears to it)
+	nvgRect(vg, 0, 0, w, box.size.y);
+	nvgFillColor(vg, kBackground);
+	nvgFill(vg);
 	nvgSave(vg);
 	nvgIntersectScissor(vg, 0, 0, w, th);
 	nvgFontFaceId(vg, font);
@@ -451,7 +457,7 @@ void View::paint(NVGcontext* vg) {
 			nvgFillColor(vg, c);
 			nvgFill(vg);
 			if (outline) {
-				nvgStrokeColor(vg, kText);
+				nvgStrokeColor(vg, kAccent);
 				nvgStrokeWidth(vg, 1);
 				nvgStroke(vg);
 			}
@@ -463,7 +469,7 @@ void View::paint(NVGcontext* vg) {
 	if (errVisible) {
 		nvgBeginPath(vg);
 		nvgRect(vg, 0, Y(err), w, lh);
-		nvgFillColor(vg, nvgRGBA(0xff, 0x6b, 0x5b, 0x30));
+		nvgFillColor(vg, nvgRGBA(0xff, 0x6b, 0x5b, 0x38));
 		nvgFill(vg);
 	}
 	if (doc->hasSelection())
@@ -516,7 +522,7 @@ void View::paint(NVGcontext* vg) {
 		int l = doc->lineOf(doc->cursor());
 		nvgBeginPath(vg);
 		nvgRect(vg, X(doc->column(doc->cursor())) - 0.5f, Y(l) + 1, 1.5f, lh - 2);
-		nvgFillColor(vg, kMessage);
+		nvgFillColor(vg, kAccent);
 		nvgFill(vg);
 	}
 
@@ -524,12 +530,12 @@ void View::paint(NVGcontext* vg) {
 	float gw = gutterW();
 	nvgBeginPath(vg);
 	nvgRect(vg, 0, 0, gw, th);
-	nvgFillColor(vg, kBackground);
+	nvgFillColor(vg, kGutter);
 	nvgFill(vg);
 	nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
 	int cur = doc->lineOf(doc->cursor());
 	for (int l = first; l <= last; l++) {
-		nvgFillColor(vg, l == err ? kError : l == cur ? kText : kDim);
+		nvgFillColor(vg, l == err ? kError : l == cur ? kPlain : kDim);
 		std::string n = std::to_string(l + 1);
 		nvgText(vg, gw - kPad, Y(l) + lh / 2, n.c_str(), nullptr);
 	}
@@ -546,6 +552,10 @@ void View::paint(NVGcontext* vg) {
 	nvgSave(vg);
 	nvgIntersectScissor(vg, 0, th, w, sh);
 	nvgBeginPath(vg);
+	nvgRect(vg, 0, th, w, sh);
+	nvgFillColor(vg, kGutter);
+	nvgFill(vg);
+	nvgBeginPath(vg);
 	nvgRect(vg, kPad, th, w - 2 * kPad, 1);
 	nvgFillColor(vg, kDim);
 	nvgFill(vg);
@@ -561,7 +571,7 @@ void View::paint(NVGcontext* vg) {
 	}
 	nvgIntersectScissor(vg, 0, th, w - uw, sh);
 	nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-	nvgFillColor(vg, error_.empty() ? kMessage : kError);
+	nvgFillColor(vg, error_.empty() ? kDim : kError);
 	nvgText(vg, kPad, th + sh / 2, message_.c_str(), nullptr);
 	nvgRestore(vg);
 }
@@ -763,12 +773,12 @@ void View::onSelectText(const SelectTextEvent& e) {
 
 namespace {
 
-/** Rack's res/`file` as a font of `vg` (an editor window's context: Rack's fonts are its own context's), which owns
-its data; -1 if it can't be read. */
-int loadFont(NVGcontext* vg, const char* file) {
+/** `path` as a font of `vg` (an editor window's context: Rack's fonts are its own context's), which owns its data;
+-1 if it can't be read. */
+int loadFont(NVGcontext* vg, const char* file, const std::string& path) {
 	std::vector<uint8_t> data;
 	try {
-		data = system::readFile(asset::system(file)); // UTF-8 paths on Windows too, as Rack's own loader
+		data = system::readFile(path); // UTF-8 paths on Windows too, as Rack's own loader
 	} catch (const std::exception& e) {
 		WARN("Filo: editor window font: %s", e.what());
 		return -1;
@@ -882,8 +892,8 @@ void Window::draw(int fbW, int fbH) {
 		vg = nvgCreateGL2(NVG_ANTIALIAS | NVG_STENCIL_STROKES); // Rack's flags
 		if (!vg)
 			return;
-		mono = loadFont(vg, kFont);
-		ui = loadFont(vg, kUiFont);
+		mono = loadFont(vg, kFont, asset::plugin(pluginInstance, kFont));
+		ui = loadFont(vg, kUiFont, asset::system(kUiFont));
 		if (mono >= 0 && ui >= 0)
 			nvgAddFallbackFontId(vg, mono, ui); // the glyphs the mono font lacks
 		// ponytail: Rack's CJK and emoji fallbacks (14 MB) aren't loaded here: those glyphs stay blank in this window.

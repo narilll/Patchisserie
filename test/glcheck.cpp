@@ -314,6 +314,9 @@ int main() {
 
 	// The editor window's widgets use Rack's event state (Widget's destructor), its fonts Rack's res/.
 	// ponytail: never freed, glcheck exits.
+	static rack::plugin::Plugin self; // the bundled fonts: res/fonts of the working directory
+	self.path = ".";
+	pluginInstance = &self;
 	rack::contextSet(new rack::Context);
 	APP->event = new rack::widget::EventState;
 	if (const char* dir = std::getenv("RACK_SYSTEM_DIR"))
