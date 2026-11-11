@@ -28,7 +28,9 @@ jobs:
       - if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
+          # Rack builds with MINGW64 (msvcrt), so its plugins do too.
           msystem: MINGW64
+          suppress-deprecation-warnings: msystem-mingw64
           # VCV Rack manual, "Building" / Windows; vim for xxd, curl for the SDK.
           install: >-
             git wget make tar unzip zip mingw-w64-x86_64-gcc mingw-w64-x86_64-gdb mingw-w64-x86_64-cmake

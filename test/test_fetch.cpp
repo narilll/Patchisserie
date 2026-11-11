@@ -21,6 +21,11 @@ std::string tempDir(const char* name) {
 	return fs::weakly_canonical(p).u8string();
 }
 
+/** root/rel as the guards return it: native separators. */
+std::string join(const std::string& root, const char* rel) {
+	return (fs::u8path(root) / fs::u8path(rel)).u8string();
+}
+
 void write(const std::string& path, const std::string& bytes) {
 	std::ofstream(path, std::ios::binary) << bytes;
 }
@@ -42,10 +47,10 @@ int files(const std::string& dir) {
 TEST(fetch_cache_path) {
 	std::string root = tempDir("cache");
 	CHECK(fetch::cachePath(root, "https://strudel.b-cdn.net/piano/A0v8.mp3") ==
-		  root + "/strudel.b-cdn.net/piano/A0v8.mp3");
-	CHECK(fetch::cachePath(root, "http://h:8080/a/b.wav?x=1&y=2#frag") == root + "/h_8080/a/b.wav@x=1&y=2");
+		  join(root, "strudel.b-cdn.net/piano/A0v8.mp3"));
+	CHECK(fetch::cachePath(root, "http://h:8080/a/b.wav?x=1&y=2#frag") == join(root, "h_8080/a/b.wav@x=1&y=2"));
 	CHECK(fetch::cachePath(root, "https://h/VCSL/Edge-blown%20Aerophones/w.wav") ==
-		  root + "/h/VCSL/Edge-blown%20Aerophones/w.wav");
+		  join(root, "h/VCSL/Edge-blown%20Aerophones/w.wav"));
 	for (const char* bad : {"ftp://h/a", "file:///etc/passwd", "https://h", "https://h/", "https:///a", "https://h/a/",
 							"https://h/../../etc/passwd", "https://h/a/./b", "https://h/a//b", "https://h/a b",
 							"https://h/a\\b", "https://h/C:/x", "https://h/\xc3\xa9", "patchisserie:engine.js"})
@@ -56,9 +61,10 @@ TEST(fetch_inside_guard) {
 	std::string root = tempDir("inside");
 	fs::create_directories(root + "/kick");
 	write(root + "/kick/a b.wav", "x");
-	CHECK(fetch::inside(root, "kick/a b.wav") == root + "/kick/a b.wav");
-	CHECK(fetch::inside(root, "new/file.wav") == root + "/new/file.wav"); // need not exist yet
-	for (const char* bad : {"", "/etc/passwd", "../x", "kick/../../x", "kick/./a b.wav", "kick//a", "a\\b", "C:x"})
+	CHECK(fetch::inside(root, "kick/a b.wav") == join(root, "kick/a b.wav"));
+	CHECK(fetch::inside(root, "new/file.wav") == join(root, "new/file.wav")); // need not exist yet
+	for (const char* bad : {"", "/etc/passwd", "../x", "kick/../../x", "kick/./a b.wav", "kick//a", "a\\b", "C:x",
+							"..\\x", "kick\\..\\..\\x", "C:\\x", "C:/x", "\\\\h\\s\\x"})
 		CHECK(fetch::inside(root, bad).empty());
 	CHECK(fetch::inside("", "kick/a b.wav").empty());
 	// A symlink inside the folder that points out of it is resolved and refused.
