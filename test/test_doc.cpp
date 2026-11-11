@@ -174,6 +174,24 @@ TEST(doc_words_and_double_click) {
 	CHECK(!e.hasSelection() && e.cursor() == 2);
 }
 
+TEST(doc_select_line_for_triple_click) {
+	Doc d("ab\ncd\nef");
+	d.selectLine(1); // a middle line: from its start to the next line's start, newline included
+	CHECK(d.anchor() == 3 && d.cursor() == 6 && d.selection() == "cd\n");
+	d.selectLine(2); // the last line, no newline: to the end of the document
+	CHECK(d.anchor() == 6 && d.cursor() == 8 && d.selection() == "ef");
+	d.setText("a\n\nb");
+	d.selectLine(1); // an empty line: just its newline
+	CHECK(d.anchor() == 2 && d.cursor() == 3 && d.selection() == "\n");
+	d.setText("é\nñö\nx");
+	d.selectLine(1); // non-ASCII: byte offsets
+	CHECK(d.anchor() == 3 && d.cursor() == 8 && d.selection() == "ñö\n");
+	d.setText("a\nb\nc");
+	d.selectLine(1);
+	d.toggleComment(); // only that line (the selection ends at column 0 of the next)
+	CHECK(d.text() == "a\n// b\nc" && d.selection() == "b\n" && d.cursor() == 7);
+}
+
 TEST(doc_lines_columns_and_vertical_moves) {
 	Doc d("first line\n\nthird\n");
 	CHECK(d.lineCount() == 4);

@@ -271,10 +271,19 @@ void View::onButton(const ButtonEvent& e) {
 	if (!doc || e.button != GLFW_MOUSE_BUTTON_LEFT) // right: the module's menu
 		return;
 	if (e.action == GLFW_PRESS && e.pos.y < textH()) { // (on the status line: only selects this)
+		// Rack reports double-clicks only (0.5 s); a third press within that and close by is a triple-click.
+		double now = system::getTime();
+		clicks_ = now - pressTime_ <= 0.5 && e.pos.minus(pressAt_).norm() <= 4.f ? clicks_ + 1 : 1;
+		pressTime_ = now;
 		pressAt_ = e.pos;
 		dragging_ = true;
 		wordDrag_ = false;
 		doc->setCursor(hit(e.pos, true), e.mods & GLFW_MOD_SHIFT);
+		if (clicks_ == 3) { // the whole line, text or gutter, past its end too
+			doc->selectLine(doc->lineOf(hit(e.pos, false)));
+			wordDrag_ = true; // (a double-click's drag doesn't extend, so neither does this)
+			clicks_ = 0;
+		}
 	}
 	e.consume(this); // selects this: the keys come here
 }

@@ -42,6 +42,8 @@ struct View : rack::widget::Widget {
 	int columns_ = 0; // the longest line's
 	bool dragging_ = false, wordDrag_ = false;
 	rack::math::Vec pressAt_;
+	double pressTime_ = -1e9;
+	int clicks_ = 0;
 	std::string message_, error_; // the engine's, this frame
 	std::vector<filo::Highlight> playing_;
 

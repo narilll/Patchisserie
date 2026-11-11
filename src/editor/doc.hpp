@@ -202,6 +202,9 @@ class Doc {
 		select(b, e);
 	}
 
+	/** A triple-click on a line: all of it with its newline (cursor at the next line's start; on the last: the end). */
+	void selectLine(int line) { select(lineStart(line), line + 1 < lineCount() ? lineStart(line + 1) : text_.size()); }
+
 	// --- Movement (`select`: Shift extends the selection) ---
 
 	void left(bool select) { setCursor(!select && hasSelection() ? selBegin() : prevChar(text_, cursor_), select); }
