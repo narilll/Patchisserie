@@ -164,6 +164,50 @@ TEST(js_onended_fires_once_via_polling) {
 	)js")));
 }
 
+// RESET (engine.cpp): __webaudio.cancel() stops what would start after the quantum the render thread may be rendering
+// (stop time = start time: it never sounds, and still ends); what plays or starts before plays out; nothing stays.
+TEST(js_cancel_silences_sources_not_rendered_yet) {
+	JsRig r;
+	CHECK(ok(r.run(R"js(
+		const ac = new AudioContext();
+		render(128);
+		const base = nodeCount();
+		const at = (frame) => frame / ac.sampleRate;
+		let ended = 0;
+		(() => {
+			const playing = ac.createConstantSource();
+			playing.connect(ac.destination);
+			playing.start(at(128));
+			playing.stop(at(256 + 2048));
+		})();
+		render(128); // the render position: frame 256
+		(() => {
+			const soon = ac.createConstantSource(); // within the next quantum: may be rendering already
+			soon.offset.value = 10;
+			soon.connect(ac.destination);
+			soon.start(at(300));
+			soon.stop(at(310));
+			const later = [ac.createConstantSource(), ac.createOscillator(), ac.createBufferSource()];
+			later[0].offset.value = 2;
+			later[2].buffer = ac.createBuffer(1, 128, ac.sampleRate);
+			later[2].buffer.getChannelData(0).fill(4);
+			later.forEach((s, i) => {
+				s.connect(ac.destination);
+				s.onended = () => ended++;
+				s.start(at(400 + 256 * i));
+			});
+		})();
+		__webaudio.cancel();
+		const out = render(2048);
+		const want = (i) => (i >= 44 && i < 54 ? 11 : 1);
+		assert(out.every((v, i) => v === want(i)), `heard ${out.findIndex((v, i) => v !== want(i))}`);
+		assert(ended === 3, `ended ${ended}`);
+		for (let k = 0; k < 4; k++) { render(128); gc(); }
+		assert(nodeCount() === base, `${nodeCount()} nodes, baseline ${base}`);
+		return 'ok';
+	)js")));
+}
+
 TEST(js_buffers_are_acquired_on_assignment_and_start) {
 	JsRig r;
 	CHECK(ok(r.run(R"js(

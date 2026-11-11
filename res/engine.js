@@ -36910,9 +36910,10 @@ registerProcessor('${name3}', MyProcessor);
   var previous;
   var [Note, Trig, CC, Tempo] = [0, 1, 2, 3];
   var midiEvents = [];
+  var rackShift = 0;
   var toRack = (hap) => {
     const v2 = hap.value;
-    const [begin2, end2, chan] = [time3(hap.whole.begin), time3(hap.whole.end), v2.midichan ?? -1];
+    const [begin2, end2, chan] = [time3(hap.whole.begin) + rackShift, time3(hap.whole.end) + rackShift, v2.midichan ?? -1];
     if (v2.note !== void 0) {
       const note4 = typeof v2.note === "number" ? v2.note : noteToMidi(v2.note);
       api.rackEvent(Note, begin2, end2, note4, (v2.gain ?? 1) * (v2.velocity ?? 0.9), chan, "", 0);
@@ -37029,7 +37030,7 @@ registerProcessor('${name3}', MyProcessor);
     ]
   };
   var byOnset = (a, b) => time3(a.whole.begin) - time3(b.whole.begin) || (b.value.cps !== void 0) - (a.value.cps !== void 0);
-  var rt = { epoch: -1, from: 0, cps: 0, tempos: [] };
+  var rt = { epoch: -1, from: 0, cps: 0, tempos: [], late: false };
   var api = globalThis.__patchisserie = {
     async evaluate(code) {
       await ready;
@@ -37091,14 +37092,19 @@ registerProcessor('${name3}', MyProcessor);
      * `frame` the Sequencer is at `cycle` with `cps`. Sounds go to superdough at context time = playback frame / sr,
      * .midi() events to the Sequencer in cycles, so both land on the same sample. Queries up to `lookahead` s ahead,
      * each window starting where the last one ended: like the Cyclist, a new pattern takes over after what is already
-     * scheduled, for sounds and .midi() events alike. A new epoch (play, stop, reset) starts over at `cycle`.
+     * scheduled, for sounds and .midi() events alike. A new epoch (play, stop) starts over at `cycle`, after a RESET
+     * (`reset`) at cycle 0, a few frames back.
      * external: the CLOCK input drives the cycle, cps is the PLL's estimate. rendered: the render thread's frame.
      */
-    tick(frame, cycle, cps2, epoch2, playing, external, sr, lookahead2, rendered = -Infinity) {
+    tick(frame, cycle, cps2, epoch2, playing, external, sr, lookahead2, rendered = -Infinity, reset2 = false) {
       seconds2 = frame / sr;
-      if (epoch2 !== rt.epoch) Object.assign(rt, { epoch: epoch2, from: cycle, cps: Math.fround(cps2), tempos: [] });
+      if (epoch2 !== rt.epoch) {
+        Object.assign(rt, { epoch: epoch2, from: reset2 ? 0 : cycle, cps: Math.fround(cps2), tempos: [], late: reset2 });
+      }
       if (!playing || !scheduler.pattern || !(cps2 > 0)) return;
-      const from = Math.max(rt.from, cycle + Math.max(0, rendered + 0.01 * sr - frame) / sr * cps2);
+      const soon = Math.max(frame, rendered + 0.01 * sr);
+      const from = rt.late ? rt.from : Math.max(rt.from, cycle + (soon - frame) / sr * cps2);
+      const earliest = rt.late ? cycle + (Math.ceil(soon) - frame) / sr * cps2 : -Infinity;
       const end2 = cycle + lookahead2 * cps2;
       if (end2 <= from) return;
       rt.tempos = rt.tempos.filter((t) => t.cycle > cycle - cps2 / sr + 1e-9);
@@ -37119,18 +37125,22 @@ registerProcessor('${name3}', MyProcessor);
         return first(f, c2, k, b) / sr;
       };
       const cpsAt = (b) => rt.tempos.reduce((k, t) => t.cycle <= b ? t.cps : k, cps2);
-      if (Math.fround(scheduler.cps) !== rt.cps) tempo(from, scheduler.cps);
+      if (Math.fround(scheduler.cps) !== rt.cps) tempo(Math.max(from, earliest), scheduler.cps);
       const haps = scheduler.pattern.queryArc(from, end2, { _cps: scheduler.cps }).filter((hap) => hap.hasOnset()).sort(byOnset);
       for (const hap of haps) {
-        const b = time3(hap.whole.begin);
+        const onset = time3(hap.whole.begin);
+        const b = Math.max(onset, earliest);
         const cpsHap = hap.value.cps;
         if (cpsHap !== void 0 && Math.fround(cpsHap) !== rt.cps) {
           tempo(b, cpsHap);
           scheduler.setCps(cpsHap);
         }
+        rackShift = b - onset;
         onSchedule(hap, at2(b), cpsHap ?? cpsAt(b));
+        rackShift = 0;
       }
       rt.from = end2;
+      rt.late = false;
     },
     /** Where .midi() events go (kind, begin, end, note, velocity, midichan, key, value); the engine replaces it. */
     rackEvent: (kind, begin2, end2, note4, velocity2, midichan2, key, value2) => midiEvents.push({ kind, begin: begin2, end: end2, note: note4, velocity: velocity2, midichan: midichan2, key, value: value2 }),

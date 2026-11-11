@@ -69,20 +69,6 @@ TEST(clock_internal_exact) {
 	CHECK_NEAR(c.cycle(), 0.5, 1e-9);
 	CHECK(c.cps() == 0.5);
 }
-TEST(clock_tempo_event) {
-	CycleClock c;
-	c.setSampleRate(1000);
-	c.setCps(1);
-	c.start();
-	CHECK(c.pushTempo(1.0, 2.0));
-	for (int i = 0; i < 1000; i++)
-		c.step(false, false, false);
-	CHECK_NEAR(c.cycle(), 1.0, 1e-9);
-	for (int i = 0; i < 100; i++)
-		c.step(false, false, false);
-	CHECK(c.cps() == 2.0);
-	CHECK_NEAR(c.cycle(), 1.2, 0.0025);
-}
 TEST(clock_stop_start) {
 	CycleClock c;
 	c.setSampleRate(1000);
@@ -242,7 +228,6 @@ TEST(pll_reset_ignores_edge_within_1ms) {
 	in.clockEdge = true;
 	s->process(in, out);
 	CHECK(s->clock.cycle() == 1 / 16.0);
-	CHECK(s->pubCycle.load() == s->clock.cycle());
 }
 
 // ---- VoiceAllocator ----
@@ -364,21 +349,20 @@ TEST(sticky_persist_reset_full) {
 // ---- ClockOut ----
 TEST(clockout_n_per_cycle) {
 	for (int N : {1, 2, 4, 8, 16, 24, 32, 48, 96}) {
-		CycleClock c;
-		c.setSampleRate(1000);
-		c.setCps(0.37);
-		c.pushTempo(2.0, 0.9); // tempo change mid-run
-		c.start();
-		ClockOut o;
-		o.setDivision(N);
-		double prev = -1e-9;
+		auto s = std::make_unique<Sequencer>();
+		s->setSampleRate(1000);
+		s->clock.setCps(0.37);
+		Event t = ev(2.0, 2.0, Tempo); // tempo change mid-run
+		t.value = 0.9f;
+		s->queue.push(t);
+		s->clockOut.setDivision(N);
+		s->start();
+		Sequencer::Inputs in;
+		Sequencer::Outputs out;
 		int n = 0;
-		for (;;) {
-			c.step(false, false, false);
-			if (c.cycle() >= 4)
-				break;
-			n += o.clk(prev, c.cycle());
-			prev = c.cycle();
+		while (s->clock.cycle() < 4) {
+			s->process(in, out);
+			n += out.clk;
 		}
 		CHECK(n == 4 * N);
 	}

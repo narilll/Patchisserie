@@ -35,9 +35,12 @@ let previous; // the pattern before the last evaluate: back to it when the engin
 // ccn/ccv a CC, both mapped to channels on the C++ side.
 const [Note, Trig, CC, Tempo] = [0, 1, 2, 3];
 const midiEvents = []; // where events go without an engine (tests): see rackEvent below
+// Cycles tick() shifts the hap it schedules by (a RESET's late onsets). toRack runs within that call: .midi() is
+// dominant, so getSchedule calls it before its first await.
+let rackShift = 0;
 const toRack = (hap) => {
   const v = hap.value;
-  const [begin, end, chan] = [time(hap.whole.begin), time(hap.whole.end), v.midichan ?? -1];
+  const [begin, end, chan] = [time(hap.whole.begin) + rackShift, time(hap.whole.end) + rackShift, v.midichan ?? -1];
   if (v.note !== undefined) {
     const note = typeof v.note === 'number' ? v.note : core.noteToMidi(v.note);
     api.rackEvent(Note, begin, end, note, (v.gain ?? 1) * (v.velocity ?? 0.9), chan, '', 0);
@@ -160,7 +163,7 @@ const dirtSamples = {
 const byOnset = (a, b) =>
   time(a.whole.begin) - time(b.whole.begin) || (b.value.cps !== undefined) - (a.value.cps !== undefined);
 // Realtime query state, see tick().
-const rt = { epoch: -1, from: 0, cps: 0, tempos: [] };
+const rt = { epoch: -1, from: 0, cps: 0, tempos: [], late: false };
 
 const api = (globalThis.__patchisserie = {
   async evaluate(code) {
@@ -230,15 +233,23 @@ const api = (globalThis.__patchisserie = {
    * `frame` the Sequencer is at `cycle` with `cps`. Sounds go to superdough at context time = playback frame / sr,
    * .midi() events to the Sequencer in cycles, so both land on the same sample. Queries up to `lookahead` s ahead,
    * each window starting where the last one ended: like the Cyclist, a new pattern takes over after what is already
-   * scheduled, for sounds and .midi() events alike. A new epoch (play, stop, reset) starts over at `cycle`.
+   * scheduled, for sounds and .midi() events alike. A new epoch (play, stop) starts over at `cycle`, after a RESET
+   * (`reset`) at cycle 0, a few frames back.
    * external: the CLOCK input drives the cycle, cps is the PLL's estimate. rendered: the render thread's frame.
    */
-  tick(frame, cycle, cps, epoch, playing, external, sr, lookahead, rendered = -Infinity) {
+  tick(frame, cycle, cps, epoch, playing, external, sr, lookahead, rendered = -Infinity, reset = false) {
     seconds = frame / sr;
-    if (epoch !== rt.epoch) Object.assign(rt, { epoch, from: cycle, cps: Math.fround(cps), tempos: [] });
+    if (epoch !== rt.epoch) {
+      Object.assign(rt, { epoch, from: reset ? 0 : cycle, cps: Math.fround(cps), tempos: [], late: reset });
+    }
     if (!playing || !scheduler.pattern || !(cps > 0)) return;
-    // Behind (a stall): what can no longer sound on time is skipped, sounds and .midi() events alike, not played late.
-    const from = Math.max(rt.from, cycle + (Math.max(0, rendered + 0.01 * sr - frame) / sr) * cps);
+    // What would start before the render thread's frame + 10 ms can no longer sound on time. Behind (a stall), it is
+    // skipped, sounds and .midi() events alike, not played late. In a RESET's first query (from cycle 0) it plays late
+    // instead, all on the first frame left, sounds and .midi() events together (`earliest`: no tempo change ahead yet).
+    // ponytail: a RESET the JS sees only after a stall piles everything since cycle 0 onto that frame.
+    const soon = Math.max(frame, rendered + 0.01 * sr);
+    const from = rt.late ? rt.from : Math.max(rt.from, cycle + ((soon - frame) / sr) * cps);
+    const earliest = rt.late ? cycle + ((Math.ceil(soon) - frame) / sr) * cps : -Infinity;
     const end = cycle + lookahead * cps;
     if (end <= from) return;
     // Applied by now (fired before the snapshot's sample, part of its cps): a change at `cycle` itself fires on it.
@@ -263,21 +274,25 @@ const api = (globalThis.__patchisserie = {
       return first(f, c, k, b) / sr;
     };
     const cpsAt = (b) => rt.tempos.reduce((k, t) => (t.cycle <= b ? t.cps : k), cps);
-    if (Math.fround(scheduler.cps) !== rt.cps) tempo(from, scheduler.cps); // setcps(), setcpm()
+    if (Math.fround(scheduler.cps) !== rt.cps) tempo(Math.max(from, earliest), scheduler.cps); // setcps(), setcpm()
     const haps = scheduler.pattern
       .queryArc(from, end, { _cps: scheduler.cps })
       .filter((hap) => hap.hasOnset())
       .sort(byOnset);
     for (const hap of haps) {
-      const b = time(hap.whole.begin);
+      const onset = time(hap.whole.begin);
+      const b = Math.max(onset, earliest);
       const cpsHap = hap.value.cps;
       if (cpsHap !== undefined && Math.fround(cpsHap) !== rt.cps) {
         tempo(b, cpsHap); // .cps(): like the Cyclist, the global tempo from this hap on
         scheduler.setCps(cpsHap);
       }
+      rackShift = b - onset;
       onSchedule(hap, at(b), cpsHap ?? cpsAt(b));
+      rackShift = 0;
     }
     rt.from = end;
+    rt.late = false;
   },
 
   /** Where .midi() events go (kind, begin, end, note, velocity, midichan, key, value); the engine replaces it. */

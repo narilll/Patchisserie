@@ -5,7 +5,7 @@
 // test/test_engine.cpp runs it headless.
 //
 // Threads, and what each owns:
-//   UI (any)  evaluate(), play(), stop(), reset(), message(), the sticky maps (mutex, shared with JS)
+//   UI (any)  evaluate(), play(), stop(), message(), the sticky maps (mutex, shared with JS)
 //   JS        QuickJS runtime #1 (res/engine.js); producer of the graph's commands and of seq.queue
 //   render    renders the graph (and its worklet scope, QuickJS #2) into the ring, ahead of the audio thread
 //   audio     process(): ring -> L/R, seq -> CV, transport, the timeline snapshot for the JS thread
@@ -69,7 +69,6 @@ class Engine {
 	// --- Any thread, applied by the next process() ---
 	void play() { transport_.store(Play); }
 	void stop() { transport_.store(Stop); }
-	void reset() { transport_.store(Reset); } // to cycle 0, playing on
 
 	// --- Audio thread ---
 	/** Owned by the audio thread: settings (voices, mode, CLK division, PPC) are set on it directly. */
@@ -92,11 +91,12 @@ class Engine {
 		double cycle = 0, cps = 0;
 		uint32_t epoch = 0; // new on play, stop and reset: the queue drops older events, the JS starts over
 		bool playing = false, external = false;
+		bool reset = false; // this epoch began with a RESET edge while playing: the JS starts over at cycle 0
 	};
 	Timeline timeline() const; // JS thread: the audio thread's last snapshot (seqlock)
 
   private:
-	enum Transport { None, Play, Stop, Reset };
+	enum Transport { None, Play, Stop };
 	struct Frame {
 		float l, r;
 		int64_t frame;
@@ -125,6 +125,7 @@ class Engine {
 	// Audio thread.
 	int64_t frame_ = 0, startAt_ = -1; // startAt_: PLAY pending, cycle 0 is at that frame
 	uint32_t epoch_ = 0;
+	bool reset_ = false; // Timeline::reset
 	int blockFrames_ = 0;
 
 	// Other threads -> audio.
@@ -135,7 +136,7 @@ class Engine {
 	std::atomic<int64_t> tlFrame_{0};
 	std::atomic<double> tlCycle_{0}, tlCps_{0};
 	std::atomic<uint32_t> tlEpoch_{0};
-	std::atomic<bool> tlPlaying_{false}, tlExternal_{false};
+	std::atomic<bool> tlPlaying_{false}, tlExternal_{false}, tlReset_{false};
 
 	// UI -> JS.
 	mutable std::mutex m_;

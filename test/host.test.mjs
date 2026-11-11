@@ -66,7 +66,7 @@ test('evaluate after evaluate replaces the pattern', async () => {
   ]);
 });
 
-// tick(frame, cycle, cps, epoch, playing, external, sr, lookahead)
+// tick(frame, cycle, cps, epoch, playing, external, sr, lookahead, rendered, reset)
 const events = () => host.midiEvents().map((e) => [e.kind, e.begin, e.end, e.note, e.key, e.value]);
 
 test('.midi() haps become Rack events in cycles, query windows tile without gaps or repeats', async () => {
@@ -152,6 +152,26 @@ test('behind (a stall): what can no longer sound on time is skipped, not played 
   // 1 s later, the render thread at 1.02 s: the window starts at what is still ahead of it (+ 10 ms).
   host.tick(48000, 0.5, 0.5, 30, true, false, 48000, 0.5, 48960);
   assert.deepEqual(events().map((e) => e[1]), [0.625]);
+});
+
+test('RESET: from cycle 0, what can no longer sound on time moves to the first frame both can make', async () => {
+  globalThis.__times = [];
+  await host.evaluate('note("c*8").onSchedule((hap, t) => __times.push(t), false).midi()');
+  host.tick(0, 0, 0.5, 50, true, false, 48000, 0.2);
+  host.midiEvents();
+  globalThis.__times = [];
+  // Cycle 0 on frame 100000; the JS sees the reset at frame 104800 (cycle 0.05), the render thread at 105728: the
+  // first frame both can still make is 106208 (+ 10 ms). Cycle 0 goes there, sound and .midi() event (duration kept);
+  // cycle 0.125 is still on time, on its frame.
+  host.tick(104800, 0.05, 0.5, 51, true, false, 48000, 0.2, 105728, true);
+  const late = 0.05 + (1408 / 48000) * 0.5;
+  host.tick(105760, 0.06, 0.5, 51, true, false, 48000, 0.5, 106688, true); // [0.15, 0.31): as usual
+  assert.deepEqual(__times, [106208 / 48000, 112000 / 48000, 124000 / 48000]);
+  assert.deepEqual(events(), [
+    [0, late, 0.125 + late, 48, '', 0],
+    [0, 0.125, 0.25, 48, '', 0],
+    [0, 0.25, 0.375, 48, '', 0],
+  ]);
 });
 
 // Query errors are Strudel's (logged, no haps); a query the engine interrupts (endless loop) reverts.

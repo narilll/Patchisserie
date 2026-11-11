@@ -79,6 +79,7 @@ struct Rig {
 	bool gate[16] = {};
 	filo::Sequencer::Inputs in;
 	filo::Sequencer::Outputs out;
+	int64_t clockEvery = 0;    // > 0: a CLOCK edge on every frame divisible by it
 	double processSeconds = 0; // the audio thread's share
 	double paceStart = 0;
 	int64_t pacedFrames = 0;
@@ -131,6 +132,7 @@ struct Rig {
 			double t0 = now();
 			for (int i = 0; i < n; i++) {
 				float l, r;
+				in.clockEdge = clockEvery && frame() % clockEvery == 0;
 				engine->process(in, out, l, r);
 				L.push_back(l);
 				bool rise = false;
@@ -503,4 +505,61 @@ TEST(engine_reset_on_start_frame_bumps_epoch) {
 	e.process(in, out, l, r);
 	CHECK(e.seq.started());
 	CHECK(e.timeline().epoch == t.epoch + 1);
+}
+
+namespace {
+
+// RESET while playing, between two beats: cycle 0 starts over at once, "late but complete". Its kick and its gate land
+// on one frame, the first both can still make; the later beats on the new timeline; what the old timeline scheduled
+// beyond the render position never sounds. Internal tempo, or an external CLOCK at the same tempo (the edge on a
+// pulse, as a sequencer sends them).
+void resetWhilePlaying(bool external) {
+	std::printf("  %s:\n", external ? "external CLOCK" : "internal tempo");
+	auto r = std::make_unique<Rig>(external ? "engine-reset-clock" : "engine-reset");
+	if (external)
+		r->in.clockConnected = true, r->clockEvery = 6000; // 16 PPC at 0.5 cps
+	CHECK(r->evaluate(kAligned, true));
+	CHECK(r->until([&] { return r->gateRises(0, r->frame()).size() >= 3; }, 15));
+	// Internal: 80 ms before the old timeline's next beat, which is scheduled but not rendered yet. External: the
+	// pulse before it (a beat sounds one frame after its pulse).
+	int64_t edge = r->gateRises(0, r->frame()).back() + 24000 - (external ? 6001 : 3840);
+	while (edge <= r->frame())
+		edge += 24000;
+	r->run(edge - r->frame());
+	r->in.resetEdge = true;
+	r->run(1);
+	r->in.resetEdge = false;
+	int64_t zero = edge + 1; // cycle 0: the clock stands still on the edge's frame
+	r->seconds(2.5);
+	std::vector<int64_t> gates = r->gateRises(zero, r->frame()), kicks = r->kicks(zero, r->frame());
+	// (a) cycle 0 sounds and gates (before cycle 0.25), (b) on the same frame.
+	CHECK(!gates.empty() && gates[0] < zero + 24000);
+	int64_t first = gates.empty() ? zero : gates[0];
+	CHECK(std::count(kicks.begin(), kicks.end(), first) == 1);
+	// (c) As soon as both can: within the ring (1024 frames), a tick (20 ms), the 10 ms margin and the query.
+	std::printf("  RESET -> cycle 0: %lld frames (%.1f ms)\n", (long long)(first - zero), 1e3 * (first - zero) / r->sr);
+	TIMED_CHECK(first - zero <= 1024 + 960 + 480 + 480);
+	// (d) The later beats exactly on the new timeline: cycle c on zero + c / cps * sr.
+	for (int64_t g : gates)
+		CHECK(g == first || (g - zero) % 24000 == 0);
+	TIMED_CHECK(gates.size() >= 5);
+	r->aligned(zero + 12000, r->frame() - 4800); // from cycle 0.125 on
+	// (e) Old-timeline kicks: only what was rendered when the JS handled the reset (its render position is first -
+	// 480; a source may start within the quantum being rendered then).
+	std::vector<int64_t> old;
+	for (int64_t k : kicks)
+		if (k != first && (k - zero) % 24000 != 0)
+			old.push_back(k);
+	for (int64_t k : old) {
+		std::printf("  old kick at %+lld\n", (long long)(k - zero));
+		CHECK(k < first - 480 + 128);
+	}
+	TIMED_CHECK(old.empty()); // the beat 80 ms after the edge was cancelled
+}
+
+} // namespace
+
+TEST(engine_reset_input_late_but_complete) {
+	resetWhilePlaying(false);
+	resetWhilePlaying(true);
 }

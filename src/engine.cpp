@@ -117,6 +117,7 @@ const char* kGlue = R"js((function (native, local) {
     samples: (map) => boot.then(() => register((local = map))),
     tick: host.tick,
     revert: host.revert,
+    cancel: __webaudio.cancel,
   };
 }))js";
 
@@ -130,7 +131,7 @@ struct Engine::Js {
 	JSContext* ctx = nullptr;
 	audio::WebAudioHost host;
 	JSValue settle = JS_UNDEFINED, api = JS_UNDEFINED, evaluate = JS_UNDEFINED, tick = JS_UNDEFINED,
-			revert = JS_UNDEFINED, samples = JS_UNDEFINED;
+			revert = JS_UNDEFINED, samples = JS_UNDEFINED, cancel = JS_UNDEFINED;
 	double deadline = 0; // now() past which JS is interrupted; 0: none
 	bool interrupted = false, booted = false, playAfter = false, queueFullSaid = false;
 	int evaluating = 0;     // evaluates in flight
@@ -402,13 +403,14 @@ struct Engine::Js {
 		tick = JS_GetPropertyStr(ctx, api, "tick");
 		revert = JS_GetPropertyStr(ctx, api, "revert");
 		samples = JS_GetPropertyStr(ctx, api, "samples");
+		cancel = JS_GetPropertyStr(ctx, api, "cancel");
 		return true;
 	}
 
 	void free() {
 		if (!ctx)
 			return;
-		for (JSValue v : {settle, api, evaluate, tick, revert, samples})
+		for (JSValue v : {settle, api, evaluate, tick, revert, samples, cancel})
 			JS_FreeValue(ctx, v);
 		JS_FreeContext(ctx);
 		JS_FreeRuntime(rt); // asserts that nothing leaked
@@ -476,18 +478,23 @@ struct Engine::Js {
 		deadline = 0;
 		runJobs(kJobBudget);
 		Timeline t = e->timeline();
+		// RESET: what the old timeline scheduled past the render position never sounds. Before the tick reads that
+		// position: cycle 0 plays right after it.
+		if (t.reset && t.epoch != tickEpoch)
+			call(cancel, 0, nullptr, e->cfg_.tickDeadline, "[webaudio]");
 		tickEpoch = t.epoch;
 		double sr = e->cfg_.sampleRate, lookahead = e->fill_.load() / sr + kLookahead;
-		JSValue args[9] = {JS_NewFloat64(ctx, (double)t.frame),
-						   JS_NewFloat64(ctx, t.cycle),
-						   JS_NewFloat64(ctx, t.cps),
-						   JS_NewFloat64(ctx, t.epoch),
-						   JS_NewBool(ctx, t.playing),
-						   JS_NewBool(ctx, t.external),
-						   JS_NewFloat64(ctx, sr),
-						   JS_NewFloat64(ctx, lookahead),
-						   JS_NewFloat64(ctx, e->graph_->currentTime() * sr)};
-		if (!call(tick, 9, args, e->cfg_.tickDeadline, "[pattern] error") && !e->abort_) {
+		JSValue args[10] = {JS_NewFloat64(ctx, (double)t.frame),
+							JS_NewFloat64(ctx, t.cycle),
+							JS_NewFloat64(ctx, t.cps),
+							JS_NewFloat64(ctx, t.epoch),
+							JS_NewBool(ctx, t.playing),
+							JS_NewBool(ctx, t.external),
+							JS_NewFloat64(ctx, sr),
+							JS_NewFloat64(ctx, lookahead),
+							JS_NewFloat64(ctx, e->graph_->currentTime() * sr),
+							JS_NewBool(ctx, t.reset)};
+		if (!call(tick, 10, args, e->cfg_.tickDeadline, "[pattern] error") && !e->abort_) {
 			say("[pattern] back to the previous pattern", true);
 			call(revert, 0, nullptr, e->cfg_.tickDeadline, "[pattern] error");
 		}
@@ -584,6 +591,7 @@ void Engine::start() {
 	if (startAt_ >= 0)
 		startAt_ = 0;             // a pending PLAY starts at once: the new JS thread needs its boot time anyway
 	seq.queue.setEpoch(++epoch_); // the new JS thread queries everything again
+	reset_ = false;
 	setBlockFrames(blockFrames_);
 	auto spawn = [](pthread_t& t, size_t stack, void* (*fn)(void*), void* arg) {
 		pthread_attr_t a;
@@ -690,12 +698,12 @@ bool Engine::process(const Sequencer::Inputs& input, Sequencer::Outputs& out, fl
 	uint32_t epoch = epoch_;
 	if (transport_.load(std::memory_order_relaxed) != None) {
 		int t = transport_.exchange(None);
-		if ((t == Stop || t == Reset) && (seq.started() || startAt_ >= 0)) {
+		if (t == Stop && (seq.started() || startAt_ >= 0)) {
 			seq.stop();
 			startAt_ = -1;
 			epoch_++;
 		}
-		if ((t == Play || t == Reset) && !seq.started() && startAt_ < 0) {
+		if (t == Play && !seq.started() && startAt_ < 0) {
 			// Cycle 0 a little ahead, published right away: the JS thread schedules the first events in time.
 			startAt_ = frame_ + fill_.load(std::memory_order_relaxed) + (int64_t)(kStartDelay * cfg_.sampleRate);
 			in.resetEdge = true; // stopped: the clock goes to 0 and waits there
@@ -712,8 +720,10 @@ bool Engine::process(const Sequencer::Inputs& input, Sequencer::Outputs& out, fl
 		epoch_++;
 		started = seq.started();
 	}
-	if (epoch_ != epoch)
+	if (epoch_ != epoch) {
 		seq.queue.setEpoch(epoch_);
+		reset_ = input.resetEdge && (started || startAt_ >= 0);
+	}
 
 	left = right = 0;
 	bool heard = false;
@@ -730,7 +740,7 @@ bool Engine::process(const Sequencer::Inputs& input, Sequencer::Outputs& out, fl
 	playback_.store(frame_, std::memory_order_relaxed);
 	bool pending = startAt_ >= 0;
 	publish({pending ? startAt_ : frame_, seq.clock.cycle(), seq.clock.cps(), epoch_, pending || seq.started(),
-			 in.clockConnected});
+			 in.clockConnected, reset_});
 	return started;
 }
 
@@ -744,6 +754,7 @@ void Engine::publish(const Timeline& t) {
 	tlEpoch_.store(t.epoch, std::memory_order_relaxed);
 	tlPlaying_.store(t.playing, std::memory_order_relaxed);
 	tlExternal_.store(t.external, std::memory_order_relaxed);
+	tlReset_.store(t.reset, std::memory_order_relaxed);
 	tlSeq_.store(s + 2, std::memory_order_release);
 }
 
@@ -757,6 +768,7 @@ Engine::Timeline Engine::timeline() const {
 		t.epoch = tlEpoch_.load(std::memory_order_relaxed);
 		t.playing = tlPlaying_.load(std::memory_order_relaxed);
 		t.external = tlExternal_.load(std::memory_order_relaxed);
+		t.reset = tlReset_.load(std::memory_order_relaxed);
 		std::atomic_thread_fence(std::memory_order_acquire);
 		if (!(s & 1) && tlSeq_.load(std::memory_order_relaxed) == s)
 			return t;

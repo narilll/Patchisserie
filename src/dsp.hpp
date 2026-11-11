@@ -108,18 +108,6 @@ class CycleClock {
   public:
 	void setSampleRate(float sr) { sr_ = sr, anchor(); }
 	void setCps(double cps) { cps_ = cps, anchor(); } // internal tempo; remembered while external
-	// Applied when the cycle reaches atCycle (internal mode). Returns false when the queue is full.
-	bool pushTempo(double atCycle, double cps) {
-		if (nt_ == kTempo)
-			return false;
-		int i = nt_++;
-		while (i > 0 && tempo_[i - 1].at > atCycle) {
-			tempo_[i] = tempo_[i - 1];
-			i--;
-		}
-		tempo_[i] = {atCycle, cps};
-		return true;
-	}
 	void setPulsesPerCycle(int ppc) { ppc_ = std::max(1, ppc); }
 	double cycle() const { return cycle_; }
 	double cps() const { return ext_ ? (np_ ? cpsEst_ : 0.0) : cps_; }
@@ -149,11 +137,6 @@ class CycleClock {
 		if (!running_)
 			return;
 		if (!ext_) {
-			while (nt_ > 0 && tempo_[0].at <= cycle_) {
-				cps_ = tempo_[0].cps;
-				anchor();
-				std::memmove(tempo_, tempo_ + 1, (--nt_) * sizeof(Tempo));
-			}
 			// From the last tempo change, not summed per sample: the JS host predicts sample n's cycle from a
 			// snapshot with the same formula, so audio and .midi() events stay on one sample after hours.
 			cycle_ = anchorCycle_ + (double)++sinceAnchor_ * cps_ / sr_;
@@ -185,14 +168,9 @@ class CycleClock {
 	}
 
   private:
-	struct Tempo {
-		double at, cps;
-	};
 	void anchor() { anchorCycle_ = cycle_, sinceAnchor_ = 0; }
-	static constexpr int kTempo = 16;
 	double sr_ = 48000, cps_ = 0.5, cycle_ = 0, cpsEst_ = 0;
-	Tempo tempo_[kTempo];
-	int nt_ = 0, ppc_ = 16, guard_ = 0, np_ = 0, pi_ = 0;
+	int ppc_ = 16, guard_ = 0, np_ = 0, pi_ = 0;
 	int64_t pulses_ = 0, sinceEdge_ = 0, sinceAnchor_ = 0;
 	double per_[4] = {}, anchorCycle_ = 0;
 	bool running_ = false, ext_ = false, hasLast_ = false;
@@ -360,8 +338,6 @@ class Sequencer {
 	EventQueue queue;
 	VoiceAllocator voices;
 	ClockOut clockOut;
-	// For the JS thread to schedule ahead.
-	std::atomic<double> pubCycle{0}, pubCps{0};
 
 	void setSampleRate(float sr) { clock.setSampleRate(sr); }
 	bool started() const { return clock.started(); }
@@ -376,7 +352,7 @@ class Sequencer {
 
 	void process(const Inputs& in, Outputs& out) {
 		// Events fire at the cycle at the start of this sample, so begin 0 fires on sample 0, and a Tempo event sets
-		// the cps this sample advances with (like CycleClock::pushTempo).
+		// the cps this sample advances with.
 		if (in.resetEdge) { // pending events belong to the old timeline
 			clock.step(in.clockConnected, in.clockEdge, true);
 			voices.allOff();
@@ -413,8 +389,6 @@ class Sequencer {
 		}
 		out.channels = voices.channels();
 		voices.tick();
-		pubCycle.store(clock.cycle(), std::memory_order_relaxed);
-		pubCps.store(clock.cps(), std::memory_order_relaxed);
 	}
 
   private:

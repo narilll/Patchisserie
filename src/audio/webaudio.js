@@ -314,7 +314,7 @@
   function startSource(node, when, offset, duration) {
     const st = node[S];
     if (st.started) throw error('InvalidStateError', 'start() called twice');
-    time(when, 'start');
+    st.when = time(when, 'start');
     st.started = true;
     st.ctx[S].playing.set(st.id, node);
     native.start(st.h, when, offset, duration);
@@ -775,6 +775,18 @@
     }
   }
 
+  // RESET (src/engine.cpp): sources set to start after the quantum the render thread may be rendering now never sound
+  // (stopped at their start time: nothing plays, 'ended' still fires); what started already plays out.
+  // ponytail: AudioWorklet voices (supersaw, ...) gate themselves through params and still sound; a message to their
+  // processors if that is ever heard.
+  function cancel(c) {
+    const quantum = 128 / native.sampleRate(c.h); // graph.hpp kQuantum
+    for (const node of c.playing.values()) {
+      const st = node[S];
+      if (st.when >= native.time(c.h) + quantum) native.stop(st.h, st.when);
+    }
+  }
+
   class BaseAudioContext extends EventTarget {
     constructor() {
       super();
@@ -963,8 +975,8 @@
     AudioContext,
     OfflineAudioContext,
   });
-  // For webaudio_js.cpp's poll(): onended of the realtime context, every JS tick.
+  // For webaudio_js.cpp's poll(): onended of the realtime context, every JS tick; for the engine: cancel() on RESET.
   Object.defineProperty(globalThis, '__webaudio', {
-    value: Object.freeze({ poll: () => realtime && poll(realtime) }),
+    value: Object.freeze({ poll: () => realtime && poll(realtime), cancel: () => realtime && cancel(realtime) }),
   });
 });
