@@ -43,7 +43,8 @@ const Entry kProcessors[] = {
 	{"distort-processor", ProcessorDef::Script, nullptr},
 	{"pulse-oscillator", ProcessorDef::Script, nullptr},
 	{"byte-beat-processor", ProcessorDef::Script, nullptr},
-	{"envelope-processor", ProcessorDef::Script, nullptr},
+	{"envelope-processor", ProcessorDef::Native,
+	 "begin end attack decay sustain release attackCurve decayCurve releaseCurve depth min max retrigger"},
 	{"transient-processor", ProcessorDef::Script, nullptr},
 	{"phase-vocoder-processor", ProcessorDef::Disabled, "stretch"},
 	{"generic-processor", ProcessorDef::Disabled, "kabelsalat"},
@@ -723,6 +724,66 @@ struct WavetableNode : WorkletNode {
 	Phases phase;
 };
 
+// worklets.mjs EnvelopeProcessor. Params: begin end attack decay sustain release attackCurve decayCurve releaseCurve
+// depth min max retrigger (all a-rate). Time is the quantum's currentTime, not advanced per sample, as in JS.
+struct EnvelopeNode : WorkletNode {
+	using WorkletNode::WorkletNode;
+
+  protected:
+	bool run(int64_t f0) override {
+		double now = (double)f0 / sampleRate;
+		double begin = param(0).at(0), end = param(1).at(0);
+		if (now >= end)
+			return false;
+		if (now <= begin)
+			return true;
+		if (outputs[0].channels < 1) {
+			fail("TypeError: output[0] is undefined");
+			return false;
+		}
+		float* out = outputs[0].data[0];
+		bool retrigger = param(12).at(0) >= 0.5;
+		if (begin != beginTime && (state == 0 || retrigger)) {
+			beginTime = begin;
+			state = 1;
+			endTime = param(1).at(0);
+			attackStart = val;
+		}
+		const double susTime = endTime - beginTime;
+		for (int i = 0; i < kQuantum; i++) {
+			double attack = param(2).at(i), decay = param(3).at(i), sustain = param(4).at(i);
+			double release = param(5).at(i);
+			// states: idle, attack, decay, sustain, release
+			const double time[5] = {INFINITY, attack, attack + decay, susTime, susTime + release};
+			const double start[5] = {0, attackStart, 1, sustain, sustain};
+			const double target[5] = {0, 1, sustain, sustain, 0};
+			const double curve[5] = {0, param(6).at(i), param(7).at(i), 0, param(8).at(i)};
+			if (time[state] == 0 || start[state] == target[state]) {
+				val = target[state];
+			} else {
+				double phase = std::min((now - beginTime) / time[state], 1.0); // Math.min: NaN stays NaN
+				double warped = phase;
+				if (phase != 0 && phase != 1) {
+					double c = curve[state];
+					warped = c > 0 ? 1 - std::pow(1 - phase, 1 + 8 * c) : std::pow(phase, 1 - 8 * c);
+				}
+				val = start[state] + (target[state] - start[state]) * warped;
+			}
+			double t = time[state];
+			while (now - beginTime >= t) {
+				state = (state + 1) % 5;
+				t = time[state];
+			}
+			out[i] = (float)clamp(val * param(9).at(i), param(10).at(i), param(11).at(i));
+		}
+		return true;
+	}
+
+  private:
+	double val = 0, beginTime = 0, endTime = 0, attackStart = 0;
+	int state = 0;
+};
+
 bool nativeMatches(const char* note, const std::vector<ProcessorDef::Param>& params) {
 	std::string names;
 	for (const ProcessorDef::Param& p : params)
@@ -917,6 +978,8 @@ Node* createWorkletNode(double sampleRate, WorkletScope* scope, const ProcessorD
 		release(options);
 		if (def.name == "supersaw-oscillator")
 			return new SuperSawNode(sampleRate, scope, def, numInputs, outputChannels);
+		if (def.name == "envelope-processor")
+			return new EnvelopeNode(sampleRate, scope, def, numInputs, outputChannels);
 		return new WavetableNode(sampleRate, scope, def, numInputs, outputChannels);
 	}
 	return new ScriptWorkletNode(sampleRate, scope, def, numInputs, outputChannels, options);

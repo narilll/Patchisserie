@@ -41,6 +41,7 @@ const wavetable = (voices) => source('wavetable-oscillator-processor', { voices,
   n.port.postMessage({ type: 'initialize', payload: { key: `bench${voices}`, frameLen: 2048, frames: frames64 } }));
 const cases = native ? [
   ['supersaw-oscillator (5 voices) native', source('supersaw-oscillator', { frequency: 110 })],
+  ['envelope-processor native', source('envelope-processor', {})],
   ['wavetable (1 voice) native', wavetable(1)],
   ['wavetable (5 voices) native', wavetable(5)],
 ] : [

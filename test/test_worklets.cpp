@@ -1,6 +1,6 @@
 // Worklet host (worklets.hpp): AudioWorkletGlobalScope semantics, failure isolation, lifetime and messages through
-// the webaudio_js binding, the native supersaw/wavetable ports against their JS processors, and the runtime on a
-// render thread next to the JS thread (make tsan).
+// the webaudio_js binding, the native supersaw/wavetable/envelope ports against their JS processors, and the runtime on
+// a render thread next to the JS thread (make tsan).
 #include <atomic>
 #include <chrono>
 #include <thread>
@@ -339,6 +339,41 @@ TEST(native_supersaw_matches_its_js_processor) {
 								 48000);
 	std::printf("  native supersaw vs JS: max |difference| %.3g\n", diff);
 	CHECK(diff >= 0 && diff <= 1e-6);
+}
+
+TEST(native_envelope_matches_its_js_processor) {
+	// Four envelopes: curved shapes with automation mid-envelope, hard edges (zero times, clamped output), a retrigger
+	// during the decay, and a begin change that retrigger=0 must ignore while the envelope is running.
+	double diff = nativeVsScript(R"js(
+		const ac = new AudioContext();
+		await ac.audioWorklet.addModule('patchisserie:worklets.js');
+		const mk = (v) => {
+			const o = new AudioWorkletNode(ac, 'envelope-processor', { outputChannelCount: [1] });
+			for (const k in v) o.parameters.get(k).value = v[k];
+			o.connect(ac.destination);
+			(globalThis.keep ??= []).push(o);
+			return o;
+		};
+		const a = mk({ begin: 0.01, end: 0.3, attack: 0.03, decay: 0.08, sustain: 0.4, release: 0.15,
+			attackCurve: 0.6, decayCurve: -0.7, releaseCurve: 0.3, depth: 0.8 });
+		a.parameters.get('sustain').linearRampToValueAtTime(0.7, 0.2);
+		a.parameters.get('depth').setValueAtTime(0.8, 0);
+		a.parameters.get('depth').linearRampToValueAtTime(0.3, 0.35);
+		a.parameters.get('attack').setValueAtTime(0.03, 0);
+		a.parameters.get('attack').linearRampToValueAtTime(0.06, 0.05);
+		mk({ begin: 0.02, end: 0.25, attack: 0, decay: 0, sustain: 1, release: 0, min: -0.2, max: 0.6, depth: 2 });
+		const c = mk({ begin: 0.01, end: 0.5, attack: 0.04, decay: 0.2, sustain: 0.3, release: 0.1,
+			attackCurve: -1, decayCurve: 1, releaseCurve: -0.5 });
+		c.parameters.get('begin').setValueAtTime(0.01, 0);
+		c.parameters.get('begin').setValueAtTime(0.09, 0.1);
+		const d = mk({ begin: 0.01, end: 0.5, attack: 0.02, decay: 0.05, sustain: 0.5, release: 0.1, retrigger: 0 });
+		d.parameters.get('begin').setValueAtTime(0.01, 0);
+		d.parameters.get('begin').setValueAtTime(0.1, 0.1);
+		return 'ok';
+	)js",
+								 48000);
+	std::printf("  native envelope vs JS: max |difference| %.3g\n", diff);
+	CHECK(diff == 0);
 }
 
 TEST(native_wavetable_matches_its_js_processor_in_every_warp_mode) {

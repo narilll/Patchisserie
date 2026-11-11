@@ -1,7 +1,7 @@
 #pragma once
 // AudioWorklet host: one AudioWorkletGlobalScope (QuickJS runtime #2) per graph, where superdough's processors
-// (res/worklets.js) run unchanged, plus native ports of the costly ones (supersaw, wavetable) as plain graph nodes
-// selected by processor name. Pure logic: no Rack headers.
+// (res/worklets.js) run unchanged, plus native ports of the costly ones (supersaw, wavetable, envelope) as plain graph
+// nodes selected by processor name. Pure logic: no Rack headers.
 //
 // Threads: a scope is created and its modules are loaded on the producer (JS) thread. The first AudioWorkletNode seals
 // it; from then on only the thread that renders the graph enters the runtime (every entry updates the stack top, so
