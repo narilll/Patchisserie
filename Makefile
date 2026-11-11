@@ -22,6 +22,11 @@ DISTRIBUTABLES += LICENSE res
 
 include $(RACK_DIR)/plugin.mk
 
+# hydra.cpp calls OpenGL 1.x directly: on Windows those come from opengl32.dll (not libRack).
+ifdef ARCH_WIN
+LDFLAGS += -lopengl32
+endif
+
 # Host-built unit tests: pure logic only, no Rack UI, sanitizers on.
 TEST_SOURCES := $(wildcard test/test_*.cpp)
 TEST_FLAGS := -std=c++17 -g -O1 -Wall -Wextra -Isrc -Itest -I$(RACK_DIR)/include -isystem $(QJS_DIR) -isystem vendor/dr_libs
@@ -30,6 +35,14 @@ TEST_FLAGS := -std=c++17 -g -O1 -Wall -Wextra -Isrc -Itest -I$(RACK_DIR)/include
 ENGINE_SOURCES := src/engine.cpp src/fetch.cpp
 TEST_SOURCES += $(AUDIO_SOURCES) $(ENGINE_SOURCES)
 TEST_FLAGS += -I$(RACK_DIR)/dep/include
+# MinGW: M_PI needs _USE_MATH_DEFINES and Rack's simd needs SSE 4.2 (SIMDe's fallback clashes with the intrinsics
+# <windows.h> declares), as in Rack's compile.mk; no sanitizer runtimes: tests run without them.
+ifdef ARCH_WIN
+TEST_FLAGS += -D_USE_MATH_DEFINES -march=nehalem
+else
+ASAN := -fsanitize=address
+ASAN_UBSAN := -fsanitize=address,undefined
+endif
 
 # Vendor C and the embedded webaudio.js for host builds, per flavour like the code that calls them: asan (tests,
 # render), tsan, release (benchmarks, plugin-like optimization).
@@ -37,7 +50,7 @@ host_objects = $(patsubst %,build/test/$(1)/%.o,$(VENDOR_SOURCES)) build/test/$(
 HOST_OBJECTS := $(call host_objects,asan)
 build/test/asan/%.c.o: %.c
 	@mkdir -p $(@D)
-	$(CC) -std=gnu11 -g -O2 $(VENDOR_FLAGS) -fsanitize=address -c -o $@ $<
+	$(CC) -std=gnu11 -g -O2 $(VENDOR_FLAGS) $(ASAN) -c -o $@ $<
 build/test/tsan/%.c.o: %.c
 	@mkdir -p $(@D)
 	$(CC) -std=gnu11 -g -O2 $(VENDOR_FLAGS) -fsanitize=thread -c -o $@ $<
@@ -50,7 +63,7 @@ build/test/%/webaudio.js.o: src/audio/webaudio.js
 
 build/test/run: test/main.cpp test/check.hpp $(TEST_SOURCES) $(HOST_OBJECTS) $(wildcard src/*.hpp src/*/*.hpp)
 	@mkdir -p $(@D)
-	$(CXX) $(TEST_FLAGS) -fsanitize=address,undefined -o $@ test/main.cpp $(TEST_SOURCES) $(HOST_OBJECTS)
+	$(CXX) $(TEST_FLAGS) $(ASAN_UBSAN) -o $@ test/main.cpp $(TEST_SOURCES) $(HOST_OBJECTS)
 
 test: build/test/run
 	build/test/run
@@ -91,7 +104,7 @@ render-bench: build/test/render-bench
 # Writes build/render/<id>.wav; `node --test test/render.test.mjs` compares them with the Chrome references.
 build/test/render: test/render/render.cpp $(AUDIO_SOURCES) $(HOST_OBJECTS) $(wildcard src/audio/*.hpp)
 	@mkdir -p $(@D)
-	$(CXX) $(TEST_FLAGS) -fsanitize=address,undefined -o $@ test/render/render.cpp $(AUDIO_SOURCES) $(HOST_OBJECTS)
+	$(CXX) $(TEST_FLAGS) $(ASAN_UBSAN) -o $@ test/render/render.cpp $(AUDIO_SOURCES) $(HOST_OBJECTS)
 
 render: build/test/render
 	build/test/render

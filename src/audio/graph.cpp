@@ -232,7 +232,7 @@ void Graph::drop(Resource* r) {
 
 void Graph::emit(Event e) {
 	if (!events_.full())
-		events_.push(e);
+		events_.pushBuffer(&e, 1); // = push(e); GCC 13+ misreads push() here as a write into the ring's atomics
 	else
 		drop(e.data);
 }
