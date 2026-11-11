@@ -242,7 +242,12 @@ struct Filo : Module {
 };
 
 // Panel layout (mm), matching res/Filo.svg: the editor with its status line at the bottom.
-static const math::Rect kEditorMm = math::Rect(3, 9, 197.2, 87);
+static const math::Rect kEditorMm = math::Rect(3, 3, 95.6, 85);
+
+// Row 1: three buttons then four inputs, evenly spaced.
+static float kRow1X(int i) {
+	return 10.3f + 13.5f * i;
+}
 
 /** The port labels. */
 struct PanelText : widget::Widget {
@@ -278,22 +283,22 @@ struct FiloWidget : ModuleWidget {
 		auto label = [&](float x, float y, const char* name) { text->labels.push_back({mm2px(Vec(x, y - 5)), name}); };
 		const char* names[] = {"PLAY", "STOP", "FULL"};
 		for (int i = 0; i < Filo::PARAMS_LEN; i++) {
-			Vec pos = mm2px(Vec(9 + 13 * i, 105));
+			Vec pos = mm2px(Vec(kRow1X(i), 100));
 			if (i == Filo::PLAY_PARAM) // lit red while playing
 				addParam(createLightParamCentered<VCVLightBezel<RedLight>>(pos, module, i, Filo::PLAY_LIGHT));
 			else
 				addParam(createParamCentered<VCVButton>(pos, module, i));
-			label(9 + 13 * i, 105, names[i]);
+			label(kRow1X(i), 100, names[i]);
 		}
 		const char* inputs[] = {"PLAY", "STOP", "CLOCK", "RESET"};
 		for (int i = 0; i < Filo::INPUTS_LEN; i++) {
-			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(6.5 + 10 * i, 117)), module, i));
-			label(6.5 + 10 * i, 117, inputs[i]);
+			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(kRow1X(3 + i), 100)), module, i));
+			label(kRow1X(3 + i), 100, inputs[i]);
 		}
 		const char* outputs[] = {"L", "R", "V/OCT", "GATE", "VEL", "TRIG", "CC", "CLK", "RESET"};
 		for (int i = 0; i < Filo::OUTPUTS_LEN; i++) {
-			addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(55 + 17.5f * i, 112)), module, i));
-			label(55 + 17.5f * i, 112, outputs[i]);
+			addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7 + 10.95f * i, 117)), module, i));
+			label(7 + 10.95f * i, 117, outputs[i]);
 		}
 		if (module) // (destroyed before the module, which holds its doc and geometry)
 			editorWindow.reset(
