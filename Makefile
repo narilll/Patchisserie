@@ -25,8 +25,10 @@ include $(RACK_DIR)/plugin.mk
 # Host-built unit tests: pure logic only, no Rack UI, sanitizers on.
 TEST_SOURCES := $(wildcard test/test_*.cpp)
 TEST_FLAGS := -std=c++17 -g -O1 -Wall -Wextra -Isrc -Itest -I$(RACK_DIR)/include -isystem $(QJS_DIR) -isystem vendor/dr_libs
-# Web Audio graph + QuickJS binding: linked into the tests; dep/include for simde, pulled in by Rack's dsp/ringbuffer.hpp.
-TEST_SOURCES += $(AUDIO_SOURCES)
+# Web Audio graph + QuickJS binding, Filo's engine and downloads: linked into the tests; dep/include for simde (pulled in
+# by Rack's dsp/ringbuffer.hpp) and ghc::filesystem.
+ENGINE_SOURCES := src/engine.cpp src/fetch.cpp
+TEST_SOURCES += $(AUDIO_SOURCES) $(ENGINE_SOURCES)
 TEST_FLAGS += -I$(RACK_DIR)/dep/include
 
 # Vendor C and the embedded webaudio.js for host builds, per flavour like the code that calls them: asan (tests,
@@ -55,12 +57,12 @@ test: build/test/run
 
 .PHONY: test
 
-# Graph and worklet tests (command/event queues, the worklet runtime on the render thread vs the JS thread) under
-# ThreadSanitizer.
-TSAN_TESTS := test/main.cpp test/test_graph.cpp test/test_worklets.cpp
-build/test/run-tsan: $(TSAN_TESTS) $(wildcard test/*.hpp) $(AUDIO_SOURCES) $(call host_objects,tsan) $(wildcard src/audio/*.hpp)
+# Graph, worklet, engine and download tests (command/event queues, the worklet runtime on the render thread vs the JS
+# thread, Filo's JS / render / audio threads, the download worker) under ThreadSanitizer.
+TSAN_TESTS := test/main.cpp test/test_graph.cpp test/test_worklets.cpp test/test_engine.cpp test/test_fetch.cpp
+build/test/run-tsan: $(TSAN_TESTS) $(wildcard test/*.hpp) $(AUDIO_SOURCES) $(ENGINE_SOURCES) $(call host_objects,tsan) $(wildcard src/*.hpp src/audio/*.hpp)
 	@mkdir -p $(@D)
-	$(CXX) $(TEST_FLAGS) -fsanitize=thread -o $@ $(TSAN_TESTS) $(AUDIO_SOURCES) $(call host_objects,tsan)
+	$(CXX) $(TEST_FLAGS) -fsanitize=thread -o $@ $(TSAN_TESTS) $(AUDIO_SOURCES) $(ENGINE_SOURCES) $(call host_objects,tsan)
 
 tsan: build/test/run-tsan
 	build/test/run-tsan

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Filo, 40 HP. Placeholder panel (M2): editor area and the message line match src/plugin.cpp (kEditorMm,
+kMessageMm); jack labels are drawn by the widget. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="203.2mm" height="128.5mm" viewBox="0 0 203.2 128.5">
+  <rect width="203.2" height="128.5" fill="#f3e6d3"/>
+  <rect y="0" width="203.2" height="7" fill="#c98b4f"/>
+  <rect y="121.5" width="203.2" height="7" fill="#c98b4f"/>
+  <rect x="2" y="8" width="199.2" height="89" rx="1" fill="#2a1f17"/>
+  <rect x="44" y="99" width="1" height="21" fill="#c98b4f"/>
+</svg>

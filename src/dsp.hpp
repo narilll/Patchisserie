@@ -15,7 +15,7 @@
 
 namespace filo {
 
-enum Kind : uint8_t { Note, Trig, CC };
+enum Kind : uint8_t { Note, Trig, CC, Tempo };
 
 struct Event {
 	uint32_t epoch;
@@ -25,7 +25,7 @@ struct Event {
 	float vel;       // 0..1
 	int8_t midichan; // 1..16, -1 unset
 	int8_t channel;  // 0..15, pre-resolved for Trig/CC
-	float value;     // CC value 0..1
+	float value;     // CC value 0..1; Tempo: cps from `begin` on
 };
 static_assert(std::is_trivially_copyable<Event>::value, "Event must be POD-like");
 
@@ -106,8 +106,8 @@ class EventQueue {
 
 class CycleClock {
   public:
-	void setSampleRate(float sr) { sr_ = sr; }
-	void setCps(double cps) { cps_ = cps; } // internal tempo; remembered while external
+	void setSampleRate(float sr) { sr_ = sr, anchor(); }
+	void setCps(double cps) { cps_ = cps, anchor(); } // internal tempo; remembered while external
 	// Applied when the cycle reaches atCycle (internal mode). Returns false when the queue is full.
 	bool pushTempo(double atCycle, double cps) {
 		if (nt_ == kTempo)
@@ -134,12 +134,15 @@ class CycleClock {
 	void step(bool clockConnected, bool clockEdge, bool resetEdge) {
 		if (clockConnected && !ext_)
 			hasLast_ = false, np_ = 0, sinceEdge_ = 0, pulses_ = (int64_t)std::floor(cycle_ * ppc_);
+		if (!clockConnected && ext_)
+			anchor();
 		ext_ = clockConnected;
 		bool edge = clockEdge;
 		if (guard_ > 0)
 			guard_--, edge = false;
 		if (resetEdge) {
 			cycle_ = 0, pulses_ = 0, sinceEdge_ = 0, hasLast_ = false;
+			anchor();
 			guard_ = (int)std::ceil(sr_ * 0.001); // ignore clock edges for 1 ms, like Fundamental SEQ3
 			return;
 		}
@@ -148,9 +151,12 @@ class CycleClock {
 		if (!ext_) {
 			while (nt_ > 0 && tempo_[0].at <= cycle_) {
 				cps_ = tempo_[0].cps;
+				anchor();
 				std::memmove(tempo_, tempo_ + 1, (--nt_) * sizeof(Tempo));
 			}
-			cycle_ += cps_ / sr_;
+			// From the last tempo change, not summed per sample: the JS host predicts sample n's cycle from a
+			// snapshot with the same formula, so audio and .midi() events stay on one sample after hours.
+			cycle_ = anchorCycle_ + (double)++sinceAnchor_ * cps_ / sr_;
 			return;
 		}
 		sinceEdge_++;
@@ -182,12 +188,13 @@ class CycleClock {
 	struct Tempo {
 		double at, cps;
 	};
+	void anchor() { anchorCycle_ = cycle_, sinceAnchor_ = 0; }
 	static constexpr int kTempo = 16;
 	double sr_ = 48000, cps_ = 0.5, cycle_ = 0, cpsEst_ = 0;
 	Tempo tempo_[kTempo];
 	int nt_ = 0, ppc_ = 16, guard_ = 0, np_ = 0, pi_ = 0;
-	int64_t pulses_ = 0, sinceEdge_ = 0;
-	double per_[4] = {};
+	int64_t pulses_ = 0, sinceEdge_ = 0, sinceAnchor_ = 0;
+	double per_[4] = {}, anchorCycle_ = 0;
 	bool running_ = false, ext_ = false, hasLast_ = false;
 };
 
@@ -368,17 +375,16 @@ class Sequencer {
 	}
 
 	void process(const Inputs& in, Outputs& out) {
-		// Events fire at the cycle at the start of this sample, so begin 0 fires on sample 0.
-		double prev = clock.cycle();
-		clock.step(in.clockConnected, in.clockEdge, in.resetEdge);
+		// Events fire at the cycle at the start of this sample, so begin 0 fires on sample 0, and a Tempo event sets
+		// the cps this sample advances with (like CycleClock::pushTempo).
 		if (in.resetEdge) { // pending events belong to the old timeline
+			clock.step(in.clockConnected, in.clockEdge, true);
 			voices.allOff();
 			queue.clear();
 			nAct_ = 0;
-			prev = clock.cycle();
 			lastAt_ = -1;
 		}
-		double at = prev + kEps;
+		double at = clock.cycle() + kEps;
 		std::memset(out.trig, 0, sizeof out.trig);
 		if (clock.started()) {
 			for (int i = 0; i < nAct_;)
@@ -397,6 +403,8 @@ class Sequencer {
 		}
 		out.clk = clock.started() && clockOut.clk(lastAt_, at);
 		lastAt_ = at;
+		if (!in.resetEdge)
+			clock.step(in.clockConnected, in.clockEdge, false);
 		for (int c = 0; c < 16; c++) {
 			out.voct[c] = voices.pitchV(c);
 			out.gate[c] = voices.gate(c) ? 10.f : 0.f;
@@ -423,6 +431,9 @@ class Sequencer {
 			uint32_t id = ++nextId_;
 			voices.noteOn(id, e.note, e.vel, e.midichan);
 			act_[nAct_++] = {id, e.end};
+		} else if (e.kind == Tempo) {
+			if (e.value > 0)
+				clock.setCps(e.value);
 		} else if (e.channel >= 0 && e.channel < 16) {
 			if (e.kind == Trig)
 				out.trig[e.channel] = true;

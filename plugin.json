@@ -14,6 +14,12 @@
   "changelogUrl": "",
   "modules": [
     {
+      "slug": "Filo",
+      "name": "Filo",
+      "description": "Strudel live coding: stereo audio, and CV, gates, triggers and CC from .midi() patterns",
+      "tags": ["Sequencer", "Sampler", "Polyphonic", "Clock generator"]
+    },
+    {
       "slug": "Icing",
       "name": "Icing",
       "description": "Hydra visuals with panel preview and output window",

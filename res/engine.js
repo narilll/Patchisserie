@@ -16012,15 +16012,15 @@ registerProcessor('${name3}', MyProcessor);
           return this.__current.node;
         };
         Controller.prototype.__execute = function __execute(callback, element) {
-          var previous, result;
+          var previous2, result;
           result = void 0;
-          previous = this.__current;
+          previous2 = this.__current;
           this.__current = element;
           this.__state = null;
           if (callback) {
             result = callback.call(this, element.node, this.__leavelist[this.__leavelist.length - 1].node);
           }
-          this.__current = previous;
+          this.__current = previous2;
           return result;
         };
         Controller.prototype.notify = function notify(flag) {
@@ -36895,10 +36895,10 @@ registerProcessor('${name3}', MyProcessor);
   // js/host.mjs
   var ready = evalScope(core_exports, edo_exports, tonal_exports, mini_exports, xen_exports, webaudio_exports);
   var evalError;
+  var seconds2 = 0;
   var { evaluate: evaluate2, scheduler, setCps } = repl({
     transpiler,
-    // ponytail: clock frozen at 0, so scheduler.now()/getTime() users see t=0; M2 injects rendered-frame time.
-    getTime: () => 0,
+    getTime: () => seconds2,
     // The host queries the pattern itself, so the Cyclist must never tick.
     setInterval: () => 0,
     clearInterval: () => {
@@ -36906,22 +36906,144 @@ registerProcessor('${name3}', MyProcessor);
     onEvalError: (err) => evalError = err
   });
   var time3 = (t) => t.valueOf();
-  var clock = { cps: 0.5, cycle: 0, seconds: 0 };
-  var cycleAt = (t) => clock.cycle + (t - clock.seconds) * clock.cps;
   var onSchedule = getSchedule({ onSchedule: webaudioOutput });
+  var previous;
+  var [Note, Trig, CC, Tempo] = [0, 1, 2, 3];
   var midiEvents = [];
-  var toRack = (hap, t, cps2) => midiEvents.push({ t, cps: cps2, duration: time3(hap.duration) / cps2, value: hap.value });
+  var toRack = (hap) => {
+    const v2 = hap.value;
+    const [begin2, end2, chan] = [time3(hap.whole.begin), time3(hap.whole.end), v2.midichan ?? -1];
+    if (v2.note !== void 0) {
+      const note4 = typeof v2.note === "number" ? v2.note : noteToMidi(v2.note);
+      api.rackEvent(Note, begin2, end2, note4, (v2.gain ?? 1) * (v2.velocity ?? 0.9), chan, "", 0);
+    } else if (v2.s !== void 0) api.rackEvent(Trig, begin2, end2, 0, 0, chan, String(v2.s), 0);
+    if (v2.ccn !== void 0 && v2.ccv !== void 0) api.rackEvent(CC, begin2, end2, 0, 0, chan, String(v2.ccn), v2.ccv);
+  };
   register("midi", (pat) => pat.onSchedule(toRack, true));
-  globalThis.__patchisserie = {
+  var dirtSamples = {
+    casio: ["casio/high.wav", "casio/low.wav", "casio/noise.wav"],
+    crow: ["crow/000_crow.wav", "crow/001_crow2.wav", "crow/002_crow3.wav", "crow/003_crow4.wav"],
+    insect: [
+      "insect/000_everglades_conehead.wav",
+      "insect/001_robust_shieldback.wav",
+      "insect/002_seashore_meadow_katydid.wav"
+    ],
+    wind: [
+      "wind/000_wind1.wav",
+      "wind/001_wind10.wav",
+      "wind/002_wind2.wav",
+      "wind/003_wind3.wav",
+      "wind/004_wind4.wav",
+      "wind/005_wind5.wav",
+      "wind/006_wind6.wav",
+      "wind/007_wind7.wav",
+      "wind/008_wind8.wav",
+      "wind/009_wind9.wav"
+    ],
+    jazz: [
+      "jazz/000_BD.wav",
+      "jazz/001_CB.wav",
+      "jazz/002_FX.wav",
+      "jazz/003_HH.wav",
+      "jazz/004_OH.wav",
+      "jazz/005_P1.wav",
+      "jazz/006_P2.wav",
+      "jazz/007_SN.wav"
+    ],
+    metal: [
+      "metal/000_0.wav",
+      "metal/001_1.wav",
+      "metal/002_2.wav",
+      "metal/003_3.wav",
+      "metal/004_4.wav",
+      "metal/005_5.wav",
+      "metal/006_6.wav",
+      "metal/007_7.wav",
+      "metal/008_8.wav",
+      "metal/009_9.wav"
+    ],
+    east: [
+      "east/000_nipon_wood_block.wav",
+      "east/001_ohkawa_mute.wav",
+      "east/002_ohkawa_open.wav",
+      "east/003_shime_hi.wav",
+      "east/004_shime_hi_2.wav",
+      "east/005_shime_mute.wav",
+      "east/006_taiko_1.wav",
+      "east/007_taiko_2.wav",
+      "east/008_taiko_3.wav"
+    ],
+    space: [
+      "space/000_0.wav",
+      "space/001_1.wav",
+      "space/002_11.wav",
+      "space/003_12.wav",
+      "space/004_13.wav",
+      "space/005_14.wav",
+      "space/006_15.wav",
+      "space/007_16.wav",
+      "space/008_17.wav",
+      "space/009_18.wav",
+      "space/010_2.wav",
+      "space/011_3.wav",
+      "space/012_4.wav",
+      "space/013_5.wav",
+      "space/014_6.wav",
+      "space/015_7.wav",
+      "space/016_8.wav",
+      "space/017_9.wav"
+    ],
+    numbers: [
+      "numbers/0.wav",
+      "numbers/1.wav",
+      "numbers/2.wav",
+      "numbers/3.wav",
+      "numbers/4.wav",
+      "numbers/5.wav",
+      "numbers/6.wav",
+      "numbers/7.wav",
+      "numbers/8.wav"
+    ],
+    num: [
+      "num/00.wav",
+      "num/01.wav",
+      "num/02.wav",
+      "num/03.wav",
+      "num/04.wav",
+      "num/05.wav",
+      "num/06.wav",
+      "num/07.wav",
+      "num/08.wav",
+      "num/09.wav",
+      "num/10.wav",
+      "num/11.wav",
+      "num/12.wav",
+      "num/13.wav",
+      "num/14.wav",
+      "num/15.wav",
+      "num/16.wav",
+      "num/17.wav",
+      "num/18.wav",
+      "num/19.wav",
+      "num/20.wav"
+    ]
+  };
+  var byOnset = (a, b) => time3(a.whole.begin) - time3(b.whole.begin) || (b.value.cps !== void 0) - (a.value.cps !== void 0);
+  var rt = { epoch: -1, from: 0, cps: 0, tempos: [] };
+  var api = globalThis.__patchisserie = {
     async evaluate(code) {
       await ready;
       evalError = void 0;
+      const before = scheduler.pattern;
       try {
         await evaluate2(code, false);
       } catch (err) {
         evalError = err;
       }
-      if (!evalError) return { ok: true };
+      if (!evalError) {
+        previous = before;
+        return { ok: true };
+      }
       const line = evalError.loc?.line ?? Number(/^\[mini\] parse error at line (\d+)/.exec(evalError.message)?.[1]);
       return line ? { ok: false, error: evalError.message, line } : { ok: false, error: evalError.message };
     },
@@ -36945,26 +37067,95 @@ registerProcessor('${name3}', MyProcessor);
       await evalScope(soundfonts);
       soundfonts.registerSoundfonts();
     },
+    // strudel.cc's prebake (website/src/repl/prebake.mjs) on top of initAudio(): the same CDN sample maps and bank
+    // aliases. Failed maps are logged, the others still load.
+    async prebake() {
+      const cdn = "https://strudel.b-cdn.net";
+      const drums2 = { prebake: true, tag: "drum-machines" };
+      const maps = [
+        [`${cdn}/piano.json`, `${cdn}/piano/`, { prebake: true }],
+        [`${cdn}/vcsl.json`, `${cdn}/VCSL/`, { prebake: true }],
+        [`${cdn}/tidal-drum-machines.json`, `${cdn}/tidal-drum-machines/machines/`, drums2],
+        [`${cdn}/uzu-drumkit.json`, `${cdn}/uzu-drumkit/`, drums2],
+        [`${cdn}/uzu-wavetables.json`, `${cdn}/uzu-wavetables/`, { prebake: true }],
+        [`${cdn}/mridangam.json`, `${cdn}/mrid/`, drums2],
+        [dirtSamples, `${cdn}/Dirt-Samples/`, { prebake: true }]
+      ];
+      const results = await Promise.allSettled(maps.map((args) => samples(...args)));
+      for (const r2 of results) if (r2.status === "rejected") logger(`[prebake] ${r2.reason?.message}`, "warning");
+      await aliasBank(`${cdn}/tidal-drum-machines-alias.json`).catch((e) => logger(`[prebake] ${e}`, "warning"));
+    },
     setCps,
-    /** Restarts the timeline: `cycle` sounds at context time `seconds`. */
-    setClock(seconds2, cycle = 0) {
-      clock = { cps: scheduler.cps, cycle, seconds: seconds2 };
+    /**
+     * The realtime query loop (src/engine.cpp calls it every ~20 ms) on the audio thread's timeline: at playback frame
+     * `frame` the Sequencer is at `cycle` with `cps`. Sounds go to superdough at context time = playback frame / sr,
+     * .midi() events to the Sequencer in cycles, so both land on the same sample. Queries up to `lookahead` s ahead,
+     * each window starting where the last one ended: like the Cyclist, a new pattern takes over after what is already
+     * scheduled, for sounds and .midi() events alike. A new epoch (play, stop, reset) starts over at `cycle`.
+     * external: the CLOCK input drives the cycle, cps is the PLL's estimate. rendered: the render thread's frame.
+     */
+    tick(frame, cycle, cps2, epoch2, playing, external, sr, lookahead2, rendered = -Infinity) {
+      seconds2 = frame / sr;
+      if (epoch2 !== rt.epoch) Object.assign(rt, { epoch: epoch2, from: cycle, cps: Math.fround(cps2), tempos: [] });
+      if (!playing || !scheduler.pattern || !(cps2 > 0)) return;
+      const from = Math.max(rt.from, cycle + Math.max(0, rendered + 0.01 * sr - frame) / sr * cps2);
+      const end2 = cycle + lookahead2 * cps2;
+      if (end2 <= from) return;
+      rt.tempos = rt.tempos.filter((t) => t.cycle > cycle - cps2 / sr + 1e-9);
+      const tempo = (at3, value2) => {
+        rt.cps = Math.fround(value2);
+        api.rackEvent(Tempo, at3, at3, 0, 0, -1, "", rt.cps);
+        if (!external) rt.tempos.push({ cycle: at3, cps: rt.cps });
+      };
+      const eps = 1e-9;
+      const first = (f, c2, k, b) => Math.max(f, Math.ceil(f + (b - eps - c2) / k * sr));
+      const at2 = (b) => {
+        let [f, c2, k] = [frame, cycle, cps2];
+        for (const t of rt.tempos) {
+          if (t.cycle > b) break;
+          const p = first(f, c2, k, t.cycle);
+          [c2, f, k] = [c2 + (p - f) * k / sr, p, t.cps];
+        }
+        return first(f, c2, k, b) / sr;
+      };
+      const cpsAt = (b) => rt.tempos.reduce((k, t) => t.cycle <= b ? t.cps : k, cps2);
+      if (Math.fround(scheduler.cps) !== rt.cps) tempo(from, scheduler.cps);
+      const haps = scheduler.pattern.queryArc(from, end2, { _cps: scheduler.cps }).filter((hap) => hap.hasOnset()).sort(byOnset);
+      for (const hap of haps) {
+        const b = time3(hap.whole.begin);
+        const cpsHap = hap.value.cps;
+        if (cpsHap !== void 0 && Math.fround(cpsHap) !== rt.cps) {
+          tempo(b, cpsHap);
+          scheduler.setCps(cpsHap);
+        }
+        onSchedule(hap, at2(b), cpsHap ?? cpsAt(b));
+      }
+      rt.from = end2;
     },
-    /** Schedules every onset in context time [t0, t1). Resolves once superdough has built the voices. */
-    schedule(t0, t1) {
-      if (!scheduler.pattern) return Promise.resolve();
-      if (scheduler.cps !== clock.cps) clock = { cps: scheduler.cps, cycle: cycleAt(t0), seconds: t0 };
-      const haps = scheduler.pattern.queryArc(cycleAt(t0), cycleAt(t1), { _cps: clock.cps }).filter((hap) => hap.hasOnset()).sort((a, b) => time3(a.whole.begin) - time3(b.whole.begin));
-      const at2 = (hap) => clock.seconds + (time3(hap.whole.begin) - clock.cycle) / clock.cps;
-      return Promise.all(haps.map((hap) => onSchedule(hap, at2(hap), hap.value.cps ?? clock.cps)));
-    },
-    /** Drains the .midi() events collected since the last call. */
+    /** Where .midi() events go (kind, begin, end, note, velocity, midichan, key, value); the engine replaces it. */
+    rackEvent: (kind, begin2, end2, note4, velocity2, midichan2, key, value2) => midiEvents.push({ kind, begin: begin2, end: end2, note: note4, velocity: velocity2, midichan: midichan2, key, value: value2 }),
+    /** Drains the events collected by the default rackEvent. */
     midiEvents: () => midiEvents.splice(0),
+    /** A query of the playing pattern was interrupted (endless loop): back to the one before the last evaluate, then
+     * silence. (Query errors are Strudel's own: logged, no haps.) */
+    revert() {
+      scheduler.pattern = previous ?? silence;
+      previous = void 0;
+    },
     /** superdough's orbits and buses back to their initial state; their nodes become garbage. */
     resetAudio: () => resetGlobalEffects(),
     // Test seam: the upstream tune regression stringifies haps with hap.show() like Strudel's own test.
     get pattern() {
       return scheduler.pattern;
     }
+  };
+  var maxPan = noteToMidi("C8");
+  var panwidth2 = (pan2, width) => pan2 * width + (1 - width) / 2;
+  Pattern.prototype.piano = function() {
+    return this.fmap((v2) => ({ ...v2, clip: v2.clip ?? 1 })).s("piano").release(0.1).fmap((value2) => {
+      const midi3 = valueToMidi(value2);
+      const pan2 = panwidth2(Math.min(Math.round(midi3) / maxPan, 1), 0.5);
+      return { ...value2, pan: (value2.pan || 1) * pan2 };
+    });
   };
 })();

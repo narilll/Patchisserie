@@ -14,10 +14,10 @@ import { transpiler } from '@strudel/transpiler';
 const ready = core.evalScope(core, edo, tonal, mini, xen, webaudio);
 
 let evalError;
+let seconds = 0; // playback position of the last tick()
 const { evaluate, scheduler, setCps } = core.repl({
   transpiler,
-  // ponytail: clock frozen at 0, so scheduler.now()/getTime() users see t=0; M2 injects rendered-frame time.
-  getTime: () => 0,
+  getTime: () => seconds,
   // The host queries the pattern itself, so the Cyclist must never tick.
   setInterval: () => 0,
   clearInterval: () => {},
@@ -25,29 +25,157 @@ const { evaluate, scheduler, setCps } = core.repl({
 });
 
 const time = (t) => t.valueOf();
-
-// The host's query loop on the frame timeline (context time): cycle c sounds at seconds + (c - cycle) / cps.
-let clock = { cps: 0.5, cycle: 0, seconds: 0 };
-const cycleAt = (t) => clock.cycle + (t - clock.seconds) * clock.cps;
 // Strudel's dispatch: webaudio unless a dominant onSchedule (e.g. .midi()) takes the hap; errors go to the log.
 const onSchedule = core.getSchedule({ onSchedule: webaudio.webaudioOutput });
+let previous; // the pattern before the last evaluate: back to it when the engine interrupts a query of the new one
 
 // .midi() sends the pattern to Rack instead of superdough, through Strudel's own mechanism (portable to strudel.cc).
-// ponytail: events are only collected here; M2 turns them into V/OCT, GATE, VEL, TRIG and CC.
-const midiEvents = [];
-const toRack = (hap, t, cps) => midiEvents.push({ t, cps, duration: time(hap.duration) / cps, value: hap.value });
+// Events (src/dsp.hpp filo::Event) carry cycles: the Sequencer fires them when its cycle gets there. Values as in
+// Strudel's @strudel/midi: note (name or number), velocity * gain, midichan; a hap without note but with s is a TRIG,
+// ccn/ccv a CC, both mapped to channels on the C++ side.
+const [Note, Trig, CC, Tempo] = [0, 1, 2, 3];
+const midiEvents = []; // where events go without an engine (tests): see rackEvent below
+const toRack = (hap) => {
+  const v = hap.value;
+  const [begin, end, chan] = [time(hap.whole.begin), time(hap.whole.end), v.midichan ?? -1];
+  if (v.note !== undefined) {
+    const note = typeof v.note === 'number' ? v.note : core.noteToMidi(v.note);
+    api.rackEvent(Note, begin, end, note, (v.gain ?? 1) * (v.velocity ?? 0.9), chan, '', 0);
+  } else if (v.s !== undefined) api.rackEvent(Trig, begin, end, 0, 0, chan, String(v.s), 0);
+  if (v.ccn !== undefined && v.ccv !== undefined) api.rackEvent(CC, begin, end, 0, 0, chan, String(v.ccn), v.ccv);
+};
 core.register('midi', (pat) => pat.onSchedule(toRack, true));
 
-globalThis.__patchisserie = {
+// strudel.cc's Dirt-Samples subset (website/src/repl/prebake.mjs), served from its CDN.
+const dirtSamples = {
+  casio: ['casio/high.wav', 'casio/low.wav', 'casio/noise.wav'],
+  crow: ['crow/000_crow.wav', 'crow/001_crow2.wav', 'crow/002_crow3.wav', 'crow/003_crow4.wav'],
+  insect: [
+    'insect/000_everglades_conehead.wav',
+    'insect/001_robust_shieldback.wav',
+    'insect/002_seashore_meadow_katydid.wav',
+  ],
+  wind: [
+    'wind/000_wind1.wav',
+    'wind/001_wind10.wav',
+    'wind/002_wind2.wav',
+    'wind/003_wind3.wav',
+    'wind/004_wind4.wav',
+    'wind/005_wind5.wav',
+    'wind/006_wind6.wav',
+    'wind/007_wind7.wav',
+    'wind/008_wind8.wav',
+    'wind/009_wind9.wav',
+  ],
+  jazz: [
+    'jazz/000_BD.wav',
+    'jazz/001_CB.wav',
+    'jazz/002_FX.wav',
+    'jazz/003_HH.wav',
+    'jazz/004_OH.wav',
+    'jazz/005_P1.wav',
+    'jazz/006_P2.wav',
+    'jazz/007_SN.wav',
+  ],
+  metal: [
+    'metal/000_0.wav',
+    'metal/001_1.wav',
+    'metal/002_2.wav',
+    'metal/003_3.wav',
+    'metal/004_4.wav',
+    'metal/005_5.wav',
+    'metal/006_6.wav',
+    'metal/007_7.wav',
+    'metal/008_8.wav',
+    'metal/009_9.wav',
+  ],
+  east: [
+    'east/000_nipon_wood_block.wav',
+    'east/001_ohkawa_mute.wav',
+    'east/002_ohkawa_open.wav',
+    'east/003_shime_hi.wav',
+    'east/004_shime_hi_2.wav',
+    'east/005_shime_mute.wav',
+    'east/006_taiko_1.wav',
+    'east/007_taiko_2.wav',
+    'east/008_taiko_3.wav',
+  ],
+  space: [
+    'space/000_0.wav',
+    'space/001_1.wav',
+    'space/002_11.wav',
+    'space/003_12.wav',
+    'space/004_13.wav',
+    'space/005_14.wav',
+    'space/006_15.wav',
+    'space/007_16.wav',
+    'space/008_17.wav',
+    'space/009_18.wav',
+    'space/010_2.wav',
+    'space/011_3.wav',
+    'space/012_4.wav',
+    'space/013_5.wav',
+    'space/014_6.wav',
+    'space/015_7.wav',
+    'space/016_8.wav',
+    'space/017_9.wav',
+  ],
+  numbers: [
+    'numbers/0.wav',
+    'numbers/1.wav',
+    'numbers/2.wav',
+    'numbers/3.wav',
+    'numbers/4.wav',
+    'numbers/5.wav',
+    'numbers/6.wav',
+    'numbers/7.wav',
+    'numbers/8.wav',
+  ],
+  num: [
+    'num/00.wav',
+    'num/01.wav',
+    'num/02.wav',
+    'num/03.wav',
+    'num/04.wav',
+    'num/05.wav',
+    'num/06.wav',
+    'num/07.wav',
+    'num/08.wav',
+    'num/09.wav',
+    'num/10.wav',
+    'num/11.wav',
+    'num/12.wav',
+    'num/13.wav',
+    'num/14.wav',
+    'num/15.wav',
+    'num/16.wav',
+    'num/17.wav',
+    'num/18.wav',
+    'num/19.wav',
+    'num/20.wav',
+  ],
+};
+
+// Onset order like the Cyclist: by begin, cps changes first among equals.
+const byOnset = (a, b) =>
+  time(a.whole.begin) - time(b.whole.begin) || (b.value.cps !== undefined) - (a.value.cps !== undefined);
+// Realtime query state, see tick().
+const rt = { epoch: -1, from: 0, cps: 0, tempos: [] };
+
+const api = (globalThis.__patchisserie = {
   async evaluate(code) {
     await ready;
     evalError = undefined;
+    const before = scheduler.pattern;
     try {
       await evaluate(code, false); // false: don't start the Cyclist; errors land in onEvalError
     } catch (err) {
       evalError = err; // repl throws (outside its try) only for empty code
     }
-    if (!evalError) return { ok: true };
+    if (!evalError) {
+      previous = before;
+      return { ok: true };
+    }
     // acorn syntax errors carry loc; mini-notation errors only say "at line N" in the message.
     const line = evalError.loc?.line ?? Number(/^\[mini\] parse error at line (\d+)/.exec(evalError.message)?.[1]);
     return line ? { ok: false, error: evalError.message, line } : { ok: false, error: evalError.message };
@@ -76,28 +204,94 @@ globalThis.__patchisserie = {
     soundfonts.registerSoundfonts();
   },
 
+  // strudel.cc's prebake (website/src/repl/prebake.mjs) on top of initAudio(): the same CDN sample maps and bank
+  // aliases. Failed maps are logged, the others still load.
+  async prebake() {
+    const cdn = 'https://strudel.b-cdn.net';
+    const drums = { prebake: true, tag: 'drum-machines' };
+    const maps = [
+      [`${cdn}/piano.json`, `${cdn}/piano/`, { prebake: true }],
+      [`${cdn}/vcsl.json`, `${cdn}/VCSL/`, { prebake: true }],
+      [`${cdn}/tidal-drum-machines.json`, `${cdn}/tidal-drum-machines/machines/`, drums],
+      [`${cdn}/uzu-drumkit.json`, `${cdn}/uzu-drumkit/`, drums],
+      [`${cdn}/uzu-wavetables.json`, `${cdn}/uzu-wavetables/`, { prebake: true }],
+      [`${cdn}/mridangam.json`, `${cdn}/mrid/`, drums],
+      [dirtSamples, `${cdn}/Dirt-Samples/`, { prebake: true }],
+    ];
+    const results = await Promise.allSettled(maps.map((args) => webaudio.samples(...args)));
+    for (const r of results) if (r.status === 'rejected') core.logger(`[prebake] ${r.reason?.message}`, 'warning');
+    await webaudio.aliasBank(`${cdn}/tidal-drum-machines-alias.json`).catch((e) => core.logger(`[prebake] ${e}`, 'warning'));
+  },
+
   setCps,
 
-  /** Restarts the timeline: `cycle` sounds at context time `seconds`. */
-  setClock(seconds, cycle = 0) {
-    clock = { cps: scheduler.cps, cycle, seconds };
-  },
-
-  /** Schedules every onset in context time [t0, t1). Resolves once superdough has built the voices. */
-  schedule(t0, t1) {
-    if (!scheduler.pattern) return Promise.resolve();
-    // ponytail: a cps change re-anchors at t0; M2's native cycle clock with tempo events replaces this.
-    if (scheduler.cps !== clock.cps) clock = { cps: scheduler.cps, cycle: cycleAt(t0), seconds: t0 };
+  /**
+   * The realtime query loop (src/engine.cpp calls it every ~20 ms) on the audio thread's timeline: at playback frame
+   * `frame` the Sequencer is at `cycle` with `cps`. Sounds go to superdough at context time = playback frame / sr,
+   * .midi() events to the Sequencer in cycles, so both land on the same sample. Queries up to `lookahead` s ahead,
+   * each window starting where the last one ended: like the Cyclist, a new pattern takes over after what is already
+   * scheduled, for sounds and .midi() events alike. A new epoch (play, stop, reset) starts over at `cycle`.
+   * external: the CLOCK input drives the cycle, cps is the PLL's estimate. rendered: the render thread's frame.
+   */
+  tick(frame, cycle, cps, epoch, playing, external, sr, lookahead, rendered = -Infinity) {
+    seconds = frame / sr;
+    if (epoch !== rt.epoch) Object.assign(rt, { epoch, from: cycle, cps: Math.fround(cps), tempos: [] });
+    if (!playing || !scheduler.pattern || !(cps > 0)) return;
+    // Behind (a stall): what can no longer sound on time is skipped, sounds and .midi() events alike, not played late.
+    const from = Math.max(rt.from, cycle + (Math.max(0, rendered + 0.01 * sr - frame) / sr) * cps);
+    const end = cycle + lookahead * cps;
+    if (end <= from) return;
+    // Applied by now (fired before the snapshot's sample, part of its cps): a change at `cycle` itself fires on it.
+    rt.tempos = rt.tempos.filter((t) => t.cycle > cycle - cps / sr + 1e-9);
+    const tempo = (at, value) => {
+      rt.cps = Math.fround(value); // what the Sequencer stores
+      api.rackEvent(Tempo, at, at, 0, 0, -1, '', rt.cps);
+      if (!external) rt.tempos.push({ cycle: at, cps: rt.cps });
+    };
+    // Frame of cycle b: through the tempo changes still ahead, each taking effect on the first sample at or after
+    // its cycle (with the Sequencer's kEps); snapped to that sample, the one the Sequencer fires on, never before the
+    // sample of the last change (that sample's cycle may be past b: back from it at a slower cps is a frame early).
+    const eps = 1e-9;
+    const first = (f, c, k, b) => Math.max(f, Math.ceil(f + ((b - eps - c) / k) * sr));
+    const at = (b) => {
+      let [f, c, k] = [frame, cycle, cps];
+      for (const t of rt.tempos) {
+        if (t.cycle > b) break;
+        const p = first(f, c, k, t.cycle);
+        [c, f, k] = [c + ((p - f) * k) / sr, p, t.cps];
+      }
+      return first(f, c, k, b) / sr;
+    };
+    const cpsAt = (b) => rt.tempos.reduce((k, t) => (t.cycle <= b ? t.cps : k), cps);
+    if (Math.fround(scheduler.cps) !== rt.cps) tempo(from, scheduler.cps); // setcps(), setcpm()
     const haps = scheduler.pattern
-      .queryArc(cycleAt(t0), cycleAt(t1), { _cps: clock.cps })
+      .queryArc(from, end, { _cps: scheduler.cps })
       .filter((hap) => hap.hasOnset())
-      .sort((a, b) => time(a.whole.begin) - time(b.whole.begin)); // onset order like the Cyclist (cut groups)
-    const at = (hap) => clock.seconds + (time(hap.whole.begin) - clock.cycle) / clock.cps;
-    return Promise.all(haps.map((hap) => onSchedule(hap, at(hap), hap.value.cps ?? clock.cps)));
+      .sort(byOnset);
+    for (const hap of haps) {
+      const b = time(hap.whole.begin);
+      const cpsHap = hap.value.cps;
+      if (cpsHap !== undefined && Math.fround(cpsHap) !== rt.cps) {
+        tempo(b, cpsHap); // .cps(): like the Cyclist, the global tempo from this hap on
+        scheduler.setCps(cpsHap);
+      }
+      onSchedule(hap, at(b), cpsHap ?? cpsAt(b));
+    }
+    rt.from = end;
   },
 
-  /** Drains the .midi() events collected since the last call. */
+  /** Where .midi() events go (kind, begin, end, note, velocity, midichan, key, value); the engine replaces it. */
+  rackEvent: (kind, begin, end, note, velocity, midichan, key, value) =>
+    midiEvents.push({ kind, begin, end, note, velocity, midichan, key, value }),
+  /** Drains the events collected by the default rackEvent. */
   midiEvents: () => midiEvents.splice(0),
+
+  /** A query of the playing pattern was interrupted (endless loop): back to the one before the last evaluate, then
+   * silence. (Query errors are Strudel's own: logged, no haps.) */
+  revert() {
+    scheduler.pattern = previous ?? core.silence;
+    previous = undefined;
+  },
 
   /** superdough's orbits and buses back to their initial state; their nodes become garbage. */
   resetAudio: () => webaudio.resetGlobalEffects(),
@@ -106,4 +300,18 @@ globalThis.__patchisserie = {
   get pattern() {
     return scheduler.pattern;
   },
+});
+
+// strudel.cc's Pattern.piano() (website/src/repl/prebake.mjs).
+const maxPan = core.noteToMidi('C8');
+const panwidth = (pan, width) => pan * width + (1 - width) / 2;
+core.Pattern.prototype.piano = function () {
+  return this.fmap((v) => ({ ...v, clip: v.clip ?? 1 }))
+    .s('piano')
+    .release(0.1)
+    .fmap((value) => {
+      const midi = core.valueToMidi(value);
+      const pan = panwidth(Math.min(Math.round(midi) / maxPan, 1), 0.5);
+      return { ...value, pan: (value.pan || 1) * pan };
+    });
 };

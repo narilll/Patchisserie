@@ -17,7 +17,7 @@ make test       # unit tests (host build, ASan/UBSan)
 make test-js    # engine tests: host + upstream tune snapshots in Node and QuickJS
 make render     # offline audio renders (build/render/*.wav, after scripts/fetch-test-samples);
                 # node --test test/render.test.mjs compares them with Chrome
-make tsan       # graph + worklet threading tests under ThreadSanitizer
+make tsan       # graph, worklet, engine and download threading tests under ThreadSanitizer
 make bench      # CPU per graph voice and per worklet processor (release build)
 make render-bench   # the render set 20x + all patterns stacked: CPU (gate G4), leaks and RSS (G2)
 scripts/update-engine [ref]   # re-pin Strudel (default: main), rebuild res/engine.js, run test-js;

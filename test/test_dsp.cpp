@@ -443,3 +443,27 @@ TEST(sequencer_trig_cc_stop) {
 		s->process(in, out);
 	CHECK(s->clock.cycle() > at && out.gate[1] == 0.f);
 }
+TEST(sequencer_tempo_event) {
+	auto s = std::make_unique<Sequencer>();
+	s->setSampleRate(1000);
+	s->clock.setCps(0.5);
+	s->start();
+	Event t = ev(0.5, 0.5, Tempo);
+	t.value = 1;
+	s->queue.push(t);
+	s->queue.push(ev(1.0, 1.1, Note));
+	Event stale = ev(0.75, 0.75, Tempo, 60, 7); // another epoch: dropped
+	stale.value = 4;
+	s->queue.push(stale);
+	Sequencer::Inputs in;
+	Sequencer::Outputs out;
+	int rise = -1;
+	for (int i = 0; i < 3000 && rise < 0; i++) {
+		s->process(in, out);
+		if (out.gate[0] > 0)
+			rise = i;
+	}
+	// cycle 0.5 at sample 1000 (0.5 cps), from there 1 cps: cycle 1.0 at sample 1500.
+	CHECK(rise == 1500);
+	CHECK(s->clock.cps() == 1.0);
+}
