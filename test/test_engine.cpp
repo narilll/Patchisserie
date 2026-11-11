@@ -530,12 +530,16 @@ void resetWhilePlaying(bool external) {
 	r->run(1);
 	r->in.resetEdge = false;
 	int64_t zero = edge + 1; // cycle 0: the clock stands still on the edge's frame
+	int64_t missing = r->engine->missingFrames;
 	r->seconds(2.5);
+	std::printf("  underflow: %lld frames\n", (long long)(r->engine->missingFrames - missing));
 	std::vector<int64_t> gates = r->gateRises(zero, r->frame()), kicks = r->kicks(zero, r->frame());
-	// (a) cycle 0 sounds and gates (before cycle 0.25), (b) on the same frame.
+	// (a) cycle 0 sounds and gates (before cycle 0.25), (b) on the same frame. An underflow on a slow CI runner can
+	// silence the kick (played as silence), never move or double it: hence the strict <= 1.
 	CHECK(!gates.empty() && gates[0] < zero + 24000);
 	int64_t first = gates.empty() ? zero : gates[0];
-	CHECK(std::count(kicks.begin(), kicks.end(), first) == 1);
+	CHECK(std::count(kicks.begin(), kicks.end(), first) <= 1);
+	TIMED_CHECK(std::count(kicks.begin(), kicks.end(), first) == 1);
 	// (c) As soon as both can: within the ring (1024 frames), a tick (20 ms), the 10 ms margin and the query.
 	std::printf("  RESET -> cycle 0: %lld frames (%.1f ms)\n", (long long)(first - zero), 1e3 * (first - zero) / r->sr);
 	TIMED_CHECK(first - zero <= 1024 + 960 + 480 + 480);
