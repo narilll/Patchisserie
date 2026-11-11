@@ -9,7 +9,7 @@
 //             and Icing's Hydra frames (hydra::Exchange)
 //   JS        QuickJS runtime #1 (res/engine.js, Hydra too); producer of the graph's commands and of seq.queue
 //   render    renders the graph (and its worklet scope, QuickJS #2) into the ring, ahead of the audio thread
-//   audio     process(): ring -> L/R, seq -> CV, transport, the timeline snapshot for the JS thread
+//   audio     process(): ring -> L/R, seq -> CV, transport, the timeline snapshot and MIDI CCs for the JS thread
 // Between threads only atomics, SPSC queues and the two mutexes above; the audio and render threads never lock or
 // allocate (graph.hpp, worklets.hpp).
 //
@@ -144,6 +144,17 @@ class Engine {
 	void setBlockFrames(int frames);
 	/** Restarts both threads at the new rate and re-evaluates the code. Blocks: call where process() can't run. */
 	void setSampleRate(double sampleRate);
+	/** A message from Filo's MIDI input (Rack's midi::Message: status nibble, channel 0-15, data bytes). midin()'s
+	cc() reads the CCs, value / 127, per channel and the latest of any channel; the rest is ignored. */
+	void midiMessage(int status, int channel, int data1, int data2) {
+		if (status != 0xb)
+			return;
+		double v = (data2 & 0x7f) / 127.;
+		midiCC_[0][data1 & 0x7f].store(v, std::memory_order_relaxed);
+		midiCC_[1 + (channel & 0xf)][data1 & 0x7f].store(v, std::memory_order_relaxed);
+	}
+	/** Filo's menu has a MIDI device chosen (midin() warns when not). */
+	std::atomic<bool> midiDevice{false};
 
 	// --- Stats (any thread) ---
 	std::atomic<int64_t> missingFrames{0};        // played as silence: the ring was empty
@@ -205,6 +216,9 @@ class Engine {
 	std::atomic<double> tlCycle_{0}, tlCps_{0};
 	std::atomic<uint32_t> tlEpoch_{0};
 	std::atomic<bool> tlPlaying_{false}, tlExternal_{false}, tlReset_{false};
+
+	// Audio -> JS: the MIDI input's latest CC values, [MIDI channel 1-16, 0: any][CC]. They outlive a restart.
+	std::atomic<double> midiCC_[17][128] = {};
 
 	// UI -> JS.
 	mutable std::mutex m_;

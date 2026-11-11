@@ -570,6 +570,45 @@ TEST(engine_reset_input_late_but_complete) {
 	resetWhilePlaying(true);
 }
 
+// midin() on Filo's MIDI input, fed as Filo::process() feeds it: a CC reaches the code when Strudel queries it (here
+// as .midi() CCs on the CC output), per channel and from any; other messages don't count; without a device midin()
+// warns once per evaluate; the values outlive a sample-rate restart and the new runtime reads them.
+TEST(engine_midin_cc) {
+	auto r = std::make_unique<Rig>("engine-midin");
+	auto warnings = [&] {
+		std::lock_guard<std::mutex> lock(r->logM);
+		return std::count_if(r->logs.begin(), r->logs.end(), [](const std::string& l) {
+			return l.find("W [midi] midin('Test'): choose a MIDI device in Filo's menu") == 0;
+		});
+	};
+	auto volts = [&](int c, float v, double timeout = 5) {
+		return r->until([&] { return std::fabs(r->out.cc[c] - v) < 1e-4f; }, timeout);
+	};
+	const std::string code = "let cc = await midin('Test')\nlet again = await midin('Test')\n"
+							 "$: ccn(\"1*16\").ccv(cc(74)).midi()\n$: ccn(\"2*16\").ccv(cc(74, 2)).midi()";
+	CHECK(r->evaluate(code, true));
+	CHECK(warnings() == 1);
+	r->engine->midiMessage(0xb, 0, 74, 127); // CC 74 = 127 on MIDI channel 1
+	CHECK(volts(0, 10));
+	r->engine->midiMessage(0x9, 0, 74, 0); // a note 74: not a CC
+	r->seconds(0.5);
+	CHECK(r->out.cc[0] == 10 && r->out.cc[1] == 0); // cc(74, 2): channel 2 only
+	r->engine->midiMessage(0xb, 1, 74, 64);         // CC 74 = 64 on channel 2: both
+	CHECK(volts(1, 640 / 127.f) && volts(0, 640 / 127.f));
+	r->engine->midiDevice = true;
+	CHECK(r->evaluate(code, true));
+	CHECK(warnings() == 1);
+
+	r->engine->setSampleRate(44100);
+	r->sr = 44100;
+	r->paceStart = 0;
+	r->engine->evaluate("let cc = await midin('Test')\n$: ccn(\"3*16\").ccv(cc(74, 2)).midi()", true);
+	CHECK(volts(2, 640 / 127.f, 30)); // after the new runtime's boot
+	r->engine->midiMessage(0xb, 1, 74, 0);
+	CHECK(volts(2, 0));
+	CHECK(warnings() == 1);
+}
+
 // Icing's frames on the real engine (plan item 8): Hydra from Filo's code, H() at the cycle Filo plays, a.fft from the
 // request, src(o0) as a sampler, real shaders through the GLSL conversion; Filo's events stay exact at 60 frames/s;
 // STOP hushes; a restart drops Hydra until the code makes it again; an endless uniform function is interrupted.

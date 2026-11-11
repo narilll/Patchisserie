@@ -226,3 +226,37 @@ test('a RESET late onset is highlighted from the frame it plays on, for its whol
     [112000, 124000],
   ]);
 });
+
+// @strudel/midi's midin() on Filo's MIDI input: host.midiCC and host.midiDevice stand in for the engine's natives.
+test("midin(): cc(n, chan?) is a pattern of the input's latest CC value when queried; no device: warns once", async () => {
+  const { midiCC, midiDevice } = host;
+  const warn = console.warn;
+  const lines = [];
+  const values = new Map(); // `${chan} ${cc}` -> value (chan 0: any)
+  console.warn = (...a) => lines.push(a.map(String).join(' '));
+  host.midiCC = (cc, chan) => values.get(`${chan} ${cc}`) ?? 0;
+  try {
+    const code =
+      "let cc = await midin('My controller')\nglobalThis.__cc = await midin('Other')\n" +
+      "globalThis.__promise = midin('Third')\n" +
+      '$: note("c").lpf(cc(74).range(0, 1000)).lpq(cc(71, 2))';
+    assert.deepEqual(await host.evaluate(code), { ok: true });
+    assert.deepEqual(lines, ["[midi] midin('My controller'): choose a MIDI device in Filo's menu"]);
+    assert.ok(globalThis.__promise instanceof Promise);
+    assert.equal(typeof globalThis.__cc, 'function');
+    assert.ok(globalThis.__cc(74) instanceof host.pattern.constructor);
+    const controls = (b, e) => host.query(b, e).map((h) => [h.value.cutoff, h.value.resonance]);
+    assert.deepEqual(controls(0, 1), [[0, 0]]); // before any CC
+    values.set('0 74', 0.5).set('2 71', 1).set('0 71', 0.25);
+    assert.deepEqual(controls(1, 2), [[500, 1]]); // read at query time, no evaluate needed
+    host.midiDevice = () => true;
+    assert.deepEqual(await host.evaluate(code), { ok: true });
+    assert.equal(lines.length, 1);
+    const pattern = await host.evaluate('let cc = await midin("IAC")');
+    assert.equal(pattern.ok, false);
+    assert.match(pattern.error, /Midi input cannot be a pattern/);
+  } finally {
+    console.warn = warn;
+    Object.assign(host, { midiCC, midiDevice });
+  }
+});

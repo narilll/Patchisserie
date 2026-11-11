@@ -7,6 +7,21 @@ VCV Rack 2 plugin that runs [Strudel](https://strudel.cc) live coding and [Hydra
 
 Status: early development.
 
+## MIDI input
+
+Choose a MIDI driver, device and channel in Filo's menu (saved in the patch); the code reads it as on strudel.cc:
+
+```js
+let cc = await midin('My controller')
+$: note("c2 eb2 g2").s("sawtooth").lpf(cc(74).range(200, 4000)).lpq(cc(71).range(0, 10))
+```
+
+The device is the one in the menu, whatever name `midin()` gets (none chosen: it warns in the log). `cc(n)` is CC n's
+latest value / 127 (0 until one arrives), `cc(n, chan)` that of MIDI channel `chan` (1-16) only; other messages are
+ignored. As on strudel.cc, values are read when Strudel queries the pattern, about 100-150 ms ahead of what plays, and
+apply per note: a knob turn reaches the notes that start after that. They stay across evaluates, not across reopening
+the patch.
+
 ## Icing (Hydra)
 
 Place Icing (30 HP; double-click its preview to open the output window) directly right of a Filo; the Hydra code goes into that Filo's editor, as on strudel.cc:

@@ -69,6 +69,12 @@ struct Filo : Module {
 	dsp::BooleanTrigger stopButton; // the PLAY button evaluates the code: FiloWidget::step(), on the UI thread
 	dsp::PulseGenerator trigPulse[16], clkPulse, resetPulse;
 	filo::Sequencer::Outputs out;
+	// midin() in the code: driver, device and channel from the menu (Rack's), saved in the patch.
+	midi::InputQueue midiInput;
+	// process()'s, reused: tryPop() copies into its bytes, which keep their capacity (Rack's own MIDI modules make one
+	// per sample). ponytail: while messages wait, tryPop() locks Rack's queue mutex and frees the popped one, as in
+	// every Rack MIDI module; idle it returns before that.
+	midi::Message midiMessage;
 	std::atomic<float> mono{0}; // audio thread -> the Icing on the right: (L + R) / 2, its unpatched AUDIO input
 
 	Filo() {
@@ -122,6 +128,10 @@ struct Filo : Module {
 			engine->stop();
 		if (args.frame % 4096 == 0)
 			engine->setBlockFrames(APP->engine->getBlockFrames());
+		while (midiInput.tryPop(&midiMessage, args.frame)) // Rack filters the menu's channel
+			engine->midiMessage(midiMessage.getStatus(), midiMessage.getChannel(), midiMessage.getNote(),
+								midiMessage.getValue());
+		engine->midiDevice.store(midiInput.getDeviceId() >= 0, std::memory_order_relaxed);
 		filo::Sequencer& seq = engine->seq;
 		lights[PLAY_LIGHT].setBrightness(seq.started() ? 1.f : 0.f);
 		seq.voices.setChannels(voices);
@@ -182,18 +192,18 @@ struct Filo : Module {
 	json_t* dataToJson() override {
 		filo::Engine::Map trig, cc;
 		engine->getMaps(trig, cc);
-		return json_pack("{s:s, s:i, s:i, s:i, s:i, s:b, s:o, s:o}", "code", doc.text().c_str(), "voices", voices,
+		return json_pack("{s:s, s:i, s:i, s:i, s:i, s:b, s:o, s:o, s:o}", "code", doc.text().c_str(), "voices", voices,
 						 "polyMode", polyMode, "clkDivision", clkDivision, "ppc", ppc, "autoPlay", autoPlay, "trigMap",
-						 mapJson(trig), "ccMap", mapJson(cc));
+						 mapJson(trig), "ccMap", mapJson(cc), "midi", midiInput.toJson());
 	}
 
 	void dataFromJson(json_t* root) override {
 		const char* code = nullptr;
 		int play = autoPlay;
-		json_t *trig = nullptr, *cc = nullptr;
-		json_unpack(root, "{s?s, s?i, s?i, s?i, s?i, s?b, s?o, s?o}", "code", &code, "voices", &voices, "polyMode",
+		json_t *trig = nullptr, *cc = nullptr, *midiJ = nullptr;
+		json_unpack(root, "{s?s, s?i, s?i, s?i, s?i, s?b, s?o, s?o, s?o}", "code", &code, "voices", &voices, "polyMode",
 					&polyMode, "clkDivision", &clkDivision, "ppc", &ppc, "autoPlay", &play, "trigMap", &trig, "ccMap",
-					&cc);
+					&cc, "midi", &midiJ);
 		// Patch data is a real boundary.
 		voices = clamp(voices, 1, 16);
 		polyMode = clamp(polyMode, 0, (int)filo::VoiceAllocator::MPE);
@@ -202,6 +212,8 @@ struct Filo : Module {
 		if (std::find(kDivisions.begin(), kDivisions.end(), ppc) == kDivisions.end())
 			ppc = 16;
 		autoPlay = play;
+		if (midiJ) // older patches have none
+			midiInput.fromJson(midiJ);
 		engine->setMaps(trig ? mapFrom(trig) : filo::Engine::Map(), cc ? mapFrom(cc) : filo::Engine::Map());
 		if (code)
 			doc.setText(code);
@@ -313,6 +325,10 @@ struct FiloWidget : ModuleWidget {
 			[=](size_t i) { m->ppc = kDivisions[i]; }));
 		menu->addChild(createBoolPtrMenuItem("Auto-play", "", &m->autoPlay));
 		menu->addChild(createMenuItem("Reset TRIG/CC channel maps", "", [=] { m->engine->resetMaps(); }));
+
+		menu->addChild(new MenuSeparator);
+		menu->addChild(createMenuLabel("MIDI input (midin() in the code)"));
+		appendMidiMenu(menu, &m->midiInput);
 
 		menu->addChild(new MenuSeparator);
 		menu->addChild(createMenuLabel("Local samples: " + (samplesDir.empty() ? "none" : samplesDir)));

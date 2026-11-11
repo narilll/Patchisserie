@@ -39757,7 +39757,7 @@ registerProcessor('${name3}', MyProcessor);
   var H = (p) => () => reify(p).queryArc(getTime(), getTime())[0].value;
 
   // js/host.mjs
-  var ready = evalScope(core_exports, edo_exports, tonal_exports, mini_exports, xen_exports, webaudio_exports, { H, initHydra, loadScript });
+  var ready = evalScope(core_exports, edo_exports, tonal_exports, mini_exports, xen_exports, webaudio_exports, { H, initHydra, loadScript, midin });
   var drawSaid = false;
   var noCanvas = (result) => function() {
     if (!drawSaid) drawSaid = true, console.warn("[draw] Strudel canvas visuals (scope, pianoroll, ...) are not shown in Rack");
@@ -39794,6 +39794,18 @@ registerProcessor('${name3}', MyProcessor);
     if (v2.ccn !== void 0 && v2.ccv !== void 0) api.rackEvent(CC, begin2, end2, 0, 0, chan, String(v2.ccn), v2.ccv);
   };
   register("midi", (pat) => pat.onSchedule(toRack, true));
+  var midiSaid = false;
+  async function midin(input) {
+    if (isPattern(input)) {
+      const hint = "Make sure to pass device name with single quotes. Example: midin('IAC Driver Bus 1')";
+      throw new Error(`[midi] Midi input cannot be a pattern. ${hint}`);
+    }
+    if (!api.midiDevice() && !midiSaid) {
+      midiSaid = true;
+      console.warn(`[midi] midin('${input}'): choose a MIDI device in Filo's menu`);
+    }
+    return (cc, chan) => ref(() => api.midiCC(cc, chan ?? 0));
+  }
   var dirtSamples = {
     casio: ["casio/high.wav", "casio/low.wav", "casio/noise.wav"],
     crow: ["crow/000_crow.wav", "crow/001_crow2.wav", "crow/002_crow3.wav", "crow/003_crow4.wav"],
@@ -39913,6 +39925,7 @@ registerProcessor('${name3}', MyProcessor);
       restoreStrudel();
       hydraCalled = false;
       said.clear();
+      midiSaid = false;
       try {
         await evaluate2(code, false);
       } catch (err) {
@@ -40035,6 +40048,10 @@ registerProcessor('${name3}', MyProcessor);
     rackHighlight: (id2, from, to, start, end2) => highlights.push({ id: id2, from, to, start, end: end2 }),
     /** Drains the highlights collected by the default rackHighlight. */
     highlights: () => highlights.splice(0),
+    /** midin()'s source: CC cc's latest value (0..1) on MIDI channel chan (1-16; 0: any), 0 before one arrives, and
+     * whether a MIDI device is chosen in Filo's menu. The engine replaces them. */
+    midiCC: (cc, chan) => 0,
+    midiDevice: () => false,
     /** A query of the playing pattern was interrupted (endless loop): back to the one before the last evaluate, then
      * silence. (Query errors are Strudel's own: logged, no haps.) */
     revert() {

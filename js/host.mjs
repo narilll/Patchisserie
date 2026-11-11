@@ -11,8 +11,9 @@ import { registerTranspilerPlugin, transpiler } from '@strudel/transpiler';
 import { H } from '@strudel/hydra';
 
 // Same scope as strudel.cc (website/src/repl/util.mjs loadModules) minus visual/IO packages; soundfonts join in
-// initAudio(). Of @strudel/hydra: its H() and our initHydra(); hydra.ojack.xyz's loadScript() (below).
-const ready = core.evalScope(core, edo, tonal, mini, xen, webaudio, { H, initHydra, loadScript });
+// initAudio(). Of @strudel/hydra: its H() and our initHydra(); hydra.ojack.xyz's loadScript(); @strudel/midi's midin()
+// (below).
+const ready = core.evalScope(core, edo, tonal, mini, xen, webaudio, { H, initHydra, loadScript, midin });
 
 // Strudel's canvas visuals need a canvas, which Rack doesn't have (out of v1). As upstream without a `window` (ours is
 // for superdough): .draw() returns the pattern, so .scope(), .spiral() etc. play on and draw nothing; the few that
@@ -64,6 +65,23 @@ const toRack = (hap) => {
   if (v.ccn !== undefined && v.ccv !== undefined) api.rackEvent(CC, begin, end, 0, 0, chan, String(v.ccn), v.ccv);
 };
 core.register('midi', (pat) => pat.onSchedule(toRack, true));
+
+// @strudel/midi's midin(input) on Filo's MIDI input: the device is the one chosen in Filo's menu, `input` only names
+// it. As upstream, cc(n, chan?) is a pattern of CC n's latest value / 127 (on MIDI channel chan 1-16, or any), 0 until
+// one arrives, read whenever Strudel queries it. Only CC messages count (upstream takes any message's data bytes).
+// ponytail: values aren't persisted (upstream: localStorage per device, sent back to it on connect): 0 after a reload.
+let midiSaid = false; // the no-device warning, once per evaluate
+async function midin(input) {
+  if (core.isPattern(input)) {
+    const hint = "Make sure to pass device name with single quotes. Example: midin('IAC Driver Bus 1')";
+    throw new Error(`[midi] Midi input cannot be a pattern. ${hint}`);
+  }
+  if (!api.midiDevice() && !midiSaid) {
+    midiSaid = true;
+    console.warn(`[midi] midin('${input}'): choose a MIDI device in Filo's menu`);
+  }
+  return (cc, chan) => core.ref(() => api.midiCC(cc, chan ?? 0));
+}
 
 // strudel.cc's Dirt-Samples subset (website/src/repl/prebake.mjs), served from its CDN.
 const dirtSamples = {
@@ -190,6 +208,7 @@ const api = (globalThis.__patchisserie = {
     restoreStrudel(); // Strudel's names again, unless this code calls initHydra()
     hydraCalled = false;
     said.clear();
+    midiSaid = false;
     try {
       await evaluate(code, false); // false: don't start the Cyclist; errors land in onEvalError
     } catch (err) {
@@ -332,6 +351,10 @@ const api = (globalThis.__patchisserie = {
   rackHighlight: (id, from, to, start, end) => highlights.push({ id, from, to, start, end }),
   /** Drains the highlights collected by the default rackHighlight. */
   highlights: () => highlights.splice(0),
+  /** midin()'s source: CC cc's latest value (0..1) on MIDI channel chan (1-16; 0: any), 0 before one arrives, and
+   * whether a MIDI device is chosen in Filo's menu. The engine replaces them. */
+  midiCC: (cc, chan) => 0,
+  midiDevice: () => false,
 
   /** A query of the playing pattern was interrupted (endless loop): back to the one before the last evaluate, then
    * silence. (Query errors are Strudel's own: logged, no haps.) */

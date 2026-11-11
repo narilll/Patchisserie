@@ -94,13 +94,15 @@ const char* kPrelude = R"js((function (native) {
 }))js";
 
 // After res/engine.js: superdough, the local samples (registered again after strudel.cc's online maps, so local names
-// win), the .midi() event, highlight and Hydra shader sinks, and what the C++ loop calls.
+// win), the .midi() event, highlight and Hydra shader sinks, the MIDI input, and what the C++ loop calls.
 const char* kGlue = R"js((function (native, local) {
   'use strict';
   const host = __patchisserie;
   host.rackEvent = native.rack;
   host.rackHighlight = native.highlight;
   host.hydraProgram = native.hydraProgram;
+  host.midiCC = native.midiCC;
+  host.midiDevice = native.midiDevice;
   const register = (map) => map && samples(map, 'localsamples:', { prebake: true, tag: 'local' });
   const boot = host.initAudio().then(() => {
     register(local);
@@ -363,6 +365,20 @@ struct Engine::Js {
 		return JS_NewUint32(ctx, self(ctx)->e->hydra.setProgram(output, std::move(p)));
 	}
 
+	/** host.midiCC(cc, chan): that CC's latest value (0..1) on MIDI channel chan (1-16; 0: any); 0 before one
+	arrives, and for numbers out of range. */
+	static JSValue nMidiCC(JSContext* ctx, JSValueConst, int, JSValueConst* argv) {
+		int32_t cc = 0, chan = 0;
+		if (JS_ToInt32(ctx, &cc, argv[0]) || JS_ToInt32(ctx, &chan, argv[1]))
+			return JS_EXCEPTION;
+		bool in = cc >= 0 && cc < 128 && chan >= 0 && chan <= 16;
+		return JS_NewFloat64(ctx, in ? self(ctx)->e->midiCC_[chan][cc].load(std::memory_order_relaxed) : 0);
+	}
+
+	static JSValue nMidiDevice(JSContext* ctx, JSValueConst, int, JSValueConst*) {
+		return JS_NewBool(ctx, self(ctx)->e->midiDevice.load(std::memory_order_relaxed));
+	}
+
 	// --- Lifetime ---
 
 	/** Evaluates `source` (a function expression) and calls it with args. */
@@ -415,7 +431,9 @@ struct Engine::Js {
 					   {"evaluated", nEvaluated, 4},
 					   {"highlight", nHighlight, 5},
 					   {"booted", nBooted, 0},
-					   {"hydraProgram", nHydraProgram, 4}};
+					   {"hydraProgram", nHydraProgram, 4},
+					   {"midiCC", nMidiCC, 2},
+					   {"midiDevice", nMidiDevice, 0}};
 			for (auto& f : fns)
 				JS_SetPropertyStr(ctx, natives, f.name, JS_NewCFunction(ctx, f.fn, f.name, f.length));
 			local = localMap(samplesDir);
