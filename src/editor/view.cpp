@@ -78,10 +78,15 @@ void View::step() {
 	clampScroll();
 }
 
+float View::gutterW() const {
+	int digits = std::max(2, (int)std::to_string(doc->lineCount()).size());
+	return 2 * kPad + digits * charW_;
+}
+
 void View::follow() {
 	int line = doc->lineOf(doc->cursor());
 	float top = line * lineH(), x = doc->column(doc->cursor()) * charW_;
-	float h = textH() - 2 * kPad, w = box.size.x - 2 * kPad;
+	float h = textH() - 2 * kPad, w = box.size.x - gutterW() - kPad;
 	if (top < scroll_.y)
 		scroll_.y = top;
 	else if (top + lineH() > scroll_.y + h)
@@ -94,14 +99,14 @@ void View::follow() {
 
 void View::clampScroll() {
 	float maxY = std::max(0.f, doc->lineCount() * lineH() - (textH() - 2 * kPad));
-	float maxX = std::max(0.f, (columns_ + 1) * charW_ - (box.size.x - 2 * kPad));
+	float maxX = std::max(0.f, (columns_ + 1) * charW_ - (box.size.x - gutterW() - kPad));
 	scroll_.x = math::clamp(scroll_.x, 0.f, maxX);
 	scroll_.y = math::clamp(scroll_.y, 0.f, maxY);
 }
 
 size_t View::hit(math::Vec pos, bool nearest) const {
 	int line = (int)std::floor((pos.y - kPad + scroll_.y) / lineH());
-	float c = (pos.x - kPad + scroll_.x) / charW_;
+	float c = (pos.x - gutterW() + scroll_.x) / charW_; // in the gutter: negative, the line's start
 	int col = std::max(0, (int)(nearest ? std::round(c) : std::floor(c)));
 	return doc->at(math::clamp(line, 0, doc->lineCount() - 1), col);
 }
@@ -132,7 +137,7 @@ void View::paint(NVGcontext* vg) {
 	charW_ = nvgTextBounds(vg, 0, 0, "0000000000", nullptr, nullptr) / 10;
 	// Only the visible lines: the cost per frame doesn't grow with the document.
 	int first = std::max(0, (int)(scroll_.y / lh)), last = std::min(doc->lineCount() - 1, (int)((scroll_.y + th) / lh));
-	auto X = [&](int col) { return kPad + col * charW_ - scroll_.x; };
+	auto X = [&](int col) { return gutterW() + col * charW_ - scroll_.x; };
 	auto Y = [&](int line) { return kPad + line * lh - scroll_.y; };
 	// [b, e) as a box per visible line, half a char for a newline in it.
 	auto mark = [&](size_t b, size_t e, NVGcolor c, bool outline) {
@@ -158,10 +163,6 @@ void View::paint(NVGcontext* vg) {
 		nvgBeginPath(vg);
 		nvgRect(vg, 0, Y(err), w, lh);
 		nvgFillColor(vg, nvgRGBA(0xff, 0x6b, 0x5b, 0x30));
-		nvgFill(vg);
-		nvgBeginPath(vg);
-		nvgRect(vg, 0, Y(err), 2, lh);
-		nvgFillColor(vg, kError);
 		nvgFill(vg);
 	}
 	if (doc->hasSelection())
@@ -215,6 +216,26 @@ void View::paint(NVGcontext* vg) {
 		nvgBeginPath(vg);
 		nvgRect(vg, X(doc->column(doc->cursor())) - 0.5f, Y(l) + 1, 1.5f, lh - 2);
 		nvgFillColor(vg, kMessage);
+		nvgFill(vg);
+	}
+
+	// Line numbers over the text scrolled under them, the error line's marker at the left edge.
+	float gw = gutterW();
+	nvgBeginPath(vg);
+	nvgRect(vg, 0, 0, gw, th);
+	nvgFillColor(vg, kBackground);
+	nvgFill(vg);
+	nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+	int cur = doc->lineOf(doc->cursor());
+	for (int l = first; l <= last; l++) {
+		nvgFillColor(vg, l == err ? kError : l == cur ? kText : kDim);
+		std::string n = std::to_string(l + 1);
+		nvgText(vg, gw - kPad, Y(l) + lh / 2, n.c_str(), nullptr);
+	}
+	if (errVisible) {
+		nvgBeginPath(vg);
+		nvgRect(vg, 0, Y(err), 2, lh);
+		nvgFillColor(vg, kError);
 		nvgFill(vg);
 	}
 	nvgRestore(vg);
@@ -322,7 +343,9 @@ void View::onSelectKey(const SelectKeyEvent& e) {
 	} else if (e.isKeyCommand(GLFW_KEY_ENTER, RACK_MOD_CTRL) || e.isKeyCommand(GLFW_KEY_KP_ENTER, RACK_MOD_CTRL)) {
 		if (e.action == GLFW_PRESS)
 			evaluate();
-	} else if (e.isKeyCommand(GLFW_KEY_PERIOD, RACK_MOD_CTRL)) {
+	} else if (m == RACK_MOD_CTRL && (e.key == GLFW_KEY_SLASH || e.key == GLFW_KEY_KP_DIVIDE || e.keyName == "/"))
+		doc->toggleComment(); // by key name too: '/' is elsewhere (or Shift+7) on other layouts
+	else if (e.isKeyCommand(GLFW_KEY_PERIOD, RACK_MOD_CTRL)) {
 		if (engine)
 			engine->stop();
 	} else if (e.isKeyCommand(GLFW_KEY_Z, RACK_MOD_CTRL))

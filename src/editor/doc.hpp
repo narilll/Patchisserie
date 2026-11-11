@@ -247,6 +247,66 @@ class Doc {
 		if (e > cursor_)
 			replace(cursor_, e - cursor_, "", word ? Other : Delete);
 	}
+	/** Cmd/Ctrl+/ like CodeMirror's: the lines the selection touches (not a last one it only enters at column 0) lose
+	their "//" if all have it, else get "// " at the least indentation. Blank lines stay, but a lone one gets it at its
+	end. One undo step, the selection kept on its text. ponytail: the step replaces the whole block (playing spans in
+	it are dropped until the next evaluate). */
+	void toggleComment() {
+		int l0 = lineOf(selBegin()), l1 = lineOf(selEnd());
+		if (l1 > l0 && selEnd() == lineStart(l1))
+			l1--;
+		struct Edit {
+			size_t pos, del, ins;
+		};
+		std::vector<Edit> edits;
+		std::vector<size_t> indents;
+		size_t least = SIZE_MAX;
+		bool all = true;
+		for (int l = l0; l <= l1; l++) {
+			size_t i = lineStart(l);
+			while (i < lineEnd(l) && (text_[i] == ' ' || text_[i] == '\t'))
+				i++;
+			if (i == lineEnd(l))
+				continue; // blank
+			indents.push_back(i);
+			least = std::min(least, i - lineStart(l));
+			all = all && text_.compare(i, 2, "//") == 0;
+		}
+		if (indents.empty()) {
+			if (l0 == l1)
+				edits.push_back({lineEnd(l0), 0, 3});
+		} else if (all)
+			for (size_t i : indents)
+				edits.push_back({i, text_[i + 2] == ' ' ? 3u : 2u, 0});
+		else {
+			int k = 0;
+			for (int l = l0; l <= l1; l++)
+				if (k < (int)indents.size() && indents[k] >= lineStart(l) && indents[k] <= lineEnd(l))
+					edits.push_back({lineStart(l) + least, 0, 3}), k++;
+		}
+		if (edits.empty())
+			return;
+		size_t from = lineStart(l0), to = lineEnd(l1), a = anchor_, c = cursor_;
+		std::string out;
+		size_t at = from;
+		auto map = [&](size_t p) {
+			size_t q = p;
+			for (const Edit& e : edits)
+				if (p >= e.pos + e.del)
+					q = q + e.ins - e.del;
+				else if (p > e.pos)
+					q = q - (p - e.pos);
+			return q;
+		};
+		a = map(a), c = map(c);
+		for (const Edit& e : edits) {
+			out += text_.substr(at, e.pos - at) + (e.ins ? "// " : "");
+			at = e.pos + e.del;
+		}
+		out += text_.substr(at, to - at);
+		replace(from, to - from, out, Other);
+		anchor_ = a, cursor_ = c;
+	}
 	/** Back to before the last step, its selection too. */
 	bool undo() {
 		if (undo_.empty())

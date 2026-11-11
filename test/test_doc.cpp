@@ -212,6 +212,76 @@ TEST(doc_newline_keeps_indentation) {
 	CHECK(std::string(editor::kIndent) == "  ");
 }
 
+TEST(doc_toggle_comment) {
+	Doc d("a\n  b");
+	d.toggleComment(); // no selection: the cursor's line
+	CHECK(d.text() == "// a\n  b" && d.cursor() == 3);
+	d.toggleComment();
+	CHECK(d.text() == "a\n  b" && d.cursor() == 0);
+	// Several lines: the markers line up at the least indentation; blank lines stay.
+	d.setText("    x\n  y\n   \n    z");
+	d.selectAll();
+	d.toggleComment();
+	CHECK(d.text() == "  //   x\n  // y\n   \n  //   z");
+	d.toggleComment(); // all commented: off again
+	CHECK(d.text() == "    x\n  y\n   \n    z");
+	// Mixed: all get commented (the commented one twice).
+	d.setText("// a\nb");
+	d.selectAll();
+	d.toggleComment();
+	CHECK(d.text() == "// // a\n// b");
+	// With and without the space after //.
+	d.setText("//a\n//  b\n  // c");
+	d.selectAll();
+	d.toggleComment();
+	CHECK(d.text() == "a\n b\n  c");
+	// A selection ending at column 0 leaves that line out.
+	d.setText("a\nb\nc");
+	d.select(0, 4);
+	d.toggleComment();
+	CHECK(d.text() == "// a\n// b\nc" && d.anchor() == 3 && d.cursor() == 10);
+	d.select(0, 0);
+	d.toggleComment(); // the first line is "// a": uncommented
+	CHECK(d.text() == "a\n// b\nc");
+	// A lone blank line gets the marker at its end; blank ones among others stay.
+	d.setText("  \nx");
+	d.toggleComment();
+	CHECK(d.text() == "  // \nx" && d.cursor() == 0);
+	d.setText("  \n\n");
+	d.select(0, 4);
+	d.toggleComment();
+	CHECK(d.text() == "  \n\n");
+	// The cursor inside the removed marker clamps to where it was; the selection follows its text.
+	d.setText("// ab");
+	d.setCursor(1);
+	d.toggleComment();
+	CHECK(d.text() == "ab" && d.cursor() == 0);
+	d.setText("  ab\n  cd");
+	d.select(3, 8);
+	d.toggleComment();
+	CHECK(d.text() == "  // ab\n  // cd" && d.selection() == "b\n  // c");
+	// One undo step, never joined with typing; it restores text and selection.
+	d.setText("ab");
+	d.setCursor(2);
+	d.type("c");
+	d.select(0, 3);
+	d.toggleComment();
+	d.type("d");
+	CHECK(d.undo() && d.text() == "// abc" && d.undo() && d.text() == "abc" && d.anchor() == 0 && d.cursor() == 3);
+	d.setText("a\nb");
+	d.select(1, 3);
+	d.toggleComment();
+	CHECK(d.undo() && d.text() == "a\nb" && d.anchor() == 1 && d.cursor() == 3);
+	CHECK(d.redo() && d.text() == "// a\n// b");
+	// Non-ASCII.
+	d.setText("  žluť\n  é");
+	d.selectAll();
+	d.toggleComment();
+	CHECK(d.text() == "  // žluť\n  // é" && d.cursor() == d.text().size());
+	d.toggleComment();
+	CHECK(d.text() == "  žluť\n  é" && d.cursor() == d.text().size());
+}
+
 TEST(doc_tokenizer_strudel_code) {
 	CHECK(tokens("$: s(\"bd*2 [sd hh]\").bank('tr909') // drums") ==
 		  "L:$: F:s S:\"bd*2 [sd hh]\" F:bank S:'tr909' C:// drums");

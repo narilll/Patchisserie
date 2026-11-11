@@ -47,6 +47,8 @@ struct View : rack::widget::Widget {
 
 	float lineH() const { return std::round(fontSize * 1.3f); }
 	float statusH() const { return std::round(fontSize * 1.6f); }
+	/** The line numbers' column: at least 2 digits, kPad around. */
+	float gutterW() const;
 	float textH() const { return box.size.y - statusH(); }
 	void paint(NVGcontext* vg);
 	size_t hit(rack::math::Vec pos, bool nearest) const;
