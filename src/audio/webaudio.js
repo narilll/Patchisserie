@@ -599,6 +599,7 @@
     }
     postMessage(message) {
       const st = this[S];
+      if (st.mode === 'disabled') return;
       if (st.mode !== 'native') return void native.post(st.h, message);
       // A native port understands what superdough sends its processor: {type: 'initialize', payload}.
       if (message?.type === 'initialize') {
@@ -610,6 +611,7 @@
   }
 
   // Worklet nodes by id, for port messages and processorerror from the render thread; entries go with their nodes.
+  const warned = new Set(); // disabled processors already logged
   const forget = new FinalizationRegistry(({ worklets, id }) => worklets.delete(id));
   class AudioWorkletNode extends AudioNode {
     constructor(ctx, name, opts) {
@@ -618,9 +620,7 @@
       name = String(name);
       const def = ctx[S].processors.get(name);
       if (!def) throw error('InvalidStateError', `AudioWorkletNode: no processor '${name}' (audioWorklet.addModule first)`);
-      if (def.mode === 'disabled') {
-        throw error('NotSupportedError', `AudioWorkletNode '${name}': ${def.feature} is not available in Patchisserie v1`);
-      }
+      const off = def.mode === 'disabled'; // unsupported processor: a pass-through gain node, params and messages ignored
       const inputs = opts?.numberOfInputs ?? 1;
       const outputs = opts?.numberOfOutputs ?? 1;
       if (inputs === 0 && outputs === 0) throw error('NotSupportedError', 'AudioWorkletNode: no inputs and no outputs');
@@ -640,11 +640,24 @@
       // Spec: without outputChannelCount, one input and one output follow the input's channel count (0), else mono.
       const computed = channels ?? Array(outputs).fill(inputs === 1 && outputs === 1 ? 0 : 1);
       const arg = { name, inputs, channels: computed, options };
-      const st = init(this, ctx, 'worklet', opts, arg, def.params, opts?.parameterData);
-      st.parameters = new Map(def.params.map((p, i) => [p, st.params[i]])); // ponytail: a Map as AudioParamMap
+      let st;
+      if (off) {
+        if (!warned.has(name)) {
+          warned.add(name);
+          native.log(`[worklet] ${def.feature} is not supported in Rack: played without it`, 'warning');
+        }
+        st = init(this, ctx, 'gain', channels && { channelCount: channels[0], channelCountMode: 'explicit' });
+        const sink = new GainNode(ctx).gain; // one unconnected param takes every write
+        st.parameters = new Map(def.params.map((p) => [p, sink]));
+        st.sink = sink;
+      } else {
+        st = init(this, ctx, 'worklet', opts, arg, def.params, opts?.parameterData);
+        st.parameters = new Map(def.params.map((p, i) => [p, st.params[i]])); // ponytail: a Map as AudioParamMap
+      }
       st.port = Object.create(MessagePort.prototype);
       st.port[S] = { h: st.h, mode: def.mode, onmessage: null };
       st.onprocessorerror = null;
+      if (off) return;
       ctx[S].worklets.set(st.id, new WeakRef(this));
       forget.register(this, { worklets: ctx[S].worklets, id: st.id });
     }

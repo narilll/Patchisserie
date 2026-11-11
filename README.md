@@ -101,8 +101,9 @@ visuals, outputs, inputs and sources below that Rack lacks are ignored with one 
   `.punchcard()` and `.wordfall()` play on but draw nothing; `.animate()` is silence. The editor's inline widgets
   `._scope()`, `._pianoroll()`, `._punchcard()`, `._spiral()`, `._pitchwheel()` and `.markcss()` do nothing, and
   `slider(value, min, max)` stays at `value`.
-- Sound: the `stretch` effect (phase vocoder) and kabelsalat are off; no microphone/audio input into Strudel; no
-  `dough` engine or multichannel orbits (Filo's output is stereo L/R).
+- Sound: the `stretch` effect (phase vocoder) and kabelsalat are ignored (the sound plays without them, one log
+  line); no microphone/audio input into Strudel; no `dough` engine or multichannel orbits (Filo's output is stereo
+  L/R).
 - Outputs other than audio and `.midi()`: `.osc()` (SuperDirt), `.serial()`, `.csound()` and `.mqtt()` send nothing,
   the pattern plays through superdough instead (`loadCsound` does nothing). Inputs: `gamepad()`'s axes and buttons
   and the motion signals (`accelerationX`, `rotationAlpha`, …) stay 0.

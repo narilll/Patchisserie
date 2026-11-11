@@ -4,7 +4,7 @@
 // (strudel.cc's WAV export, used for the Chrome references): per cycle, onset haps queried and awaited through
 // superdough() one cycle ahead.
 // Writes build/render/<id>.wav; asserts non-silence, no logged errors, exact sample onsets (`samples`), that the node
-// count returns to its baseline after every pattern and that a disabled worklet ('stretch') is a logged error.
+// count returns to its baseline after every pattern and that a disabled worklet ('stretch') is ignored.
 // https URLs come from build/render-cache/<host>/<path>.
 // Flags: --bench        CPU per pattern and for all patterns stacked (G4), no WAVs (make render-bench: release build)
 //        --loop N       the set N times: after the first pass, nodes and native resources return to the same count
@@ -447,14 +447,14 @@ int main(int argc, char** argv) {
 		}
 	}
 
-	// A disabled processor is a clear error in the log, not a crash (off t = 0: superdough starts stretch 40 ms early).
+	// A disabled processor is ignored (warning only): the voice plays like the same pattern without it (off t = 0:
+	// superdough starts stretch 40 ms early).
 	Result r = renderPattern(h, "note(\"~ c3\").s(\"sawtooth\").stretch(2)", cps, 1, baseline, nullptr);
-	bool reported = false;
-	for (const std::string& e : r.problems)
-		reported |= e.find("stretch is not available") != std::string::npos;
-	std::printf("stretch: %s, nodes %d (baseline %d)\n", reported ? "reported as an error" : "FAIL: no error logged",
-				r.nodesAfter, baseline);
-	failures += !reported || r.nodesAfter != baseline;
+	Result plain = renderPattern(h, "note(\"~ c3\").s(\"sawtooth\")", cps, 1, baseline, nullptr);
+	bool same = r.problems.empty() && plain.problems.empty() && std::fabs(r.peak - plain.peak) < 1e-3;
+	std::printf("stretch: %s, peak %.4f (plain %.4f), nodes %d (baseline %d)\n",
+				same ? "ignored, plays un-stretched" : "FAIL", r.peak, plain.peak, r.nodesAfter, baseline);
+	failures += !same || r.nodesAfter != baseline;
 
 	std::printf("%d patterns failed\n", failures);
 	return failures ? 1 : 0;

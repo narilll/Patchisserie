@@ -140,16 +140,48 @@ TEST(worklet_descriptors_are_on_the_js_thread_after_add_module) {
 		assert(p.get('frequency').minValue === -3.4028234663852886e38 && p.get('begin').maxValue === 3.4028234663852886e38, 'range');
 		const crush = new AudioWorkletNode(ac, 'crush-processor', { parameterData: { crush: 4 } });
 		assert(crush.parameters.get('crush').value === 4 && crush.numberOfInputs === 1 && crush.port.onmessage === null, 'crush');
-		for (const [proc, feature] of [['phase-vocoder-processor', 'stretch'], ['generic-processor', 'kabelsalat']]) {
-			const e = name(() => new AudioWorkletNode(ac, proc));
-			assert(e.startsWith('NotSupportedError') && e.includes(feature), e);
-		}
 		assert(/^IndexSizeError/.test(name(() => new AudioWorkletNode(ac, 'lfo-processor', { outputChannelCount: [1, 1] }))), 'count');
 		assert(/^NotSupportedError/.test(name(() => new AudioWorkletNode(ac, 'lfo-processor', { outputChannelCount: [3] }))), '3 ch');
 		const late = await ac.audioWorklet.addModule('src/audio/webaudio.js').then(() => 'resolved', (e) => e.message);
 		assert(/render thread/.test(late), `a new module after the first node: ${late}`);
 		return 'ok';
 	)js")));
+}
+
+TEST(disabled_processor_is_a_pass_through_that_warns_once) {
+	JsRig r;
+	CHECK(ok(r.run(R"js(
+		const ac = new AudioContext();
+		await ac.audioWorklet.addModule('patchisserie:worklets.js');
+		const base = nodeCount();
+		(() => {
+			const src = new ConstantSourceNode(ac, { offset: 0.5 });
+			const a = new AudioWorkletNode(ac, 'phase-vocoder-processor', { outputChannelCount: [2] });
+			const b = new AudioWorkletNode(ac, 'phase-vocoder-processor', { outputChannelCount: [2] });
+			const k = new AudioWorkletNode(ac, 'generic-processor', { numberOfInputs: 0, outputChannelCount: [2] });
+			for (const p of a.parameters.values()) { p.value = 3; p.setValueAtTime(2, 0); } // accepted, ignored
+			a.port.postMessage({ anything: 1 });
+			a.port.onmessage = () => {};
+			src.connect(a);
+			a.connect(b);
+			b.connect(ac.destination);
+			k.connect(ac.destination); // no input: silence
+			src.start();
+			src.stop(0.01);
+			const out = render(256);
+			assert(out[0] === 0.5 && out[255] === 0.5, `pass-through ${out[0]} ${out[255]}`);
+			assert(a.numberOfInputs === 1 && a.numberOfOutputs === 1, 'shape');
+		})();
+		for (let n = 0; n < 5; n++) { render(512); gc(); }
+		assert(nodeCount() === base, `${nodeCount() - base} nodes over the baseline`);
+		return 'ok';
+	)js")));
+	int stretch = 0, kabel = 0;
+	for (const std::string& l : r.logs) {
+		stretch += l == "warning: [worklet] stretch is not supported in Rack: played without it";
+		kabel += l == "warning: [worklet] kabelsalat is not supported in Rack: played without it";
+	}
+	CHECK(stretch == 1 && kabel == 1);
 }
 
 TEST(worklet_scope_semantics) {
