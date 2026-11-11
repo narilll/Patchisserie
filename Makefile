@@ -62,3 +62,10 @@ test-js: build/qjs
 	build/qjs test/qjs_tunes.mjs
 
 .PHONY: test-js
+
+# Audio regression (plan G1/G3) of build/render/<id>.wav against the Chrome references in test/render/reference.json;
+# patterns without a render are skipped. References: scripts/fetch-test-samples && node scripts/render-reference.mjs
+test-render:
+	node --test test/render.test.mjs
+
+.PHONY: test-render

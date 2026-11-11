@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Downloads every URL in test/render/urls.txt to build/render-cache/<host>/<path> (the render tests' offline cache).
+# Idempotent: files already present are kept. urls.txt is produced by `node scripts/render-reference.mjs --record`.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+while read -r url; do
+  [ -n "$url" ] || continue
+  path="${url#https://}"
+  file="$root/build/render-cache/${path%%\?*}"
+  [ -f "$file" ] && continue
+  mkdir -p "$(dirname "$file")"
+  curl -fsSL --retry 3 -o "$file.tmp" "$url"
+  mv "$file.tmp" "$file"
+  echo "$url"
+done <"$root/test/render/urls.txt"

@@ -1,0 +1,5 @@
+https://felixroos.github.io/webaudiofontdata/sound/0000_JCLive_sf2_file.js
+https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/bd/BT0A0A7.wav
+https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/hh/000_hh3closedhh.wav
+https://raw.githubusercontent.com/tidalcycles/Dirt-Samples/master/sd/rytm-00-hard.wav
+https://raw.githubusercontent.com/tidalcycles/dirt-samples/main/strudel.json
