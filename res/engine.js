@@ -39758,6 +39758,13 @@ registerProcessor('${name3}', MyProcessor);
 
   // js/host.mjs
   var ready = evalScope(core_exports, edo_exports, tonal_exports, mini_exports, xen_exports, webaudio_exports, { H, initHydra });
+  var drawSaid = false;
+  var noCanvas = (result) => function() {
+    if (!drawSaid) drawSaid = true, console.warn("[draw] Strudel canvas visuals (scope, pianoroll, ...) are not shown in Rack");
+    return result ?? this;
+  };
+  for (const name3 of ["draw", "pianoroll", "pitchwheel"]) Pattern.prototype[name3] = noCanvas();
+  Pattern.prototype.animate = noCanvas(silence);
   var evalError;
   var seconds2 = 0;
   var { evaluate: evaluate2, scheduler, setCps } = repl({
@@ -40182,7 +40189,8 @@ registerProcessor('${name3}', MyProcessor);
     });
     return h3;
   }
-  async function initHydra() {
+  async function initHydra(options) {
+    if (options?.feedStrudel) console.warn("[hydra] feedStrudel: Strudel's canvas isn't drawn in Rack, s0 stays empty");
     hydraCalled = true;
     hydra = await (hydraReady ??= createHydra());
     installHydra();

@@ -174,3 +174,18 @@ test('a failing uniform function warns once, not on every frame', async () => {
   assert.equal(lines.length, 1, lines.join('\n'));
   assert.match(lines[0], /nosuchname/);
 });
+
+test("Strudel's canvas visuals and feedStrudel draw nothing but don't stop the code (they warn once)", async () => {
+  const warn = console.warn;
+  const lines = [];
+  console.warn = (...a) => lines.push(a.map(String).join(' '));
+  try {
+    for (let i = 0; i < 2; i++)
+      await ok('await initHydra({feedStrudel:1})\nsrc(s0).kaleid(4).out()\n$: s("bd*4").scope({pos:0}).pianoroll()');
+  } finally {
+    console.warn = warn;
+  }
+  assert.equal(host.query(0, 1).length, 4);
+  assert.equal(lines.filter((l) => /\[draw\]/.test(l)).length, 1, lines.join('\n'));
+  assert.ok(lines.some((l) => /feedStrudel/.test(l)), lines.join('\n'));
+});

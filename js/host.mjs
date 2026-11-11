@@ -14,6 +14,18 @@ import { H } from '@strudel/hydra';
 // initAudio(). Of @strudel/hydra: its H() and our initHydra() (below).
 const ready = core.evalScope(core, edo, tonal, mini, xen, webaudio, { H, initHydra });
 
+// Strudel's canvas visuals need a canvas, which Rack doesn't have (out of v1). As upstream without a `window` (ours is
+// for superdough): .draw() returns the pattern, so .scope(), .spiral() etc. play on and draw nothing; the few that
+// take a canvas before drawing do the same. They warn once.
+let drawSaid = false;
+const noCanvas = (result) =>
+  function () {
+    if (!drawSaid) (drawSaid = true), console.warn('[draw] Strudel canvas visuals (scope, pianoroll, ...) are not shown in Rack');
+    return result ?? this;
+  };
+for (const name of ['draw', 'pianoroll', 'pitchwheel']) core.Pattern.prototype[name] = noCanvas();
+core.Pattern.prototype.animate = noCanvas(core.silence);
+
 let evalError;
 let seconds = 0; // playback position of the last tick()
 const { evaluate, scheduler, setCps } = core.repl({
@@ -486,7 +498,8 @@ async function createHydra() {
 
 /** strudel.cc's initHydra(): Hydra's functions, outputs and values as globals for the rest of this evaluate. Its
  * options (canvas, DOM, microphone, Strudel canvas) are accepted and ignored. */
-async function initHydra() {
+async function initHydra(options) {
+  if (options?.feedStrudel) console.warn("[hydra] feedStrudel: Strudel's canvas isn't drawn in Rack, s0 stays empty");
   hydraCalled = true;
   hydra = await (hydraReady ??= createHydra());
   installHydra();
