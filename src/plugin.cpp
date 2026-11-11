@@ -1,6 +1,7 @@
 #include <osdialog.h>
 #include <rack.hpp>
 
+#include "editor/view.hpp"
 #include "engine.hpp"
 #include "hydra.hpp"
 
@@ -59,9 +60,8 @@ struct Filo : Module {
 	// Settings: set by the UI thread (menu, JSON), read by process(), like Rack's own modules.
 	int voices = 16, polyMode = filo::VoiceAllocator::Rotate, clkDivision = 16, ppc = 16;
 	bool autoPlay = true;
-	// The editor's text (UI thread); a new textVersion tells the editor that JSON replaced it.
-	std::string text = kDefaultCode;
-	int textVersion = 0;
+	// The code, its undo history and what of it plays (UI thread): the panel's and the fullscreen editor's.
+	editor::Doc doc{kDefaultCode};
 	bool added = false;
 
 	dsp::SchmittTrigger playIn, stopIn, clockIn, resetIn;
@@ -73,7 +73,7 @@ struct Filo : Module {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, 0);
 		configButton(PLAY_PARAM, "Play");
 		configButton(STOP_PARAM, "Stop (hush, gates down)");
-		configButton(FULLSCREEN_PARAM, "Fullscreen editor (not yet)");
+		configButton(FULLSCREEN_PARAM, "Fullscreen editor (Esc closes)");
 		configInput(PLAY_INPUT, "Play trigger");
 		configInput(STOP_INPUT, "Stop trigger");
 		configInput(CLOCK_INPUT, "Clock (pulses per cycle: menu)");
@@ -101,9 +101,11 @@ struct Filo : Module {
 		engine.reset(new filo::Engine(c));
 	}
 
+	void evaluate(bool play) { doc.evaluated(engine->evaluate(doc.text(), play)); }
+
 	void onAdd(const AddEvent&) override {
 		added = true;
-		engine->evaluate(text, autoPlay);
+		evaluate(autoPlay);
 	}
 
 	void onSampleRateChange(const SampleRateChangeEvent& e) override { engine->setSampleRate(e.sampleRate); }
@@ -177,8 +179,8 @@ struct Filo : Module {
 	json_t* dataToJson() override {
 		filo::Engine::Map trig, cc;
 		engine->getMaps(trig, cc);
-		return json_pack("{s:s, s:i, s:i, s:i, s:i, s:b, s:o, s:o}", "code", text.c_str(), "voices", voices, "polyMode",
-						 polyMode, "clkDivision", clkDivision, "ppc", ppc, "autoPlay", autoPlay, "trigMap",
+		return json_pack("{s:s, s:i, s:i, s:i, s:i, s:b, s:o, s:o}", "code", doc.text().c_str(), "voices", voices,
+						 "polyMode", polyMode, "clkDivision", clkDivision, "ppc", ppc, "autoPlay", autoPlay, "trigMap",
 						 mapJson(trig), "ccMap", mapJson(cc));
 	}
 
@@ -198,56 +200,18 @@ struct Filo : Module {
 			ppc = 16;
 		autoPlay = play;
 		engine->setMaps(trig ? mapFrom(trig) : filo::Engine::Map(), cc ? mapFrom(cc) : filo::Engine::Map());
-		if (code) {
-			text = code;
-			textVersion++;
-		}
+		if (code)
+			doc.setText(code);
 		if (added) // a preset or undo on a module that is running already; a new one evaluates in onAdd()
-			engine->evaluate(text, autoPlay);
+			evaluate(autoPlay);
 	}
 };
 
-// Panel layout (mm), matching res/Filo.svg.
-static const math::Rect kEditorMm = math::Rect(3, 9, 197.2, 80);
-static const math::Rect kMessageMm = math::Rect(3, 90, 197.2, 6);
+// Panel layout (mm), matching res/Filo.svg: the editor with its status line at the bottom.
+static const math::Rect kEditorMm = math::Rect(3, 9, 197.2, 87);
 
-// ponytail: the interim editor (M2), Rack's multiline text field; M3 replaces this struct with the real editor.
-struct CodeField : app::LedDisplayTextField {
-	Filo* module = nullptr;
-	int version = -1;
-
-	void step() override {
-		if (module && version != module->textVersion) {
-			version = module->textVersion;
-			setText(module->text);
-		}
-		LedDisplayTextField::step();
-	}
-	void onChange(const ChangeEvent& e) override {
-		if (module)
-			module->text = getText();
-		LedDisplayTextField::onChange(e);
-	}
-	void onSelectKey(const SelectKeyEvent& e) override {
-		if (module && e.action == GLFW_PRESS && (e.mods & RACK_MOD_MASK) == RACK_MOD_CTRL) {
-			if (e.key == GLFW_KEY_ENTER || e.key == GLFW_KEY_KP_ENTER) {
-				module->engine->evaluate(getText(), true);
-				e.consume(this);
-				return;
-			}
-			if (e.key == GLFW_KEY_PERIOD) {
-				module->engine->stop();
-				e.consume(this);
-				return;
-			}
-		}
-		LedDisplayTextField::onSelectKey(e);
-	}
-};
-
-/** The engine's last message, and the port labels. */
+/** The port labels. */
 struct FiloText : widget::Widget {
-	Filo* module = nullptr;
 	std::vector<std::pair<math::Vec, std::string>> labels; // px, centered
 
 	void draw(const DrawArgs& args) override {
@@ -258,35 +222,24 @@ struct FiloText : widget::Widget {
 		for (auto& l : labels)
 			nvgText(args.vg, l.first.x, l.first.y, l.second.c_str(), nullptr);
 	}
-	void drawLayer(const DrawArgs& args, int layer) override {
-		if (layer != 1 || !module)
-			return;
-		math::Rect r(mm2px(kMessageMm.pos), mm2px(kMessageMm.size));
-		std::string m = module->engine->message();
-		nvgFontFaceId(args.vg, APP->window->uiFont->handle);
-		nvgFontSize(args.vg, 11);
-		nvgFillColor(args.vg, nvgRGB(0xf3, 0xc8, 0x8e));
-		nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-		nvgScissor(args.vg, r.pos.x, r.pos.y, r.size.x, r.size.y);
-		nvgText(args.vg, r.pos.x + 2, r.pos.y + r.size.y / 2, m.substr(0, m.find('\n')).c_str(), nullptr);
-		nvgResetScissor(args.vg);
-	}
 };
 
 struct FiloWidget : ModuleWidget {
+	editor::View* view;                // the panel's editor
+	WeakPtr<editor::Overlay> overlay;  // the fullscreen editor, while open
+	editor::Doc preview{kDefaultCode}; // the module browser's
+	bool fullscreenDown = false;
+
 	FiloWidget(Filo* module) {
 		setModule(module);
 		setPanel(createPanel(asset::plugin(pluginInstance, "res/Filo.svg")));
-		auto* editor = createWidget<CodeField>(mm2px(kEditorMm.pos));
-		editor->box.size = mm2px(kEditorMm.size);
-		editor->multiline = true;
-		editor->module = module;
-		if (!module) // module browser preview
-			editor->setText(kDefaultCode);
-		addChild(editor);
+		view = createWidget<editor::View>(mm2px(kEditorMm.pos));
+		view->box.size = mm2px(kEditorMm.size);
+		view->doc = module ? &module->doc : &preview;
+		view->engine = module ? module->engine.get() : nullptr;
+		addChild(view);
 		auto* text = createWidget<FiloText>(Vec());
 		text->box.size = box.size;
-		text->module = module;
 		addChild(text);
 		auto label = [&](float x, float y, const char* name) { text->labels.push_back({mm2px(Vec(x, y - 5)), name}); };
 		const char* names[] = {"PLAY", "STOP", "FULL"};
@@ -304,6 +257,24 @@ struct FiloWidget : ModuleWidget {
 			addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(55 + 17.5f * i, 112)), module, i));
 			label(55 + 17.5f * i, 112, outputs[i]);
 		}
+	}
+
+	~FiloWidget() override {
+		if (editor::Overlay* o = overlay.get()) // still open: the module (its doc) is deleted right after this
+			o->detach();
+	}
+
+	void step() override {
+		ModuleWidget::step();
+		// The FULL button (Rack holds a momentary press for a frame at least).
+		bool down = module && module->params[Filo::FULLSCREEN_PARAM].getValue() > 0.f;
+		if (down && !fullscreenDown && !overlay.get()) {
+			auto* o = new editor::Overlay(view);
+			APP->scene->addChild(o);
+			APP->event->setSelectedWidget(o->view);
+			overlay = o;
+		}
+		fullscreenDown = down;
 	}
 
 	void appendContextMenu(Menu* menu) override {

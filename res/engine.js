@@ -36908,6 +36908,8 @@ registerProcessor('${name3}', MyProcessor);
   var time3 = (t) => t.valueOf();
   var onSchedule = getSchedule({ onSchedule: webaudioOutput });
   var previous;
+  var [patternId, previousId] = [0, 0];
+  var highlights = [];
   var [Note, Trig, CC, Tempo] = [0, 1, 2, 3];
   var midiEvents = [];
   var rackShift = 0;
@@ -37032,7 +37034,7 @@ registerProcessor('${name3}', MyProcessor);
   var byOnset = (a, b) => time3(a.whole.begin) - time3(b.whole.begin) || (b.value.cps !== void 0) - (a.value.cps !== void 0);
   var rt = { epoch: -1, from: 0, cps: 0, tempos: [], late: false };
   var api = globalThis.__patchisserie = {
-    async evaluate(code) {
+    async evaluate(code, id2 = 0) {
       await ready;
       evalError = void 0;
       const before = scheduler.pattern;
@@ -37042,7 +37044,7 @@ registerProcessor('${name3}', MyProcessor);
         evalError = err;
       }
       if (!evalError) {
-        previous = before;
+        [previous, previousId, patternId] = [before, patternId, id2];
         return { ok: true };
       }
       const line = evalError.loc?.line ?? Number(/^\[mini\] parse error at line (\d+)/.exec(evalError.message)?.[1]);
@@ -37095,6 +37097,7 @@ registerProcessor('${name3}', MyProcessor);
      * scheduled, for sounds and .midi() events alike. A new epoch (play, stop) starts over at `cycle`, after a RESET
      * (`reset`) at cycle 0, a few frames back.
      * external: the CLOCK input drives the cycle, cps is the PLL's estimate. rendered: the render thread's frame.
+     * Every scheduled hap's mini-notation locations go to rackHighlight() with the frames it plays.
      */
     tick(frame, cycle, cps2, epoch2, playing, external, sr, lookahead2, rendered = -Infinity, reset2 = false) {
       seconds2 = frame / sr;
@@ -37136,8 +37139,13 @@ registerProcessor('${name3}', MyProcessor);
           scheduler.setCps(cpsHap);
         }
         rackShift = b - onset;
-        onSchedule(hap, at2(b), cpsHap ?? cpsAt(b));
+        const t = at2(b);
+        onSchedule(hap, t, cpsHap ?? cpsAt(b));
         rackShift = 0;
+        const locations = hap.context.locations ?? [];
+        if (!locations.length) continue;
+        const [from2, to] = [Math.round(t * sr), Math.round(at2(time3(hap.whole.end) + b - onset) * sr)];
+        for (const { start, end: end3 } of locations) api.rackHighlight(patternId, from2, to, start, end3);
       }
       rt.from = end2;
       rt.late = false;
@@ -37146,11 +37154,15 @@ registerProcessor('${name3}', MyProcessor);
     rackEvent: (kind, begin2, end2, note4, velocity2, midichan2, key, value2) => midiEvents.push({ kind, begin: begin2, end: end2, note: note4, velocity: velocity2, midichan: midichan2, key, value: value2 }),
     /** Drains the events collected by the default rackEvent. */
     midiEvents: () => midiEvents.splice(0),
+    /** Where highlights go (code id, frames [from, to), UTF-16 offsets [start, end)); the engine replaces it. */
+    rackHighlight: (id2, from, to, start, end2) => highlights.push({ id: id2, from, to, start, end: end2 }),
+    /** Drains the highlights collected by the default rackHighlight. */
+    highlights: () => highlights.splice(0),
     /** A query of the playing pattern was interrupted (endless loop): back to the one before the last evaluate, then
      * silence. (Query errors are Strudel's own: logged, no haps.) */
     revert() {
       scheduler.pattern = previous ?? silence;
-      previous = void 0;
+      [previous, patternId, previousId] = [void 0, previous ? previousId : 0, 0];
     },
     /** superdough's orbits and buses back to their initial state; their nodes become garbage. */
     resetAudio: () => resetGlobalEffects(),

@@ -4,7 +4,7 @@ FLAGS += -Isrc
 # compile.mk sets -std=c++11 after our CXXFLAGS; EXTRA_CXXFLAGS is appended last.
 EXTRA_CXXFLAGS += -std=c++17
 
-SOURCES += $(wildcard src/*.cpp)
+SOURCES += $(wildcard src/*.cpp) src/editor/view.cpp
 AUDIO_SOURCES := $(wildcard src/audio/*.cpp)
 SOURCES += $(AUDIO_SOURCES)
 # Web Audio classes for QuickJS, embedded as a C array (Rack's xxd rule): src_audio_webaudio_js[].

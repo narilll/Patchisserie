@@ -94,11 +94,12 @@ const char* kPrelude = R"js((function (native) {
 }))js";
 
 // After res/engine.js: superdough, the local samples (registered again after strudel.cc's online maps, so local names
-// win), the .midi() event sink, and what the C++ loop calls.
+// win), the .midi() event and highlight sinks, and what the C++ loop calls.
 const char* kGlue = R"js((function (native, local) {
   'use strict';
   const host = __patchisserie;
   host.rackEvent = native.rack;
+  host.rackHighlight = native.highlight;
   const register = (map) => map && samples(map, 'localsamples:', { prebake: true, tag: 'local' });
   const boot = host.initAudio().then(() => {
     register(local);
@@ -107,12 +108,12 @@ const char* kGlue = R"js((function (native, local) {
   });
   boot.catch((e) => native.log(`[engine] audio init failed: ${e?.message ?? e}`, true));
   return {
-    evaluate: (code) =>
+    evaluate: (code, id) =>
       boot
-        .then(() => host.evaluate(code))
+        .then(() => host.evaluate(code, id))
         .then(
-          (r) => native.evaluated(r.ok, r.error ?? '', r.line ?? 0),
-          (e) => native.evaluated(false, String(e?.message ?? e), 0),
+          (r) => native.evaluated(r.ok, r.error ?? '', r.line ?? 0, id),
+          (e) => native.evaluated(false, String(e?.message ?? e), 0, id),
         ),
     samples: (map) => boot.then(() => register((local = map))),
     tick: host.tick,
@@ -134,8 +135,9 @@ struct Engine::Js {
 			revert = JS_UNDEFINED, samples = JS_UNDEFINED, cancel = JS_UNDEFINED;
 	double deadline = 0; // now() past which JS is interrupted; 0: none
 	bool interrupted = false, booted = false, playAfter = false, queueFullSaid = false;
-	int evaluating = 0;     // evaluates in flight
-	uint32_t tickEpoch = 0; // the epoch of the events this tick pushes
+	int evaluating = 0;        // evaluates in flight
+	uint32_t evaluatingId = 0; // the last one's code id
+	uint32_t tickEpoch = 0;    // the epoch of the events this tick pushes
 	std::string samplesDir;
 	std::map<int, std::string> downloads; // id -> cache file
 	int nextDownload = 0;
@@ -306,17 +308,29 @@ struct Engine::Js {
 	static JSValue nEvaluated(JSContext* ctx, JSValueConst, int, JSValueConst* argv) {
 		Js* js = self(ctx);
 		js->evaluating = std::max(0, js->evaluating - 1);
-		if (JS_ToBool(ctx, argv[0])) {
+		Report r;
+		r.id = (uint32_t)num(ctx, argv[3]);
+		r.ok = JS_ToBool(ctx, argv[0]);
+		if (r.ok) {
 			if (js->playAfter)
 				js->e->play();
 		} else { // Strudel has logged it ([eval] error: ...); the panel gets the line too
-			int line = (int)num(ctx, argv[2]);
-			std::string error = str(ctx, argv[1]);
-			js->e->setMessage(line ? "line " + std::to_string(line) + ": " + error : error);
+			r.line = (int)num(ctx, argv[2]);
+			r.error = str(ctx, argv[1]);
+			js->e->setMessage(r.line ? "line " + std::to_string(r.line) + ": " + r.error : r.error);
 		}
+		js->e->setReport(r);
 		std::lock_guard<std::mutex> lock(js->e->m_);
 		if (!js->e->codePending_) // reported back: a restart re-evaluates without playing (the transport plays on)
 			js->e->playAfter_ = false;
+		return JS_UNDEFINED;
+	}
+
+	static JSValue nHighlight(JSContext* ctx, JSValueConst, int, JSValueConst* argv) {
+		Engine* e = self(ctx)->e;
+		Highlight h{(int64_t)num(ctx, argv[1]), (int64_t)num(ctx, argv[2]), (uint32_t)num(ctx, argv[0]),
+					(int)num(ctx, argv[3]), (int)num(ctx, argv[4])};
+		e->highlights_.push(h, e->playback_.load(std::memory_order_relaxed));
 		return JS_UNDEFINED;
 	}
 
@@ -374,7 +388,8 @@ struct Engine::Js {
 			} fns[] = {{"log", nLog, 2},
 					   {"fetch", nFetch, 1},
 					   {"rack", nRack, 8},
-					   {"evaluated", nEvaluated, 3},
+					   {"evaluated", nEvaluated, 4},
+					   {"highlight", nHighlight, 5},
 					   {"booted", nBooted, 0}};
 			for (auto& f : fns)
 				JS_SetPropertyStr(ctx, natives, f.name, JS_NewCFunction(ctx, f.fn, f.name, f.length));
@@ -435,6 +450,7 @@ struct Engine::Js {
 				if (evaluating > 0) { // its promise never settles now
 					evaluating--;
 					e->setMessage("evaluate " + error);
+					e->setReport({evaluatingId, false, 0, "evaluate " + error});
 				}
 				say("[eval] error: " + error, true);
 			}
@@ -445,11 +461,13 @@ struct Engine::Js {
 
 	void step() {
 		std::string code, dir;
+		uint32_t codeId = 0;
 		bool haveCode = false, haveDir = false;
 		{
 			std::lock_guard<std::mutex> lock(e->m_);
 			if (e->codePending_)
-				code = e->code_, playAfter = e->playAfter_, haveCode = true, e->codePending_ = false;
+				code = e->code_, codeId = e->codeId_, playAfter = e->playAfter_, haveCode = true,
+				e->codePending_ = false;
 			if (e->samplesPending_)
 				dir = e->samplesDir_, haveDir = true, e->samplesPending_ = false;
 		}
@@ -482,6 +500,8 @@ struct Engine::Js {
 		// position: cycle 0 plays right after it.
 		if (t.reset && t.epoch != tickEpoch)
 			call(cancel, 0, nullptr, e->cfg_.tickDeadline, "[webaudio]");
+		if (t.epoch != tickEpoch) // play, stop, reset: what was ahead won't play
+			e->highlights_.clear();
 		tickEpoch = t.epoch;
 		double sr = e->cfg_.sampleRate, lookahead = e->fill_.load() / sr + kLookahead;
 		JSValue args[10] = {JS_NewFloat64(ctx, (double)t.frame),
@@ -500,11 +520,14 @@ struct Engine::Js {
 		}
 		runJobs(kVoiceBudget); // superdough builds the voices of this tick
 		if (haveCode) { // after them: its jobs would delay them (an evaluate can take long), it goes on next time
-			JSValue arg = JS_NewStringLen(ctx, code.data(), code.size());
+			JSValue args[2] = {JS_NewStringLen(ctx, code.data(), code.size()), JS_NewUint32(ctx, codeId)};
 			evaluating++;
-			if (!call(evaluate, 1, &arg, e->cfg_.evalDeadline, "[eval] error"))
+			evaluatingId = codeId;
+			if (!call(evaluate, 2, args, e->cfg_.evalDeadline, "[eval] error")) {
 				evaluating--;
-			JS_FreeValue(ctx, arg);
+				e->setReport({codeId, false, 0, "evaluate failed"});
+			}
+			JS_FreeValue(ctx, args[0]);
 		}
 	}
 
@@ -639,11 +662,12 @@ void Engine::setBlockFrames(int frames) {
 	fill_.store(std::min(fill, kRing - kQuantum));
 }
 
-void Engine::evaluate(const std::string& code, bool play) {
+uint32_t Engine::evaluate(const std::string& code, bool play) {
 	std::lock_guard<std::mutex> lock(m_);
 	code_ = code;
 	codePending_ = true;
 	playAfter_ = play;
+	return ++codeId_;
 }
 
 std::string Engine::code() const {
@@ -654,6 +678,23 @@ std::string Engine::code() const {
 std::string Engine::message() const {
 	std::lock_guard<std::mutex> lock(m_);
 	return message_;
+}
+
+Engine::Report Engine::report() const {
+	std::lock_guard<std::mutex> lock(m_);
+	return report_;
+}
+
+void Engine::setReport(const Report& r) {
+	std::lock_guard<std::mutex> lock(m_);
+	report_ = r;
+}
+
+void Engine::highlights(std::vector<Highlight>& out) const {
+	Timeline t = timeline();
+	out.clear();
+	if (t.playing)
+		highlights_.playing(t.frame, out);
 }
 
 void Engine::setMessage(const std::string& m) {

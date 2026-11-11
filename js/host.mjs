@@ -28,6 +28,9 @@ const time = (t) => t.valueOf();
 // Strudel's dispatch: webaudio unless a dominant onSchedule (e.g. .midi()) takes the hap; errors go to the log.
 const onSchedule = core.getSchedule({ onSchedule: webaudio.webaudioOutput });
 let previous; // the pattern before the last evaluate: back to it when the engine interrupts a query of the new one
+// The engine's id of the code the pattern (and `previous`) came from: highlights say which code their offsets are in.
+let [patternId, previousId] = [0, 0];
+const highlights = []; // where highlights go without an engine (tests): see rackHighlight below
 
 // .midi() sends the pattern to Rack instead of superdough, through Strudel's own mechanism (portable to strudel.cc).
 // Events (src/dsp.hpp filo::Event) carry cycles: the Sequencer fires them when its cycle gets there. Values as in
@@ -166,7 +169,7 @@ const byOnset = (a, b) =>
 const rt = { epoch: -1, from: 0, cps: 0, tempos: [], late: false };
 
 const api = (globalThis.__patchisserie = {
-  async evaluate(code) {
+  async evaluate(code, id = 0) {
     await ready;
     evalError = undefined;
     const before = scheduler.pattern;
@@ -176,7 +179,7 @@ const api = (globalThis.__patchisserie = {
       evalError = err; // repl throws (outside its try) only for empty code
     }
     if (!evalError) {
-      previous = before;
+      [previous, previousId, patternId] = [before, patternId, id];
       return { ok: true };
     }
     // acorn syntax errors carry loc; mini-notation errors only say "at line N" in the message.
@@ -236,6 +239,7 @@ const api = (globalThis.__patchisserie = {
    * scheduled, for sounds and .midi() events alike. A new epoch (play, stop) starts over at `cycle`, after a RESET
    * (`reset`) at cycle 0, a few frames back.
    * external: the CLOCK input drives the cycle, cps is the PLL's estimate. rendered: the render thread's frame.
+   * Every scheduled hap's mini-notation locations go to rackHighlight() with the frames it plays.
    */
   tick(frame, cycle, cps, epoch, playing, external, sr, lookahead, rendered = -Infinity, reset = false) {
     seconds = frame / sr;
@@ -288,8 +292,13 @@ const api = (globalThis.__patchisserie = {
         scheduler.setCps(cpsHap);
       }
       rackShift = b - onset;
-      onSchedule(hap, at(b), cpsHap ?? cpsAt(b));
+      const t = at(b);
+      onSchedule(hap, t, cpsHap ?? cpsAt(b));
       rackShift = 0;
+      const locations = hap.context.locations ?? [];
+      if (!locations.length) continue;
+      const [from, to] = [Math.round(t * sr), Math.round(at(time(hap.whole.end) + b - onset) * sr)];
+      for (const { start, end } of locations) api.rackHighlight(patternId, from, to, start, end);
     }
     rt.from = end;
     rt.late = false;
@@ -300,12 +309,16 @@ const api = (globalThis.__patchisserie = {
     midiEvents.push({ kind, begin, end, note, velocity, midichan, key, value }),
   /** Drains the events collected by the default rackEvent. */
   midiEvents: () => midiEvents.splice(0),
+  /** Where highlights go (code id, frames [from, to), UTF-16 offsets [start, end)); the engine replaces it. */
+  rackHighlight: (id, from, to, start, end) => highlights.push({ id, from, to, start, end }),
+  /** Drains the highlights collected by the default rackHighlight. */
+  highlights: () => highlights.splice(0),
 
   /** A query of the playing pattern was interrupted (endless loop): back to the one before the last evaluate, then
    * silence. (Query errors are Strudel's own: logged, no haps.) */
   revert() {
     scheduler.pattern = previous ?? core.silence;
-    previous = undefined;
+    [previous, patternId, previousId] = [undefined, previous ? previousId : 0, 0];
   },
 
   /** superdough's orbits and buses back to their initial state; their nodes become garbage. */

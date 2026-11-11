@@ -185,3 +185,44 @@ test('revert() goes back to the pattern before the last evaluate, then to silenc
   host.revert();
   assert.deepEqual(host.query(0, 1), []);
 });
+
+// tick() -> rackHighlight(id, from, to, start, end): what the editor highlights while it plays.
+test('tick() publishes each scheduled hap location with its frames and the code id', async () => {
+  const code = 'note("c e").midi()';
+  assert.deepEqual(await host.evaluate(code, 7), { ok: true });
+  host.highlights();
+  host.tick(0, 0, 0.5, 60, true, false, 48000, 2); // [0, 1): 1 cycle = 96000 frames
+  const got = host.highlights();
+  assert.deepEqual(got, [
+    { id: 7, from: 0, to: 48000, start: 6, end: 7 },
+    { id: 7, from: 48000, to: 96000, start: 8, end: 9 },
+  ]);
+  assert.deepEqual(got.map((h) => code.slice(h.start, h.end)), ['c', 'e']);
+  host.tick(96000, 1, 0.5, 60, false, false, 48000, 2); // stopped: none
+  assert.deepEqual(host.highlights(), []);
+});
+
+test('highlights keep the id of the playing code: a failed evaluate keeps it, revert() goes back', async () => {
+  await host.evaluate('s("bd")', 8);
+  assert.equal((await host.evaluate('s("bd"', 9)).ok, false);
+  host.highlights();
+  host.tick(0, 0, 0.5, 61, true, false, 48000, 1);
+  assert.deepEqual(host.highlights().map((h) => h.id), [8]);
+  await host.evaluate('s("hh")', 10);
+  host.revert();
+  host.tick(0, 0, 0.5, 62, true, false, 48000, 1);
+  assert.deepEqual(host.highlights().map((h) => [h.id, h.start]), [[8, 3]]);
+});
+
+test('a RESET late onset is highlighted from the frame it plays on, for its whole duration', async () => {
+  await host.evaluate('note("c*8")', 11);
+  host.tick(0, 0, 0.5, 70, true, false, 48000, 0.2);
+  host.highlights();
+  // As in the RESET test above: cycle 0 plays at frame 106208, 0.125 cycles (12000 frames) long.
+  host.tick(104800, 0.05, 0.5, 71, true, false, 48000, 0.2, 105728, true);
+  const c = host.highlights().filter((h) => h.start === 6); // "c"; "8" (8, 9) is highlighted with it
+  assert.deepEqual(c.slice(0, 2).map((h) => [h.from, h.to]), [
+    [106208, 118208],
+    [112000, 124000],
+  ]);
+});

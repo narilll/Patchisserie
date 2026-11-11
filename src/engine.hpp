@@ -5,7 +5,7 @@
 // test/test_engine.cpp runs it headless.
 //
 // Threads, and what each owns:
-//   UI (any)  evaluate(), play(), stop(), message(), the sticky maps (mutex, shared with JS)
+//   UI (any)  evaluate(), play(), stop(), message(), report(), highlights(), the sticky maps (mutexes, shared with JS)
 //   JS        QuickJS runtime #1 (res/engine.js); producer of the graph's commands and of seq.queue
 //   render    renders the graph (and its worklet scope, QuickJS #2) into the ring, ahead of the audio thread
 //   audio     process(): ring -> L/R, seq -> CV, transport, the timeline snapshot for the JS thread
@@ -14,6 +14,7 @@
 //
 // Timeline: graph frame == playback frame. Ring frames carry their graph frame; frames the audio thread played as
 // silence (underflow) are rendered and discarded, so the graph never falls behind and nothing plays late.
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <functional>
@@ -36,6 +37,47 @@ class WorkletScope;
 
 namespace filo {
 
+/** What plays when, as a span of the code (the editor highlights it): a hap's mini-notation location. */
+struct Highlight {
+	int64_t from, to; // playback frames [from, to)
+	uint32_t id;      // the evaluate() whose code the offsets are in
+	int start, end;   // UTF-16 offsets into that code (JS string positions)
+};
+
+/** JS thread -> UI: the highlights scheduled ahead and playing. Bounded, behind a mutex (no audio thread here). */
+class Highlights {
+  public:
+	static constexpr size_t kMax = 1024;
+	/** Full: drops the ones over by `now` first, then `h` if it is still full. */
+	void push(const Highlight& h, int64_t now) {
+		std::lock_guard<std::mutex> lock(m_);
+		if (v_.size() >= kMax)
+			v_.erase(std::remove_if(v_.begin(), v_.end(), [&](const Highlight& x) { return x.to <= now; }), v_.end());
+		if (v_.size() < kMax)
+			v_.push_back(h);
+	}
+	void clear() {
+		std::lock_guard<std::mutex> lock(m_);
+		v_.clear();
+	}
+	size_t size() const {
+		std::lock_guard<std::mutex> lock(m_);
+		return v_.size();
+	}
+	/** The ones playing at `frame`. */
+	void playing(int64_t frame, std::vector<Highlight>& out) const {
+		std::lock_guard<std::mutex> lock(m_);
+		out.clear();
+		for (const Highlight& h : v_)
+			if (h.from <= frame && frame < h.to)
+				out.push_back(h);
+	}
+
+  private:
+	mutable std::mutex m_;
+	std::vector<Highlight> v_;
+};
+
 struct EngineConfig {
 	double sampleRate = 48000;
 	std::string resDir = "res";   // engine.js, worklets.js
@@ -54,11 +96,22 @@ class Engine {
 	Engine& operator=(const Engine&) = delete;
 
 	// --- Any thread but the audio thread ---
-	/** Evaluates on the JS thread (the latest code wins while one runs); `play`: start playing if it succeeds. */
-	void evaluate(const std::string& code, bool play);
+	/** Evaluates on the JS thread (the latest code wins while one runs); `play`: start playing if it succeeds.
+	Returns the code's id (1, 2, ...): report() and the highlights refer to it. */
+	uint32_t evaluate(const std::string& code, bool play);
 	std::string code() const; // last code passed to evaluate()
 	/** Last log line or evaluate error, for the panel. */
 	std::string message() const;
+	/** How an evaluate() turned out (an evaluate superseded before the JS thread took it never reports). */
+	struct Report {
+		uint32_t id = 0; // 0: none yet
+		bool ok = true;
+		int line = 0; // syntax error: its line (1-based) in that code; 0: none, or a runtime error
+		std::string error;
+	};
+	Report report() const; // the last one
+	/** The code spans of what plays now (none while stopped). */
+	void highlights(std::vector<Highlight>& out) const;
 	/** Re-scans the local samples folder (one subfolder per sound) and registers it. */
 	void setSamplesDir(const std::string& dir);
 	using Map = std::vector<std::pair<std::string, int>>;
@@ -141,7 +194,13 @@ class Engine {
 	// UI -> JS.
 	mutable std::mutex m_;
 	std::string code_, message_, samplesDir_;
+	uint32_t codeId_ = 0; // code_'s
+	Report report_;
 	bool codePending_ = false, playAfter_ = false, samplesPending_ = false;
+	void setReport(const Report& r);
+
+	// JS -> UI.
+	Highlights highlights_;
 
 	// UI <-> JS.
 	std::mutex mapsM_;
