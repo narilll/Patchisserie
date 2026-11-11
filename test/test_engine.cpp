@@ -179,12 +179,14 @@ struct Rig {
 				v.push_back(i);
 		return v;
 	}
-	/** Start frames of the kicks: first non-zero sample after silence, minus the attack ramp's samples. */
+	/** Start frames of the kicks: first non-zero sample after silence, minus the attack ramp's samples. An underflow
+	(silence) inside the attack ramp resumes on the same ramp, which extrapolates to the same start: counted once. */
 	std::vector<int64_t> kicks(int64_t from, int64_t to) const {
 		std::vector<int64_t> v;
 		for (int64_t i = std::max<int64_t>(from, 1); i + 1 < std::min(to, frame()); i++)
 			if (L[i - 1] == 0 && L[i] != 0 && L[i + 1] != L[i])
 				v.push_back(i - std::llround(L[i] / (L[i + 1] - L[i])));
+		v.erase(std::unique(v.begin(), v.end()), v.end());
 		return v;
 	}
 	/** Kicks and gate rises in [from, to) on the same frames (!kTimed: every kick on a gate); returns how many. */
