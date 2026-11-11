@@ -111,12 +111,14 @@ render: build/test/render
 
 .PHONY: render
 
-# Icing's shaders and passes on this machine's GL driver (test/glcheck.cpp). Not part of `make test`: CI runners may
-# have no GL. The plugin's own objects minus its Rack UI, linked to libRack like the plugin.
-GLCHECK_OBJECTS := $(filter-out build/src/plugin.cpp.o build/src/editor/%,$(OBJECTS))
+# Icing's shaders and passes and Filo's editor window on this machine's GL driver (test/glcheck.cpp). Not part of
+# `make test`: CI runners may have no GL. The plugin's own objects minus its modules, linked to libRack like the plugin;
+# the editor window's fonts from Rack's own res/ (RACK_SYSTEM_DIR).
+GLCHECK_OBJECTS := $(filter-out build/src/plugin.cpp.o,$(OBJECTS))
 GLCHECK_LIBS := -L$(RACK_DIR) -lRack
 ifdef ARCH_MAC
 GLCHECK_LIBS += -framework OpenGL -lobjc
+RACK_SYSTEM_DIR ?= /Applications/VCV Rack 2 Free.app/Contents/Resources
 endif
 ifdef ARCH_LIN
 GLCHECK_LIBS += -lGL
@@ -128,7 +130,7 @@ build/glcheck: test/glcheck.cpp $(GLCHECK_OBJECTS)
 	$(CXX) $(filter-out -MMD -MP,$(CXXFLAGS)) -o $@ test/glcheck.cpp $(GLCHECK_OBJECTS) $(GLCHECK_LIBS)
 
 glcheck: build/glcheck
-	DYLD_LIBRARY_PATH=$(RACK_DIR) LD_LIBRARY_PATH=$(RACK_DIR) build/glcheck
+	RACK_SYSTEM_DIR="$(RACK_SYSTEM_DIR)" DYLD_LIBRARY_PATH=$(RACK_DIR) LD_LIBRARY_PATH=$(RACK_DIR) build/glcheck
 
 .PHONY: glcheck
 

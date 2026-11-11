@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
+#include <cstring>
 
 using namespace rack;
 
@@ -12,8 +14,8 @@ namespace editor {
 namespace {
 
 constexpr float kPad = 4;                                        // px around the text
-constexpr float kHeader = 24;                                    // px, the overlay's title bar
 const char* const kFont = "res/fonts/ShareTechMono-Regular.ttf"; // Rack's monospace font
+const char* const kUiFont = "res/fonts/DejaVuSans.ttf";          // Rack's UI font (APP->window->uiFont)
 
 // On the panel's dark brown (res/Filo.svg).
 const NVGcolor kBackground = nvgRGB(0x2a, 0x1f, 0x17);
@@ -93,13 +95,14 @@ const std::vector<Entry>& docs() {
 
 // --- Tip ---
 
-/** The completion popup or the hover docs, on APP->scene: over the module and the overlay, neither clipped by them nor
-zoomed with the rack. Passive: its View sets what it shows each step. */
+/** The completion popup or the hover docs, on APP->scene (the panel's) or the editor window's root: over everything
+there, neither clipped by the module nor zoomed with the rack. Passive: its View sets what it shows each step. */
 struct Tip : widget::Widget {
 	std::vector<Match> items, details; // the popup's rows (none: hover docs), the entries described
 	int sel = 0, top = 0;
 	math::Vec at;    // the identifier's top left, scene px
 	float lineH = 0; // its line's height, scene px
+	int font = -1;   // its View's monoFont()
 
 	void step() override {
 		if (parent) // the scene: the whole window
@@ -110,11 +113,10 @@ struct Tip : widget::Widget {
 };
 
 void Tip::draw(const DrawArgs& args) {
-	std::shared_ptr<window::Font> font = APP->window->loadFont(asset::system(kFont));
-	if (!font || font->handle < 0 || details.empty())
+	if (font < 0 || details.empty())
 		return;
 	NVGcontext* vg = args.vg;
-	nvgFontFaceId(vg, font->handle);
+	nvgFontFaceId(vg, font);
 	nvgFontSize(vg, kTipFont);
 	nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
 	float cw = nvgTextBounds(vg, 0, 0, "0000000000", nullptr, nullptr) / 10, rh = std::round(kTipFont * 1.4f);
@@ -275,13 +277,11 @@ void Tip::draw(const DrawArgs& args) {
 
 View::~View() {
 	if (tip_)
-		tip_->requestDelete(); // APP->scene deletes it in its next step (or with itself, after this)
+		tip_->requestDelete(); // its parent deletes it in its next step (or with itself, after this)
 }
 
 void View::step() {
 	Widget::step();
-	if (!doc)
-		return;
 	if (engine) {
 		filo::Engine::Report r = engine->report();
 		doc->report(r.id, r.ok, r.line);
@@ -297,7 +297,7 @@ void View::step() {
 	}
 	if (changed || doc->cursor() != seenCursor_) // typed, moved, or the other view did: the cursor stays in sight
 		follow();
-	if (completion_.open && APP->event->getSelectedWidget() != this) // clicked elsewhere
+	if (completion_.open && events()->getSelectedWidget() != this) // clicked elsewhere
 		completion_.close();
 	else if (completion_.open && (changed || doc->cursor() != seenCursor_)) // undone, a patch loaded, ...
 		completion_.update(*doc, docs(), false);
@@ -312,7 +312,7 @@ void View::step() {
 void View::hover(bool changed) {
 	size_t b = 0, e = 0;
 	int line = (int)std::floor((hoverPos_.y - kPad + scroll_.y) / lineH());
-	bool over = APP->event->getHoveredWidget() == this && !dragging_ && hoverPos_.x >= gutterW() &&
+	bool over = events()->getHoveredWidget() == this && !dragging_ && hoverPos_.x >= gutterW() &&
 				hoverPos_.y < textH() && line >= 0 && line < doc->lineCount() &&
 				identAt(*doc, hit(hoverPos_, false), b, e);
 	if (!over || changed) {
@@ -342,15 +342,41 @@ void View::showTip() {
 	}
 	if (!tip_) {
 		tip_ = new Tip;
-		APP->scene->addChild(tip_);
+		(host ? host->root : APP->scene)->addChild(tip_);
 	}
 	tip_->show();
+	tip_->font = monoFont();
 	tip_->items = popup ? completion_.items : std::vector<Match>();
 	tip_->details = popup ? std::vector<Match>{completion_.items[completion_.sel]} : hover_;
 	tip_->sel = completion_.sel;
 	tip_->top = completion_.top;
 	tip_->at = getAbsoluteOffset(p);
 	tip_->lineH = lineH() * getAbsoluteZoom();
+}
+
+widget::EventState* View::events() const {
+	return host ? &host->events : APP->event;
+}
+
+int View::mods() const {
+	if (!host)
+		return APP->window->getMods();
+	// As Rack's Window::getMods(), from this window's keys.
+	GLFWwindow* w = host->window.win;
+	auto held = [&](int left, int right) {
+		return glfwGetKey(w, left) == GLFW_PRESS || glfwGetKey(w, right) == GLFW_PRESS;
+	};
+	return (held(GLFW_KEY_LEFT_SHIFT, GLFW_KEY_RIGHT_SHIFT) ? GLFW_MOD_SHIFT : 0) |
+		   (held(GLFW_KEY_LEFT_CONTROL, GLFW_KEY_RIGHT_CONTROL) ? GLFW_MOD_CONTROL : 0) |
+		   (held(GLFW_KEY_LEFT_ALT, GLFW_KEY_RIGHT_ALT) ? GLFW_MOD_ALT : 0) |
+		   (held(GLFW_KEY_LEFT_SUPER, GLFW_KEY_RIGHT_SUPER) ? GLFW_MOD_SUPER : 0);
+}
+
+int View::monoFont() const {
+	if (host)
+		return host->mono;
+	std::shared_ptr<window::Font> font = APP->window->loadFont(asset::system(kFont));
+	return font ? font->handle : -1;
 }
 
 float View::gutterW() const {
@@ -387,26 +413,26 @@ size_t View::hit(math::Vec pos, bool nearest) const {
 }
 
 void View::draw(const DrawArgs& args) {
-	if (!panel)
+	if (host)
 		paint(args.vg);
 	Widget::draw(args);
 }
 
 void View::drawLayer(const DrawArgs& args, int layer) {
-	if (panel && layer == 1)
+	if (!host && layer == 1)
 		paint(args.vg);
 	Widget::drawLayer(args, layer);
 }
 
 void View::paint(NVGcontext* vg) {
-	std::shared_ptr<window::Font> font = APP->window->loadFont(asset::system(kFont));
-	if (!doc || !font || font->handle < 0)
+	int font = monoFont();
+	if (font < 0)
 		return;
 	const std::string& s = doc->text();
 	float lh = lineH(), th = textH(), w = box.size.x;
 	nvgSave(vg);
 	nvgIntersectScissor(vg, 0, 0, w, th);
-	nvgFontFaceId(vg, font->handle);
+	nvgFontFaceId(vg, font);
 	nvgFontSize(vg, fontSize);
 	nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
 	charW_ = nvgTextBounds(vg, 0, 0, "0000000000", nullptr, nullptr) / 10;
@@ -486,7 +512,7 @@ void View::paint(NVGcontext* vg) {
 		nvgFillColor(vg, kError);
 		nvgText(vg, X(doc->column(doc->lineEnd(err)) + 2), Y(err) + lh / 2, error_.c_str(), nullptr);
 	}
-	if (APP->event->getSelectedWidget() == this) {
+	if (events()->getSelectedWidget() == this) {
 		int l = doc->lineOf(doc->cursor());
 		nvgBeginPath(vg);
 		nvgRect(vg, X(doc->column(doc->cursor())) - 0.5f, Y(l) + 1, 1.5f, lh - 2);
@@ -523,7 +549,7 @@ void View::paint(NVGcontext* vg) {
 	nvgRect(vg, kPad, th, w - 2 * kPad, 1);
 	nvgFillColor(vg, kDim);
 	nvgFill(vg);
-	nvgFontFaceId(vg, APP->window->uiFont->handle);
+	nvgFontFaceId(vg, host ? host->ui : APP->window->uiFont->handle);
 	nvgFontSize(vg, std::round(fontSize * 0.9f));
 	float uw = 0;
 	if (engine) {
@@ -548,7 +574,7 @@ void View::onHover(const HoverEvent& e) {
 }
 
 void View::onButton(const ButtonEvent& e) {
-	if (!doc || e.button != GLFW_MOUSE_BUTTON_LEFT) // right: the module's menu
+	if (e.button != GLFW_MOUSE_BUTTON_LEFT) // right: the module's menu
 		return;
 	if (e.action == GLFW_PRESS)
 		completion_.close();
@@ -571,17 +597,18 @@ void View::onButton(const ButtonEvent& e) {
 }
 
 void View::onDoubleClick(const DoubleClickEvent& e) {
-	if (!doc || !dragging_) // (a click on the overlay's title bar gives this the drag too)
+	if (!dragging_) // (on the status line)
 		return;
 	doc->selectWord(hit(pressAt_, false));
 	wordDrag_ = true; // the word stays selected, however the mouse moves
 }
 
 void View::onDragMove(const DragMoveEvent& e) {
-	if (!doc || !dragging_ || wordDrag_ || e.mouseDelta.isZero())
+	if (!dragging_ || wordDrag_ || e.mouseDelta.isZero())
 		return;
 	// Beyond the box too (follow() scrolls): the mouse in local coordinates.
-	math::Vec pos = APP->scene->getMousePos().minus(getAbsoluteOffset(math::Vec())).div(getAbsoluteZoom());
+	math::Vec mouse = host ? host->mouse : APP->scene->getMousePos();
+	math::Vec pos = mouse.minus(getAbsoluteOffset(math::Vec())).div(getAbsoluteZoom());
 	doc->setCursor(hit(pos, true), true);
 }
 
@@ -590,11 +617,9 @@ void View::onDragEnd(const DragEndEvent& e) {
 }
 
 void View::onHoverScroll(const HoverScrollEvent& e) {
-	if (!doc)
-		return;
 	math::Vec d = e.scrollDelta;
 #if !defined ARCH_MAC // like Rack's ScrollWidget: Shift scrolls sideways (macOS does it already)
-	if (APP->window->getMods() & GLFW_MOD_SHIFT)
+	if (mods() & GLFW_MOD_SHIFT)
 		d = d.flip();
 #endif
 	scroll_ = scroll_.minus(d);
@@ -616,7 +641,7 @@ bool View::completionKey(const SelectKeyEvent& e) {
 	if (k != GLFW_KEY_ESCAPE && k != GLFW_KEY_UP && k != GLFW_KEY_DOWN && k != GLFW_KEY_PAGE_UP &&
 		k != GLFW_KEY_PAGE_DOWN && k != GLFW_KEY_TAB && k != GLFW_KEY_ENTER && k != GLFW_KEY_KP_ENTER)
 		return false;
-	e.consume(this); // Esc: not the overlay's, not Rack's
+	e.consume(this); // Esc: not the window's, not Rack's
 	if (e.action != GLFW_PRESS && e.action != GLFW_REPEAT)
 		return true;
 	if (k == GLFW_KEY_ESCAPE)
@@ -631,15 +656,14 @@ bool View::completionKey(const SelectKeyEvent& e) {
 }
 
 void View::onSelectKey(const SelectKeyEvent& e) {
-	if (!doc)
-		return;
 	if (completion_.open && (e.mods & RACK_MOD_MASK) == 0 && completionKey(e))
 		return;
-	// Rack's own: save, save as, quit, open, new. Esc in the panel: Rack leaves fullscreen.
+	// Rack's own: save, save as, quit, open, new. Esc: in the panel Rack leaves fullscreen, in the editor window the
+	// window does (routeKey()).
 	for (int key : {GLFW_KEY_S, GLFW_KEY_Q, GLFW_KEY_O, GLFW_KEY_N})
 		if (e.isKeyCommand(key, RACK_MOD_CTRL))
 			return;
-	if (e.isKeyCommand(GLFW_KEY_S, RACK_MOD_CTRL | GLFW_MOD_SHIFT) || (e.key == GLFW_KEY_ESCAPE && !onEscape))
+	if (e.isKeyCommand(GLFW_KEY_S, RACK_MOD_CTRL | GLFW_MOD_SHIFT) || e.key == GLFW_KEY_ESCAPE)
 		return;
 	// Everything else is the editor's, used or not: Rack's would act on the module under the mouse (Backspace
 	// deletes it, Cmd+Z undoes in the rack).
@@ -651,12 +675,9 @@ void View::onSelectKey(const SelectKeyEvent& e) {
 	int page = std::max(1, (int)(textH() / lineH()) - 1);
 	GLFWwindow* win = APP->window->win;
 
-	if (e.key == GLFW_KEY_ESCAPE) {
-		if (e.action == GLFW_PRESS)
-			onEscape();
-	} else if ((e.key == GLFW_KEY_SPACE && mods == GLFW_MOD_CONTROL) // Ctrl+Space everywhere, as in CodeMirror
+	if ((e.key == GLFW_KEY_SPACE && mods == GLFW_MOD_CONTROL) // Ctrl+Space everywhere, as in CodeMirror
 #if defined ARCH_MAC
-			   || e.isKeyCommand(GLFW_KEY_I, GLFW_MOD_SUPER) // macOS: Ctrl+Space often switches the input source
+		|| e.isKeyCommand(GLFW_KEY_I, GLFW_MOD_SUPER) // macOS: Ctrl+Space often switches the input source
 #endif
 	) {
 		completion_.request(*doc, docs());
@@ -729,89 +750,176 @@ void View::onSelectKey(const SelectKeyEvent& e) {
 }
 
 void View::onSelectText(const SelectTextEvent& e) {
-	if (!doc || e.codepoint < 32 || e.codepoint == 127)
+	if (e.codepoint < 32 || e.codepoint == 127)
 		return;
-	if (e.codepoint == ' ' && (APP->window->getMods() & RACK_MOD_MASK) == GLFW_MOD_CONTROL)
+	if (e.codepoint == ' ' && (mods() & RACK_MOD_MASK) == GLFW_MOD_CONTROL)
 		return e.consume(this); // Ctrl+Space opens the completions (Windows also sends the space)
 	doc->type(utf8(e.codepoint));
 	completion_.update(*doc, docs(), e.codepoint < 0x80 && isIdent((char)e.codepoint));
 	e.consume(this);
 }
 
-// --- Overlay ---
+// --- Window ---
 
-Overlay::Overlay(View* panel) : panel_(panel) {
+namespace {
+
+/** Rack's res/`file` as a font of `vg` (an editor window's context: Rack's fonts are its own context's), which owns
+its data; -1 if it can't be read. */
+int loadFont(NVGcontext* vg, const char* file) {
+	std::vector<uint8_t> data;
+	try {
+		data = system::readFile(asset::system(file)); // UTF-8 paths on Windows too, as Rack's own loader
+	} catch (const std::exception& e) {
+		WARN("Filo: editor window font: %s", e.what());
+		return -1;
+	}
+	unsigned char* copy = (unsigned char*)std::malloc(data.size());
+	std::memcpy(copy, data.data(), data.size());
+	return nvgCreateFontMem(vg, file, copy, (int)data.size(), 1);
+}
+
+Window* owner(GLFWwindow* w) {
+	return (Window*)glfwGetWindowUserPointer(w);
+}
+
+#if defined ARCH_MAC // Rack's window's scroll factors
+constexpr float kScroll = 10;
+#else
+constexpr float kScroll = 50;
+#endif
+
+} // namespace
+
+Window::Window(Doc& doc, filo::Engine* engine, hydra::WindowGeometry& g, bool& open) : g_(g), open_(open) {
+	root = new widget::Widget;
 	view = new View;
-	view->doc = panel->doc;
-	view->engine = panel->engine;
-	view->panel = false;
+	view->doc = &doc;
+	view->engine = engine;
+	view->host = this;
 	view->fontSize = 16;
-	view->onEscape = [this] { close(); };
-	addChild(view);
+	root->addChild(view);
+	events.rootWidget = root;
 }
 
-void Overlay::close() {
-	if (View* p = panel_.get())
-		APP->event->setSelectedWidget(p);
-	requestDelete();
+Window::~Window() {
+	destroy();
+	events.finalizeWidget(view); // (Rack's event state lets go of the widgets in their destructors)
+	delete root;                 // with the View, then its Tip
 }
 
-void Overlay::detach() {
-	view->doc = nullptr;
-	view->engine = nullptr;
-	requestDelete();
-}
-
-math::Rect Overlay::closeBox() const {
-	return math::Rect(box.size.x - 120, 0, 120, kHeader);
-}
-
-void Overlay::step() {
-	if (parent) // the scene: the whole window, also after Rack's fullscreen or a resize
-		box = math::Rect(math::Vec(), parent->box.size);
-	view->box = math::Rect(math::Vec(0, kHeader), box.size.minus(math::Vec(0, kHeader)));
-	OpaqueWidget::step();
-}
-
-void Overlay::draw(const DrawArgs& args) {
-	NVGcontext* vg = args.vg;
-	nvgBeginPath(vg);
-	nvgRect(vg, 0, 0, box.size.x, box.size.y);
-	nvgFillColor(vg, kBackground);
-	nvgFill(vg);
-	nvgBeginPath(vg);
-	nvgRect(vg, 0, 0, box.size.x, kHeader);
-	nvgFillColor(vg, kAccent);
-	nvgFill(vg);
-	nvgFontFaceId(vg, APP->window->uiFont->handle);
-	nvgFontSize(vg, 13);
-	nvgFillColor(vg, kBackground);
-	nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-	std::string title = string::f("Filo   %s+Enter: evaluate   %s+.: stop", RACK_MOD_CTRL_NAME, RACK_MOD_CTRL_NAME);
-	nvgText(vg, 8, kHeader / 2, title.c_str(), nullptr);
-	math::Rect c = closeBox();
-	nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
-	nvgText(vg, c.getRight() - 8, kHeader / 2, "Close (Esc)", nullptr);
-	OpaqueWidget::draw(args);
-}
-
-void Overlay::onButton(const ButtonEvent& e) {
-	OpaqueWidget::onButton(e);
-	if (e.getTarget() != this || e.button != GLFW_MOUSE_BUTTON_LEFT) // the editor took it
+void Window::update(GLFWwindow* rack, const std::string& title) {
+	window.update(rack, title.c_str(), g_, open_, [this](int fbW, int fbH) { draw(fbW, fbH); });
+	GLFWwindow* w = window.win;
+	if (!w || owner(w) == this)
 		return;
-	if (e.action == GLFW_PRESS && closeBox().contains(e.pos)) {
-		close();
-		if (View* p = panel_.get())
-			e.consume(p); // Rack selects the target after this: the panel's editor, not the overlay going away
-	} else
-		e.consume(view); // the title bar: the editor gets the keys
+	// A new GLFW window: its input into `events`, as Rack's window's into APP->event (its window/Window.cpp callbacks).
+	glfwSetWindowUserPointer(w, this);
+	glfwSetInputMode(w, GLFW_STICKY_KEYS, GLFW_FALSE); // View::mods() polls the keys held now
+	glfwSetCursorPosCallback(w, [](GLFWwindow* win, double x, double y) {
+		if (Window* o = owner(win)) {
+			math::Vec pos = math::Vec(x, y).mult(o->mouseScale), delta = pos.minus(o->mouse);
+			o->mouse = pos;
+			o->events.handleHover(pos, delta);
+		}
+	});
+	glfwSetCursorEnterCallback(w, [](GLFWwindow* win, int entered) {
+		if (Window* o = owner(win))
+			if (!entered)
+				o->events.handleLeave();
+	});
+	glfwSetMouseButtonCallback(w, [](GLFWwindow* win, int button, int action, int mods) {
+		if (Window* o = owner(win))
+			o->events.handleButton(o->mouse, button, action, mods);
+	});
+	glfwSetScrollCallback(w, [](GLFWwindow* win, double x, double y) {
+		if (Window* o = owner(win))
+			o->events.handleScroll(o->mouse, math::Vec(x, y).mult(kScroll));
+	});
+	glfwSetCharCallback(w, [](GLFWwindow* win, unsigned codepoint) {
+		if (Window* o = owner(win))
+			o->events.handleText(o->mouse, codepoint);
+	});
+	glfwSetKeyCallback(w, [](GLFWwindow* win, int key, int scancode, int action, int mods) {
+		if (Window* o = owner(win))
+			o->key(key, scancode, action, mods);
+	});
+	// Focused: the editor has the keys and shows its cursor; not: its popup closes.
+	glfwSetWindowFocusCallback(w, [](GLFWwindow* win, int focused) {
+		if (Window* o = owner(win))
+			o->events.setSelectedWidget(focused ? o->view : nullptr);
+	});
+	events.setSelectedWidget(view);
 }
 
-void Overlay::onHoverKey(const HoverKeyEvent& e) {
-	// The editor not selected: Esc closes; the rest stops here (Enter would open the module browser behind this).
-	if (e.action == GLFW_PRESS && e.key == GLFW_KEY_ESCAPE)
-		close();
-	e.consume(this);
+void Window::key(int key, int scancode, int action, int mods) {
+	switch (routeKey(key, [&] { return events.handleKey(mouse, key, scancode, action, mods); })) {
+	case KeyRoute::ToggleFullscreen:
+		if (action == GLFW_PRESS)
+			g_.fullscreen = !g_.fullscreen; // flags only: update() applies them
+		break;
+	case KeyRoute::LeaveFullscreen:
+		if (action == GLFW_PRESS)
+			g_.fullscreen = false;
+		break;
+	case KeyRoute::Rack: // last: Rack may delete this (File > New, Open)
+		APP->event->handleKey(APP->scene->getMousePos(), key, scancode, action, mods);
+		break;
+	case KeyRoute::Editor:
+		break;
+	}
+}
+
+void Window::show() {
+	open_ = true;
+	if (GLFWwindow* w = window.win) { // update() creates it otherwise
+		glfwShowWindow(w);
+		glfwFocusWindow(w);
+	}
+}
+
+void Window::draw(int fbW, int fbH) {
+	if (!vg) { // the window's first frame: its own NanoVG context, Rack's fonts loaded into it
+		vg = nvgCreateGL2(NVG_ANTIALIAS | NVG_STENCIL_STROKES); // Rack's flags
+		if (!vg)
+			return;
+		mono = loadFont(vg, kFont);
+		ui = loadFont(vg, kUiFont);
+		if (mono >= 0 && ui >= 0)
+			nvgAddFallbackFontId(vg, mono, ui); // the glyphs the mono font lacks
+		// ponytail: Rack's CJK and emoji fallbacks (14 MB) aren't loaded here: those glyphs stay blank in this window.
+	}
+	// UI px as in Rack's window (its pixelRatio): the monitor's scale, or Rack's own setting.
+	float scale = 1;
+	glfwGetWindowContentScale(window.win, &scale, nullptr);
+	float ratio = std::max(1.f, settings::pixelRatio > 0 ? settings::pixelRatio : std::floor(scale + 0.5f));
+	int w, h;
+	glfwGetWindowSize(window.win, &w, &h);
+	mouseScale = w > 0 ? fbW / (w * ratio) : 1;
+	root->box.size = view->box.size = math::Vec(fbW, fbH).div(ratio);
+	root->step();
+	glClearColor(kBackground.r, kBackground.g, kBackground.b, 1);
+	glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+	nvgBeginFrame(vg, root->box.size.x, root->box.size.y, ratio);
+	widget::Widget::DrawArgs args;
+	args.vg = vg;
+	args.clipBox = root->box.zeroPos();
+	root->draw(args);
+	nvgEndFrame(vg);
+}
+
+void Window::destroy() {
+	if (GLFWwindow* w = window.win) {
+		if (vg) { // its GL objects, in its context
+			GLFWwindow* current = glfwGetCurrentContext();
+			glfwMakeContextCurrent(w);
+			nvgDeleteGL2(vg);
+			glfwMakeContextCurrent(current);
+		}
+		glfwSetWindowUserPointer(w, nullptr); // its callbacks ignore it until collectWindows() destroys it
+	}
+	vg = nullptr;
+	mono = ui = -1;
+	window.destroy();
 }
 
 } // namespace editor

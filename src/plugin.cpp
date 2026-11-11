@@ -35,6 +35,20 @@ static void saveSettings() {
 	json_decref(root);
 }
 
+// --- Output and editor windows: their geometry in the patch ---
+
+static json_t* geometryJson(const hydra::WindowGeometry& g) {
+	return json_pack("{s:i, s:i, s:i, s:i, s:b}", "x", g.x, "y", g.y, "w", g.w, "h", g.h, "fullscreen", g.fullscreen);
+}
+
+static void geometryFromJson(json_t* o, hydra::WindowGeometry& g) {
+	int fullscreen = g.fullscreen;
+	json_unpack(o, "{s?i, s?i, s?i, s?i, s?b}", "x", &g.x, "y", &g.y, "w", &g.w, "h", &g.h, "fullscreen", &fullscreen);
+	g.fullscreen = fullscreen;
+	g.w = clamp(g.w, 64, 16384); // x/y are checked against the connected monitors when the window opens
+	g.h = clamp(g.h, 64, 16384);
+}
+
 // --- Filo ---
 
 static const char kDefaultCode[] = "$: s(\"bd sd\").bank(\"tr909\")\n$: note(\"c3 e3 g3\").midi()\n";
@@ -61,9 +75,11 @@ struct Filo : Module {
 	// Settings: set by the UI thread (menu, JSON), read by process(), like Rack's own modules.
 	int voices = 16, polyMode = filo::VoiceAllocator::Rotate, clkDivision = 16, ppc = 16;
 	bool autoPlay = true;
-	// The code, its undo history and what of it plays (UI thread): the panel's and the fullscreen editor's.
+	// The code, its undo history and what of it plays (UI thread): the panel's and the editor window's.
 	editor::Doc doc{kDefaultCode};
 	bool added = false;
+	hydra::WindowGeometry window{100, 100, 960, 640}; // the editor window's (UI thread), saved in the patch
+	bool windowOpen = false;
 
 	dsp::SchmittTrigger playIn, stopIn, clockIn, resetIn;
 	dsp::BooleanTrigger stopButton; // the PLAY button evaluates the code: FiloWidget::step(), on the UI thread
@@ -81,7 +97,7 @@ struct Filo : Module {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
 		configButton(PLAY_PARAM, "Play (evaluates the code, like Cmd/Ctrl+Enter)");
 		configButton(STOP_PARAM, "Stop (hush, gates down)");
-		configButton(FULLSCREEN_PARAM, "Fullscreen editor (Esc closes)");
+		configButton(FULLSCREEN_PARAM, "Editor window (F11 there: fullscreen)");
 		configInput(PLAY_INPUT, "Play trigger");
 		configInput(STOP_INPUT, "Stop trigger");
 		configInput(CLOCK_INPUT, "Clock (pulses per cycle: menu)");
@@ -192,18 +208,19 @@ struct Filo : Module {
 	json_t* dataToJson() override {
 		filo::Engine::Map trig, cc;
 		engine->getMaps(trig, cc);
-		return json_pack("{s:s, s:i, s:i, s:i, s:i, s:b, s:o, s:o, s:o}", "code", doc.text().c_str(), "voices", voices,
-						 "polyMode", polyMode, "clkDivision", clkDivision, "ppc", ppc, "autoPlay", autoPlay, "trigMap",
-						 mapJson(trig), "ccMap", mapJson(cc), "midi", midiInput.toJson());
+		return json_pack("{s:s, s:i, s:i, s:i, s:i, s:b, s:o, s:o, s:o, s:o, s:b}", "code", doc.text().c_str(),
+						 "voices", voices, "polyMode", polyMode, "clkDivision", clkDivision, "ppc", ppc, "autoPlay",
+						 autoPlay, "trigMap", mapJson(trig), "ccMap", mapJson(cc), "midi", midiInput.toJson(), "window",
+						 geometryJson(window), "windowOpen", windowOpen);
 	}
 
 	void dataFromJson(json_t* root) override {
 		const char* code = nullptr;
-		int play = autoPlay;
-		json_t *trig = nullptr, *cc = nullptr, *midiJ = nullptr;
-		json_unpack(root, "{s?s, s?i, s?i, s?i, s?i, s?b, s?o, s?o, s?o}", "code", &code, "voices", &voices, "polyMode",
-					&polyMode, "clkDivision", &clkDivision, "ppc", &ppc, "autoPlay", &play, "trigMap", &trig, "ccMap",
-					&cc, "midi", &midiJ);
+		int play = autoPlay, open = windowOpen;
+		json_t *trig = nullptr, *cc = nullptr, *midiJ = nullptr, *windowJ = nullptr;
+		json_unpack(root, "{s?s, s?i, s?i, s?i, s?i, s?b, s?o, s?o, s?o, s?o, s?b}", "code", &code, "voices", &voices,
+					"polyMode", &polyMode, "clkDivision", &clkDivision, "ppc", &ppc, "autoPlay", &play, "trigMap",
+					&trig, "ccMap", &cc, "midi", &midiJ, "window", &windowJ, "windowOpen", &open);
 		// Patch data is a real boundary.
 		voices = clamp(voices, 1, 16);
 		polyMode = clamp(polyMode, 0, (int)filo::VoiceAllocator::MPE);
@@ -212,6 +229,8 @@ struct Filo : Module {
 		if (std::find(kDivisions.begin(), kDivisions.end(), ppc) == kDivisions.end())
 			ppc = 16;
 		autoPlay = play;
+		geometryFromJson(windowJ, window); // older patches have none
+		windowOpen = open;
 		if (midiJ) // older patches have none
 			midiInput.fromJson(midiJ);
 		engine->setMaps(trig ? mapFrom(trig) : filo::Engine::Map(), cc ? mapFrom(cc) : filo::Engine::Map());
@@ -240,9 +259,9 @@ struct PanelText : widget::Widget {
 };
 
 struct FiloWidget : ModuleWidget {
-	editor::View* view;                // the panel's editor
-	WeakPtr<editor::Overlay> overlay;  // the fullscreen editor, while open
-	editor::Doc preview{kDefaultCode}; // the module browser's
+	editor::View* view;                           // the panel's editor
+	std::unique_ptr<editor::Window> editorWindow; // null: the module browser's preview
+	editor::Doc preview{kDefaultCode};            // the module browser's
 	bool fullscreenDown = false, playDown = false;
 
 	FiloWidget(Filo* module) {
@@ -276,33 +295,42 @@ struct FiloWidget : ModuleWidget {
 			addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(55 + 17.5f * i, 112)), module, i));
 			label(55 + 17.5f * i, 112, outputs[i]);
 		}
+		if (module) // (destroyed before the module, which holds its doc and geometry)
+			editorWindow.reset(
+				new editor::Window(module->doc, module->engine.get(), module->window, module->windowOpen));
 	}
 
-	~FiloWidget() override {
-		if (editor::Overlay* o = overlay.get()) // still open: the module (its doc) is deleted right after this
-			o->detach();
+	void onContextDestroy(const ContextDestroyEvent& e) override {
+		if (editorWindow) // its context shares the dying one; the next step() opens a fresh one
+			editorWindow->destroy();
+		ModuleWidget::onContextDestroy(e);
 	}
 
 	void step() override {
 		ModuleWidget::step();
+		hydra::collectWindows();
 		// The FULL button (Rack holds a momentary press for a frame at least).
 		bool down = module && module->params[Filo::FULLSCREEN_PARAM].getValue() > 0.f;
-		if (down && !fullscreenDown && !overlay.get()) {
-			auto* o = new editor::Overlay(view);
-			APP->scene->addChild(o);
-			APP->event->setSelectedWidget(o->view);
-			overlay = o;
-		}
+		if (down && !fullscreenDown)
+			editorWindow->show();
 		fullscreenDown = down;
 		// PLAY: evaluate what the editor shows and play (like strudel.cc's play button; already playing: just update).
 		down = module && module->params[Filo::PLAY_PARAM].getValue() > 0.f;
 		if (down && !playDown)
 			static_cast<Filo*>(module)->evaluate(true);
 		playDown = down;
+		// Drawn here, not in draw(): draw() is skipped for off-screen modules.
+		// ponytail: titled by module id; the patch's name is in patch.hpp, which isn't Rack's public API.
+		if (editorWindow)
+			editorWindow->update(APP->window->win, "Filo — " + std::to_string(module->id));
 	}
 
 	void appendContextMenu(Menu* menu) override {
 		Filo* m = static_cast<Filo*>(module);
+		menu->addChild(new MenuSeparator);
+		// Only flags here: menu actions run inside GLFW callbacks, step() applies them.
+		menu->addChild(createBoolPtrMenuItem("Editor window", "", &m->windowOpen));
+		menu->addChild(createBoolPtrMenuItem("Editor window fullscreen", "F11", &m->window.fullscreen));
 		menu->addChild(new MenuSeparator);
 		std::vector<std::string> counts, divisions;
 		for (int i = 1; i <= 16; i++)
@@ -381,21 +409,9 @@ struct Icing : Module {
 			audio.push(x);
 	}
 
-	json_t* dataToJson() override {
-		const hydra::WindowGeometry& g = window;
-		return json_pack("{s:{s:i, s:i, s:i, s:i, s:b}}", "window", "x", g.x, "y", g.y, "w", g.w, "h", g.h,
-						 "fullscreen", g.fullscreen);
-	}
+	json_t* dataToJson() override { return json_pack("{s:o}", "window", geometryJson(window)); }
 
-	void dataFromJson(json_t* root) override {
-		hydra::WindowGeometry& g = window;
-		int fullscreen = g.fullscreen;
-		json_unpack(root, "{s?{s?i, s?i, s?i, s?i, s?b}}", "window", "x", &g.x, "y", &g.y, "w", &g.w, "h", &g.h,
-					"fullscreen", &fullscreen);
-		g.fullscreen = fullscreen;
-		g.w = clamp(g.w, 64, 16384); // x/y are checked against the connected monitors when the window opens
-		g.h = clamp(g.h, 64, 16384);
-	}
+	void dataFromJson(json_t* root) override { geometryFromJson(json_object_get(root, "window"), window); }
 };
 
 // Matches res/Icing.svg (mm): a strip on the left for the jack, the preview from there to the right edge.
@@ -478,7 +494,13 @@ struct IcingWidget : ModuleWidget {
 			engine->hydra.request(q);
 			renderer.update(APP->window->vg, engine->hydra, [=](const std::string& line) { engine->log(line, true); });
 		}
-		output.update(APP->window->win, f ? &renderer : nullptr, m->window, outputOpen);
+		if (outputOpen && output.win && glfwGetKey(output.win, GLFW_KEY_ESCAPE) == GLFW_PRESS) // sticky: a tap counts
+			m->window.fullscreen = false;
+		output.update(APP->window->win, "Icing", m->window, outputOpen, [&](int, int) {
+			glClear(GL_COLOR_BUFFER_BIT);
+			if (f)
+				renderer.present();
+		});
 	}
 
 	void appendContextMenu(Menu* menu) override {

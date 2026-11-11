@@ -16,10 +16,16 @@ Status: early development.
 | Cmd+/ | comment / uncomment the selected lines |
 | Ctrl+Space (also Cmd+I on macOS) | completions; they also open while typing a name. Up/Down, Tab or Enter accepts, Esc closes |
 | double-click / triple-click | select the word / the whole line |
-| FULL button, Esc | fullscreen editor, back |
+| FULL button | the editor window (also in Filo's menu) |
+| F11 (in the editor window) | its fullscreen on the monitor it is on; Esc leaves it |
 
 Rest the mouse on a function name to see its docs (Strudel's and Hydra's, from `res/strudel-docs.json`, regenerated
 by `scripts/update-engine`).
+
+The editor window is a window of its own with the same code, cursor and undo as the panel: move it to another monitor,
+resize it, make it fullscreen there (F11 or the menu's "Editor window fullscreen"). Rack's own shortcuts work from it
+(Cmd+S saves the patch). Closing it hides it; FULL brings it back. Its place, size, fullscreen and whether it is open
+are saved in the patch.
 
 ## MIDI input
 
@@ -144,7 +150,8 @@ make test-js    # engine tests: host, Hydra, upstream tune snapshots in Node and
 make render     # offline audio renders (build/render/*.wav, after scripts/fetch-test-samples);
                 # node --test test/render.test.mjs compares them with Chrome
 make tsan       # graph, worklet, engine and download threading tests under ThreadSanitizer
-make glcheck    # Icing's shaders and passes on this machine's GL driver (not in `make test`: needs a display)
+make glcheck    # Icing's shaders and passes, Filo's editor window, on this machine's GL driver (not in `make test`:
+                # needs a display; RACK_SYSTEM_DIR: Rack's install, for its fonts)
 make bench      # CPU per graph voice and per worklet processor (release build)
 make render-bench   # the render set 20x + all patterns stacked: CPU (gate G4), leaks and RSS (G2)
 scripts/update-engine [ref]   # re-pin Strudel (default: main) and with it hydra-synth, rebuild res/engine.js, run test-js;

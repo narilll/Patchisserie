@@ -500,7 +500,7 @@ static GLFWmonitor* monitorAt(int x, int y) {
 	return NULL;
 }
 
-static GLFWwindow* createWindow(GLFWwindow* rack, WindowGeometry& g) {
+static GLFWwindow* createWindow(GLFWwindow* rack, const char* title, WindowGeometry& g) {
 	// Same hints as Rack 2.6's own window (checked in libRack's Window::Window), so the contexts can share.
 	glfwDefaultWindowHints();
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
@@ -508,9 +508,9 @@ static GLFWwindow* createWindow(GLFWwindow* rack, WindowGeometry& g) {
 	glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
 	glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
 	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-	GLFWwindow* win = glfwCreateWindow(g.w, g.h, "Icing", NULL, rack);
+	GLFWwindow* win = glfwCreateWindow(g.w, g.h, title, NULL, rack);
 	if (!win) {
-		WARN("Icing: could not create output window");
+		WARN("%s: could not create a window", title);
 		return NULL;
 	}
 	glfwMakeContextCurrent(win);
@@ -548,7 +548,8 @@ static void applyFullscreen(GLFWwindow* win, const WindowGeometry& g) {
 	setLevelAboveMenuBar(win, g.fullscreen);
 }
 
-void Window::update(GLFWwindow* rack, const Renderer* image, WindowGeometry& g, bool& open) {
+void Window::update(GLFWwindow* rack, const char* title, WindowGeometry& g, bool& open,
+					const std::function<void(int, int)>& draw) {
 	if (win && glfwWindowShouldClose(win)) { // title-bar close = hide; Rack state stays
 		glfwSetWindowShouldClose(win, GLFW_FALSE);
 		open = false;
@@ -559,15 +560,13 @@ void Window::update(GLFWwindow* rack, const Renderer* image, WindowGeometry& g, 
 		return;
 	}
 	if (!win) {
-		win = createWindow(rack, g);
+		win = createWindow(rack, title, g);
 		fullscreen = false;
 		if (!win) {
 			open = false;
 			return;
 		}
 	}
-	if (glfwGetKey(win, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-		g.fullscreen = false;
 	if (!fullscreen) { // track the windowed geometry for the patch and for leaving fullscreen
 		glfwGetWindowPos(win, &g.x, &g.y);
 		glfwGetWindowSize(win, &g.w, &g.h);
@@ -585,9 +584,7 @@ void Window::update(GLFWwindow* rack, const Renderer* image, WindowGeometry& g, 
 	int fw, fh;
 	glfwGetFramebufferSize(win, &fw, &fh);
 	glViewport(0, 0, fw, fh);
-	glClear(GL_COLOR_BUFFER_BIT);
-	if (image)
-		image->present();
+	draw(fw, fh);
 	glfwSwapBuffers(win);
 	glfwMakeContextCurrent(rack);
 }

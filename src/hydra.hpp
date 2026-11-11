@@ -272,16 +272,18 @@ class Renderer {
 	bool failed_ = false;
 };
 
-/** Separate output window. Its context shares Rack's, but FBOs aren't shared: it only samples Renderer's texture. */
+/** A separate OS window: Icing's output, Filo's editor window (editor::Window). Its context shares Rack's, but FBOs
+aren't shared: Icing's only samples Renderer's texture. */
 struct Window {
 	GLFWwindow* win = nullptr;
 	bool fullscreen = false; // applied state; WindowGeometry::fullscreen is the wanted one
 
-	/** Reconciles the window with `open`/`g` and presents `image` (null: black). Title-bar close and Esc write back
-	into them. Must run outside GLFW callbacks (step()), so menus and keys only flip flags. Leaves `rack`'s context
-	current.
+	/** Reconciles the window with `open`/`g` (a new one is titled `title`) and draws a frame: `draw(framebuffer width,
+	height)` with the window's context current and its viewport set. Title-bar close writes back into `open`. Must run
+	outside GLFW callbacks (step()), so menus and keys only flip flags. Leaves `rack`'s context current.
 	*/
-	void update(GLFWwindow* rack, const Renderer* image, WindowGeometry& g, bool& open);
+	void update(GLFWwindow* rack, const char* title, WindowGeometry& g, bool& open,
+				const std::function<void(int, int)>& draw);
 	/** Hides the window for collectWindows() to destroy: safe inside GLFW callbacks, where Rack deletes widgets. */
 	void destroy();
 };
