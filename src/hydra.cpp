@@ -335,7 +335,14 @@ void Renderer::drawPreview(NVGcontext* vg, float x, float y, float w, float h) {
 	nvgFill(vg);
 	if (!display_ || failed_)
 		return;
-	nvgFillPaint(vg, nvgImagePattern(vg, x, y, w, h, 0.f, display_->image, 1.f)); // nvglu image is already FLIPY
+	int iw, ih;
+	nvgImageSize(vg, display_->image, &iw, &ih);
+	float fw = std::min(w, h * iw / ih), fh = fw * ih / iw; // the canvas's aspect, centred; the rest stays black
+	x += (w - fw) / 2;
+	y += (h - fh) / 2;
+	nvgBeginPath(vg);
+	nvgRect(vg, x, y, fw, fh);
+	nvgFillPaint(vg, nvgImagePattern(vg, x, y, fw, fh, 0.f, display_->image, 1.f)); // nvglu image is already FLIPY
 	nvgFill(vg);
 }
 

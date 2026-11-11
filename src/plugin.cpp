@@ -382,9 +382,20 @@ struct Icing : Module {
 	}
 };
 
-// Matches the preview frame in res/Icing.svg (mm).
-static const math::Rect kPreviewMm = math::Rect(2.54, 12.7, 76.2, 42.8625);
-static const Vec kAudioMm = Vec(40.64, 108);
+// Matches res/Icing.svg (mm): a strip on the left for the jack, the preview from there to the right edge.
+static const math::Rect kPreviewMm = math::Rect(12, 2, 138.4, 124.5);
+static const Vec kAudioMm = Vec(5.5, 118);
+
+struct IcingWidget;
+
+/** The Hydra preview: the image fitted to its box (rest black), or the hint. Double-click opens the output window. */
+struct IcingPreview : widget::Widget {
+	IcingWidget* icing;
+	explicit IcingPreview(IcingWidget* w) : icing(w) {}
+	void draw(const DrawArgs& args) override;
+	void drawLayer(const DrawArgs& args, int layer) override;
+	// No mouse handlers: the press goes on to the module, which drags it and opens its menu as elsewhere on the panel.
+};
 
 struct IcingWidget : ModuleWidget {
 	hydra::Renderer renderer;
@@ -392,6 +403,7 @@ struct IcingWidget : ModuleWidget {
 	hydra::Analyser analyser;
 	bool outputOpen = false;
 	int64_t filoId = -1; // the Filo whose Hydra this renders (-1: none)
+	IcingPreview* preview;
 
 	IcingWidget(Icing* module) {
 		setModule(module);
@@ -400,7 +412,11 @@ struct IcingWidget : ModuleWidget {
 		auto* text = createWidget<PanelText>(Vec());
 		text->box.size = box.size;
 		text->labels.push_back({mm2px(kAudioMm.minus(Vec(0, 5))), "AUDIO"});
+		text->labels.push_back({mm2px(Vec(kAudioMm.x, 8)), "ICING"});
 		addChild(text);
+		preview = new IcingPreview(this);
+		preview->box = math::Rect(mm2px(kPreviewMm.pos), mm2px(kPreviewMm.size));
+		addChild(preview);
 	}
 
 	~IcingWidget() override {
@@ -449,26 +465,6 @@ struct IcingWidget : ModuleWidget {
 		output.update(APP->window->win, f ? &renderer : nullptr, m->window, outputOpen);
 	}
 
-	void draw(const DrawArgs& args) override {
-		ModuleWidget::draw(args);
-		if (filoId >= 0)
-			return;
-		math::Rect r(mm2px(kPreviewMm.pos), mm2px(kPreviewMm.size));
-		nvgFontFaceId(args.vg, APP->window->uiFont->handle);
-		nvgFontSize(args.vg, 11);
-		nvgFillColor(args.vg, nvgRGB(0xe8, 0xa7, 0xc3));
-		nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
-		nvgText(args.vg, r.getCenter().x, r.getCenter().y, "Place directly right of a Filo", nullptr);
-	}
-
-	void drawLayer(const DrawArgs& args, int layer) override {
-		if (layer == 1 && filoId >= 0) { // like lights: drawn after the room-brightness dimming
-			math::Rect r(mm2px(kPreviewMm.pos), mm2px(kPreviewMm.size));
-			renderer.drawPreview(args.vg, r.pos.x, r.pos.y, r.size.x, r.size.y);
-		}
-		ModuleWidget::drawLayer(args, layer);
-	}
-
 	void appendContextMenu(Menu* menu) override {
 		Icing* m = static_cast<Icing*>(module);
 		menu->addChild(new MenuSeparator);
@@ -476,7 +472,36 @@ struct IcingWidget : ModuleWidget {
 		menu->addChild(createBoolPtrMenuItem("Output window", "", &outputOpen));
 		menu->addChild(createBoolPtrMenuItem("Fullscreen", "Esc", &m->window.fullscreen));
 	}
+
+	// Rack sends the double-click to the widget that took the press: this module (the preview has no mouse handlers).
+	// On the preview it opens the output window, or brings it to the front.
+	void onDoubleClick(const DoubleClickEvent& e) override {
+		if (!module || !preview->box.contains(APP->scene->rack->getMousePos().minus(box.pos))) {
+			ModuleWidget::onDoubleClick(e);
+			return;
+		}
+		outputOpen = true;
+		if (GLFWwindow* win = output.win) { // step() creates it otherwise
+			glfwShowWindow(win);
+			glfwFocusWindow(win);
+		}
+	}
 };
+
+void IcingPreview::draw(const DrawArgs& args) {
+	if (icing->filoId >= 0)
+		return;
+	nvgFontFaceId(args.vg, APP->window->uiFont->handle);
+	nvgFontSize(args.vg, 11);
+	nvgFillColor(args.vg, nvgRGB(0xe8, 0xa7, 0xc3));
+	nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+	nvgText(args.vg, box.size.x / 2, box.size.y / 2, "Place directly right of a Filo", nullptr);
+}
+
+void IcingPreview::drawLayer(const DrawArgs& args, int layer) {
+	if (layer == 1 && icing->filoId >= 0) // like lights: drawn after the room-brightness dimming
+		icing->renderer.drawPreview(args.vg, 0, 0, box.size.x, box.size.y);
+}
 
 void init(Plugin* p) {
 	pluginInstance = p;

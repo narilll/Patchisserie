@@ -9,7 +9,7 @@ Status: early development.
 
 ## Icing (Hydra)
 
-Place Icing directly right of a Filo; the Hydra code goes into that Filo's editor, as on strudel.cc:
+Place Icing (30 HP; double-click its preview to open the output window) directly right of a Filo; the Hydra code goes into that Filo's editor, as on strudel.cc:
 
 ```js
 await initHydra()

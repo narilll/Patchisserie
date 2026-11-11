@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Icing, 16 HP. Placeholder panel (M5): the preview frame matches kPreviewMm in src/plugin.cpp; the AUDIO label and
-the hint are drawn by the widget. -->
-<svg xmlns="http://www.w3.org/2000/svg" width="81.28mm" height="128.5mm" viewBox="0 0 81.28 128.5">
-  <rect width="81.28" height="128.5" fill="#f4d8e4"/>
-  <rect y="0" width="81.28" height="7" fill="#e8a7c3"/>
-  <rect y="121.5" width="81.28" height="7" fill="#e8a7c3"/>
-  <rect x="1.54" y="11.7" width="78.2" height="44.8625" rx="1" fill="#2b1d24"/>
-  <rect x="2.54" y="12.7" width="76.2" height="42.8625" fill="#000000"/>
+<!-- Icing, 30 HP. Placeholder panel (M5): the preview frame matches kPreviewMm in src/plugin.cpp; the AUDIO and ICING
+labels and the hint are drawn by the widget. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="152.4mm" height="128.5mm" viewBox="0 0 152.4 128.5">
+  <rect width="152.4" height="128.5" fill="#f4d8e4"/>
+  <rect width="11" height="128.5" fill="#e8a7c3"/>
+  <rect x="11" y="1" width="140.4" height="126.5" rx="1" fill="#2b1d24"/>
+  <rect x="12" y="2" width="138.4" height="124.5" fill="#000000"/>
 </svg>
