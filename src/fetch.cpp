@@ -60,11 +60,15 @@ bool download(const Downloader& d, const std::string& url, const std::string& pa
 	fs::create_directories(p.parent_path(), ec);
 	std::string tmp = path + ".part" + std::to_string(serial++);
 	bool ok = d(url, tmp);
+	std::error_code renamed;
 	if (ok)
-		fs::rename(fs::u8path(tmp), p, ec);
-	if (!ok || ec)
+		fs::rename(fs::u8path(tmp), p, renamed);
+	// Windows can't rename over a file another requester has open (a second Filo): that file is the same download.
+	if (renamed)
+		ok = fs::is_regular_file(p, ec);
+	if (!ok || renamed)
 		fs::remove(fs::u8path(tmp), ec);
-	return ok && !ec;
+	return ok;
 }
 
 uint64_t size(const std::string& dir) {

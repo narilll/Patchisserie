@@ -81,6 +81,16 @@ TEST(fetch_download_temp_rename) {
 	CHECK(fetch::download(ok, "https://h/a/b.wav", path));
 	CHECK(seen != path && seen.find(path) == 0); // written next to it, then renamed
 	CHECK(read(path) == "data" && files(root) == 1);
+	// The same download again while another requester reads the file (Windows then can't rename over it): done.
+	std::FILE* held = std::fopen(path.c_str(), "rb");
+	CHECK(held && fetch::download(ok, "https://h/a/b.wav", path));
+	if (held)
+		std::fclose(held);
+	CHECK(read(path) == "data" && files(root) == 1);
+	// Renaming fails and no file is there (a folder is): failed, and nothing left behind.
+	fs::create_directories(root + "/h/dir");
+	CHECK(!fetch::download(ok, "https://h/a/b.wav", root + "/h/dir"));
+	CHECK(files(root) == 1);
 	// A failed download (HTTP error, partial body) leaves no file, and an existing one untouched.
 	auto fail = [](const std::string&, const std::string& file) {
 		write(file, "<html>404</html>");
