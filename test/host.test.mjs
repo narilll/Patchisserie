@@ -341,3 +341,13 @@ $: n(accX.segment(4).range(0, 7)).scale("C:minor").markcss('color: red')`;
     "[slider] slider() is strudel.cc's editor widget: in Rack it stays at its value",
   ]);
 });
+
+test('mondo`...` notation (strudel.cc loads @strudel/mondo) evaluates and plays', async () => {
+  assert.deepEqual(await host.evaluate('$: mondo`n <0 2 4 [3 1] -1>*4 # s sawtooth`\n$: mondo`s hh*8`'), { ok: true });
+  const haps = host.query(0, 1);
+  assert.equal(haps.filter((h) => h.value.s === 'hh').length, 8);
+  assert.deepEqual(
+    haps.filter((h) => h.value.s === 'sawtooth').map((h) => h.value.n),
+    [0, 2, 4, 3, 1],
+  );
+});

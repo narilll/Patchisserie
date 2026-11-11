@@ -7,13 +7,14 @@ import * as tonal from '@strudel/tonal';
 import * as xen from '@strudel/xen';
 import * as edo from '@strudel/edo';
 import * as webaudio from '@strudel/webaudio';
+import * as mondo from '@strudel/mondo'; // registers the mondo`...` language with the transpiler
 import { registerTranspilerPlugin, transpiler } from '@strudel/transpiler';
 import { H } from '@strudel/hydra';
 
 // Same scope as strudel.cc (website/src/repl/util.mjs loadModules) minus visual/IO packages; soundfonts join in
 // initAudio(). Of @strudel/hydra: its H() and our initHydra(); hydra.ojack.xyz's loadScript(); @strudel/midi's midin()
 // and midikeys(); stand-ins for strudel.cc's editor slider, gamepad, motion and Csound loaders (below).
-const ready = core.evalScope(core, edo, tonal, mini, xen, webaudio, {
+const ready = core.evalScope(core, edo, tonal, mini, xen, webaudio, mondo, {
   ...{ H, initHydra, loadScript, midin, midikeys, slider, sliderWithID, gamepad, ...motion() },
   ...{ loadCsound, loadCSound: loadCsound, loadcsound: loadCsound, loadOrc: loadCsound },
 });
@@ -25,15 +26,19 @@ const ignore = (key, line) => ignored.has(key) || (ignored.add(key), console.war
 
 // Strudel's canvas visuals and editor widgets need a canvas or the editor, which Rack doesn't have (out of v1). As
 // upstream without a `window` (ours is for superdough): .draw() returns the pattern, so .scope(), .spiral() etc. play
-// on and draw nothing; the few that take a canvas before drawing, the inline widgets and .markcss() do the same.
+// on and draw nothing; the few that take a canvas before drawing and the inline widgets do the same.
 const noCanvas = (result) =>
   function () {
     ignore('draw', '[draw] Strudel canvas visuals and editor widgets (scope, pianoroll, ...) are not shown in Rack');
     return result ?? this;
   };
-const widgets = ['_scope', '_pianoroll', '_punchcard', '_spiral', '_pitchwheel', 'markcss'];
+const widgets = ['_scope', '_pianoroll', '_punchcard', '_spiral', '_pitchwheel'];
 for (const name of ['draw', 'pianoroll', 'pitchwheel', ...widgets]) core.Pattern.prototype[name] = noCanvas();
 core.Pattern.prototype.animate = noCanvas(core.silence);
+// .markcss() only styles the pattern's code in strudel.cc's editor (mondo`...` calls it on every pattern): silently.
+core.Pattern.prototype.markcss = function () {
+  return this;
+};
 // strudel.cc's slider(value, min, max, step), which its transpiler makes sliderWithID(id, value, min, max): the value.
 function slider(value) {
   ignore('slider', "[slider] slider() is strudel.cc's editor widget: in Rack it stays at its value");

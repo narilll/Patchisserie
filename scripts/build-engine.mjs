@@ -65,6 +65,9 @@ const engine = await build({
       ]),
     ),
     'hydra-synth': hydraSynth,
+    // mondo`...`: @strudel/mondo lives in packages/mondough, its parser mondolang in packages/mondo (no npm deps).
+    '@strudel/mondo': packages + 'mondough',
+    mondolang: packages + 'mondo',
   },
   plugins: [stubs],
 });

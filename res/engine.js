@@ -5950,7 +5950,7 @@
     setInterval,
     clearInterval,
     id: id2,
-    mondo = false
+    mondo: mondo2 = false
   }) {
     if (defaultOutput) {
       throw new Error(
@@ -6101,7 +6101,7 @@
         await beforeEval?.({ code });
         allTransforms = [];
         shouldHush && hush();
-        if (mondo) {
+        if (mondo2) {
           code = `mondolang\`${code}\``;
         }
         let { pattern: pattern2, meta } = await evaluate(code, transpiler2, transpilerOptions);
@@ -10409,8 +10409,8 @@ Please check with "npm ls @strudel/core".`
       exports.__esModule = true;
       exports.getBestVoicing = void 0;
       function getBestVoicing(voicingOptions) {
-        var chord3 = voicingOptions.chord, range5 = voicingOptions.range, finder = voicingOptions.finder, picker = voicingOptions.picker, lastVoicing2 = voicingOptions.lastVoicing;
-        var voicings2 = finder(chord3, range5);
+        var chord3 = voicingOptions.chord, range6 = voicingOptions.range, finder = voicingOptions.finder, picker = voicingOptions.picker, lastVoicing2 = voicingOptions.lastVoicing;
+        var voicings2 = finder(chord3, range6);
         if (!voicings2.length) {
           return [];
         }
@@ -10446,12 +10446,12 @@ Please check with "npm ls @strudel/core".`
       var tonal_1 = (init_dist32(), __toCommonJS(dist_exports3));
       var dictionaryVoicing_1 = require_dictionaryVoicing();
       var tokenizeChord_1 = require_tokenizeChord();
-      function voicingsInRange(chord3, dictionary5, range5) {
+      function voicingsInRange(chord3, dictionary5, range6) {
         if (dictionary5 === void 0) {
           dictionary5 = dictionaryVoicing_1.lefthand;
         }
-        if (range5 === void 0) {
-          range5 = ["D3", "A4"];
+        if (range6 === void 0) {
+          range6 = ["D3", "A4"];
         }
         var _a = (0, tokenizeChord_1.tokenizeChord)(chord3), tonic = _a[0], symbol = _a[1];
         if (!dictionary5[symbol]) {
@@ -10460,7 +10460,7 @@ Please check with "npm ls @strudel/core".`
         var voicings2 = dictionary5[symbol].map(function(intervals2) {
           return intervals2.split(" ");
         });
-        var notesInRange = tonal_1.Range.chromatic(range5);
+        var notesInRange = tonal_1.Range.chromatic(range6);
         return voicings2.reduce(function(voiced, voicing2) {
           var relativeIntervals = voicing2.map(function(interval3) {
             return tonal_1.Interval.substract(interval3, voicing2[0]);
@@ -10469,7 +10469,7 @@ Please check with "npm ls @strudel/core".`
           var starts = notesInRange.filter(function(note4) {
             return tonal_1.Note.chroma(note4) === tonal_1.Note.chroma(bottomPitchClass);
           }).filter(function(note4) {
-            return tonal_1.Note.midi(tonal_1.Note.transpose(note4, relativeIntervals[relativeIntervals.length - 1])) <= tonal_1.Note.midi(range5[1]);
+            return tonal_1.Note.midi(tonal_1.Note.transpose(note4, relativeIntervals[relativeIntervals.length - 1])) <= tonal_1.Note.midi(range6[1]);
           }).map(function(note4) {
             return tonal_1.Note.enharmonic(note4, bottomPitchClass);
           });
@@ -10553,14 +10553,14 @@ Please check with "npm ls @strudel/core".`
         aug: ["1P 3m 5A", "3m 5A 8P", "5A 8P 10m"]
       };
       var dictionaryVoicingFinder = function(dictionary5) {
-        return function(chordSymbol, range5) {
-          return (0, voicingsInRange_1.voicingsInRange)(chordSymbol, dictionary5, range5);
+        return function(chordSymbol, range6) {
+          return (0, voicingsInRange_1.voicingsInRange)(chordSymbol, dictionary5, range6);
         };
       };
       exports.dictionaryVoicingFinder = dictionaryVoicingFinder;
       var dictionaryVoicing2 = function(props) {
-        var dictionary5 = props.dictionary, range5 = props.range, rest = __rest(props, ["dictionary", "range"]);
-        return (0, getBestVoicing_1.getBestVoicing)(__assign(__assign({}, rest), { range: range5, finder: (0, exports.dictionaryVoicingFinder)(dictionary5) }));
+        var dictionary5 = props.dictionary, range6 = props.range, rest = __rest(props, ["dictionary", "range"]);
+        return (0, getBestVoicing_1.getBestVoicing)(__assign(__assign({}, rest), { range: range6, finder: (0, exports.dictionaryVoicingFinder)(dictionary5) }));
       };
       exports.dictionaryVoicing = dictionaryVoicing2;
     }
@@ -11370,8 +11370,8 @@ Please check with "npm ls @strudel/core".`
           min = min === 0 ? 1e-3 : min;
           max = max === 0 ? 1e-3 : max;
         }
-        const range5 = max - min;
-        const sustainVal = min + sustain2 * range5;
+        const range6 = max - min;
+        const sustainVal = min + sustain2 * range6;
         const duration2 = end2 - begin2;
         const envValAtTime = (time4) => {
           let val2;
@@ -13335,8 +13335,8 @@ Please check with "npm ls @strudel/core".`
         }
         connect(...nodes) {
           nodes.forEach((node) => {
-            this.tails.forEach((tail) => {
-              tail.connect(node);
+            this.tails.forEach((tail2) => {
+              tail2.connect(node);
             });
           });
           this.tails = nodes;
@@ -19000,15 +19000,15 @@ registerProcessor('${name3}', MyProcessor);
           return "/*" + comment.value + "*/";
         }
         function addComments(stmt, result) {
-          var i3, len, comment, save, tailingToStatement, specialBase, fragment, extRange, range5, prevRange, prefix, infix, suffix, count;
+          var i3, len, comment, save, tailingToStatement, specialBase, fragment, extRange, range6, prevRange, prefix, infix, suffix, count;
           if (stmt.leadingComments && stmt.leadingComments.length > 0) {
             save = result;
             if (preserveBlankLines) {
               comment = stmt.leadingComments[0];
               result = [];
               extRange = comment.extendedRange;
-              range5 = comment.range;
-              prefix = sourceCode.substring(extRange[0], range5[0]);
+              range6 = comment.range;
+              prefix = sourceCode.substring(extRange[0], range6[0]);
               count = (prefix.match(/\n/g) || []).length;
               if (count > 0) {
                 result.push(stringRepeat("\n", count));
@@ -19017,17 +19017,17 @@ registerProcessor('${name3}', MyProcessor);
                 result.push(prefix);
                 result.push(generateComment(comment));
               }
-              prevRange = range5;
+              prevRange = range6;
               for (i3 = 1, len = stmt.leadingComments.length; i3 < len; i3++) {
                 comment = stmt.leadingComments[i3];
-                range5 = comment.range;
-                infix = sourceCode.substring(prevRange[1], range5[0]);
+                range6 = comment.range;
+                infix = sourceCode.substring(prevRange[1], range6[0]);
                 count = (infix.match(/\n/g) || []).length;
                 result.push(stringRepeat("\n", count));
                 result.push(addIndent(generateComment(comment)));
-                prevRange = range5;
+                prevRange = range6;
               }
-              suffix = sourceCode.substring(range5[1], extRange[1]);
+              suffix = sourceCode.substring(range6[1], extRange[1]);
               count = (suffix.match(/\n/g) || []).length;
               result.push(stringRepeat("\n", count));
             } else {
@@ -19055,8 +19055,8 @@ registerProcessor('${name3}', MyProcessor);
             if (preserveBlankLines) {
               comment = stmt.trailingComments[0];
               extRange = comment.extendedRange;
-              range5 = comment.range;
-              prefix = sourceCode.substring(extRange[0], range5[0]);
+              range6 = comment.range;
+              prefix = sourceCode.substring(extRange[0], range6[0]);
               count = (prefix.match(/\n/g) || []).length;
               if (count > 0) {
                 result.push(stringRepeat("\n", count));
@@ -19284,12 +19284,12 @@ registerProcessor('${name3}', MyProcessor);
         };
         CodeGenerator.Statement = {
           BlockStatement: function(stmt, flags) {
-            var range5, content, result = ["{", newline], that = this;
+            var range6, content, result = ["{", newline], that = this;
             withIndent(function() {
               if (stmt.body.length === 0 && preserveBlankLines) {
-                range5 = stmt.range;
-                if (range5[1] - range5[0] > 2) {
-                  content = sourceCode.substring(range5[0] + 1, range5[1] - 1);
+                range6 = stmt.range;
+                if (range6[1] - range6[0] > 2) {
+                  content = sourceCode.substring(range6[0] + 1, range6[1] - 1);
                   if (content[0] === "\n") {
                     result = ["{"];
                   }
@@ -19305,8 +19305,8 @@ registerProcessor('${name3}', MyProcessor);
                 if (preserveBlankLines) {
                   if (i3 === 0) {
                     if (stmt.body[0].leadingComments) {
-                      range5 = stmt.body[0].leadingComments[0].extendedRange;
-                      content = sourceCode.substring(range5[0], range5[1]);
+                      range6 = stmt.body[0].leadingComments[0].extendedRange;
+                      content = sourceCode.substring(range6[0], range6[1]);
                       if (content[0] === "\n") {
                         result = ["{"];
                       }
@@ -29245,24 +29245,24 @@ registerProcessor('${name3}', MyProcessor);
     var peg$f17 = function(_steps, s2) {
       return new PatternStub(s2, "fastcat", void 0, !!_steps);
     };
-    var peg$f18 = function(tail) {
-      return { alignment: "stack", list: tail };
+    var peg$f18 = function(tail2) {
+      return { alignment: "stack", list: tail2 };
     };
-    var peg$f19 = function(tail) {
-      return { alignment: "rand", list: tail, seed: seed2++ };
+    var peg$f19 = function(tail2) {
+      return { alignment: "rand", list: tail2, seed: seed2++ };
     };
-    var peg$f20 = function(tail) {
-      return { alignment: "feet", list: tail, seed: seed2++ };
+    var peg$f20 = function(tail2) {
+      return { alignment: "feet", list: tail2, seed: seed2++ };
     };
-    var peg$f21 = function(head, tail) {
-      if (tail && tail.list.length > 0) {
-        return new PatternStub([head, ...tail.list], tail.alignment, tail.seed);
+    var peg$f21 = function(head, tail2) {
+      if (tail2 && tail2.list.length > 0) {
+        return new PatternStub([head, ...tail2.list], tail2.alignment, tail2.seed);
       } else {
         return head;
       }
     };
-    var peg$f22 = function(head, tail) {
-      return new PatternStub(tail ? [head, ...tail.list] : [head], "polymeter");
+    var peg$f22 = function(head, tail2) {
+      return new PatternStub(tail2 ? [head, ...tail2.list] : [head], "polymeter");
     };
     var peg$f23 = function(sc) {
       return sc;
@@ -29338,7 +29338,7 @@ registerProcessor('${name3}', MyProcessor);
     function offset3() {
       return peg$savedPos;
     }
-    function range5() {
+    function range6() {
       return {
         source: peg$source,
         start: peg$savedPos,
@@ -31385,12 +31385,12 @@ registerProcessor('${name3}', MyProcessor);
           case "range": {
             const friend = enter(op.arguments_.element);
             pat = reify(pat);
-            const arrayRange = (start, stop2, step = 1) => Array.from(
+            const arrayRange2 = (start, stop2, step = 1) => Array.from(
               { length: Math.abs(stop2 - start) / step + 1 },
               (value2, index5) => start < stop2 ? start + index5 * step : start - index5 * step
             );
-            let range5 = (apat, bpat) => apat.squeezeBind((a2) => bpat.bind((b) => fastcat(...arrayRange(a2, b))));
-            pat = range5(pat, friend);
+            let range6 = (apat, bpat) => apat.squeezeBind((a2) => bpat.bind((b) => fastcat(...arrayRange2(a2, b))));
+            pat = range6(pat, friend);
             break;
           }
           default: {
@@ -32503,19 +32503,19 @@ registerProcessor('${name3}', MyProcessor);
   };
   var defaultDict = "ireal";
   var setDefaultVoicings = (dict2) => defaultDict = dict2;
-  var setVoicingRange = (name3, range5) => addVoicings(name3, voicingRegistry[name3].dictionary, range5);
-  var addVoicings = (name3, dictionary5, range5 = ["F3", "A4"]) => {
-    Object.assign(voicingRegistry, { [name3]: { dictionary: dictionary5, range: range5 } });
+  var setVoicingRange = (name3, range6) => addVoicings(name3, voicingRegistry[name3].dictionary, range6);
+  var addVoicings = (name3, dictionary5, range6 = ["F3", "A4"]) => {
+    Object.assign(voicingRegistry, { [name3]: { dictionary: dictionary5, range: range6 } });
   };
   var registerVoicings = (name3, dictionary5, options = {}) => {
     Object.assign(voicingRegistry, { [name3]: { dictionary: dictionary5, ...options } });
   };
   var getVoicing = (chord3, dictionaryName, lastVoicing2) => {
-    const { dictionary: dictionary5, range: range5 } = voicingRegistry[dictionaryName];
+    const { dictionary: dictionary5, range: range6 } = voicingRegistry[dictionaryName];
     return dictionaryVoicing({
       chord: chord3,
       dictionary: dictionary5,
-      range: range5,
+      range: range6,
       picker: minTopNoteDiff,
       lastVoicing: lastVoicing2
     });
@@ -33459,6 +33459,16 @@ registerProcessor('${name3}', MyProcessor);
 
   // js/host.mjs
   init_webaudio2();
+
+  // build/engine-src/strudel/packages/mondough/mondough.mjs
+  var mondough_exports = {};
+  __export(mondough_exports, {
+    getLocations: () => getLocations,
+    mondi: () => mondi,
+    mondo: () => mondo,
+    mondolang: () => mondolang
+  });
+  init_core();
 
   // build/engine-src/strudel/packages/transpiler/index.mjs
   init_core();
@@ -39150,6 +39160,9 @@ registerProcessor('${name3}', MyProcessor);
 
   // build/engine-src/strudel/packages/transpiler/transpiler.mjs
   var languages = /* @__PURE__ */ new Map();
+  function registerLanguage(type, config) {
+    languages.set(type, config);
+  }
   function getLanguages() {
     return languages;
   }
@@ -39751,13 +39764,527 @@ registerProcessor('${name3}', MyProcessor);
   }
   registerTranspilerPlugin(widgetTranspilerPlugins);
 
+  // build/engine-src/strudel/packages/mondo/mondo.mjs
+  var MondoParser = class {
+    // these are the tokens we expect
+    token_types = {
+      comment: /^\/\/(.*?)(?=\n|$)/,
+      quotes_double: /^"(.*?)"/,
+      quotes_single: /^'(.*?)'/,
+      open_list: /^\(/,
+      close_list: /^\)/,
+      open_angle: /^</,
+      close_angle: /^>/,
+      open_square: /^\[/,
+      close_square: /^\]/,
+      open_curly: /^\{/,
+      close_curly: /^\}/,
+      number: /^-?[0-9]*\.?[0-9]+/,
+      // before pipe!
+      // TODO: better error handling when "-" is used as rest, e.g "s [- bd]"
+      op: /^[*/:!@%?+\-&]|^\.{2}/,
+      // * / : ! @ % ? ..
+      // dollar: /^\$/,
+      pipe: /^#/,
+      stack: /^[,$]/,
+      or: /^[|]/,
+      plain: /^[a-zA-Z0-9-~_^#]+/
+    };
+    op_precedence = [["*", "/", ":", "!", "@", "%", "?", "+", "-", ".."], ["&"]];
+    // matches next token
+    next_token(code, offset3 = 0) {
+      for (let type in this.token_types) {
+        const match = code.match(this.token_types[type]);
+        if (match) {
+          let token = { type, value: match[0] };
+          if (offset3 !== -1) {
+            token.loc = [offset3, offset3 + match[0].length];
+          }
+          return token;
+        }
+      }
+      throw new Error(`mondo: could not match '${code}'`);
+    }
+    // takes code string, returns list of matched tokens (if valid)
+    tokenize(code, offset3 = 0) {
+      let tokens = [];
+      let locEnabled = offset3 !== -1;
+      let trim = () => {
+        offset3 += code.length - code.trimStart().length;
+        return code.trim();
+      };
+      code = trim();
+      while (code.length > 0) {
+        code = trim();
+        const token = this.next_token(code, locEnabled ? offset3 : -1);
+        code = code.slice(token.value.length);
+        offset3 += token.value.length;
+        tokens.push(token);
+      }
+      return tokens;
+    }
+    // take code, return abstract syntax tree
+    parse(code, offset3) {
+      this.code = code;
+      this.offset = offset3;
+      this.tokens = this.tokenize(code, offset3);
+      const expressions = [];
+      while (this.tokens.length) {
+        expressions.push(this.parse_expr());
+      }
+      if (expressions.length === 0) {
+        return { type: "list", children: [] };
+      }
+      if (expressions.length > 1 || expressions[0].type !== "list") {
+        return {
+          type: "list",
+          children: this.desugar(expressions)
+        };
+      }
+      return expressions[0];
+    }
+    // parses any valid expression
+    parse_expr() {
+      if (!this.tokens[0]) {
+        throw new Error(`unexpected end of file`);
+      }
+      let next = this.tokens[0]?.type;
+      if (next === "open_list") {
+        return this.parse_list();
+      }
+      if (next === "open_angle") {
+        return this.parse_angle();
+      }
+      if (next === "open_square") {
+        return this.parse_square();
+      }
+      if (next === "open_curly") {
+        return this.parse_curly();
+      }
+      return this.consume(next);
+    }
+    // Token[] => Token[][], e.g. (x , y z) => [['x'],['y','z']]
+    split_children(children, split_type) {
+      const chunks = [];
+      while (true) {
+        let splitIndex = children.findIndex((child) => child.type === split_type);
+        if (splitIndex === -1) break;
+        const chunk2 = children.slice(0, splitIndex);
+        chunks.push(chunk2);
+        children = children.slice(splitIndex + 1);
+      }
+      chunks.push(children);
+      return chunks;
+    }
+    desugar_split(children, split_type, next) {
+      const chunks = this.split_children(children, split_type);
+      if (chunks.length === 1) {
+        return next(children);
+      }
+      const args = chunks.map((chunk2) => {
+        if (!chunk2.length) {
+          return;
+        }
+        if (chunk2.length === 1) {
+          return chunk2[0];
+        }
+        chunk2 = next(chunk2);
+        return { type: "list", children: chunk2 };
+      }).filter(Boolean);
+      return [{ type: "plain", value: split_type }, ...args];
+    }
+    // prevents to get a list, e.g. ((x y)) => (x y)
+    unwrap_children(children) {
+      if (children.length === 1) {
+        return children[0].children;
+      }
+      return children;
+    }
+    desugar_ops(children, types2) {
+      while (true) {
+        let opIndex = children.findIndex((child) => child.type === "op" && types2.includes(child.value));
+        if (opIndex === -1) break;
+        const op = { type: "plain", value: children[opIndex].value };
+        if (opIndex === children.length - 1) {
+          children[opIndex] = op;
+          continue;
+        }
+        if (opIndex === 0) {
+          children[opIndex] = op;
+          continue;
+        }
+        const left2 = children[opIndex - 1];
+        const right2 = children[opIndex + 1];
+        if (left2.type === "pipe") {
+          children[opIndex] = op;
+          continue;
+        }
+        if (left2.type === "op") {
+          throw new Error(`got 2 ops in a row: "${left2.value}${op.value}"`);
+        }
+        if (right2.type === "op") {
+          let err = `got 2 ops in a row: "${op.value}${right2.value}"`;
+          if (op.value === "-") {
+            err += '. you probably want a rest, which is "_" in mondo!';
+          }
+          throw new Error(err);
+        }
+        const call = { type: "list", children: [op, right2, left2] };
+        children = [...children.slice(0, opIndex - 1), call, ...children.slice(opIndex + 2)];
+        children = this.unwrap_children(children);
+      }
+      return children;
+    }
+    get_lambda(args, children) {
+      children = this.desugar(children);
+      const body = children.length === 1 ? children[0] : { type: "list", children };
+      return [{ type: "plain", value: "fn" }, { type: "list", children: args }, body];
+    }
+    // returns location range of given ast (even if desugared)
+    get_range(ast, range6 = [Infinity, 0]) {
+      let union = (a2, b) => [Math.min(a2[0], b[0]), Math.max(a2[1], b[1])];
+      if (ast.loc) {
+        return union(range6, ast.loc);
+      }
+      if (ast.type !== "list") {
+        return range6;
+      }
+      return ast.children.reduce((range7, child) => {
+        const childrange = this.get_range(child, range7);
+        return union(range7, childrange);
+      }, range6);
+    }
+    errorhead(ast) {
+      return `[mondo ${this.get_range(ast)?.join(":") || "?"}]`;
+    }
+    // returns original user code where the given ast originates (even if desugared)
+    get_code_snippet(ast) {
+      const [min, max] = this.get_range(ast);
+      return this.code.slice(min - this.offset, max - this.offset);
+    }
+    desugar_pipes(children) {
+      let chunks = this.split_children(children, "pipe");
+      while (chunks.length > 1) {
+        let [left2, right2, ...rest] = chunks;
+        if (!left2.length) {
+          const arg = { type: "plain", value: "_" };
+          return this.get_lambda([arg], [arg, ...children]);
+        }
+        const call = left2.length > 1 ? { type: "list", children: left2 } : left2[0];
+        chunks = [[...right2, call], ...rest];
+      }
+      return chunks[0];
+    }
+    parse_pair(open_type, close_type) {
+      const begin2 = this.tokens[0].loc?.[0];
+      this.consume(open_type);
+      const children = [];
+      while (this.tokens[0]?.type !== close_type) {
+        children.push(this.parse_expr());
+      }
+      const end2 = this.tokens[0].loc?.[1];
+      this.consume(close_type);
+      const node = { type: "list", children };
+      if (begin2 !== void 0) {
+        node.loc = [begin2, end2];
+        node.raw = this.code.slice(begin2, end2);
+      }
+      return node;
+    }
+    desugar(children, type) {
+      children = type ? children.slice(1) : children;
+      children = this.desugar_split(
+        children,
+        "stack",
+        (children2) => this.desugar_split(children2, "or", (children3) => {
+          if (type) {
+            children3 = [{ type: "plain", value: type }, ...children3];
+          }
+          this.op_precedence.forEach((ops) => {
+            children3 = this.desugar_ops(children3, ops);
+          });
+          children3 = this.desugar_pipes(children3);
+          return children3;
+        })
+      );
+      return children;
+    }
+    parse_list() {
+      let node = this.parse_pair("open_list", "close_list");
+      node.children = this.desugar(node.children);
+      return node;
+    }
+    parse_angle() {
+      let node = this.parse_pair("open_angle", "close_angle");
+      node.children.unshift({ type: "plain", value: "angle" });
+      node.children = this.desugar(node.children, "angle");
+      return node;
+    }
+    parse_square() {
+      let node = this.parse_pair("open_square", "close_square");
+      node.children.unshift({ type: "plain", value: "square" });
+      node.children = this.desugar(node.children, "square");
+      return node;
+    }
+    parse_curly() {
+      let node = this.parse_pair("open_curly", "close_curly");
+      node.children.unshift({ type: "plain", value: "curly" });
+      node.children = this.desugar(node.children, "curly");
+      return node;
+    }
+    consume(type) {
+      const token = this.tokens.shift();
+      if (token.type !== type) {
+        throw new Error(`expected token type ${type}, got ${token.type}`);
+      }
+      return token;
+    }
+    get_locations(code, offset3 = 0) {
+      let walk2 = (ast2, locations2 = []) => {
+        if (ast2.type === "list") {
+          return ast2.children.forEach((child) => walk2(child, locations2));
+        }
+        if (ast2.loc) {
+          locations2.push(ast2.loc);
+        }
+      };
+      const ast = this.parse(code, offset3);
+      let locations = [];
+      walk2(ast, locations);
+      return locations;
+    }
+  };
+  var MondoRunner = class {
+    constructor({ evaluator: evaluator2 } = {}) {
+      this.parser = new MondoParser();
+      this.evaluator = evaluator2;
+      this.assert(typeof evaluator2 === "function", `expected an evaluator function to be passed to new MondoRunner`);
+    }
+    // a helper to check conditions and throw if they are not met
+    assert(condition, error) {
+      if (!condition) {
+        throw new Error(error);
+      }
+    }
+    run(code, scope, offset3 = 0) {
+      const ast = this.parser.parse(code, offset3);
+      return this.evaluate(ast, scope);
+    }
+    evaluate_let(ast, scope) {
+      const defs = ast.children[1].children;
+      const args = defs.map((pair) => pair.children[0]);
+      const vals = defs.map((pair) => pair.children[1]);
+      const body = ast.children.slice(2);
+      const lambda = {
+        type: "list",
+        children: [{ type: "plain", value: "fn" }, { type: "list", children: args }, ...body]
+      };
+      return this.evaluate({ type: "list", children: [lambda, ...vals] }, scope);
+    }
+    evaluate_def(ast, scope) {
+      if (ast.children[1].type === "list") {
+        const args = ast.children[1].children.slice(1);
+        const lambda = {
+          // lambda
+          type: "list",
+          children: [
+            { type: "plain", value: "fn" },
+            { type: "list", children: args },
+            ...ast.children.slice(2)
+            // body
+          ]
+        };
+        ast.children[1] = ast.children[1].children[0];
+        ast.children[2] = lambda;
+        ast.children = ast.children.slice(0, 3);
+      }
+      if (ast.children.length !== 3) {
+        throw new Error(`expected "def" to have 3 children, but got ${ast.children.length}`);
+      }
+      const name3 = ast.children[1].value;
+      const body = this.evaluate(ast.children[2], scope);
+      scope[name3] = body;
+    }
+    evaluate_match(ast, scope) {
+      if (ast.children.length < 2) {
+        return;
+      }
+      const [_, ...body] = ast.children;
+      for (let i3 = 0; i3 < body.length; ++i3) {
+        const [predicate, exp] = body[i3].children;
+        if (predicate.value === "else") {
+          return this.evaluate(exp, scope);
+        }
+        const outcome = this.evaluate(predicate, scope);
+        if (outcome) {
+          return this.evaluate(exp, scope);
+        }
+      }
+      return void 0;
+    }
+    evaluate_if(ast, scope) {
+      if (ast.children.length !== 4) {
+        return;
+      }
+      const [_, predicate, consequent, alternative] = ast.children;
+      const matcher = {
+        type: "list",
+        children: [
+          { type: "plain", value: "match" },
+          { type: "list", children: [predicate, consequent] },
+          { type: "list", children: [{ type: "plain", value: "else" }, alternative] }
+        ]
+      };
+      return this.evaluate_match(matcher, scope);
+    }
+    evaluate_lambda(ast, scope) {
+      const [_, formalArgs, ...body] = ast.children;
+      return (...args) => {
+        const params = Object.fromEntries(formalArgs.children.map((arg, i3) => [arg.value, args[i3]]));
+        const closure = {
+          ...scope,
+          ...params
+        };
+        const res = body.map((exp) => this.evaluate(exp, closure));
+        return res[res.length - 1];
+      };
+    }
+    evaluate_list(ast, scope) {
+      const args = ast.children.filter((child) => child.type !== "comment").map((arg) => this.evaluate(arg, scope));
+      const node = { type: "list", children: args };
+      return this.evaluator(node, scope);
+    }
+    evaluate_leaf(ast, scope) {
+      if (ast.type === "number") {
+        ast.value = Number(ast.value);
+      } else if (["quotes_double", "quotes_single"].includes(ast.type)) {
+        ast.value = ast.value.slice(1, -1);
+        ast.type = "string";
+      }
+      return this.evaluator(ast, scope);
+    }
+    evaluate(ast, scope = {}) {
+      if (ast.type !== "list") {
+        return this.evaluate_leaf(ast, scope);
+      }
+      const name3 = ast.children[0]?.value;
+      if (name3 === "fn") {
+        return this.evaluate_lambda(ast, scope);
+      }
+      if (name3 === "match") {
+        return this.evaluate_match(ast, scope);
+      }
+      if (name3 === "if") {
+        return this.evaluate_if(ast, scope);
+      }
+      if (name3 === "let") {
+        return this.evaluate_let(ast, scope);
+      }
+      if (name3 === "def") {
+        this.evaluate_def(ast, scope);
+      }
+      return this.evaluate_list(ast, scope);
+    }
+  };
+
+  // build/engine-src/strudel/packages/mondough/mondough.mjs
+  var tail = (friend, pat) => pat.fmap((a2) => (b) => Array.isArray(a2) ? [...a2, b] : [a2, b]).appLeft(friend);
+  var arrayRange = (start, stop2, step = 1) => Array.from(
+    { length: Math.abs(stop2 - start) / step + 1 },
+    (_, index5) => start < stop2 ? start + index5 * step : start - index5 * step
+  );
+  var range5 = (max, min) => min.squeezeBind((a2) => max.bind((b) => seq(...arrayRange(a2, b))));
+  var nope = (...args) => args[args.length - 1];
+  var lib = {};
+  lib["nope"] = nope;
+  lib["-"] = (a2, b) => b.early(a2);
+  lib["+"] = (a2, b) => b.late(a2);
+  lib["_"] = silence;
+  lib["~"] = silence;
+  lib.curly = stepcat;
+  lib.square = (...args) => stepcat(...args).setSteps(1);
+  lib.angle = (...args) => stepcat(...args).pace(1);
+  lib["*"] = fast;
+  lib["/"] = slow;
+  lib["!"] = replicate;
+  lib["@"] = expand;
+  lib["%"] = pace;
+  lib["?"] = degradeBy;
+  lib["&"] = bjork;
+  lib[":"] = tail;
+  lib[".."] = range5;
+  lib["def"] = () => silence;
+  lib["or"] = (...children) => chooseIn(...children);
+  function evaluator(node, scope) {
+    const { type } = node;
+    if (type === "list") {
+      const { children } = node;
+      const [name3, ...args] = children;
+      if (typeof name3 === "function") {
+        return name3(...args);
+      }
+      if (name3.value === "def") {
+        return silence;
+      }
+      const first = name3.firstCycle(true)[0];
+      const type2 = typeof first?.value;
+      if (type2 !== "function") {
+        throw new Error(`[mondough] expected function, got "${first?.value}"`);
+      }
+      return name3.fmap((fn) => {
+        if (typeof fn !== "function") {
+          throw new Error(`[mondough] "${fn}" is not a function b`);
+        }
+        return fn(...args);
+      }).innerJoin();
+    }
+    let { value: value2 } = node;
+    if (type === "plain" && scope[value2]) {
+      return reify(scope[value2]);
+    }
+    const variable = lib[value2] ?? strudelScope[value2];
+    let pat;
+    if (type === "plain" && typeof variable !== "undefined") {
+      if (["!", "extend", "@", "expand", "square", "angle", "all", "setcpm", "setcps"].includes(value2)) {
+        return variable;
+      }
+      pat = reify(variable);
+    } else {
+      pat = reify(value2);
+    }
+    if (node.loc) {
+      pat = pat.withLoc(node.loc[0], node.loc[1]);
+    }
+    return pat;
+  }
+  var runner = new MondoRunner({ evaluator });
+  function mondo(code, offset3 = 0) {
+    if (Array.isArray(code)) {
+      code = code.join("");
+    }
+    const pat = runner.run(code, void 0, offset3);
+    return pat.markcss("color: var(--caret,--foreground);text-decoration:underline");
+  }
+  var getLocations = (code, offset3) => runner.parser.get_locations(code, offset3);
+  var mondi = (str, offset3) => {
+    const code = `[${str}]`;
+    return mondo(code, offset3);
+  };
+  registerLanguage("mondo", {
+    getLocations
+  });
+  var mondolang = (code) => mondo(code, 0);
+  registerLanguage("mondolang", {
+    getLocations: (code) => getLocations(code, 0)
+  });
+
   // build/engine-src/strudel/packages/hydra/hydra.mjs
   init_draw2();
   init_core();
   var H = (p) => () => reify(p).queryArc(getTime(), getTime())[0].value;
 
   // js/host.mjs
-  var ready = evalScope(core_exports, edo_exports, tonal_exports, mini_exports, xen_exports, webaudio_exports, {
+  var ready = evalScope(core_exports, edo_exports, tonal_exports, mini_exports, xen_exports, webaudio_exports, mondough_exports, {
     ...{ H, initHydra, loadScript, midin, midikeys, slider, sliderWithID, gamepad, ...motion() },
     ...{ loadCsound, loadCSound: loadCsound, loadcsound: loadCsound, loadOrc: loadCsound }
   });
@@ -39767,9 +40294,12 @@ registerProcessor('${name3}', MyProcessor);
     ignore("draw", "[draw] Strudel canvas visuals and editor widgets (scope, pianoroll, ...) are not shown in Rack");
     return result ?? this;
   };
-  var widgets = ["_scope", "_pianoroll", "_punchcard", "_spiral", "_pitchwheel", "markcss"];
+  var widgets = ["_scope", "_pianoroll", "_punchcard", "_spiral", "_pitchwheel"];
   for (const name3 of ["draw", "pianoroll", "pitchwheel", ...widgets]) Pattern.prototype[name3] = noCanvas();
   Pattern.prototype.animate = noCanvas(silence);
+  Pattern.prototype.markcss = function() {
+    return this;
+  };
   function slider(value2) {
     ignore("slider", "[slider] slider() is strudel.cc's editor widget: in Rack it stays at its value");
     return pure(value2);
