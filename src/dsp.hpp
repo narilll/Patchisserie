@@ -261,9 +261,10 @@ class VoiceAllocator {
 	Mode mode_ = Rotate;
 };
 
-// Key string -> channel 0..15, assigned on first use and then sticky. A default key gets its default channel if that
-// is still free. Other keys prefer channels no default points at, then default channels whose key hasn't been used
-// yet (so CC 74 still gets a channel although CC 1..16 all have defaults).
+// Key string -> channel 0..15. A default key (CC 1..16, bd, sd, ...) always gets its default channel: a key that sits
+// there moves (defaults win). Other keys are assigned on first use and then sticky: the lowest channel no default
+// points at, else the highest default channel whose key hasn't been used (CC 1..16 all have defaults; from the top so
+// the low, common numbers stay free).
 class StickyMap {
   public:
 	explicit StickyMap(std::vector<std::pair<std::string, int>> defaults) : defaults_(std::move(defaults)) {}
@@ -281,22 +282,22 @@ class StickyMap {
 
 	// -1 when all 16 channels are taken (not remembered); the caller ignores the event and logs once.
 	int channel(const std::string& key) {
+		int def = defaultOf(key);
 		auto it = map_.find(key); // no allocation for known keys
-		if (it != map_.end())
+		if (it != map_.end() && (def < 0 || it->second == def))
 			return it->second;
-		bool used[16] = {}, reserved[16] = {};
+		if (def < 0)
+			return assign(key);
+		std::string moved; // what sits on the default's channel (an older map may have put the key elsewhere)
 		for (auto& kv : map_)
-			used[kv.second] = true;
-		for (auto& kv : defaults_) {
-			reserved[kv.second] = true;
-			if (kv.first == key && !used[kv.second])
-				return map_.emplace(key, kv.second).first->second;
+			if (kv.second == def && kv.first != key)
+				moved = kv.first;
+		map_[key] = def;
+		if (!moved.empty()) {
+			map_.erase(moved);
+			assign(moved);
 		}
-		for (bool allowReserved : {false, true})
-			for (int c = 0; c < 16; c++)
-				if (!used[c] && (allowReserved || !reserved[c]))
-					return map_.emplace(key, c).first->second;
-		return -1;
+		return def;
 	}
 	void reset() { map_.clear(); }
 	std::vector<std::pair<std::string, int>> entries() const { return {map_.begin(), map_.end()}; }
@@ -308,6 +309,27 @@ class StickyMap {
 	}
 
   private:
+	int defaultOf(const std::string& key) const {
+		for (auto& kv : defaults_)
+			if (kv.first == key)
+				return kv.second;
+		return -1;
+	}
+	int assign(const std::string& key) { // a key without a default
+		bool used[16] = {}, reserved[16] = {};
+		for (auto& kv : map_)
+			used[kv.second] = true;
+		for (auto& kv : defaults_)
+			reserved[kv.second] = true;
+		for (int c = 0; c < 16; c++)
+			if (!used[c] && !reserved[c])
+				return map_.emplace(key, c).first->second;
+		for (int c = 15; c >= 0; c--)
+			if (!used[c])
+				return map_.emplace(key, c).first->second;
+		return -1;
+	}
+
 	std::vector<std::pair<std::string, int>> defaults_;
 	std::map<std::string, int> map_;
 };

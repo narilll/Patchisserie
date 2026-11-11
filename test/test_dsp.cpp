@@ -323,9 +323,17 @@ TEST(sticky_defaults_and_unknown) {
 	CHECK(m.channel("zip") == 13);
 	StickyMap cc(StickyMap::ccDefaults());
 	CHECK(cc.channel("1") == 0 && cc.channel("16") == 15);
-	// Every channel has a CC default, yet a non-default CC still gets the lowest unused one.
-	CHECK(cc.channel("74") == 1);
-	CHECK(cc.channel("2") == 2); // its default channel 1 is taken by 74 -> next unused
+	// Every channel has a CC default: a non-default CC gets the highest unused one, a default always its own.
+	CHECK(cc.channel("74") == 14);
+	CHECK(cc.channel("2") == 1);
+	CHECK(cc.channel("15") == 14 && cc.channel("74") == 13); // 74 moves off CC 15's channel
+	// ccn(74) first, then ccn(1) and ccn(2): they still get channels 1 and 2 (a user's patch had 74 -> 1, 1 -> 2).
+	StickyMap first(StickyMap::ccDefaults());
+	CHECK(first.channel("74") == 15 && first.channel("1") == 0 && first.channel("2") == 1);
+	// A map saved by an older version, with defaults off their channels, is put right on use.
+	StickyMap old(StickyMap::ccDefaults());
+	old.load({{"74", 0}, {"1", 1}, {"2", 2}});
+	CHECK(old.channel("1") == 0 && old.channel("2") == 1 && old.channel("74") == 15);
 }
 TEST(sticky_persist_reset_full) {
 	StickyMap m(StickyMap::trigDefaults());
@@ -337,13 +345,14 @@ TEST(sticky_persist_reset_full) {
 	m.reset();
 	CHECK(m.channel("b") == 12);                    // "a" forgotten
 	m.channel("c"), m.channel("d"), m.channel("e"); // 13, 14, 15: non-default channels are used up
-	CHECK(m.channel("f") == 0);                     // then an unused default channel (bd not played yet)
-	CHECK(m.channel("bd") == 1);                    // bd's default is taken -> next unused
+	CHECK(m.channel("f") == 11);                    // then the highest unused default channel (cb not played yet)
+	CHECK(m.channel("bd") == 0);                    // a default always gets its own
 	for (int i = 0; i < 9; i++)
-		m.channel("x" + std::to_string(i)); // fills 2..10
-	CHECK(m.channel("last") == 11);
+		m.channel("x" + std::to_string(i)); // fills 10 down to 2
+	CHECK(m.channel("last") == 1);
 	CHECK(m.channel("over") == -1);
 	CHECK(m.channel("over") == -1);
+	CHECK(m.channel("sd") == 1 && m.channel("last") == -1); // sd takes its channel back; nowhere left for "last"
 }
 
 // ---- ClockOut ----
