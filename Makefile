@@ -5,6 +5,8 @@ FLAGS += -Isrc
 EXTRA_CXXFLAGS += -std=c++17
 
 SOURCES += $(wildcard src/*.cpp)
+AUDIO_SOURCES := $(wildcard src/audio/*.cpp)
+SOURCES += $(AUDIO_SOURCES)
 
 DISTRIBUTABLES += LICENSE res
 
@@ -13,6 +15,9 @@ include $(RACK_DIR)/plugin.mk
 # Host-built unit tests: pure logic only, no Rack UI, sanitizers on.
 TEST_SOURCES := $(wildcard test/test_*.cpp)
 TEST_FLAGS := -std=c++17 -g -O1 -Wall -Wextra -Isrc -Itest -I$(RACK_DIR)/include
+# Web Audio graph: linked into the tests; dep/include for simde, pulled in by Rack's dsp/ringbuffer.hpp.
+TEST_SOURCES += $(AUDIO_SOURCES)
+TEST_FLAGS += -I$(RACK_DIR)/dep/include
 
 build/test/run: test/main.cpp test/check.hpp $(TEST_SOURCES) $(wildcard src/*.hpp src/*/*.hpp)
 	@mkdir -p $(@D)
@@ -22,6 +27,24 @@ test: build/test/run
 	build/test/run
 
 .PHONY: test
+
+# Graph tests (command/event queues, producer thread vs render thread) under ThreadSanitizer.
+build/test/tsan: test/main.cpp test/check.hpp test/test_graph.cpp $(AUDIO_SOURCES) $(wildcard src/audio/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) $(TEST_FLAGS) -fsanitize=thread -o $@ test/main.cpp test/test_graph.cpp $(AUDIO_SOURCES)
+
+tsan: build/test/tsan
+	build/test/tsan
+
+# Rough CPU benchmark with plugin-like optimization (prints, asserts nothing).
+build/test/bench: test/bench_audio.cpp $(AUDIO_SOURCES) $(wildcard src/audio/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) -std=c++17 -O3 -funsafe-math-optimizations -Wall -Wextra -Isrc -I$(RACK_DIR)/include -I$(RACK_DIR)/dep/include -o $@ test/bench_audio.cpp $(AUDIO_SOURCES)
+
+bench: build/test/bench
+	build/test/bench
+
+.PHONY: tsan bench
 
 # QuickJS CLI for headless engine tests. Vendor C: no warnings, strict IEEE math.
 QJS_DIR := vendor/quickjs-ng

@@ -1,0 +1,18 @@
+{
+  "comment": "Audio regression set (plan gates G1-G4). Rendered offline: 48000 Hz stereo, cps 0.5, 4 cycles (8 s). 'worklet' entries need M1c-3. Samples: bd/sd/hh/white come from the cache prepared by scripts/fetch-test-samples (never committed).",
+  "sampleRate": 48000,
+  "cps": 0.5,
+  "cycles": 4,
+  "patterns": [
+    { "id": "samples", "code": "s(\"bd sd hh*2 sd\")" },
+    { "id": "saw_lpf", "code": "note(\"c3 e3 g3 b3\").s(\"sawtooth\").lpf(800)" },
+    { "id": "tri_room", "code": "note(\"c3 [e3 g3]\").s(\"triangle\").room(.5)" },
+    { "id": "delay", "code": "s(\"bd*4\").delay(.3).delaytime(.125).delayfeedback(.5)" },
+    { "id": "adsr", "code": "note(\"c2*8\").s(\"sine\").attack(.01).decay(.1).sustain(0)" },
+    { "id": "noise_hpf", "code": "s(\"white*4\").hpf(2000).decay(.05).sustain(0)" },
+    { "id": "soundfont", "code": "note(\"c4 e4 g4\").s(\"gm_piano\")" },
+    { "id": "crush", "code": "note(\"c3*4\").s(\"sawtooth\").crush(4)", "worklet": true },
+    { "id": "shape", "code": "note(\"c3*4\").s(\"square\").shape(.5)", "worklet": true },
+    { "id": "supersaw", "code": "note(\"c3 g3\").s(\"supersaw\")", "worklet": true }
+  ]
+}
