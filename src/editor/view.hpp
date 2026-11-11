@@ -1,7 +1,7 @@
 #pragma once
 // Filo's code editor in Rack: View draws an editor::Doc with NanoVG and edits it from the mouse and keyboard (one class
 // for the panel and the fullscreen overlay: they share the module's Doc, each scrolls on its own); Overlay is the
-// fullscreen editor on APP->scene. Thin: the editing logic is in doc.hpp.
+// fullscreen editor on APP->scene. Thin: the editing logic is in doc.hpp, the completions' in complete.hpp.
 #include <cmath>
 #include <functional>
 #include <string>
@@ -9,10 +9,13 @@
 
 #include <rack.hpp>
 
+#include "editor/complete.hpp"
 #include "editor/doc.hpp"
 #include "engine.hpp"
 
 namespace editor {
+
+struct Tip;
 
 struct View : rack::widget::Widget {
 	Doc* doc = nullptr;             // null: inert (its module is gone, the overlay waits for its deletion)
@@ -23,9 +26,11 @@ struct View : rack::widget::Widget {
 	/** Esc, if set (the overlay closes). Unset, Esc goes to Rack (leaves fullscreen). */
 	std::function<void()> onEscape;
 
+	~View() override;
 	void step() override;
 	void draw(const DrawArgs& args) override;
 	void drawLayer(const DrawArgs& args, int layer) override;
+	void onHover(const HoverEvent& e) override;
 	void onButton(const ButtonEvent& e) override;
 	void onDoubleClick(const DoubleClickEvent& e) override;
 	void onDragMove(const DragMoveEvent& e) override;
@@ -46,6 +51,12 @@ struct View : rack::widget::Widget {
 	int clicks_ = 0;
 	std::string message_, error_; // the engine's, this frame
 	std::vector<filo::Highlight> playing_;
+	Completion completion_;
+	rack::math::Vec hoverPos_;
+	size_t hoverBegin_ = SIZE_MAX; // the identifier under the mouse
+	double hoverSince_ = 0;
+	std::vector<Match> hover_; // its docs, once the mouse rested on it
+	Tip* tip_ = nullptr;       // on APP->scene: the popup or the hover docs
 
 	float lineH() const { return std::round(fontSize * 1.3f); }
 	float statusH() const { return std::round(fontSize * 1.6f); }
@@ -57,6 +68,9 @@ struct View : rack::widget::Widget {
 	void follow();
 	void clampScroll();
 	void evaluate();
+	bool completionKey(const SelectKeyEvent& e);
+	void hover(bool changed);
+	void showTip();
 };
 
 /** The fullscreen editor: covers APP->scene (the whole Rack window); Esc or its Close button closes it. */

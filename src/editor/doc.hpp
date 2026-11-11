@@ -227,6 +227,12 @@ class Doc {
 	void type(const std::string& s) { replace(selBegin(), selEnd() - selBegin(), s, Typing); }
 	/** Pasted text, over the selection. */
 	void insert(const std::string& s) { replace(selBegin(), selEnd() - selBegin(), s, Other); }
+	/** An accepted completion: name replaces [from, cursor), the cursor after it; one undo step (none if it's there).
+	 */
+	void complete(size_t from, const std::string& name) {
+		if (from <= cursor_ && text_.compare(from, cursor_ - from, name) != 0)
+			replace(from, cursor_ - from, name, Other);
+	}
 	/** Enter: a newline with the current line's indentation (up to the cursor). */
 	void newline() {
 		size_t from = selBegin(), ls = lineStart(lineOf(from)), i = ls;

@@ -1,0 +1,72 @@
+[
+  {
+    "name": "initHydra",
+    "signature": "initHydra(options)",
+    "description": "Starts Hydra (Icing, right of this Filo, draws it) and makes Hydra's functions, outputs and values global for the rest of this evaluate: `noise`, `shape`, `speed`, `hush`, `time` and `src` are Hydra's then. The next evaluate starts with Strudel's names again; one without `initHydra()` hushes the visuals. Its options are ignored.",
+    "examples": ["await initHydra()\nosc(10, 0.1, () => a.fft[0] * 2).kaleid(4).out()"],
+    "source": "hydra"
+  },
+  {
+    "name": "loadScript",
+    "signature": "loadScript(url)",
+    "description": "Runs a Hydra extension (https only, cached like samples) in global scope, so its `setFunction()`s join Hydra's functions. Starts Hydra as `initHydra()` does. A failed fetch or script fails the evaluate.",
+    "examples": ["await loadScript(\"https://.../lib-color.js\")"],
+    "source": "hydra"
+  },
+  {
+    "name": "H",
+    "signature": "H(pattern)",
+    "description": "A pattern as a Hydra argument: its value at the cycle Filo plays.",
+    "examples": ["await initHydra()\nosc(H(\"<10 20 40>\")).out()"],
+    "source": "strudel"
+  },
+  {
+    "name": "midin",
+    "signature": "midin(input)",
+    "description": "Filo's MIDI input: the device chosen in Filo's menu (`input` only names it). Resolves to `cc(ccNum, chan)`: a pattern of CC `ccNum`'s latest value / 127 (0..1), 0 until one arrives; on MIDI channel `chan` (1-16) only, if given.",
+    "examples": ["let cc = await midin('My controller')\nnote(\"c2 eb2 g2\").s(\"sawtooth\").lpf(cc(74).range(200, 4000))"],
+    "source": "strudel"
+  },
+  {
+    "name": "a",
+    "signature": "a",
+    "description": "Hydra's audio analysis of Icing's AUDIO input (unpatched: Filo's L+R): `a.fft[i]` per bin; `a.setBins`, `a.setSmooth`, `a.setCutoff`, `a.setScale`.",
+    "examples": ["osc(10, 0.1, () => a.fft[0] * 2).out()"],
+    "source": "hydra"
+  },
+  {
+    "name": "fft",
+    "signature": "a.fft[i]",
+    "description": "Hydra audio: bin `i`'s level of the AUDIO input, 0 at the cutoff, 1 at cutoff + scale.",
+    "examples": ["osc(10, 0.1, () => a.fft[0] * 2).out()"],
+    "source": "hydra"
+  },
+  {
+    "name": "setBins",
+    "signature": "a.setBins(numBins = 4)",
+    "description": "Hydra audio: the number of bins in `a.fft` (also `a0`, `a1`, ... as functions).",
+    "examples": ["a.setBins(8)"],
+    "source": "hydra"
+  },
+  {
+    "name": "setSmooth",
+    "signature": "a.setSmooth(smooth = 0.4)",
+    "description": "Hydra audio: how much each bin keeps of its previous value (0..1).",
+    "examples": ["a.setSmooth(0.8)"],
+    "source": "hydra"
+  },
+  {
+    "name": "setCutoff",
+    "signature": "a.setCutoff(cutoff = 2)",
+    "description": "Hydra audio: the level below which a bin reads 0.",
+    "examples": ["a.setCutoff(4)"],
+    "source": "hydra"
+  },
+  {
+    "name": "setScale",
+    "signature": "a.setScale(scale = 10)",
+    "description": "Hydra audio: the level above the cutoff that reads 1.",
+    "examples": ["a.setScale(5)"],
+    "source": "hydra"
+  }
+]

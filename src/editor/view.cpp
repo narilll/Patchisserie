@@ -5,6 +5,8 @@
 
 using namespace rack;
 
+extern Plugin* pluginInstance; // src/plugin.cpp
+
 namespace editor {
 
 namespace {
@@ -50,9 +52,231 @@ constexpr int kWordMod = GLFW_MOD_ALT;
 constexpr int kWordMod = GLFW_MOD_CONTROL;
 #endif
 
+constexpr float kTipFont = 13; // px on the scene: the same at any rack zoom
+constexpr int kDetailCols = 60, kDescLines = 4, kExampleLines = 6;
+
+/** res/strudel-docs.json (scripts/build-docs.mjs), shared by all Filos: loaded on first use; empty (no completions,
+no hover docs) if it can't be read. */
+const std::vector<Entry>& docs() {
+	static std::vector<Entry> entries;
+	static bool loaded = false;
+	if (loaded)
+		return entries;
+	loaded = true;
+	std::string path = asset::plugin(pluginInstance, "res/strudel-docs.json");
+	json_error_t err;
+	json_t* root = json_load_file(path.c_str(), 0, &err);
+	auto str = [](json_t* j) {
+		const char* s = json_string_value(j);
+		return std::string(s ? s : "");
+	};
+	size_t i, k;
+	json_t *e, *v;
+	json_array_foreach(root, i, e) {
+		Entry x;
+		x.name = str(json_object_get(e, "name"));
+		x.signature = str(json_object_get(e, "signature"));
+		x.description = str(json_object_get(e, "description"));
+		x.example = str(json_array_get(json_object_get(e, "examples"), 0));
+		x.source = str(json_object_get(e, "source"));
+		json_array_foreach(json_object_get(e, "synonyms"), k, v) x.synonyms.push_back(str(v));
+		if (!x.name.empty())
+			entries.push_back(std::move(x));
+	}
+	if (entries.empty())
+		WARN("Filo: no completions or hover docs, %s: %s", path.c_str(), root ? "no entries" : err.text);
+	json_decref(root);
+	return entries;
+}
+
 } // namespace
 
+// --- Tip ---
+
+/** The completion popup or the hover docs, on APP->scene: over the module and the overlay, neither clipped by them nor
+zoomed with the rack. Passive: its View sets what it shows each step. */
+struct Tip : widget::Widget {
+	std::vector<Match> items, details; // the popup's rows (none: hover docs), the entries described
+	int sel = 0, top = 0;
+	math::Vec at;    // the identifier's top left, scene px
+	float lineH = 0; // its line's height, scene px
+
+	void step() override {
+		if (parent) // the scene: the whole window
+			box = math::Rect(math::Vec(), parent->box.size);
+		Widget::step();
+	}
+	void draw(const DrawArgs& args) override;
+};
+
+void Tip::draw(const DrawArgs& args) {
+	std::shared_ptr<window::Font> font = APP->window->loadFont(asset::system(kFont));
+	if (!font || font->handle < 0 || details.empty())
+		return;
+	NVGcontext* vg = args.vg;
+	nvgFontFaceId(vg, font->handle);
+	nvgFontSize(vg, kTipFont);
+	nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+	float cw = nvgTextBounds(vg, 0, 0, "0000000000", nullptr, nullptr) / 10, rh = std::round(kTipFont * 1.4f);
+	math::Vec size = box.size;
+	auto frame = [&](math::Rect r) {
+		nvgBeginPath(vg);
+		nvgRoundedRect(vg, r.pos.x, r.pos.y, r.size.x, r.size.y, 3);
+		nvgFillColor(vg, kBackground);
+		nvgFill(vg);
+		nvgStrokeColor(vg, kAccent);
+		nvgStrokeWidth(vg, 1);
+		nvgStroke(vg);
+	};
+	// Under the identifier's line, above it if there's no room there.
+	auto place = [&](math::Vec s, float x) {
+		float below = at.y + lineH, y = (below + s.y <= size.y || at.y < s.y) ? below : at.y - s.y;
+		return math::Rect(math::Vec(math::clamp(x, 0.f, size.x - s.x), y), s);
+	};
+
+	// The popup's list: a row per name, "hydra" for Hydra's, a scroll bar when there are more.
+	math::Rect list;
+	if (!items.empty()) {
+		size_t cols = 10;
+		for (const Match& m : items)
+			cols = std::max(cols, m.label.size() + (m.entry->hydra() ? 7 : 0));
+		int n = (int)items.size(), rows = std::min(n, Completion::kRows);
+		list = place(math::Vec(std::min(cols, (size_t)40) * cw + 2 * kPad, rows * rh + 2 * kPad), at.x - kPad);
+		frame(list);
+		nvgSave(vg);
+		nvgIntersectScissor(vg, list.pos.x, list.pos.y, list.size.x, list.size.y);
+		for (int i = 0; i < rows && top + i < n; i++) {
+			const Match& m = items[top + i];
+			float y = list.pos.y + kPad + i * rh;
+			if (top + i == sel) {
+				nvgBeginPath(vg);
+				nvgRect(vg, list.pos.x + 1, y, list.size.x - 2, rh);
+				nvgFillColor(vg, kSelection);
+				nvgFill(vg);
+			}
+			nvgFillColor(vg, kText);
+			nvgText(vg, list.pos.x + kPad, y + rh / 2, m.label.c_str(), nullptr);
+			if (m.entry->hydra()) {
+				nvgFillColor(vg, kDim);
+				nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
+				nvgText(vg, list.getRight() - kPad - 2, y + rh / 2, "hydra", nullptr);
+				nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+			}
+		}
+		if (n > rows) {
+			float h = list.size.y - 2 * kPad;
+			nvgBeginPath(vg);
+			nvgRect(vg, list.getRight() - 3, list.pos.y + kPad + h * top / n, 2, h * rows / n);
+			nvgFillColor(vg, kDim);
+			nvgFill(vg);
+		}
+		nvgRestore(vg);
+	}
+
+	// Each entry's box: its signature (under the name it's listed as), its other names, the description wrapped (cut
+	// at a few lines) with its `code` in another colour, and the first example.
+	enum Kind { Plain, Text, Example };
+	struct Line {
+		std::string text;
+		NVGcolor color;
+		Kind kind;
+	};
+	float maxW = std::max(10 * cw, std::min(kDetailCols * cw, size.x - 2 * kPad)), w = 0;
+	size_t maxCols = (size_t)(maxW / cw);
+	std::vector<std::vector<Line>> boxes;
+	for (const Match& m : details) {
+		const Entry& e = *m.entry;
+		std::vector<Line> ls;
+		std::string sig = e.signature, others;
+		if (m.label != e.name && sig.compare(0, e.name.size(), e.name) == 0)
+			sig = m.label + sig.substr(e.name.size());
+		ls.push_back({sig, color(Token::Call), Plain});
+		std::vector<std::string> names = e.synonyms;
+		names.insert(names.begin(), e.name);
+		for (const std::string& n : names)
+			if (n != m.label)
+				others += (others.empty() ? "Synonyms: " : ", ") + n;
+		if (!others.empty())
+			ls.push_back({others, kDim, Plain});
+		std::string desc = e.description;
+		for (size_t p; (p = desc.find("\n\n")) != std::string::npos;) // paragraphs: no blank lines here
+			desc.erase(p, 1);
+		NVGtextRow rows[kDescLines];
+		const char* end = desc.data() + desc.size();
+		int n = desc.empty() ? 0 : nvgTextBreakLines(vg, desc.data(), end, maxW, rows, kDescLines);
+		for (int i = 0; i < n; i++) {
+			std::string t(rows[i].start, rows[i].end);
+			if (i == n - 1 && rows[i].next < end) { // more: cut
+				size_t cut = std::min(t.size(), maxCols - 3);
+				while (cut > 0 && isTail(t[cut]))
+					cut--;
+				t = t.substr(0, cut) + "...";
+			}
+			ls.push_back({t, kText, Text});
+		}
+		for (size_t a = 0, k = 0; a < e.example.size(); k++) {
+			size_t b = std::min(e.example.find('\n', a), e.example.size());
+			ls.push_back({k < (size_t)kExampleLines ? e.example.substr(a, b - a) : "...", kText, Example});
+			a = k < (size_t)kExampleLines ? b + 1 : e.example.size();
+		}
+		for (const Line& l : ls)
+			w = std::max(w, nvgTextBounds(vg, 0, 0, l.text.c_str(), nullptr, nullptr));
+		boxes.push_back(std::move(ls));
+	}
+	w = std::min(w, maxW) + 2 * kPad;
+	auto height = [&](const std::vector<Line>& ls) { return ls.size() * rh + 2 * kPad; };
+	float total = -2;
+	for (const std::vector<Line>& ls : boxes)
+		total += height(ls) + 2;
+	// Next to the list (right, else left), or under / above the hovered identifier, stacked.
+	math::Vec pos;
+	if (!items.empty()) {
+		pos.x = list.getRight() + 2 + w <= size.x ? list.getRight() + 2 : list.pos.x - 2 - w;
+		pos.x = math::clamp(pos.x, 0.f, size.x - w);
+		pos.y = math::clamp(list.pos.y, 0.f, size.y - total);
+	} else
+		pos = place(math::Vec(w, total), at.x - kPad).pos;
+	for (const std::vector<Line>& ls : boxes) {
+		math::Rect r(pos, math::Vec(w, height(ls)));
+		frame(r);
+		nvgSave(vg);
+		nvgIntersectScissor(vg, r.pos.x, r.pos.y, r.size.x, r.size.y);
+		float y = r.pos.y + kPad;
+		bool code = false;
+		for (const Line& l : ls) {
+			float x = r.pos.x + kPad;
+			if (l.kind == Example) {
+				nvgBeginPath(vg);
+				nvgRect(vg, r.pos.x + 1, y, r.size.x - 2, rh);
+				nvgFillColor(vg, nvgRGBA(0, 0, 0, 0x50));
+				nvgFill(vg);
+			}
+			if (l.kind != Text) {
+				nvgFillColor(vg, l.color);
+				nvgText(vg, x, y + rh / 2, l.text.c_str(), nullptr);
+			} else
+				for (size_t a = 0; a <= l.text.size();) { // `code` toggles at each backtick (not drawn)
+					size_t b = std::min(l.text.find('`', a), l.text.size());
+					nvgFillColor(vg, code ? kMessage : l.color);
+					if (b > a)
+						x = nvgText(vg, x, y + rh / 2, l.text.data() + a, l.text.data() + b);
+					if (b < l.text.size())
+						code = !code;
+					a = b + 1;
+				}
+			y += rh;
+		}
+		nvgRestore(vg);
+		pos.y += r.size.y + 2;
+	}
+}
+
 // --- View ---
+
+View::~View() {
+	if (tip_)
+		tip_->requestDelete(); // APP->scene deletes it in its next step (or with itself, after this)
+}
 
 void View::step() {
 	Widget::step();
@@ -73,9 +297,60 @@ void View::step() {
 	}
 	if (changed || doc->cursor() != seenCursor_) // typed, moved, or the other view did: the cursor stays in sight
 		follow();
+	if (completion_.open && APP->event->getSelectedWidget() != this) // clicked elsewhere
+		completion_.close();
+	else if (completion_.open && (changed || doc->cursor() != seenCursor_)) // undone, a patch loaded, ...
+		completion_.update(*doc, docs(), false);
 	seenVersion_ = doc->version();
 	seenCursor_ = doc->cursor();
 	clampScroll();
+	hover(changed);
+	showTip();
+}
+
+/** The hover docs: the identifier under the mouse, once it stayed on it for 0.5 s. */
+void View::hover(bool changed) {
+	size_t b = 0, e = 0;
+	int line = (int)std::floor((hoverPos_.y - kPad + scroll_.y) / lineH());
+	bool over = APP->event->getHoveredWidget() == this && !dragging_ && hoverPos_.x >= gutterW() &&
+				hoverPos_.y < textH() && line >= 0 && line < doc->lineCount() &&
+				identAt(*doc, hit(hoverPos_, false), b, e);
+	if (!over || changed) {
+		hoverBegin_ = SIZE_MAX;
+		hover_.clear();
+	} else if (b != hoverBegin_) {
+		hoverBegin_ = b;
+		hoverSince_ = system::getTime();
+		hover_.clear();
+	} else if (hover_.empty() && system::getTime() - hoverSince_ >= 0.5)
+		hover_ = lookup(docs(), doc->text().substr(b, e - b));
+}
+
+/** The tip: the popup (and the selected entry's docs), else the hover docs, at their identifier while in sight. */
+void View::showTip() {
+	bool popup = completion_.open, show = popup || !hover_.empty();
+	size_t at = popup ? completion_.from : hoverBegin_;
+	math::Vec p;
+	if (show) {
+		p = math::Vec(gutterW() + doc->column(at) * charW_ - scroll_.x, kPad + doc->lineOf(at) * lineH() - scroll_.y);
+		show = p.y >= 0 && p.y + lineH() <= textH() + 1 && p.x >= gutterW() - 1 && p.x <= box.size.x;
+	}
+	if (!show) {
+		if (tip_)
+			tip_->hide();
+		return;
+	}
+	if (!tip_) {
+		tip_ = new Tip;
+		APP->scene->addChild(tip_);
+	}
+	tip_->show();
+	tip_->items = popup ? completion_.items : std::vector<Match>();
+	tip_->details = popup ? std::vector<Match>{completion_.items[completion_.sel]} : hover_;
+	tip_->sel = completion_.sel;
+	tip_->top = completion_.top;
+	tip_->at = getAbsoluteOffset(p);
+	tip_->lineH = lineH() * getAbsoluteZoom();
 }
 
 float View::gutterW() const {
@@ -267,9 +542,16 @@ void View::paint(NVGcontext* vg) {
 
 // --- Mouse ---
 
+void View::onHover(const HoverEvent& e) {
+	hoverPos_ = e.pos;
+	e.consume(this); // hovered (getHoveredWidget()): the hover docs
+}
+
 void View::onButton(const ButtonEvent& e) {
 	if (!doc || e.button != GLFW_MOUSE_BUTTON_LEFT) // right: the module's menu
 		return;
+	if (e.action == GLFW_PRESS)
+		completion_.close();
 	if (e.action == GLFW_PRESS && e.pos.y < textH()) { // (on the status line: only selects this)
 		// Rack reports double-clicks only (0.5 s); a third press within that and close by is a triple-click.
 		double now = system::getTime();
@@ -327,8 +609,31 @@ void View::evaluate() {
 		doc->evaluated(engine->evaluate(doc->text(), true));
 }
 
+/** The completion popup's keys (unmodified): Esc closes it (only), Up/Down and PageUp/PageDown select, Tab or Enter
+accept. False: not one of those. */
+bool View::completionKey(const SelectKeyEvent& e) {
+	int k = e.key;
+	if (k != GLFW_KEY_ESCAPE && k != GLFW_KEY_UP && k != GLFW_KEY_DOWN && k != GLFW_KEY_PAGE_UP &&
+		k != GLFW_KEY_PAGE_DOWN && k != GLFW_KEY_TAB && k != GLFW_KEY_ENTER && k != GLFW_KEY_KP_ENTER)
+		return false;
+	e.consume(this); // Esc: not the overlay's, not Rack's
+	if (e.action != GLFW_PRESS && e.action != GLFW_REPEAT)
+		return true;
+	if (k == GLFW_KEY_ESCAPE)
+		completion_.close();
+	else if (k == GLFW_KEY_UP || k == GLFW_KEY_DOWN)
+		completion_.move(k == GLFW_KEY_UP ? -1 : 1, true);
+	else if (k == GLFW_KEY_PAGE_UP || k == GLFW_KEY_PAGE_DOWN)
+		completion_.move(k == GLFW_KEY_PAGE_UP ? -Completion::kRows : Completion::kRows, false);
+	else
+		completion_.accept(*doc);
+	return true;
+}
+
 void View::onSelectKey(const SelectKeyEvent& e) {
 	if (!doc)
+		return;
+	if (completion_.open && (e.mods & RACK_MOD_MASK) == 0 && completionKey(e))
 		return;
 	// Rack's own: save, save as, quit, open, new. Esc in the panel: Rack leaves fullscreen.
 	for (int key : {GLFW_KEY_S, GLFW_KEY_Q, GLFW_KEY_O, GLFW_KEY_N})
@@ -349,7 +654,14 @@ void View::onSelectKey(const SelectKeyEvent& e) {
 	if (e.key == GLFW_KEY_ESCAPE) {
 		if (e.action == GLFW_PRESS)
 			onEscape();
+	} else if ((e.key == GLFW_KEY_SPACE && mods == GLFW_MOD_CONTROL) // Ctrl+Space everywhere, as in CodeMirror
+#if defined ARCH_MAC
+			   || e.isKeyCommand(GLFW_KEY_I, GLFW_MOD_SUPER) // macOS: Ctrl+Space often switches the input source
+#endif
+	) {
+		completion_.request(*doc, docs());
 	} else if (e.isKeyCommand(GLFW_KEY_ENTER, RACK_MOD_CTRL) || e.isKeyCommand(GLFW_KEY_KP_ENTER, RACK_MOD_CTRL)) {
+		completion_.close();
 		if (e.action == GLFW_PRESS)
 			evaluate();
 	} else if (m == RACK_MOD_CTRL && (e.key == GLFW_KEY_SLASH || e.key == GLFW_KEY_KP_DIVIDE || e.keyName == "/"))
@@ -412,12 +724,17 @@ void View::onSelectKey(const SelectKeyEvent& e) {
 		doc->vertical(-page, shift);
 	else if (e.key == GLFW_KEY_PAGE_DOWN && m == 0)
 		doc->vertical(page, shift);
+	if (completion_.open) // moved out of the identifier, backspaced, ...
+		completion_.update(*doc, docs(), false);
 }
 
 void View::onSelectText(const SelectTextEvent& e) {
 	if (!doc || e.codepoint < 32 || e.codepoint == 127)
 		return;
+	if (e.codepoint == ' ' && (APP->window->getMods() & RACK_MOD_MASK) == GLFW_MOD_CONTROL)
+		return e.consume(this); // Ctrl+Space opens the completions (Windows also sends the space)
 	doc->type(utf8(e.codepoint));
+	completion_.update(*doc, docs(), e.codepoint < 0x80 && isIdent((char)e.codepoint));
 	e.consume(this);
 }
 

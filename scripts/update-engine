@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Pins Strudel to a ref (default: main), rebuilds res/engine.js + res/worklets.js and runs the regression.
+# Pins Strudel to a ref (default: main), rebuilds res/engine.js + res/worklets.js and the editor's docs
+# (res/strudel-docs.json, with the jsdoc Strudel's lockfile pins) and runs the regression.
 # hydra-synth comes at the version Strudel's lockfile pins for @strudel/hydra.
 # Usage: scripts/update-engine [--dry-run] [--ack-superdough <sha>] [ref]
 # Stops (exit 1) before touching anything when
@@ -95,6 +96,7 @@ git -C "$src" checkout -q --force --detach "$new"
 (cd "$root" && npm ci --ignore-scripts --no-audit --no-fund)
 
 node "$root/scripts/build-engine.mjs"
+node "$root/scripts/build-docs.mjs"
 
 {
   echo "# Written by scripts/update-engine: res/engine.js is built from exactly these sources."
