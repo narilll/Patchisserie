@@ -15,6 +15,8 @@ export RACK_DIR=/path/to/Rack-SDK   # default: ../Rack-SDK
 make            # plugin
 make test       # unit tests (host build, ASan/UBSan)
 make test-js    # engine tests: host + upstream tune snapshots in Node and QuickJS
+make render     # offline audio renders (build/render/*.wav, after scripts/fetch-test-samples);
+                # node --test test/render.test.mjs compares them with Chrome
 scripts/update-engine [ref]   # re-pin Strudel (default: main), rebuild res/engine.js, run test-js
 make install    # into your Rack user folder
 ```

@@ -65,3 +65,22 @@ test('evaluate after evaluate replaces the pattern', async () => {
     [1, { note: 'd' }],
   ]);
 });
+
+test('.midi() haps go to the Rack event list on the frame timeline, not to superdough', async () => {
+  assert.deepEqual(await host.evaluate('note("c e").midi()'), { ok: true });
+  host.setCps(0.5);
+  host.setClock(10); // cycle 0 sounds at context time 10 s
+  await host.schedule(10, 13); // cycles [0, 1.5)
+  await host.schedule(13, 14); // cycles [1.5, 2): windows tile without gaps or repeats
+  const events = host.midiEvents();
+  assert.deepEqual(
+    events.map((e) => [e.t, e.duration, e.cps, e.value.note]),
+    [
+      [10, 1, 0.5, 'c'],
+      [11, 1, 0.5, 'e'],
+      [12, 1, 0.5, 'c'],
+      [13, 1, 0.5, 'e'],
+    ],
+  );
+  assert.deepEqual(host.midiEvents(), [], 'drained');
+});

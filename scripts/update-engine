@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pins Strudel to a ref (default: main), rebuilds res/engine.js and runs the regression.
+# Pins Strudel to a ref (default: main), rebuilds res/engine.js + res/worklets.js and runs the regression.
 # Usage: scripts/update-engine [ref]
 # Third-party code stays under build/ (gitignored); Strudel sources are never modified.
 set -euo pipefail
@@ -21,7 +21,8 @@ git -C "$src" checkout -q --force --detach FETCH_HEAD
 # CI=true: non-interactive (pnpm would otherwise prompt before purging a stale node_modules).
 (cd "$src" && CI=true pnpm install --prod --frozen-lockfile --ignore-scripts \
   --filter @strudel/core --filter @strudel/mini --filter @strudel/tonal \
-  --filter @strudel/transpiler --filter @strudel/xen --filter @strudel/edo)
+  --filter @strudel/transpiler --filter @strudel/xen --filter @strudel/edo \
+  --filter superdough --filter @strudel/webaudio --filter @strudel/soundfonts)
 (cd "$root" && npm ci --ignore-scripts --no-audit --no-fund)
 
 node "$root/scripts/build-engine.mjs"

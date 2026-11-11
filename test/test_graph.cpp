@@ -299,3 +299,71 @@ TEST(producer_posts_while_render_thread_renders) {
 	CHECK(ended == notes);
 	CHECK(r.g->nodeCount() == 1);
 }
+
+// --- Review regressions ---
+
+TEST(disposed_sink_with_live_inputs_is_reclaimed) {
+	// superdough's connectBusModulator: a long-lived bus feeds a per-note gain; releaseAudioNode() only cuts the gain's
+	// outputs, so the disposed gain keeps an incoming edge forever unless "no outputs" alone makes it reclaimable.
+	Rig r;
+	auto* bus = r.make<GainNode>();
+	r.g->connect(r.constant(1), bus);
+	r.g->connect(bus, r.dest());
+	r.render(128);
+	int baseline = r.g->nodeCount();
+	for (int i = 0; i < 100; i++) {
+		auto* shifted = r.make<GainNode>();
+		auto* depth = r.make<GainNode>();
+		r.g->connect(bus, shifted);
+		r.g->connect(shifted, depth);
+		r.g->disconnect(shifted);
+		r.g->dispose(shifted);
+		r.g->dispose(depth);
+		r.render(128);
+	}
+	CHECK(r.g->nodeCount() == baseline);
+	CHECK(r.L[0] == 1); // the bus still plays
+}
+
+TEST(nan_never_reaches_the_output) {
+	Rig r;
+	auto* d = r.make<DelayNode>();
+	d->delayTime.value = 0.25f; // integer frames: no interpolation that would let a NaN decay
+	auto* fb = r.make<GainNode>();
+	fb->gain.value = 0.5f;
+	r.g->connect(d, fb);
+	r.g->connect(fb, d);
+	r.g->connect(d, r.dest());
+	auto* f = r.make<BiquadFilterNode>();
+	r.g->connect(f, r.dest());
+	auto* nan = r.play(buffer({NAN}), 0.1);
+	r.g->connect(nan, d);
+	r.g->connect(nan, f);
+	r.g->connect(r.constant(0.25f), f);
+	bool finite = true;
+	for (int k = 0; k < 40; k++) {
+		r.render(4800);
+		for (float v : r.L)
+			finite &= std::isfinite(v);
+	}
+	CHECK(finite);                     // the output guard
+	for (int i = 0; i < kQuantum; i++) // and neither node latched it
+		CHECK(std::isfinite(d->outputs[0].data[0][i]) && std::fabs(f->outputs[0].data[0][i] - 0.25f) < 1e-3);
+}
+
+TEST(huge_stop_time_keeps_playing) { // UBSan: no out-of-range double -> int64 cast
+	Rig r;
+	auto* c = r.constant(1);
+	r.g->stop(c, 1e20);
+	r.g->connect(c, r.dest());
+	r.render(256);
+	CHECK(r.L[200] == 1);
+}
+
+TEST(disposing_the_destination_is_ignored) {
+	Rig r;
+	r.g->connect(r.constant(1), r.dest());
+	r.g->dispose(r.dest());
+	r.render(256); // ASan: render() still reads the destination's bus
+	CHECK(r.g->nodeCount() == 2 && r.L[255] == 1);
+}

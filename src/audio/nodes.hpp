@@ -56,6 +56,7 @@ struct ConvolverKernel : Resource {
 struct DestinationNode : Node {
 	explicit DestinationNode(double sr) : Node(sr, 1, 0) { countMode = CountMode::Explicit; }
 	void process(int64_t) override {}
+	bool reclaimable() const override { return false; } // owned by the graph, render() reads its bus
 };
 
 struct GainNode : Node {

@@ -4,7 +4,31 @@
 
 #include "audio/nodes.hpp"
 
+#if defined(__x86_64__) || defined(__i386__)
+#include <xmmintrin.h>
+#endif
+
 namespace audio {
+
+#if defined(__aarch64__)
+DenormalsOff::DenormalsOff() {
+	asm volatile("mrs %0, fpcr" : "=r"(saved));
+	asm volatile("msr fpcr, %0" ::"r"(saved | (UINT64_C(1) << 24))); // FZ: flush denormal inputs and outputs
+}
+DenormalsOff::~DenormalsOff() {
+	asm volatile("msr fpcr, %0" ::"r"(saved));
+}
+#elif defined(__x86_64__) || defined(__i386__)
+DenormalsOff::DenormalsOff() : saved(_mm_getcsr()) {
+	_mm_setcsr((unsigned)saved | 0x8040); // FTZ | DAZ
+}
+DenormalsOff::~DenormalsOff() {
+	_mm_setcsr((unsigned)saved);
+}
+#else
+DenormalsOff::DenormalsOff() {}
+DenormalsOff::~DenormalsOff() {}
+#endif
 
 void release(Resource* r) {
 	if (r && r->refs.fetch_sub(1, std::memory_order_acq_rel) == 1)
@@ -23,7 +47,10 @@ bool AudioParam::insert(Kind kind, double v, double time, int64_t nowFrame, doub
 	int pos = n;
 	while (pos > 0 && ev[pos - 1].time > time)
 		pos--;
-	// Spec: a ramp with no preceding event behaves as if setValueAtTime(value, currentTime) came first.
+	// Spec: a ramp with no preceding event behaves as if setValueAtTime(value, currentTime) came first; one that
+	// already ended by then (T1 <= T0) holds V1 from T1.
+	if (kind != Set && pos == 0 && time <= (double)nowFrame / sampleRate)
+		kind = Set;
 	if (kind != Set && pos == 0) {
 		if (!insert(Set, value, (double)nowFrame / sampleRate, nowFrame, sampleRate))
 			return false;
@@ -117,11 +144,11 @@ void AudioParam::compute(int64_t f0, double sampleRate, uint64_t quantum) {
 // --- Node defaults ---
 
 bool Node::reclaimable() const {
+	if (!outEdges)
+		return true; // unheard: whatever still feeds it can't reach the output (Chrome collects it too)
 	for (const Input& in : inputs)
 		if (in.edges)
 			return false;
-	if (!outEdges)
-		return true;
 	for (const Bus& b : outputs)
 		if (!b.silent)
 			return false;
@@ -236,11 +263,15 @@ void Graph::renderQuantum() {
 	for (Node* n = head_; n; n = n->next) {
 		if (!n->inCycle)
 			continue;
-		for (Edge* e = n->inputs[0].edges; e; e = e->nextIn)
-			pull(e->src);
-		mix(n->inputs[0], *n);
+		mix(n->inputs[0], *n); // its inputs were all pulled by the loop above
 		n->asDelay()->write(f0_);
 	}
+	// Boundary guard: a NaN/Inf that slipped through never reaches the audio output.
+	Bus& out = dest_->inputs[0].bus;
+	for (auto& ch : out.data)
+		for (float& v : ch)
+			if (!std::isfinite(v))
+				v = 0;
 	for (Node* n = head_; n;) {
 		Node* next = n->next;
 		if (n->disposed && n->reclaimable())

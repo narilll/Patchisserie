@@ -207,6 +207,9 @@ void BiquadFilterNode::process(int64_t) {
 			out.data[k][i] = (float)y;
 		}
 	}
+	for (auto& st : s) // a NaN/Inf input would latch in the recursion: restart from rest
+		if (!std::isfinite(st[2] + st[3] + st[0] + st[1]))
+			std::fill(st, st + 4, 0.0);
 }
 
 void BiquadFilterNode::setAttr(int attr, double v, Resource* r) {
@@ -439,11 +442,11 @@ void AudioBufferSourceNode::process(int64_t f0) {
 		if (loop) {
 			if (!enteredLoop && ((startPos < le && pos >= ls) || (startPos >= le && pos < le)))
 				enteredLoop = true;
-			if (enteredLoop && le > ls) {
-				while (pos >= le)
-					pos -= le - ls;
-				while (pos < ls)
-					pos += le - ls;
+			if (enteredLoop && le > ls && (pos >= le || pos < ls)) {
+				double r = std::fmod(pos - ls, le - ls); // exact for whole frames; no loop for huge playback rates
+				pos = ls + (r < 0 ? r + (le - ls) : r);
+				if (pos >= le) // r + length rounded up to length
+					pos = ls;
 			}
 		}
 		if (pos >= 0 && pos < len) {
@@ -461,7 +464,7 @@ void AudioBufferSourceNode::process(int64_t f0) {
 				out.data[c][i] = 0;
 		}
 		pos += step;
-		elapsed += step;
+		elapsed += std::fabs(step); // buffer time played, either direction
 		// Not looping and past either end, or the requested duration played: playback is over.
 		if ((!loop && (pos >= len || pos < 0)) || elapsed >= durationFrames)
 			stopFrame = std::min(stopFrame, f + 1);
@@ -639,8 +642,8 @@ void DelayNode::write(int64_t f0) {
 	}
 	for (int c = 0; c < kMaxChannels; c++) {
 		const float* src = in.data[std::min(c, in.channels - 1)]; // mono stored up-mixed: one channel layout
-		for (int i = 0; i < kQuantum; i++)
-			buf[c][(f0 + i) % len] = src[i];
+		for (int i = 0; i < kQuantum; i++) // a NaN/Inf would circulate forever in a feedback loop
+			buf[c][(f0 + i) % len] = std::isfinite(src[i]) ? src[i] : 0.f;
 	}
 }
 
@@ -654,7 +657,7 @@ void DelayNode::read(int64_t f0) {
 	// Spec: in a cycle the delay is at least one quantum, so the reader only touches frames already written.
 	double minFrames = inCycle ? kQuantum : 0;
 	for (int i = 0; i < kQuantum; i++) {
-		double d = std::min(std::max(delayTime.at(i) * sampleRate, minFrames), maxFrames);
+		double d = std::max(std::min(delayTime.at(i) * sampleRate, maxFrames), minFrames);
 		double r = (double)(f0 + i) - d;
 		int64_t k = (int64_t)std::floor(r);
 		float fr = (float)(r - (double)k);
@@ -668,7 +671,7 @@ void DelayNode::read(int64_t f0) {
 }
 
 bool DelayNode::reclaimable() const {
-	return !inputs[0].edges && (!outEdges || tailDone(lastF0));
+	return !outEdges || (!inputs[0].edges && tailDone(lastF0));
 }
 
 // --- Convolver: uniformly partitioned overlap-save, one partition per quantum, zero latency ---
@@ -783,7 +786,7 @@ void ConvolverNode::setAttr(int attr, double v, Resource* r) {
 }
 
 bool ConvolverNode::reclaimable() const {
-	return !inputs[0].edges && (!outEdges || tailDone(lastF0));
+	return !outEdges || (!inputs[0].edges && tailDone(lastF0));
 }
 
 // --- Merger / Splitter ---

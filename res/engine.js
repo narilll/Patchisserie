@@ -13,11 +13,11 @@
       throw err = [e], e;
     }
   };
-  var __commonJS = (cb, mod4) => function __require() {
+  var __commonJS = (cb, mod5) => function __require() {
     try {
-      return mod4 || (0, cb[__getOwnPropNames(cb)[0]])((mod4 = { exports: {} }).exports, mod4), mod4.exports;
+      return mod5 || (0, cb[__getOwnPropNames(cb)[0]])((mod5 = { exports: {} }).exports, mod5), mod5.exports;
     } catch (e) {
-      throw mod4 = 0, e;
+      throw mod5 = 0, e;
     }
   };
   var __export = (target, all5) => {
@@ -32,15 +32,7488 @@
     }
     return to;
   };
-  var __toESM = (mod4, isNodeMode, target) => (target = mod4 != null ? __create(__getProtoOf(mod4)) : {}, __copyProps(
+  var __toESM = (mod5, isNodeMode, target) => (target = mod5 != null ? __create(__getProtoOf(mod5)) : {}, __copyProps(
     // If the importer is in node compatibility mode or this is not an ESM
     // file that has been converted to a CommonJS file using a Babel-
     // compatible transform (i.e. "__esModule" has not been set), then set
     // "default" to the CommonJS "module.exports" for node compatibility.
-    isNodeMode || !mod4 || !mod4.__esModule ? __defProp(target, "default", { value: mod4, enumerable: true }) : target,
-    mod4
+    isNodeMode || !mod5 || !mod5.__esModule ? __defProp(target, "default", { value: mod5, enumerable: true }) : target,
+    mod5
   ));
-  var __toCommonJS = (mod4) => __copyProps(__defProp({}, "__esModule", { value: true }), mod4);
+  var __toCommonJS = (mod5) => __copyProps(__defProp({}, "__esModule", { value: true }), mod5);
+
+  // build/engine-src/strudel/packages/core/logger.mjs
+  function errorLogger(e, origin = "cyclist") {
+    if (false) {
+      console.error(e);
+    }
+    logger(`[${origin}] error: ${e.message}`);
+  }
+  function logger(message, type, data2 = {}) {
+    let t = performance.now();
+    if (lastMessage === message && t - lastTime < debounce) {
+      return;
+    }
+    lastMessage = message;
+    lastTime = t;
+    console.log(`%c${message}`, "background-color: black;color:white;border-radius:15px");
+    if (typeof document !== "undefined" && typeof CustomEvent !== "undefined") {
+      document.dispatchEvent(
+        new CustomEvent(logKey, {
+          detail: {
+            message,
+            type,
+            data: data2
+          }
+        })
+      );
+    }
+  }
+  var logKey, debounce, lastMessage, lastTime;
+  var init_logger = __esm({
+    "build/engine-src/strudel/packages/core/logger.mjs"() {
+      logKey = "strudel.log";
+      debounce = 1e3;
+      logger.key = logKey;
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/fraction.js@5.2.1/node_modules/fraction.js/dist/fraction.mjs
+  function assign(n2, s2) {
+    try {
+      n2 = BigInt(n2);
+    } catch (e) {
+      throw InvalidParameter();
+    }
+    return n2 * s2;
+  }
+  function trunc(x3) {
+    return typeof x3 === "bigint" ? x3 : Math.floor(x3);
+  }
+  function newFraction(n2, d) {
+    if (d === C_ZERO) {
+      throw DivisionByZero();
+    }
+    const f = Object.create(Fraction.prototype);
+    f["s"] = n2 < C_ZERO ? -C_ONE : C_ONE;
+    n2 = n2 < C_ZERO ? -n2 : n2;
+    const a = gcd(n2, d);
+    f["n"] = n2 / a;
+    f["d"] = d / a;
+    return f;
+  }
+  function factorize(num3) {
+    const factors = {};
+    let n2 = num3;
+    let i3 = C_TWO;
+    let s2 = C_FIVE - C_ONE;
+    while (s2 <= n2) {
+      while (n2 % i3 === C_ZERO) {
+        n2 /= i3;
+        factors[i3] = (factors[i3] || C_ZERO) + C_ONE;
+      }
+      s2 += C_ONE + C_TWO * i3++;
+    }
+    if (n2 !== num3) {
+      if (n2 > 1)
+        factors[n2] = (factors[n2] || C_ZERO) + C_ONE;
+    } else {
+      factors[num3] = (factors[num3] || C_ZERO) + C_ONE;
+    }
+    return factors;
+  }
+  function modpow(b, e, m3) {
+    let r2 = C_ONE;
+    for (; e > C_ZERO; b = b * b % m3, e >>= C_ONE) {
+      if (e & C_ONE) {
+        r2 = r2 * b % m3;
+      }
+    }
+    return r2;
+  }
+  function cycleLen(n2, d) {
+    for (; d % C_TWO === C_ZERO; d /= C_TWO) {
+    }
+    for (; d % C_FIVE === C_ZERO; d /= C_FIVE) {
+    }
+    if (d === C_ONE)
+      return C_ZERO;
+    let rem = C_TEN % d;
+    let t = 1;
+    for (; rem !== C_ONE; t++) {
+      rem = rem * C_TEN % d;
+      if (t > MAX_CYCLE_LEN)
+        return C_ZERO;
+    }
+    return BigInt(t);
+  }
+  function cycleStart(n2, d, len) {
+    let rem1 = C_ONE;
+    let rem2 = modpow(C_TEN, len, d);
+    for (let t = 0; t < 300; t++) {
+      if (rem1 === rem2)
+        return BigInt(t);
+      rem1 = rem1 * C_TEN % d;
+      rem2 = rem2 * C_TEN % d;
+    }
+    return 0;
+  }
+  function gcd(a, b) {
+    if (!a)
+      return b;
+    if (!b)
+      return a;
+    while (1) {
+      a %= b;
+      if (!a)
+        return b;
+      b %= a;
+      if (!b)
+        return a;
+    }
+  }
+  function Fraction(a, b) {
+    parse(a, b);
+    if (this instanceof Fraction) {
+      a = gcd(P["d"], P["n"]);
+      this["s"] = P["s"];
+      this["n"] = P["n"] / a;
+      this["d"] = P["d"] / a;
+    } else {
+      return newFraction(P["s"] * P["n"], P["d"]);
+    }
+  }
+  var C_ZERO, C_ONE, C_TWO, C_FIVE, C_TEN, MAX_CYCLE_LEN, P, parse, DivisionByZero, InvalidParameter, NonIntegerParameter;
+  var init_fraction = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/fraction.js@5.2.1/node_modules/fraction.js/dist/fraction.mjs"() {
+      "use strict";
+      if (typeof BigInt === "undefined") BigInt = function(n2) {
+        if (isNaN(n2)) throw new Error("");
+        return n2;
+      };
+      C_ZERO = BigInt(0);
+      C_ONE = BigInt(1);
+      C_TWO = BigInt(2);
+      C_FIVE = BigInt(5);
+      C_TEN = BigInt(10);
+      MAX_CYCLE_LEN = 2e3;
+      P = {
+        "s": C_ONE,
+        "n": C_ZERO,
+        "d": C_ONE
+      };
+      parse = function(p1, p2) {
+        let n2 = C_ZERO, d = C_ONE, s2 = C_ONE;
+        if (p1 === void 0 || p1 === null) {
+        } else if (p2 !== void 0) {
+          if (typeof p1 === "bigint") {
+            n2 = p1;
+          } else if (isNaN(p1)) {
+            throw InvalidParameter();
+          } else if (p1 % 1 !== 0) {
+            throw NonIntegerParameter();
+          } else {
+            n2 = BigInt(p1);
+          }
+          if (typeof p2 === "bigint") {
+            d = p2;
+          } else if (isNaN(p2)) {
+            throw InvalidParameter();
+          } else if (p2 % 1 !== 0) {
+            throw NonIntegerParameter();
+          } else {
+            d = BigInt(p2);
+          }
+          s2 = n2 * d;
+        } else if (typeof p1 === "object") {
+          if ("d" in p1 && "n" in p1) {
+            n2 = BigInt(p1["n"]);
+            d = BigInt(p1["d"]);
+            if ("s" in p1)
+              n2 *= BigInt(p1["s"]);
+          } else if (0 in p1) {
+            n2 = BigInt(p1[0]);
+            if (1 in p1)
+              d = BigInt(p1[1]);
+          } else if (typeof p1 === "bigint") {
+            n2 = p1;
+          } else {
+            throw InvalidParameter();
+          }
+          s2 = n2 * d;
+        } else if (typeof p1 === "number") {
+          if (isNaN(p1)) {
+            throw InvalidParameter();
+          }
+          if (p1 < 0) {
+            s2 = -C_ONE;
+            p1 = -p1;
+          }
+          if (p1 % 1 === 0) {
+            n2 = BigInt(p1);
+          } else if (p1 > 0) {
+            let z = 1;
+            let A = 0, B = 1;
+            let C2 = 1, D2 = 1;
+            let N = 1e7;
+            if (p1 >= 1) {
+              z = 10 ** Math.floor(1 + Math.log10(p1));
+              p1 /= z;
+            }
+            while (B <= N && D2 <= N) {
+              let M2 = (A + C2) / (B + D2);
+              if (p1 === M2) {
+                if (B + D2 <= N) {
+                  n2 = A + C2;
+                  d = B + D2;
+                } else if (D2 > B) {
+                  n2 = C2;
+                  d = D2;
+                } else {
+                  n2 = A;
+                  d = B;
+                }
+                break;
+              } else {
+                if (p1 > M2) {
+                  A += C2;
+                  B += D2;
+                } else {
+                  C2 += A;
+                  D2 += B;
+                }
+                if (B > N) {
+                  n2 = C2;
+                  d = D2;
+                } else {
+                  n2 = A;
+                  d = B;
+                }
+              }
+            }
+            n2 = BigInt(n2) * BigInt(z);
+            d = BigInt(d);
+          }
+        } else if (typeof p1 === "string") {
+          let ndx = 0;
+          let v2 = C_ZERO, w3 = C_ZERO, x3 = C_ZERO, y2 = C_ONE, z = C_ONE;
+          let match = p1.replace(/_/g, "").match(/\d+|./g);
+          if (match === null)
+            throw InvalidParameter();
+          if (match[ndx] === "-") {
+            s2 = -C_ONE;
+            ndx++;
+          } else if (match[ndx] === "+") {
+            ndx++;
+          }
+          if (match.length === ndx + 1) {
+            w3 = assign(match[ndx++], s2);
+          } else if (match[ndx + 1] === "." || match[ndx] === ".") {
+            if (match[ndx] !== ".") {
+              v2 = assign(match[ndx++], s2);
+            }
+            ndx++;
+            if (ndx + 1 === match.length || match[ndx + 1] === "(" && match[ndx + 3] === ")" || match[ndx + 1] === "'" && match[ndx + 3] === "'") {
+              w3 = assign(match[ndx], s2);
+              y2 = C_TEN ** BigInt(match[ndx].length);
+              ndx++;
+            }
+            if (match[ndx] === "(" && match[ndx + 2] === ")" || match[ndx] === "'" && match[ndx + 2] === "'") {
+              x3 = assign(match[ndx + 1], s2);
+              z = C_TEN ** BigInt(match[ndx + 1].length) - C_ONE;
+              ndx += 3;
+            }
+          } else if (match[ndx + 1] === "/" || match[ndx + 1] === ":") {
+            w3 = assign(match[ndx], s2);
+            y2 = assign(match[ndx + 2], C_ONE);
+            ndx += 3;
+          } else if (match[ndx + 3] === "/" && match[ndx + 1] === " ") {
+            v2 = assign(match[ndx], s2);
+            w3 = assign(match[ndx + 2], s2);
+            y2 = assign(match[ndx + 4], C_ONE);
+            ndx += 5;
+          }
+          if (match.length <= ndx) {
+            d = y2 * z;
+            s2 = /* void */
+            n2 = x3 + d * v2 + z * w3;
+          } else {
+            throw InvalidParameter();
+          }
+        } else if (typeof p1 === "bigint") {
+          n2 = p1;
+          s2 = p1;
+          d = C_ONE;
+        } else {
+          throw InvalidParameter();
+        }
+        if (d === C_ZERO) {
+          throw DivisionByZero();
+        }
+        P["s"] = s2 < C_ZERO ? -C_ONE : C_ONE;
+        P["n"] = n2 < C_ZERO ? -n2 : n2;
+        P["d"] = d < C_ZERO ? -d : d;
+      };
+      DivisionByZero = function() {
+        return new Error("Division by Zero");
+      };
+      InvalidParameter = function() {
+        return new Error("Invalid argument");
+      };
+      NonIntegerParameter = function() {
+        return new Error("Parameters must be integer");
+      };
+      Fraction.prototype = {
+        "s": C_ONE,
+        "n": C_ZERO,
+        "d": C_ONE,
+        /**
+         * Calculates the absolute value
+         *
+         * Ex: new Fraction(-4).abs() => 4
+         **/
+        "abs": function() {
+          return newFraction(this["n"], this["d"]);
+        },
+        /**
+         * Inverts the sign of the current fraction
+         *
+         * Ex: new Fraction(-4).neg() => 4
+         **/
+        "neg": function() {
+          return newFraction(-this["s"] * this["n"], this["d"]);
+        },
+        /**
+         * Adds two rational numbers
+         *
+         * Ex: new Fraction({n: 2, d: 3}).add("14.9") => 467 / 30
+         **/
+        "add": function(a, b) {
+          parse(a, b);
+          return newFraction(
+            this["s"] * this["n"] * P["d"] + P["s"] * this["d"] * P["n"],
+            this["d"] * P["d"]
+          );
+        },
+        /**
+         * Subtracts two rational numbers
+         *
+         * Ex: new Fraction({n: 2, d: 3}).add("14.9") => -427 / 30
+         **/
+        "sub": function(a, b) {
+          parse(a, b);
+          return newFraction(
+            this["s"] * this["n"] * P["d"] - P["s"] * this["d"] * P["n"],
+            this["d"] * P["d"]
+          );
+        },
+        /**
+         * Multiplies two rational numbers
+         *
+         * Ex: new Fraction("-17.(345)").mul(3) => 5776 / 111
+         **/
+        "mul": function(a, b) {
+          parse(a, b);
+          return newFraction(
+            this["s"] * P["s"] * this["n"] * P["n"],
+            this["d"] * P["d"]
+          );
+        },
+        /**
+         * Divides two rational numbers
+         *
+         * Ex: new Fraction("-17.(345)").inverse().div(3)
+         **/
+        "div": function(a, b) {
+          parse(a, b);
+          return newFraction(
+            this["s"] * P["s"] * this["n"] * P["d"],
+            this["d"] * P["n"]
+          );
+        },
+        /**
+         * Clones the actual object
+         *
+         * Ex: new Fraction("-17.(345)").clone()
+         **/
+        "clone": function() {
+          return newFraction(this["s"] * this["n"], this["d"]);
+        },
+        /**
+         * Calculates the modulo of two rational numbers - a more precise fmod
+         *
+         * Ex: new Fraction('4.(3)').mod([7, 8]) => (13/3) % (7/8) = (5/6)
+         * Ex: new Fraction(20, 10).mod().equals(0) ? "is Integer"
+         **/
+        "mod": function(a, b) {
+          if (a === void 0) {
+            return newFraction(this["s"] * this["n"] % this["d"], C_ONE);
+          }
+          parse(a, b);
+          if (C_ZERO === P["n"] * this["d"]) {
+            throw DivisionByZero();
+          }
+          return newFraction(
+            this["s"] * (P["d"] * this["n"]) % (P["n"] * this["d"]),
+            P["d"] * this["d"]
+          );
+        },
+        /**
+         * Calculates the fractional gcd of two rational numbers
+         *
+         * Ex: new Fraction(5,8).gcd(3,7) => 1/56
+         */
+        "gcd": function(a, b) {
+          parse(a, b);
+          return newFraction(gcd(P["n"], this["n"]) * gcd(P["d"], this["d"]), P["d"] * this["d"]);
+        },
+        /**
+         * Calculates the fractional lcm of two rational numbers
+         *
+         * Ex: new Fraction(5,8).lcm(3,7) => 15
+         */
+        "lcm": function(a, b) {
+          parse(a, b);
+          if (P["n"] === C_ZERO && this["n"] === C_ZERO) {
+            return newFraction(C_ZERO, C_ONE);
+          }
+          return newFraction(P["n"] * this["n"], gcd(P["n"], this["n"]) * gcd(P["d"], this["d"]));
+        },
+        /**
+         * Gets the inverse of the fraction, means numerator and denominator are exchanged
+         *
+         * Ex: new Fraction([-3, 4]).inverse() => -4 / 3
+         **/
+        "inverse": function() {
+          return newFraction(this["s"] * this["d"], this["n"]);
+        },
+        /**
+         * Calculates the fraction to some integer exponent
+         *
+         * Ex: new Fraction(-1,2).pow(-3) => -8
+         */
+        "pow": function(a, b) {
+          parse(a, b);
+          if (P["d"] === C_ONE) {
+            if (P["s"] < C_ZERO) {
+              return newFraction((this["s"] * this["d"]) ** P["n"], this["n"] ** P["n"]);
+            } else {
+              return newFraction((this["s"] * this["n"]) ** P["n"], this["d"] ** P["n"]);
+            }
+          }
+          if (this["s"] < C_ZERO) return null;
+          let N = factorize(this["n"]);
+          let D2 = factorize(this["d"]);
+          let n2 = C_ONE;
+          let d = C_ONE;
+          for (let k in N) {
+            if (k === "1") continue;
+            if (k === "0") {
+              n2 = C_ZERO;
+              break;
+            }
+            N[k] *= P["n"];
+            if (N[k] % P["d"] === C_ZERO) {
+              N[k] /= P["d"];
+            } else return null;
+            n2 *= BigInt(k) ** N[k];
+          }
+          for (let k in D2) {
+            if (k === "1") continue;
+            D2[k] *= P["n"];
+            if (D2[k] % P["d"] === C_ZERO) {
+              D2[k] /= P["d"];
+            } else return null;
+            d *= BigInt(k) ** D2[k];
+          }
+          if (P["s"] < C_ZERO) {
+            return newFraction(d, n2);
+          }
+          return newFraction(n2, d);
+        },
+        /**
+         * Calculates the logarithm of a fraction to a given rational base
+         *
+         * Ex: new Fraction(27, 8).log(9, 4) => 3/2
+         */
+        "log": function(a, b) {
+          parse(a, b);
+          if (this["s"] <= C_ZERO || P["s"] <= C_ZERO) return null;
+          const allPrimes = {};
+          const baseFactors = factorize(P["n"]);
+          const T1 = factorize(P["d"]);
+          const numberFactors = factorize(this["n"]);
+          const T2 = factorize(this["d"]);
+          for (const prime in T1) {
+            baseFactors[prime] = (baseFactors[prime] || C_ZERO) - T1[prime];
+          }
+          for (const prime in T2) {
+            numberFactors[prime] = (numberFactors[prime] || C_ZERO) - T2[prime];
+          }
+          for (const prime in baseFactors) {
+            if (prime === "1") continue;
+            allPrimes[prime] = true;
+          }
+          for (const prime in numberFactors) {
+            if (prime === "1") continue;
+            allPrimes[prime] = true;
+          }
+          let retN = null;
+          let retD = null;
+          for (const prime in allPrimes) {
+            const baseExponent = baseFactors[prime] || C_ZERO;
+            const numberExponent = numberFactors[prime] || C_ZERO;
+            if (baseExponent === C_ZERO) {
+              if (numberExponent !== C_ZERO) {
+                return null;
+              }
+              continue;
+            }
+            let curN = numberExponent;
+            let curD = baseExponent;
+            const gcdValue = gcd(curN, curD);
+            curN /= gcdValue;
+            curD /= gcdValue;
+            if (retN === null && retD === null) {
+              retN = curN;
+              retD = curD;
+            } else if (curN * retD !== retN * curD) {
+              return null;
+            }
+          }
+          return retN !== null && retD !== null ? newFraction(retN, retD) : null;
+        },
+        /**
+         * Check if two rational numbers are the same
+         *
+         * Ex: new Fraction(19.6).equals([98, 5]);
+         **/
+        "equals": function(a, b) {
+          parse(a, b);
+          return this["s"] * this["n"] * P["d"] === P["s"] * P["n"] * this["d"];
+        },
+        /**
+         * Check if this rational number is less than another
+         *
+         * Ex: new Fraction(19.6).lt([98, 5]);
+         **/
+        "lt": function(a, b) {
+          parse(a, b);
+          return this["s"] * this["n"] * P["d"] < P["s"] * P["n"] * this["d"];
+        },
+        /**
+         * Check if this rational number is less than or equal another
+         *
+         * Ex: new Fraction(19.6).lt([98, 5]);
+         **/
+        "lte": function(a, b) {
+          parse(a, b);
+          return this["s"] * this["n"] * P["d"] <= P["s"] * P["n"] * this["d"];
+        },
+        /**
+         * Check if this rational number is greater than another
+         *
+         * Ex: new Fraction(19.6).lt([98, 5]);
+         **/
+        "gt": function(a, b) {
+          parse(a, b);
+          return this["s"] * this["n"] * P["d"] > P["s"] * P["n"] * this["d"];
+        },
+        /**
+         * Check if this rational number is greater than or equal another
+         *
+         * Ex: new Fraction(19.6).lt([98, 5]);
+         **/
+        "gte": function(a, b) {
+          parse(a, b);
+          return this["s"] * this["n"] * P["d"] >= P["s"] * P["n"] * this["d"];
+        },
+        /**
+         * Compare two rational numbers
+         * < 0 iff this < that
+         * > 0 iff this > that
+         * = 0 iff this = that
+         *
+         * Ex: new Fraction(19.6).compare([98, 5]);
+         **/
+        "compare": function(a, b) {
+          parse(a, b);
+          let t = this["s"] * this["n"] * P["d"] - P["s"] * P["n"] * this["d"];
+          return (C_ZERO < t) - (t < C_ZERO);
+        },
+        /**
+         * Calculates the ceil of a rational number
+         *
+         * Ex: new Fraction('4.(3)').ceil() => (5 / 1)
+         **/
+        "ceil": function(places) {
+          places = C_TEN ** BigInt(places || 0);
+          return newFraction(
+            trunc(this["s"] * places * this["n"] / this["d"]) + (places * this["n"] % this["d"] > C_ZERO && this["s"] >= C_ZERO ? C_ONE : C_ZERO),
+            places
+          );
+        },
+        /**
+         * Calculates the floor of a rational number
+         *
+         * Ex: new Fraction('4.(3)').floor() => (4 / 1)
+         **/
+        "floor": function(places) {
+          places = C_TEN ** BigInt(places || 0);
+          return newFraction(
+            trunc(this["s"] * places * this["n"] / this["d"]) - (places * this["n"] % this["d"] > C_ZERO && this["s"] < C_ZERO ? C_ONE : C_ZERO),
+            places
+          );
+        },
+        /**
+         * Rounds a rational numbers
+         *
+         * Ex: new Fraction('4.(3)').round() => (4 / 1)
+         **/
+        "round": function(places) {
+          places = C_TEN ** BigInt(places || 0);
+          return newFraction(
+            trunc(this["s"] * places * this["n"] / this["d"]) + this["s"] * ((this["s"] >= C_ZERO ? C_ONE : C_ZERO) + C_TWO * (places * this["n"] % this["d"]) > this["d"] ? C_ONE : C_ZERO),
+            places
+          );
+        },
+        /**
+          * Rounds a rational number to a multiple of another rational number
+          *
+          * Ex: new Fraction('0.9').roundTo("1/8") => 7 / 8
+          **/
+        "roundTo": function(a, b) {
+          parse(a, b);
+          const n2 = this["n"] * P["d"];
+          const d = this["d"] * P["n"];
+          const r2 = n2 % d;
+          let k = trunc(n2 / d);
+          if (r2 + r2 >= d) {
+            k++;
+          }
+          return newFraction(this["s"] * k * P["n"], P["d"]);
+        },
+        /**
+         * Check if two rational numbers are divisible
+         *
+         * Ex: new Fraction(19.6).divisible(1.5);
+         */
+        "divisible": function(a, b) {
+          parse(a, b);
+          return !(!(P["n"] * this["d"]) || this["n"] * P["d"] % (P["n"] * this["d"]));
+        },
+        /**
+         * Returns a decimal representation of the fraction
+         *
+         * Ex: new Fraction("100.'91823'").valueOf() => 100.91823918239183
+         **/
+        "valueOf": function() {
+          return Number(this["s"] * this["n"]) / Number(this["d"]);
+        },
+        /**
+         * Creates a string representation of a fraction with all digits
+         *
+         * Ex: new Fraction("100.'91823'").toString() => "100.(91823)"
+         **/
+        "toString": function(dec2) {
+          let N = this["n"];
+          let D2 = this["d"];
+          dec2 = dec2 || 15;
+          let cycLen = cycleLen(N, D2);
+          let cycOff = cycleStart(N, D2, cycLen);
+          let str = this["s"] < C_ZERO ? "-" : "";
+          str += trunc(N / D2);
+          N %= D2;
+          N *= C_TEN;
+          if (N)
+            str += ".";
+          if (cycLen) {
+            for (let i3 = cycOff; i3--; ) {
+              str += trunc(N / D2);
+              N %= D2;
+              N *= C_TEN;
+            }
+            str += "(";
+            for (let i3 = cycLen; i3--; ) {
+              str += trunc(N / D2);
+              N %= D2;
+              N *= C_TEN;
+            }
+            str += ")";
+          } else {
+            for (let i3 = dec2; N && i3--; ) {
+              str += trunc(N / D2);
+              N %= D2;
+              N *= C_TEN;
+            }
+          }
+          return str;
+        },
+        /**
+         * Returns a string-fraction representation of a Fraction object
+         *
+         * Ex: new Fraction("1.'3'").toFraction() => "4 1/3"
+         **/
+        "toFraction": function(showMixed) {
+          let n2 = this["n"];
+          let d = this["d"];
+          let str = this["s"] < C_ZERO ? "-" : "";
+          if (d === C_ONE) {
+            str += n2;
+          } else {
+            let whole = trunc(n2 / d);
+            if (showMixed && whole > C_ZERO) {
+              str += whole;
+              str += " ";
+              n2 %= d;
+            }
+            str += n2;
+            str += "/";
+            str += d;
+          }
+          return str;
+        },
+        /**
+         * Returns a latex representation of a Fraction object
+         *
+         * Ex: new Fraction("1.'3'").toLatex() => "\frac{4}{3}"
+         **/
+        "toLatex": function(showMixed) {
+          let n2 = this["n"];
+          let d = this["d"];
+          let str = this["s"] < C_ZERO ? "-" : "";
+          if (d === C_ONE) {
+            str += n2;
+          } else {
+            let whole = trunc(n2 / d);
+            if (showMixed && whole > C_ZERO) {
+              str += whole;
+              n2 %= d;
+            }
+            str += "\\frac{";
+            str += n2;
+            str += "}{";
+            str += d;
+            str += "}";
+          }
+          return str;
+        },
+        /**
+         * Returns an array of continued fraction elements
+         *
+         * Ex: new Fraction("7/8").toContinued() => [0,1,7]
+         */
+        "toContinued": function() {
+          let a = this["n"];
+          let b = this["d"];
+          let res = [];
+          do {
+            res.push(trunc(a / b));
+            let t = a % b;
+            a = b;
+            b = t;
+          } while (a !== C_ONE);
+          return res;
+        },
+        "simplify": function(eps) {
+          const ieps = BigInt(1 / (eps || 1e-3) | 0);
+          const thisABS = this["abs"]();
+          const cont = thisABS["toContinued"]();
+          for (let i3 = 1; i3 < cont.length; i3++) {
+            let s2 = newFraction(cont[i3 - 1], C_ONE);
+            for (let k = i3 - 2; k >= 0; k--) {
+              s2 = s2["inverse"]()["add"](cont[k]);
+            }
+            let t = s2["sub"](thisABS);
+            if (t["n"] * ieps < t["d"]) {
+              return s2["mul"](this["s"]);
+            }
+          }
+          return this;
+        }
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/util.mjs
+  function nanFallback(value2, fallback = 0) {
+    if (isNaN(Number(value2))) {
+      logger(`"${value2}" is not a number, falling back to ${fallback}`, "warning");
+      return fallback;
+    }
+    return value2;
+  }
+  function curry(func2, overload, arity = func2.length) {
+    const fn = function curried(...args) {
+      if (args.length >= arity) {
+        return func2.apply(this, args);
+      } else {
+        const partial = function(...args2) {
+          return curried.apply(this, args.concat(args2));
+        };
+        if (overload) {
+          overload(partial, args);
+        }
+        return partial;
+      }
+    };
+    if (overload) {
+      overload(fn, []);
+    }
+    return fn;
+  }
+  function parseNumeral(numOrString) {
+    const asNumber = Number(numOrString);
+    if (!isNaN(asNumber)) {
+      return asNumber;
+    }
+    if (isNote(numOrString)) {
+      return noteToMidi(numOrString);
+    }
+    throw new Error(`cannot parse as numeral: "${numOrString}"`);
+  }
+  function mapArgs(fn, mapFn) {
+    return (...args) => fn(...args.map(mapFn));
+  }
+  function numeralArgs(fn) {
+    return mapArgs(fn, parseNumeral);
+  }
+  function parseFractional(numOrString) {
+    const asNumber = Number(numOrString);
+    if (!isNaN(asNumber)) {
+      return asNumber;
+    }
+    const specialValue = {
+      pi: Math.PI,
+      w: 1,
+      h: 0.5,
+      q: 0.25,
+      e: 0.125,
+      s: 0.0625,
+      t: 1 / 3,
+      f: 0.2,
+      x: 1 / 6
+    }[numOrString];
+    if (typeof specialValue !== "undefined") {
+      return specialValue;
+    }
+    throw new Error(`cannot parse as fractional: "${numOrString}"`);
+  }
+  function uniq(a) {
+    var seen = {};
+    return a.filter(function(item) {
+      return seen.hasOwn(item) ? false : seen[item] = true;
+    });
+  }
+  function uniqsort(a) {
+    return a.sort().filter(function(item, pos, ary) {
+      return !pos || item != ary[pos - 1];
+    });
+  }
+  function uniqsortr(a) {
+    return a.sort((x3, y2) => x3.compare(y2)).filter(function(item, pos, ary) {
+      return !pos || item.ne(ary[pos - 1]);
+    });
+  }
+  function unicodeToBase64(text) {
+    const utf8Bytes = new TextEncoder().encode(text);
+    let binaryString = "";
+    const chunkSize = 32768;
+    for (let i3 = 0; i3 < utf8Bytes.length; i3 += chunkSize) {
+      const chunk2 = utf8Bytes.subarray(i3, i3 + chunkSize);
+      binaryString += String.fromCharCode.apply(null, chunk2);
+    }
+    return btoa(binaryString);
+  }
+  function base64ToUnicode(base64String) {
+    const utf8Bytes = new Uint8Array(
+      atob(base64String).split("").map((char) => char.charCodeAt(0))
+    );
+    const decodedText = new TextDecoder().decode(utf8Bytes);
+    return decodedText;
+  }
+  function code2hash(code) {
+    return encodeURIComponent(unicodeToBase64(code));
+  }
+  function hash2code(hash) {
+    return base64ToUnicode(decodeURIComponent(hash));
+  }
+  function objectMap(obj, fn) {
+    if (Array.isArray(obj)) {
+      return obj.map(fn);
+    }
+    return Object.fromEntries(Object.entries(obj).map(([k, v2], i3) => [k, fn(v2, k, i3)]));
+  }
+  function cycleToSeconds(cycle, cps2) {
+    return cycle / cps2;
+  }
+  function getPerformanceTimeSeconds() {
+    return performance.now() * 1e-3;
+  }
+  function getUnixTimeSeconds() {
+    return Date.now() * 1e-3;
+  }
+  function getCurrentKeyboardState() {
+    if (keyState == null) {
+      if (typeof window === "undefined") {
+        return;
+      }
+      keyState = {};
+      window.addEventListener("keydown", (event) => {
+        keyState[event.key] = true;
+      });
+      window.addEventListener("keyup", (event) => {
+        keyState[event.key] = false;
+      });
+    }
+    return { ...keyState };
+  }
+  function stringifyValues(value2, compact3 = false) {
+    return typeof value2 === "object" ? compact3 ? JSON.stringify(value2).slice(1, -1).replaceAll('"', "").replaceAll(",", " ") : JSON.stringify(value2) : value2;
+  }
+  var isNoteWithOctave, isNote, tokenizeNote, chromas, accs, getAccidentalsOffset, noteToMidi, midiToFreq, freqToMidi, valueToMidi, getEventOffsetMs, pcs, midi2note, _mod, averageArray, getSoundIndex, getPlayableNoteValue, getFrequency, getFreq, rotate, pipe, compose, removeUndefineds, flatten, id, constant, listRange, fractionalArgs, splitAt, zipWith, pairs, clamp, solfeggio, indian, german, byzantine, japanese, english, sol2note, ClockCollator, keyAlias, keyState;
+  var init_util = __esm({
+    "build/engine-src/strudel/packages/core/util.mjs"() {
+      init_logger();
+      isNoteWithOctave = (name3) => /^[a-gA-G][#bsf]*[0-9]*$/.test(name3);
+      isNote = (name3) => /^[a-gA-G][#bsf]*-?[0-9]*$/.test(name3);
+      tokenizeNote = (note4) => {
+        if (typeof note4 !== "string") {
+          return [];
+        }
+        const [pc, acc = "", oct2] = note4.match(/^([a-gA-G])([#bsf]*)(-?[0-9]*)$/)?.slice(1) || [];
+        if (!pc) {
+          return [];
+        }
+        return [pc, acc, oct2 ? Number(oct2) : void 0];
+      };
+      chromas = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
+      accs = { "#": 1, b: -1, s: 1, f: -1 };
+      getAccidentalsOffset = (accidentals2) => {
+        return accidentals2?.split("").reduce((o, char) => o + accs[char], 0) || 0;
+      };
+      noteToMidi = (note4, defaultOctave = 3) => {
+        const [pc, acc, oct2 = defaultOctave] = tokenizeNote(note4);
+        if (!pc) {
+          throw new Error('not a note: "' + note4 + '"');
+        }
+        const chroma5 = chromas[pc.toLowerCase()];
+        const offset3 = getAccidentalsOffset(acc);
+        return (Number(oct2) + 1) * 12 + chroma5 + offset3;
+      };
+      midiToFreq = (n2) => {
+        return Math.pow(2, (n2 - 69) / 12) * 440;
+      };
+      freqToMidi = (freq3) => {
+        return 12 * Math.log(freq3 / 440) / Math.LN2 + 69;
+      };
+      valueToMidi = (value2, fallbackValue) => {
+        if (typeof value2 !== "object") {
+          throw new Error("valueToMidi: expected object value");
+        }
+        let { freq: freq3, note: note4 } = value2;
+        if (typeof freq3 === "number") {
+          return freqToMidi(freq3);
+        }
+        if (typeof note4 === "string") {
+          return noteToMidi(note4);
+        }
+        if (typeof note4 === "number") {
+          return note4;
+        }
+        if (!fallbackValue) {
+          throw new Error("valueToMidi: expected freq or note to be set");
+        }
+        return fallbackValue;
+      };
+      getEventOffsetMs = (targetTimeSeconds, currentTimeSeconds) => {
+        return (targetTimeSeconds - currentTimeSeconds) * 1e3;
+      };
+      pcs = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+      midi2note = (n2) => {
+        const oct2 = Math.floor(n2 / 12) - 1;
+        const pc = pcs[n2 % 12];
+        return pc + oct2;
+      };
+      _mod = (n2, m3) => (n2 % m3 + m3) % m3;
+      averageArray = (arr) => arr.reduce((a, b) => a + b) / arr.length;
+      getSoundIndex = (n2, numSounds) => {
+        return _mod(Math.round(nanFallback(n2 ?? 0, 0)), numSounds);
+      };
+      getPlayableNoteValue = (hap) => {
+        let { value: value2, context } = hap;
+        let note4 = value2;
+        if (typeof note4 === "object" && !Array.isArray(note4)) {
+          note4 = note4.note || note4.n || note4.value;
+          if (note4 === void 0) {
+            throw new Error(`cannot find a playable note for ${JSON.stringify(value2)}`);
+          }
+        }
+        if (typeof note4 === "number" && context.type !== "frequency") {
+          note4 = midiToFreq(hap.value);
+        } else if (typeof note4 === "number" && context.type === "frequency") {
+          note4 = hap.value;
+        } else if (typeof note4 !== "string" || !isNote(note4)) {
+          throw new Error("not a note: " + JSON.stringify(note4));
+        }
+        return note4;
+      };
+      getFrequency = (hap) => {
+        let { value: value2, context } = typeof hap == "object" ? hap : (
+          // default: interpret value as midi note.
+          { value: hap, context: { type: "note" } }
+        );
+        if (typeof value2 === "object") {
+          if (value2.freq) {
+            return value2.freq;
+          }
+          return getFreq(value2.note ?? value2.n ?? value2.value);
+        }
+        if (typeof value2 === "number" && context.type !== "frequency") {
+          value2 = midiToFreq(value2);
+        } else if (typeof value2 === "string" && isNote(value2)) {
+          value2 = midiToFreq(noteToMidi(value2));
+        } else if (typeof value2 !== "number") {
+          throw new Error("not a note or frequency: " + value2);
+        }
+        return value2;
+      };
+      getFreq = (hap) => getFrequency(hap);
+      rotate = (arr, n2) => arr.slice(n2).concat(arr.slice(0, n2));
+      pipe = (...funcs) => {
+        return funcs.reduce(
+          (f, g) => (...args) => f(g(...args)),
+          (x3) => x3
+        );
+      };
+      compose = (...funcs) => pipe(...funcs.reverse());
+      removeUndefineds = (xs) => xs.filter((x3) => x3 != void 0);
+      flatten = (arr) => [].concat(...arr);
+      id = (a) => a;
+      constant = (a, b) => a;
+      listRange = (min, max) => Array.from({ length: max - min + 1 }, (_, i3) => i3 + min);
+      fractionalArgs = (fn) => mapArgs(fn, parseFractional);
+      splitAt = function(index5, value2) {
+        return [value2.slice(0, index5), value2.slice(index5)];
+      };
+      zipWith = (f, xs, ys) => xs.map((n2, i3) => f(n2, ys[i3]));
+      pairs = function(xs) {
+        const result = [];
+        for (let i3 = 0; i3 < xs.length - 1; ++i3) {
+          result.push([xs[i3], xs[i3 + 1]]);
+        }
+        return result;
+      };
+      clamp = (num3, min, max) => Math.min(Math.max(num3, min), max);
+      solfeggio = ["Do", "Reb", "Re", "Mib", "Mi", "Fa", "Solb", "Sol", "Lab", "La", "Sib", "Si"];
+      indian = [
+        "Sa",
+        "Re",
+        "Ga",
+        "Ma",
+        "Pa",
+        "Dha",
+        "Ni"
+      ];
+      german = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Hb", "H"];
+      byzantine = [
+        "Ni",
+        "Pab",
+        "Pa",
+        "Voub",
+        "Vou",
+        "Ga",
+        "Dib",
+        "Di",
+        "Keb",
+        "Ke",
+        "Zob",
+        "Zo"
+      ];
+      japanese = [
+        "I",
+        "Ro",
+        "Ha",
+        "Ni",
+        "Ho",
+        "He",
+        "To"
+      ];
+      english = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+      sol2note = (n2, notation = "letters") => {
+        const pc = notation === "solfeggio" ? solfeggio : notation === "indian" ? indian : notation === "german" ? german : notation === "byzantine" ? byzantine : notation === "japanese" ? japanese : english;
+        const note4 = pc[n2 % 12];
+        const oct2 = Math.floor(n2 / 12) - 1;
+        return note4 + oct2;
+      };
+      ClockCollator = class {
+        constructor({
+          getTargetClockTime = getUnixTimeSeconds,
+          weight = 16,
+          offsetDelta = 5e-3,
+          checkAfterTime = 2,
+          resetAfterTime = 8
+        }) {
+          this.offsetTime;
+          this.timeAtPrevOffsetSample;
+          this.prevOffsetTimes = [];
+          this.getTargetClockTime = getTargetClockTime;
+          this.weight = weight;
+          this.offsetDelta = offsetDelta;
+          this.checkAfterTime = checkAfterTime;
+          this.resetAfterTime = resetAfterTime;
+          this.reset = () => {
+            this.prevOffsetTimes = [];
+            this.offsetTime = null;
+            this.timeAtPrevOffsetSample = null;
+          };
+        }
+        calculateOffset(currentTime) {
+          const targetClockTime = this.getTargetClockTime();
+          const diffBetweenTimeSamples = targetClockTime - this.timeAtPrevOffsetSample;
+          const newOffsetTime = targetClockTime - currentTime;
+          if (diffBetweenTimeSamples > this.resetAfterTime) {
+            this.reset();
+          }
+          if (this.offsetTime == null) {
+            this.offsetTime = newOffsetTime;
+          }
+          this.prevOffsetTimes.push(newOffsetTime);
+          if (this.prevOffsetTimes.length > this.weight) {
+            this.prevOffsetTimes.shift();
+          }
+          if (this.timeAtPrevOffsetSample == null || diffBetweenTimeSamples > this.checkAfterTime) {
+            this.timeAtPrevOffsetSample = targetClockTime;
+            const rollingOffsetTime = averageArray(this.prevOffsetTimes);
+            if (Math.abs(rollingOffsetTime - this.offsetTime) > this.offsetDelta) {
+              this.offsetTime = rollingOffsetTime;
+            }
+          }
+          return this.offsetTime;
+        }
+        calculateTimestamp(currentTime, targetTime) {
+          return this.calculateOffset(currentTime) + targetTime;
+        }
+      };
+      keyAlias = /* @__PURE__ */ new Map([
+        ["control", "Control"],
+        ["ctrl", "Control"],
+        ["alt", "Alt"],
+        ["shift", "Shift"],
+        ["down", "ArrowDown"],
+        ["up", "ArrowUp"],
+        ["left", "ArrowLeft"],
+        ["right", "ArrowRight"]
+      ]);
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/fraction.mjs
+  var fraction, gcd2, lcm, isFraction, fraction_default;
+  var init_fraction2 = __esm({
+    "build/engine-src/strudel/packages/core/fraction.mjs"() {
+      init_fraction();
+      init_timespan();
+      init_util();
+      Fraction.prototype.sam = function() {
+        return this.floor();
+      };
+      Fraction.prototype.nextSam = function() {
+        return this.sam().add(1);
+      };
+      Fraction.prototype.wholeCycle = function() {
+        return new TimeSpan(this.sam(), this.nextSam());
+      };
+      Fraction.prototype.cyclePos = function() {
+        return this.sub(this.sam());
+      };
+      Fraction.prototype.lt = function(other) {
+        return this.compare(other) < 0;
+      };
+      Fraction.prototype.gt = function(other) {
+        return this.compare(other) > 0;
+      };
+      Fraction.prototype.lte = function(other) {
+        return this.compare(other) <= 0;
+      };
+      Fraction.prototype.gte = function(other) {
+        return this.compare(other) >= 0;
+      };
+      Fraction.prototype.eq = function(other) {
+        return this.compare(other) == 0;
+      };
+      Fraction.prototype.ne = function(other) {
+        return this.compare(other) != 0;
+      };
+      Fraction.prototype.max = function(other) {
+        return this.gt(other) ? this : other;
+      };
+      Fraction.prototype.maximum = function(...others) {
+        others = others.map((x3) => new Fraction(x3));
+        return others.reduce((max, other) => other.max(max), this);
+      };
+      Fraction.prototype.min = function(other) {
+        return this.lt(other) ? this : other;
+      };
+      Fraction.prototype.mulmaybe = function(other) {
+        return other !== void 0 ? this.mul(other) : void 0;
+      };
+      Fraction.prototype.divmaybe = function(other) {
+        return other !== void 0 ? this.div(other) : void 0;
+      };
+      Fraction.prototype.addmaybe = function(other) {
+        return other !== void 0 ? this.add(other) : void 0;
+      };
+      Fraction.prototype.submaybe = function(other) {
+        return other !== void 0 ? this.sub(other) : void 0;
+      };
+      Fraction.prototype.show = function() {
+        return this.s * this.n + "/" + this.d;
+      };
+      Fraction.prototype.or = function(other) {
+        return this.eq(0) ? other : this;
+      };
+      fraction = (n2) => {
+        if (typeof n2 === "number") {
+        }
+        return Fraction(n2);
+      };
+      gcd2 = (...fractions) => {
+        fractions = removeUndefineds(fractions);
+        if (fractions.length === 0) {
+          return void 0;
+        }
+        return fractions.reduce((gcd3, fraction3) => gcd3.gcd(fraction3), fraction(1));
+      };
+      lcm = (...fractions) => {
+        fractions = removeUndefineds(fractions);
+        if (fractions.length === 0) {
+          return void 0;
+        }
+        const x3 = fractions.pop();
+        return fractions.reduce(
+          (lcm2, fraction3) => lcm2 === void 0 || fraction3 === void 0 ? void 0 : lcm2.lcm(fraction3),
+          x3
+        );
+      };
+      isFraction = (x3) => x3 instanceof Fraction;
+      fraction._original = Fraction;
+      fraction_default = fraction;
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/timespan.mjs
+  var TimeSpan, timespan_default;
+  var init_timespan = __esm({
+    "build/engine-src/strudel/packages/core/timespan.mjs"() {
+      init_fraction2();
+      TimeSpan = class _TimeSpan {
+        constructor(begin2, end2) {
+          this.begin = fraction_default(begin2);
+          this.end = fraction_default(end2);
+        }
+        get spanCycles() {
+          const spans = [];
+          var begin2 = this.begin;
+          const end2 = this.end;
+          const end_sam = end2.sam();
+          if (begin2.equals(end2)) {
+            return [new _TimeSpan(begin2, end2)];
+          }
+          while (end2.gt(begin2)) {
+            if (begin2.sam().equals(end_sam)) {
+              spans.push(new _TimeSpan(begin2, this.end));
+              break;
+            }
+            const next_begin = begin2.nextSam();
+            spans.push(new _TimeSpan(begin2, next_begin));
+            begin2 = next_begin;
+          }
+          return spans;
+        }
+        get duration() {
+          return this.end.sub(this.begin);
+        }
+        cycleArc() {
+          const b = this.begin.cyclePos();
+          const e = b.add(this.duration);
+          return new _TimeSpan(b, e);
+        }
+        withTime(func_time) {
+          return new _TimeSpan(func_time(this.begin), func_time(this.end));
+        }
+        withEnd(func_time) {
+          return new _TimeSpan(this.begin, func_time(this.end));
+        }
+        withCycle(func_time) {
+          const sam = this.begin.sam();
+          const b = sam.add(func_time(this.begin.sub(sam)));
+          const e = sam.add(func_time(this.end.sub(sam)));
+          return new _TimeSpan(b, e);
+        }
+        intersection(other) {
+          const intersect_begin = this.begin.max(other.begin);
+          const intersect_end = this.end.min(other.end);
+          if (intersect_begin.gt(intersect_end)) {
+            return void 0;
+          }
+          if (intersect_begin.equals(intersect_end)) {
+            if (intersect_begin.equals(this.end) && this.begin.lt(this.end)) {
+              return void 0;
+            }
+            if (intersect_begin.equals(other.end) && other.begin.lt(other.end)) {
+              return void 0;
+            }
+          }
+          return new _TimeSpan(intersect_begin, intersect_end);
+        }
+        intersection_e(other) {
+          const result = this.intersection(other);
+          if (result == void 0) {
+            throw "TimeSpans do not intersect";
+          }
+          return result;
+        }
+        midpoint() {
+          return this.begin.add(this.duration.div(fraction_default(2)));
+        }
+        equals(other) {
+          return this.begin.equals(other.begin) && this.end.equals(other.end);
+        }
+        show() {
+          return this.begin.show() + " \u2192 " + this.end.show();
+        }
+      };
+      timespan_default = TimeSpan;
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/hap.mjs
+  var Hap, hap_default;
+  var init_hap = __esm({
+    "build/engine-src/strudel/packages/core/hap.mjs"() {
+      init_fraction2();
+      init_util();
+      Hap = class _Hap {
+        /*
+              Event class, representing a value active during the timespan
+              'part'. This might be a fragment of an event, in which case the
+              timespan will be smaller than the 'whole' timespan, otherwise the
+              two timespans will be the same. The 'part' must never extend outside of the
+              'whole'. If the event represents a continuously changing value
+              then the whole will be returned as None, in which case the given
+              value will have been sampled from the point halfway between the
+              start and end of the 'part' timespan.
+              The context is to store a list of source code locations causing the event.
+        
+              The word 'Event' is more or less a reserved word in javascript, hence this
+              class is named called 'Hap'.
+              */
+        constructor(whole, part, value2, context = {}, stateful = false) {
+          this.whole = whole;
+          this.part = part;
+          this.value = value2;
+          this.context = context;
+          this.stateful = stateful;
+          if (stateful) {
+            console.assert(typeof this.value === "function", "Stateful values must be functions");
+          }
+        }
+        get duration() {
+          let duration2;
+          if (typeof this.value?.duration === "number") {
+            duration2 = fraction_default(this.value.duration);
+          } else {
+            duration2 = this.whole.end.sub(this.whole.begin);
+          }
+          if (typeof this.value?.clip === "number") {
+            return duration2.mul(this.value.clip);
+          }
+          return duration2;
+        }
+        get endClipped() {
+          return this.whole.begin.add(this.duration);
+        }
+        isActive(currentTime) {
+          return this.whole.begin <= currentTime && this.endClipped >= currentTime;
+        }
+        isInPast(currentTime) {
+          return currentTime > this.endClipped;
+        }
+        isInNearPast(margin, currentTime) {
+          return currentTime - margin <= this.endClipped;
+        }
+        isInFuture(currentTime) {
+          return currentTime < this.whole.begin;
+        }
+        isInNearFuture(margin, currentTime) {
+          return currentTime < this.whole.begin && currentTime > this.whole.begin - margin;
+        }
+        isWithinTime(min, max) {
+          return this.whole.begin <= max && this.endClipped >= min;
+        }
+        wholeOrPart() {
+          return this.whole ? this.whole : this.part;
+        }
+        withSpan(func2) {
+          const whole = this.whole ? func2(this.whole) : void 0;
+          return new _Hap(whole, func2(this.part), this.value, this.context);
+        }
+        withValue(func2) {
+          return new _Hap(this.whole, this.part, func2(this.value), this.context);
+        }
+        hasOnset() {
+          return this.whole != void 0 && this.whole.begin.equals(this.part.begin);
+        }
+        hasTag(tag) {
+          return this.context.tags?.includes(tag);
+        }
+        resolveState(state) {
+          if (this.stateful && this.hasOnset()) {
+            console.log("stateful");
+            const func2 = this.value;
+            const [newState, newValue] = func2(state);
+            return [newState, new _Hap(this.whole, this.part, newValue, this.context, false)];
+          }
+          return [state, this];
+        }
+        spanEquals(other) {
+          return this.whole == void 0 && other.whole == void 0 || this.whole.equals(other.whole);
+        }
+        equals(other) {
+          return this.spanEquals(other) && this.part.equals(other.part) && // TODO would == be better ??
+          this.value === other.value;
+        }
+        show(compact3 = false) {
+          const value2 = typeof this.value === "object" ? compact3 ? JSON.stringify(this.value).slice(1, -1).replaceAll('"', "").replaceAll(",", " ") : JSON.stringify(this.value) : this.value;
+          var spans = "";
+          if (this.whole == void 0) {
+            spans = "~" + this.part.show;
+          } else {
+            var is_whole = this.whole.begin.equals(this.part.begin) && this.whole.end.equals(this.part.end);
+            if (!this.whole.begin.equals(this.part.begin)) {
+              spans = this.whole.begin.show() + " \u21DC ";
+            }
+            if (!is_whole) {
+              spans += "(";
+            }
+            spans += this.part.show();
+            if (!is_whole) {
+              spans += ")";
+            }
+            if (!this.whole.end.equals(this.part.end)) {
+              spans += " \u21DD " + this.whole.end.show();
+            }
+          }
+          return "[ " + spans + " | " + value2 + " ]";
+        }
+        showWhole(compact3 = false) {
+          return `${this.whole == void 0 ? "~" : this.whole.show()}: ${stringifyValues(this.value, compact3)}`;
+        }
+        combineContext(b) {
+          const a = this;
+          return { ...a.context, ...b.context, locations: (a.context.locations || []).concat(b.context.locations || []) };
+        }
+        setContext(context) {
+          return new _Hap(this.whole, this.part, this.value, context);
+        }
+        ensureObjectValue() {
+          if (typeof this.value !== "object") {
+            throw new Error(
+              `expected hap.value to be an object, but got "${this.value}". Hint: append .note() or .s() to the end`,
+              "error"
+            );
+          }
+        }
+      };
+      hap_default = Hap;
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/state.mjs
+  var State, state_default;
+  var init_state = __esm({
+    "build/engine-src/strudel/packages/core/state.mjs"() {
+      State = class _State {
+        constructor(span, controls = {}) {
+          this.span = span;
+          this.controls = controls;
+        }
+        // Returns new State with different span
+        setSpan(span) {
+          return new _State(span, this.controls);
+        }
+        withSpan(func2) {
+          return this.setSpan(func2(this.span));
+        }
+        // Returns new State with added controls.
+        setControls(controls) {
+          return new _State(this.span, { ...this.controls, ...controls });
+        }
+      };
+      state_default = State;
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/value.mjs
+  function unionWithObj(a, b, func2) {
+    if (b?.value !== void 0 && Object.keys(b).length === 1) {
+      logger(`[warn]: Can't do arithmetic on control pattern.`);
+      return a;
+    }
+    const common = Object.keys(a).filter((k) => Object.keys(b).includes(k));
+    return Object.assign({}, a, b, Object.fromEntries(common.map((k) => [k, func2(a[k], b[k])])));
+  }
+  var mul, map;
+  var init_value = __esm({
+    "build/engine-src/strudel/packages/core/value.mjs"() {
+      init_util();
+      init_logger();
+      mul = curry((a, b) => a * b);
+      map = curry((f, anyFunctor) => anyFunctor.map(f));
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/drawLine.mjs
+  function drawLine(pat, chars = 60) {
+    let cycle = 0;
+    let pos = fraction_default(0);
+    let lines = [""];
+    let emptyLine = "";
+    while (lines[0].length < chars) {
+      const haps = pat.queryArc(cycle, cycle + 1);
+      const durations = haps.filter((hap) => hap.hasOnset()).map((hap) => hap.duration);
+      const charFraction = gcd2(...durations);
+      const totalSlots = charFraction.inverse();
+      lines = lines.map((line) => line + "|");
+      emptyLine += "|";
+      for (let i3 = 0; i3 < totalSlots; i3++) {
+        const [begin2, end2] = [pos, pos.add(charFraction)];
+        const matches = haps.filter((hap) => hap.whole.begin.lte(begin2) && hap.whole.end.gte(end2));
+        const missingLines = matches.length - lines.length;
+        if (missingLines > 0) {
+          lines = lines.concat(Array(missingLines).fill(emptyLine));
+        }
+        lines = lines.map((line, i4) => {
+          const hap = matches[i4];
+          if (hap) {
+            const isOnset = hap.whole.begin.eq(begin2);
+            const char = isOnset ? "" + hap.value : "-";
+            return line + char;
+          }
+          return line + ".";
+        });
+        emptyLine += ".";
+        pos = pos.add(charFraction);
+      }
+      cycle++;
+    }
+    return lines.join("\n");
+  }
+  var drawLine_default;
+  var init_drawLine = __esm({
+    "build/engine-src/strudel/packages/core/drawLine.mjs"() {
+      init_fraction2();
+      drawLine_default = drawLine;
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/evaluate.mjs
+  function safeEval(str, options = {}) {
+    const { wrapExpression = true, wrapAsync = true } = options;
+    if (wrapExpression) {
+      str = `{${str}}`;
+    }
+    if (wrapAsync) {
+      str = `(async ()=>${str})()`;
+    }
+    const body = `"use strict";return (${str})`;
+    return Function(body)();
+  }
+  var strudelScope, evalScope, evaluate;
+  var init_evaluate = __esm({
+    "build/engine-src/strudel/packages/core/evaluate.mjs"() {
+      strudelScope = {};
+      evalScope = async (...args) => {
+        const results = await Promise.allSettled(args);
+        const modules = results.filter((result) => result.status === "fulfilled").map((r2) => r2.value);
+        results.forEach((result, i3) => {
+          if (result.status === "rejected") {
+            console.warn(`evalScope: module with index ${i3} could not be loaded:`, result.reason);
+          }
+        });
+        modules.forEach((module) => {
+          Object.entries(module).forEach(([name3, value2]) => {
+            globalThis[name3] = value2;
+            strudelScope[name3] = value2;
+          });
+        });
+        return modules;
+      };
+      evaluate = async (code, transpiler2, transpilerOptions) => {
+        let meta = {};
+        if (transpiler2) {
+          const transpiled = transpiler2(code, transpilerOptions);
+          code = transpiled.output;
+          meta = transpiled;
+        }
+        const options = { wrapExpression: !!transpiler2 };
+        let evaluated = await safeEval(code, options);
+        return { mode: "javascript", pattern: evaluated, meta };
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/schedulerState.mjs
+  function getTime() {
+    if (!time) {
+      throw new Error("no time set! use setTime to define a time source");
+    }
+    return time();
+  }
+  function setTime(func2) {
+    time = func2;
+  }
+  function getClockTime() {
+    if (!clockTime) {
+      throw new Error("no clockTime set! use setClockTime to define a time source");
+    }
+    return clockTime();
+  }
+  function setClockTime(func2) {
+    clockTime = func2;
+  }
+  function setCpsFunc(func2) {
+    cpsFunc = func2;
+  }
+  function getCps() {
+    return cpsFunc?.();
+  }
+  function setPattern(pat) {
+    pattern = pat;
+  }
+  function getPattern() {
+    return pattern;
+  }
+  function setScheduleFunc(func2) {
+    scheduleFunc = func2;
+  }
+  function getScheduleFunc() {
+    return scheduleFunc;
+  }
+  function setIsStarted(val2) {
+    isStarted = !!val2;
+  }
+  function getIsStarted() {
+    return isStarted;
+  }
+  var time, cpsFunc, pattern, scheduleFunc, isStarted, clockTime;
+  var init_schedulerState = __esm({
+    "build/engine-src/strudel/packages/core/schedulerState.mjs"() {
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/pattern.mjs
+  function groupHapsBy(eq2, haps) {
+    let groups = [];
+    haps.forEach((hap) => {
+      const match = groups.findIndex(([other]) => eq2(hap, other));
+      if (match === -1) {
+        groups.push([hap]);
+      } else {
+        groups[match].push(hap);
+      }
+    });
+    return groups;
+  }
+  function _nonArrayObject(x3) {
+    return !Array.isArray(x3) && typeof x3 === "object" && !isFraction(x3);
+  }
+  function _composeOp(a, b, func2) {
+    if (_nonArrayObject(a) || _nonArrayObject(b)) {
+      if (!_nonArrayObject(a)) {
+        a = { value: a };
+      }
+      if (!_nonArrayObject(b)) {
+        b = { value: b };
+      }
+      return unionWithObj(a, b, func2);
+    }
+    return func2(a, b);
+  }
+  function pure(value2) {
+    function query(state) {
+      return state.span.spanCycles.map((subspan) => new hap_default(fraction_default(subspan.begin).wholeCycle(), subspan, value2));
+    }
+    const result = new Pattern(query, 1);
+    result.__pure = value2;
+    return result;
+  }
+  function isPattern(thing) {
+    const is = thing instanceof Pattern || thing?._Pattern;
+    return is;
+  }
+  function reify(thing) {
+    if (isPattern(thing)) {
+      return thing;
+    }
+    if (stringParser && typeof thing === "string") {
+      return stringParser(thing);
+    }
+    return pure(thing);
+  }
+  function sequenceP(pats) {
+    let result = pure([]);
+    for (const pat of pats) {
+      result = result.bind((list2) => pat.fmap((v2) => list2.concat([v2])));
+    }
+    return result;
+  }
+  function stack(...pats) {
+    pats = pats.map((pat) => Array.isArray(pat) ? sequence(...pat) : reify(pat));
+    const query = (state) => flatten(
+      pats.map((pat) => {
+        try {
+          return pat.query(state);
+        } catch (e) {
+          errorLogger(e);
+          return [];
+        }
+      })
+    );
+    const result = new Pattern(query);
+    if (__steps) {
+      result._steps = lcm(...pats.map((pat) => pat._steps));
+    }
+    return result;
+  }
+  function _stackWith(func2, pats) {
+    pats = pats.map((pat) => Array.isArray(pat) ? sequence(...pat) : reify(pat));
+    if (pats.length === 0) {
+      return silence;
+    }
+    if (pats.length === 1) {
+      return pats[0];
+    }
+    const [left2, ...right2] = pats.map((pat) => pat._steps);
+    const steps4 = __steps ? left2.maximum(...right2) : void 0;
+    return stack(...func2(steps4, pats));
+  }
+  function stackLeft(...pats) {
+    return _stackWith(
+      (steps4, pats2) => pats2.map((pat) => pat._steps.eq(steps4) ? pat : stepcat(pat, gap(steps4.sub(pat._steps)))),
+      pats
+    );
+  }
+  function stackRight(...pats) {
+    return _stackWith(
+      (steps4, pats2) => pats2.map((pat) => pat._steps.eq(steps4) ? pat : stepcat(gap(steps4.sub(pat._steps)), pat)),
+      pats
+    );
+  }
+  function stackCenter(...pats) {
+    return _stackWith(
+      (steps4, pats2) => pats2.map((pat) => {
+        if (pat._steps.eq(steps4)) {
+          return pat;
+        }
+        const g = gap(steps4.sub(pat._steps).div(2));
+        return stepcat(g, pat, g);
+      }),
+      pats
+    );
+  }
+  function stackCentre(...pats) {
+    return stackCenter(...pats);
+  }
+  function stackRepeat(...pats) {
+    return stackBy(reify("repeat"), ...pats);
+  }
+  function stackBy(by, ...pats) {
+    const [left2, ...right2] = pats.map((pat) => pat._steps);
+    const steps4 = left2.maximum(...right2);
+    const lookup = {
+      centre: stackCentre,
+      left: stackLeft,
+      right: stackRight,
+      expand: stack,
+      repeat: (...args) => polymeter(...args).steps(steps4)
+    };
+    return by.inhabit(lookup).fmap((func2) => func2(...pats)).innerJoin().setSteps(steps4);
+  }
+  function slowcat(...pats) {
+    pats = pats.map((pat) => Array.isArray(pat) ? fastcat(...pat) : reify(pat));
+    if (!pats.length) {
+      return silence;
+    } else if (pats.length == 1) {
+      return pats[0];
+    }
+    const query = function(state) {
+      const span = state.span;
+      const pat_n = _mod(span.begin.sam(), pats.length);
+      const pat = pats[pat_n];
+      const offset3 = span.begin.floor().sub(span.begin.div(pats.length).floor());
+      return pat.withHapTime((t) => t.add(offset3)).query(state.setSpan(span.withTime((t) => t.sub(offset3))));
+    };
+    const steps4 = __steps ? lcm(...pats.map((x3) => x3._steps)) : void 0;
+    return new Pattern(query).splitQueries().setSteps(steps4);
+  }
+  function slowcatPrime(...pats) {
+    if (!pats.length) {
+      return silence;
+    }
+    pats = pats.map(reify);
+    const query = function(state) {
+      const pat_n = _mod(Math.floor(state.span.begin), pats.length);
+      const pat = pats[pat_n];
+      return pat.query(state);
+    };
+    return new Pattern(query).splitQueries();
+  }
+  function cat(...pats) {
+    return slowcat(...pats);
+  }
+  function arrange(...sections) {
+    const total = sections.reduce((sum, [cycles]) => sum + cycles, 0);
+    sections = sections.map(([cycles, section]) => [cycles, section.fast(cycles)]);
+    return stepcat(...sections).slow(total);
+  }
+  function seqPLoop(...parts) {
+    let total = fraction_default(0);
+    const pats = [];
+    for (let part of parts) {
+      if (part.length == 2) {
+        part.unshift(total);
+      }
+      total = part[1];
+    }
+    return stack(
+      ...parts.map(
+        ([start, stop2, pat]) => pure(reify(pat)).compress(fraction_default(start).div(total), fraction_default(stop2).div(total))
+      )
+    ).slow(total).innerJoin();
+  }
+  function fastcat(...pats) {
+    let result = slowcat(...pats);
+    if (pats.length > 1) {
+      result = result._fast(pats.length);
+      result._steps = pats.length;
+    }
+    if (pats.length == 1 && pats[0].__steps_source) {
+      pats._steps = pats[0]._steps;
+    }
+    return result;
+  }
+  function sequence(...pats) {
+    return fastcat(...pats);
+  }
+  function seq(...pats) {
+    return fastcat(...pats);
+  }
+  function _sequenceCount(x3) {
+    if (Array.isArray(x3)) {
+      if (x3.length == 0) {
+        return [silence, 0];
+      }
+      if (x3.length == 1) {
+        return _sequenceCount(x3[0]);
+      }
+      return [fastcat(...x3.map((a) => _sequenceCount(a)[0])), x3.length];
+    }
+    return [reify(x3), 1];
+  }
+  function register(name3, func2, patternify = true, preserveSteps = false, join = (x3) => x3.innerJoin()) {
+    if (isPattern(name3)) {
+      throw new Error(
+        `Name argument for register is a pattern, try using single quotes ('name') instead of double quotes ("name")`
+      );
+    }
+    if (Array.isArray(name3)) {
+      const result = {};
+      for (const name_item of name3) {
+        result[name_item] = register(name_item, func2, patternify, preserveSteps, join);
+      }
+      return result;
+    }
+    const arity = func2.length;
+    var pfunc;
+    if (patternify) {
+      pfunc = function(...args) {
+        args = args.map(reify);
+        const pat = args[args.length - 1];
+        let result;
+        if (arity === 1) {
+          result = func2(pat);
+        } else {
+          const firstArgs = args.slice(0, -1);
+          if (firstArgs.every((arg) => arg.__pure != void 0)) {
+            const pureArgs = firstArgs.map((arg) => arg.__pure);
+            const pureLocs = firstArgs.filter((arg) => arg.__pure_loc).map((arg) => arg.__pure_loc);
+            result = func2(...pureArgs, pat);
+            result = result.withContext((context) => {
+              const locations = (context.locations || []).concat(pureLocs);
+              return { ...context, locations };
+            });
+          } else {
+            const [left2, ...right2] = firstArgs;
+            let mapFn = (...args2) => {
+              return func2(...args2, pat);
+            };
+            mapFn = curry(mapFn, null, arity - 1);
+            result = join(right2.reduce((acc, p) => acc.appLeft(p), left2.fmap(mapFn)));
+          }
+        }
+        if (preserveSteps) {
+          result._steps = pat._steps;
+        }
+        return result;
+      };
+    } else {
+      pfunc = function(...args) {
+        args = args.map(reify);
+        const result = func2(...args);
+        if (preserveSteps) {
+          result._steps = args[args.length - 1]._steps;
+        }
+        return result;
+      };
+    }
+    Pattern.prototype[name3] = function(...args) {
+      if (arity === 2 && args.length !== 1) {
+        args = [sequence(...args)];
+      } else if (arity !== args.length + 1) {
+        throw new Error(`.${name3}() expects ${arity - 1} inputs but got ${args.length}.`);
+      }
+      args = args.map(reify);
+      return pfunc(...args, this);
+    };
+    if (arity > 1) {
+      Pattern.prototype["_" + name3] = function(...args) {
+        const result = func2(...args, this);
+        if (preserveSteps) {
+          result.setSteps(this._steps);
+        }
+        return result;
+      };
+    }
+    const curried = curry(pfunc, null, arity);
+    strudelScope[name3] = curried;
+    return curried;
+  }
+  function stepRegister(name3, func2, patternify = true, preserveSteps = false, join = (x3) => x3.stepJoin()) {
+    return register(name3, func2, patternify, preserveSteps, join);
+  }
+  function _retime(timedHaps) {
+    const occupied_perc = timedHaps.filter((t, pat) => pat.hasSteps).reduce((a, b) => a.add(b), fraction_default(0));
+    const occupied_steps = removeUndefineds(timedHaps.map((t, pat) => pat._steps)).reduce(
+      (a, b) => a.add(b),
+      fraction_default(0)
+    );
+    const total_steps = occupied_perc.eq(0) ? void 0 : occupied_steps.div(occupied_perc);
+    function adjust(dur2, pat) {
+      if (pat._steps === void 0) {
+        return [dur2.mulmaybe(total_steps), pat];
+      }
+      return [pat._steps, pat];
+    }
+    return timedHaps.map((x3) => adjust(...x3));
+  }
+  function _slices(haps) {
+    const breakpoints = flatten(haps.map((hap) => [hap.part.begin, hap.part.end]));
+    const unique = uniqsortr([fraction_default(0), fraction_default(1), ...breakpoints]);
+    const slicespans = pairs(unique);
+    return slicespans.map((s2) => [
+      s2[1].sub(s2[0]),
+      stack(..._fitslice(new timespan_default(...s2), haps).map((x3) => x3.value.withHap((h3) => h3.setContext(h3.combineContext(x3)))))
+    ]);
+  }
+  function _fitslice(span, haps) {
+    return removeUndefineds(haps.map((hap) => _match(span, hap)));
+  }
+  function _match(span, hap_p) {
+    const subspan = span.intersection(hap_p.part);
+    if (subspan == void 0) {
+      return void 0;
+    }
+    return new hap_default(hap_p.whole, subspan, hap_p.value, hap_p.context);
+  }
+  function _polymeterListSteps(steps4, ...args) {
+    const seqs = args.map((a) => _sequenceCount(a));
+    if (seqs.length == 0) {
+      return silence;
+    }
+    if (steps4 == 0) {
+      steps4 = seqs[0][1];
+    }
+    const pats = [];
+    for (const seq2 of seqs) {
+      if (seq2[1] == 0) {
+        continue;
+      }
+      if (steps4 == seq2[1]) {
+        pats.push(seq2[0]);
+      } else {
+        pats.push(seq2[0]._fast(fraction_default(steps4).div(fraction_default(seq2[1]))));
+      }
+    }
+    return stack(...pats);
+  }
+  function polymeter(...args) {
+    if (Array.isArray(args[0])) {
+      return _polymeterListSteps(0, ...args);
+    }
+    args = args.filter((arg) => arg.hasSteps);
+    if (args.length == 0) {
+      return silence;
+    }
+    const steps4 = lcm(...args.map((x3) => x3._steps));
+    if (steps4.eq(fraction_default(0))) {
+      return nothing;
+    }
+    const result = stack(...args.map((x3) => x3.pace(steps4)));
+    result._steps = steps4;
+    return result;
+  }
+  function stepcat(...timepats) {
+    if (timepats.length === 0) {
+      return nothing;
+    }
+    const findsteps = (x3) => Array.isArray(x3) ? x3 : [x3._steps ?? 1, x3];
+    timepats = timepats.map(findsteps);
+    if (timepats.find((x3) => x3[0] === void 0)) {
+      const times = timepats.map((a) => a[0]).filter((x3) => x3 !== void 0);
+      if (times.length === 0) {
+        return fastcat(...timepats.map((x3) => x3[1]));
+      }
+      if (times.length === timepats.length) {
+        return nothing;
+      }
+      const avg = times.reduce((a, b) => a.add(b), fraction_default(0)).div(times.length);
+      for (let timepat of timepats) {
+        if (timepat[0] === void 0) {
+          timepat[0] = avg;
+        }
+      }
+    }
+    if (timepats.length == 1) {
+      const result2 = reify(timepats[0][1]);
+      return result2.withSteps((_) => timepats[0][0]);
+    }
+    const total = timepats.map((a) => a[0]).reduce((a, b) => a.add(b), fraction_default(0));
+    let begin2 = fraction_default(0);
+    const pats = [];
+    for (const [time4, pat] of timepats) {
+      if (fraction_default(time4).eq(0)) {
+        continue;
+      }
+      const end2 = begin2.add(time4);
+      pats.push(reify(pat)._compress(begin2.div(total), end2.div(total)));
+      begin2 = end2;
+    }
+    const result = stack(...pats);
+    result._steps = total;
+    return result;
+  }
+  function stepalt(...groups) {
+    groups = groups.map((a) => Array.isArray(a) ? a.map(reify) : [reify(a)]);
+    const cycles = lcm(...groups.map((x3) => fraction_default(x3.length)));
+    let result = [];
+    for (let cycle = 0; cycle < cycles; ++cycle) {
+      result.push(...groups.map((x3) => x3.length == 0 ? silence : x3[cycle % x3.length]));
+    }
+    result = result.filter((x3) => x3.hasSteps && x3._steps > 0);
+    const steps4 = result.reduce((a, b) => a.add(b._steps), fraction_default(0));
+    result = stepcat(...result);
+    result._steps = steps4;
+    return result;
+  }
+  var stringParser, __steps, calculateSteps, setStringParser, Pattern, congruent, arpWith, arp, COMPOSERS, _setupAlignments, DEFAULT_ALIGNMENT, ALIGNMENTS, ALIGNMENT_KEYS, setDefaultJoin, polyrhythm, pr, pm, gap, silence, nothing, mask, struct, superimpose, withValue, bind, innerBind, outerBind, squeezeBind, stepBind, polyBind, set, keep, keepif, add, sub, mul2, div, mod, pow, band, bor, bxor, blshift, brshift, lt, gt, lte, gte, eq, eqt, ne, net, and, or, func, round, floor, log2, ceil, toBipolar, fromBipolar, range, rangex, range2, ratio, compress, compressSpan, compressspan, fastGap, fastgap, focus, focusSpan, focusspan, ply, fast, hurry, slow, sparsity, inside, outside, lastOf, firstOf, every, apply, cpm, early, late, zoom, zoomArc, zoomarc, bite, isobite, cyclestruct, cycleStruct, linger, segment, seg, swingBy, swing, invert, inv, when, off, brak, rev, revv, pressBy, press, palindrome, juxBy, juxby, juxFlipBy, juxflipby, fluxBy, fluxby, jux, juxFlip, flux, echoWith, echowith, stutWith, stutwith, echo, stut, applyN, plyWith, plyForEach, _iter, iter, iterBack, iterback, repeatCycles, _chunk, chunk, slowchunk, slowChunk, chunkBack, chunkback, fastchunk, fastChunk, chunkinto, chunkInto, chunkbackinto, chunkBackInto, bypass, ribbon, rib, hsla, hsl, filter, filterWhen, within, pace, take, drop, extend, replicate, expand, contract, shrinklist, growlist, shrink, grow, tour, zip, timecat, timeCat, s_cat, s_alt, s_polymeter, s_taper, s_taperlist, s_add, s_sub, s_expand, s_extend, s_contract, s_tour, s_zip, steps, chop, striate, _loopAt, loopAt, loopat, slice, splice, fit, loopAtCps, loopatcps, ref, fadeGain, xfade, __beat, beat, _morph, morph, _distortWithAlg, soft, hard, cubic, diode, asym, fold, sinefold, chebyshev, parray, _ensureListPattern, partials, phases, _asArrayPattern, worklet, base;
+  var init_pattern = __esm({
+    "build/engine-src/strudel/packages/core/pattern.mjs"() {
+      init_timespan();
+      init_fraction2();
+      init_hap();
+      init_state();
+      init_value();
+      init_util();
+      init_drawLine();
+      init_logger();
+      init_evaluate();
+      init_schedulerState();
+      __steps = true;
+      calculateSteps = function(x3) {
+        __steps = x3 ? true : false;
+      };
+      setStringParser = (parser) => stringParser = parser;
+      Pattern = class _Pattern {
+        /**
+         * Create a pattern. As an end user, you will most likely not create a Pattern directly.
+         *
+         * @param {function} query - The function that maps a `State` to an array of `Hap`.
+         * @noAutocomplete
+         */
+        constructor(query, steps4 = void 0) {
+          this.query = query;
+          this._Pattern = true;
+          this._steps = steps4;
+        }
+        get _steps() {
+          return this.__steps;
+        }
+        set _steps(steps4) {
+          this.__steps = steps4 === void 0 ? void 0 : fraction_default(steps4);
+        }
+        setSteps(steps4) {
+          this._steps = steps4;
+          return this;
+        }
+        withSteps(f) {
+          if (!__steps) {
+            return this;
+          }
+          return new _Pattern(this.query, this._steps === void 0 ? void 0 : f(this._steps));
+        }
+        get hasSteps() {
+          return this._steps !== void 0;
+        }
+        //////////////////////////////////////////////////////////////////////
+        // Haskell-style functor, applicative and monadic operations
+        /**
+         * Returns a new pattern, with the function applied to the value of
+         * each hap. It has the alias `fmap`.
+         * @tags functional
+         * @synonyms fmap
+         * @param {Function} func to to apply to the value
+         * @returns Pattern
+         * @example
+         * "0 1 2".withValue(v => v + 10).log()
+         */
+        withValue(func2) {
+          const result = new _Pattern((state) => this.query(state).map((hap) => hap.withValue(func2)));
+          result._steps = this._steps;
+          return result;
+        }
+        // runs func on query state
+        withState(func2) {
+          return new _Pattern((state) => this.query(func2(state)));
+        }
+        /**
+         * see `withValue`
+         * @noAutocomplete
+         */
+        fmap(func2) {
+          return this.withValue(func2);
+        }
+        /**
+         * Assumes 'this' is a pattern of functions, and given a function to
+         * resolve wholes, applies a given pattern of values to that
+         * pattern of functions.
+         * @tags functional
+         * @param {Function} whole_func
+         * @param {Function} func
+         * @noAutocomplete
+         * @returns Pattern
+         */
+        appWhole(whole_func, pat_val) {
+          const pat_func = this;
+          const query = function(state) {
+            const hap_funcs = pat_func.query(state);
+            const hap_vals = pat_val.query(state);
+            const apply2 = function(hap_func, hap_val) {
+              const s2 = hap_func.part.intersection(hap_val.part);
+              if (s2 == void 0) {
+                return void 0;
+              }
+              return new hap_default(
+                whole_func(hap_func.whole, hap_val.whole),
+                s2,
+                hap_func.value(hap_val.value),
+                hap_val.combineContext(hap_func)
+              );
+            };
+            return flatten(
+              hap_funcs.map((hap_func) => removeUndefineds(hap_vals.map((hap_val) => apply2(hap_func, hap_val))))
+            );
+          };
+          return new _Pattern(query);
+        }
+        /**
+         * When this method is called on a pattern of functions, it matches its haps
+         * with those in the given pattern of values.  A new pattern is returned, with
+         * each matching value applied to the corresponding function.
+         *
+         * In this `_appBoth` variant, where timespans of the function and value haps
+         * are not the same but do intersect, the resulting hap has a timespan of the
+         * intersection. This applies to both the part and the whole timespan.
+         * @tags functional
+         * @param {Pattern} pat_val
+         * @noAutocomplete
+         * @returns Pattern
+         */
+        appBoth(pat_val) {
+          const pat_func = this;
+          const whole_func = function(span_a, span_b) {
+            if (span_a == void 0 || span_b == void 0) {
+              return void 0;
+            }
+            return span_a.intersection_e(span_b);
+          };
+          const result = pat_func.appWhole(whole_func, pat_val);
+          if (__steps) {
+            result._steps = lcm(pat_val._steps, pat_func._steps);
+          }
+          return result;
+        }
+        /**
+         * As with `appBoth`, but the `whole` timespan is not the intersection,
+         * but the timespan from the function of patterns that this method is called
+         * on. In practice, this means that the pattern structure, including onsets,
+         * are preserved from the pattern of functions (often referred to as the left
+         * hand or inner pattern).
+         * @tags functional
+         * @param {Pattern} pat_val
+         * @noAutocomplete
+         * @returns Pattern
+         */
+        appLeft(pat_val) {
+          const pat_func = this;
+          const query = function(state) {
+            const haps = [];
+            for (const hap_func of pat_func.query(state)) {
+              const hap_vals = pat_val.query(state.setSpan(hap_func.wholeOrPart()));
+              for (const hap_val of hap_vals) {
+                const new_whole = hap_func.whole;
+                const new_part = hap_func.part.intersection(hap_val.part);
+                if (new_part) {
+                  const new_value = hap_func.value(hap_val.value);
+                  const new_context = hap_val.combineContext(hap_func);
+                  const hap = new hap_default(new_whole, new_part, new_value, new_context);
+                  haps.push(hap);
+                }
+              }
+            }
+            return haps;
+          };
+          const result = new _Pattern(query);
+          result._steps = this._steps;
+          return result;
+        }
+        /**
+         * As with `appLeft`, but `whole` timespans are instead taken from the
+         * pattern of values, i.e. structure is preserved from the right hand/outer
+         * pattern.
+         * @tags functional
+         * @param {Pattern} pat_val
+         * @noAutocomplete
+         * @returns Pattern
+         */
+        appRight(pat_val) {
+          const pat_func = this;
+          const query = function(state) {
+            const haps = [];
+            for (const hap_val of pat_val.query(state)) {
+              const hap_funcs = pat_func.query(state.setSpan(hap_val.wholeOrPart()));
+              for (const hap_func of hap_funcs) {
+                const new_whole = hap_val.whole;
+                const new_part = hap_func.part.intersection(hap_val.part);
+                if (new_part) {
+                  const new_value = hap_func.value(hap_val.value);
+                  const new_context = hap_val.combineContext(hap_func);
+                  const hap = new hap_default(new_whole, new_part, new_value, new_context);
+                  haps.push(hap);
+                }
+              }
+            }
+            return haps;
+          };
+          const result = new _Pattern(query);
+          result._steps = pat_val._steps;
+          return result;
+        }
+        bindWhole(choose_whole, func2) {
+          const pat_val = this;
+          const query = function(state) {
+            const withWhole = function(a, b) {
+              return new hap_default(
+                choose_whole(a.whole, b.whole),
+                b.part,
+                b.value,
+                Object.assign({}, a.context, b.context, {
+                  locations: (a.context.locations || []).concat(b.context.locations || [])
+                })
+              );
+            };
+            const match = function(a) {
+              return func2(a.value).query(state.setSpan(a.part)).map((b) => withWhole(a, b));
+            };
+            return flatten(pat_val.query(state).map((a) => match(a)));
+          };
+          return new _Pattern(query);
+        }
+        bind(func2) {
+          const whole_func = function(a, b) {
+            if (a == void 0 || b == void 0) {
+              return void 0;
+            }
+            return a.intersection_e(b);
+          };
+          return this.bindWhole(whole_func, func2);
+        }
+        join() {
+          return this.bind(id);
+        }
+        outerBind(func2) {
+          return this.bindWhole((a) => a, func2).setSteps(this._steps);
+        }
+        outerJoin() {
+          return this.outerBind(id);
+        }
+        innerBind(func2) {
+          return this.bindWhole((_, b) => b, func2);
+        }
+        innerJoin() {
+          return this.innerBind(id);
+        }
+        // Flatterns patterns of patterns, by retriggering/resetting inner patterns at onsets of outer pattern haps
+        resetJoin(restart = false) {
+          const pat_of_pats = this;
+          return new _Pattern((state) => {
+            return pat_of_pats.discreteOnly().query(state).map((outer_hap) => {
+              return outer_hap.value.late(restart ? outer_hap.whole.begin : outer_hap.whole.begin.cyclePos()).query(state).map(
+                (inner_hap) => new hap_default(
+                  // Supports continuous haps in the inner pattern
+                  inner_hap.whole ? inner_hap.whole.intersection(outer_hap.whole) : void 0,
+                  inner_hap.part.intersection(outer_hap.part),
+                  inner_hap.value
+                ).setContext(outer_hap.combineContext(inner_hap))
+              ).filter((hap) => hap.part);
+            }).flat();
+          });
+        }
+        restartJoin() {
+          return this.resetJoin(true);
+        }
+        // Like the other joins above, joins a pattern of patterns of values, into a flatter
+        // pattern of values. In this case it takes whole cycles of the inner pattern to fit each event
+        // in the outer pattern.
+        squeezeJoin() {
+          const pat_of_pats = this;
+          function query(state) {
+            const haps = pat_of_pats.discreteOnly().query(state);
+            function flatHap(outerHap) {
+              const inner_pat = outerHap.value._focusSpan(outerHap.wholeOrPart());
+              const innerHaps = inner_pat.query(state.setSpan(outerHap.part));
+              function munge(outer, inner) {
+                let whole = void 0;
+                if (inner.whole && outer.whole) {
+                  whole = inner.whole.intersection(outer.whole);
+                  if (!whole) {
+                    return void 0;
+                  }
+                }
+                const part = inner.part.intersection(outer.part);
+                if (!part) {
+                  return void 0;
+                }
+                const context = inner.combineContext(outer);
+                return new hap_default(whole, part, inner.value, context);
+              }
+              return innerHaps.map((innerHap) => munge(outerHap, innerHap));
+            }
+            const result = flatten(haps.map(flatHap));
+            return result.filter((x3) => x3);
+          }
+          return new _Pattern(query);
+        }
+        squeezeBind(func2) {
+          return this.fmap(func2).squeezeJoin();
+        }
+        polyJoin = function() {
+          const pp2 = this;
+          return pp2.fmap((p) => p.extend(pp2._steps.div(p._steps))).outerJoin();
+        };
+        polyBind(func2) {
+          return this.fmap(func2).polyJoin();
+        }
+        //////////////////////////////////////////////////////////////////////
+        // Utility methods mainly for internal use
+        /**
+         * Query haps inside the given time span.
+         *
+         * @tags internals
+         * @param {Fraction | number} begin from time
+         * @param {Fraction | number} end to time
+         * @returns Hap[]
+         * @example
+         * const pattern = sequence('a', ['b', 'c'])
+         * const haps = pattern.queryArc(0, 1)
+         * console.log(haps)
+         * silence
+         * @noAutocomplete
+         */
+        queryArc(begin2, end2, controls = {}) {
+          try {
+            return this.query(new state_default(new timespan_default(begin2, end2), controls));
+          } catch (err) {
+            errorLogger(err, "query");
+            return [];
+          }
+        }
+        /**
+         * Returns a new pattern, with queries split at cycle boundaries. This makes
+         * some calculations easier to express, as all haps are then constrained to
+         * happen within a cycle.
+         * @tags internals
+         * @returns Pattern
+         * @noAutocomplete
+         */
+        splitQueries() {
+          const pat = this;
+          const q2 = (state) => {
+            return flatten(state.span.spanCycles.map((subspan) => pat.query(state.setSpan(subspan))));
+          };
+          return new _Pattern(q2);
+        }
+        /**
+         * Returns a new pattern, where the given function is applied to the query
+         * timespan before passing it to the original pattern.
+         * @tags internals
+         * @param {Function} func the function to apply
+         * @returns Pattern
+         * @noAutocomplete
+         */
+        withQuerySpan(func2) {
+          return new _Pattern((state) => this.query(state.withSpan(func2)));
+        }
+        withQuerySpanMaybe(func2) {
+          const pat = this;
+          return new _Pattern((state) => {
+            const newState = state.withSpan(func2);
+            if (!newState.span) {
+              return [];
+            }
+            return pat.query(newState);
+          });
+        }
+        /**
+         * As with `withQuerySpan`, but the function is applied to both the
+         * begin and end time of the query timespan.
+         * @tags internals
+         * @param {Function} func the function to apply
+         * @returns Pattern
+         * @noAutocomplete
+         */
+        withQueryTime(func2) {
+          return new _Pattern((state) => this.query(state.withSpan((span) => span.withTime(func2))));
+        }
+        /**
+         * Similar to `withQuerySpan`, but the function is applied to the timespans
+         * of all haps returned by pattern queries (both `part` timespans, and where
+         * present, `whole` timespans).
+         * @tags internals
+         * @param {Function} func
+         * @returns Pattern
+         * @noAutocomplete
+         */
+        withHapSpan(func2) {
+          return new _Pattern((state) => this.query(state).map((hap) => hap.withSpan(func2)));
+        }
+        /**
+         * As with `withHapSpan`, but the function is applied to both the
+         * begin and end time of the hap timespans.
+         * @tags internals
+         * @param {Function} func the function to apply
+         * @returns Pattern
+         * @noAutocomplete
+         */
+        withHapTime(func2) {
+          return this.withHapSpan((span) => span.withTime(func2));
+        }
+        /**
+         * Returns a new pattern with the given function applied to the list of haps returned by every query.
+         *
+         * As an end user, you will most likely not need to use this; look at `withContext`, `withHapSpan`, etc. instead.
+         * @tags internals
+         * @param {Function} func
+         * @returns Pattern
+         * @noAutocomplete
+         * @example
+         * note("[a b, c d] a b c d").s("gm_piano").withHaps(x=>{
+         *   if (x.length > 1) {
+         *     x = x.map(hap => hap.withValue(val => {
+         *       return {
+         *         n: 1,
+         *         // select gm_piano:1 sample
+         *         ...val
+         *       }
+         *     }));
+         *   }
+         *   return x
+         * })
+         */
+        withHaps(func2) {
+          const result = new _Pattern((state) => func2(this.query(state), state));
+          result._steps = this._steps;
+          return result;
+        }
+        /**
+         * As with `withHaps`, but applies the function to every hap, rather than every list of haps.
+         *
+         * As an end user, you will most likely not need to use this; look at `withContext`, `withHapSpan`, etc. instead.
+         * @tags internals
+         * @param {Function} func
+         * @returns Pattern
+         * @noAutocomplete
+         * @example
+         * note("c a f e").withHap(x=>{
+         *   if (x.value.note == 'c') {
+         *     x.value.s = 'gm_piano'
+         *   }
+         *   else {
+         *     x.value.s = 'gm_piano'
+         *     x.value.n = 2
+         *   }
+         *   return x
+         * })
+         */
+        withHap(func2) {
+          return this.withHaps((haps) => haps.map(func2));
+        }
+        /**
+         * Returns a new pattern with the context field set to every hap set to the given value.
+         * @tags internals
+         * @param {*} context
+         * @returns Pattern
+         * @noAutocomplete
+         */
+        setContext(context) {
+          return this.withHap((hap) => hap.setContext(context));
+        }
+        /**
+         * Returns a new pattern with the given function applied to the context field of every hap.
+         * @tags internals
+         * @param {Function} func
+         * @returns Pattern
+         * @noAutocomplete
+         */
+        withContext(func2) {
+          const result = this.withHap((hap) => hap.setContext(func2(hap.context)));
+          if (this.__pure !== void 0) {
+            result.__pure = this.__pure;
+            result.__pure_loc = this.__pure_loc;
+          }
+          return result;
+        }
+        /**
+         * Returns a new pattern with the context field of every hap set to an empty object.
+         * @tags internals
+         * @returns Pattern
+         * @noAutocomplete
+         */
+        stripContext() {
+          return this.withHap((hap) => hap.setContext({}));
+        }
+        /**
+         * Returns a new pattern with the given location information added to the
+         * context of every hap.
+         * @tags internals
+         * @param {Number} start start offset
+         * @param {Number} end end offset
+         * @returns Pattern
+         * @noAutocomplete
+         */
+        withLoc(start, end2) {
+          const location = {
+            start,
+            end: end2
+          };
+          const result = this.withContext((context) => {
+            const locations = (context.locations || []).concat([location]);
+            return { ...context, locations };
+          });
+          if (this.__pure) {
+            result.__pure = this.__pure;
+            result.__pure_loc = location;
+          }
+          return result;
+        }
+        /**
+         * Returns a new Pattern, which only returns haps that meet the given test.
+         * @tags internals
+         * @param {Function} hap_test - a function which returns false for haps to be removed from the pattern
+         * @returns Pattern
+         * @example
+         * s("bd*8").velocity(rand).filterHaps((h) => (h.whole.begin % 1) < h.value.velocity)
+         */
+        filterHaps(hap_test) {
+          return new _Pattern((state) => this.query(state).filter(hap_test));
+        }
+        /**
+         * As with `filterHaps`, but the function is applied to values
+         * inside haps.
+         * @tags internals
+         * @param {Function} value_test
+         * @returns Pattern
+         * @example
+         * const drums = s("bd sd bd sd")
+         * kick: drums.filterValues((v) => v.s === 'bd').duck(2)
+         * snare: drums.filterValues((v) => v.s === 'sd')
+         * bass: s("saw!4").note("G#1").lpf(80).lpenv(4).orbit(2)
+         */
+        filterValues(value_test) {
+          return new _Pattern((state) => this.query(state).filter((hap) => value_test(hap.value))).setSteps(this._steps);
+        }
+        /**
+         * Returns a new pattern, with haps containing undefined values removed from
+         * query results.
+         * @tags internals
+         * @returns Pattern
+         * @noAutocomplete
+         */
+        removeUndefineds() {
+          return this.filterValues((val2) => val2 != void 0);
+        }
+        /**
+         * Returns a new pattern, with all haps without onsets filtered out. A hap
+         * with an onset is one with a `whole` timespan that begins at the same time
+         * as its `part` timespan.
+         * @tags internals
+         * @returns Pattern
+         * @noAutocomplete
+         */
+        onsetsOnly() {
+          return this.filterHaps((hap) => hap.hasOnset());
+        }
+        /**
+         * Returns a new pattern, with 'continuous' haps (those without 'whole'
+         * timespans) removed from query results.
+         * @tags internals
+         * @returns Pattern
+         * @noAutocomplete
+         */
+        discreteOnly() {
+          return this.filterHaps((hap) => hap.whole);
+        }
+        /**
+         * Combines adjacent haps with the same value and whole.  Only
+         * intended for use in tests.
+         * @tags internals
+         * @noAutocomplete
+         */
+        defragmentHaps() {
+          const pat = this.discreteOnly();
+          return pat.withHaps((haps) => {
+            const result = [];
+            for (var i3 = 0; i3 < haps.length; ++i3) {
+              var searching = true;
+              var a = haps[i3];
+              while (searching) {
+                const a_value = JSON.stringify(haps[i3].value);
+                var found = false;
+                for (var j = i3 + 1; j < haps.length; j++) {
+                  const b = haps[j];
+                  if (a.whole.equals(b.whole)) {
+                    if (a.part.begin.eq(b.part.end)) {
+                      if (a_value === JSON.stringify(b.value)) {
+                        a = new hap_default(a.whole, new timespan_default(b.part.begin, a.part.end), a.value);
+                        haps.splice(j, 1);
+                        found = true;
+                        break;
+                      }
+                    } else if (b.part.begin.eq(a.part.end)) {
+                      if (a_value == JSON.stringify(b.value)) {
+                        a = new hap_default(a.whole, new timespan_default(a.part.begin, b.part.end), a.value);
+                        haps.splice(j, 1);
+                        found = true;
+                        break;
+                      }
+                    }
+                  }
+                }
+                searching = found;
+              }
+              result.push(a);
+            }
+            return result;
+          });
+        }
+        /**
+         * Queries the pattern for the first cycle, returning Haps. Mainly of use when
+         * debugging a pattern.
+         * @tags internals
+         * @param {Boolean} with_context - set to true, otherwise the context field
+         * will be stripped from the resulting haps.
+         * @returns [Hap]
+         * @noAutocomplete
+         */
+        firstCycle(with_context = false) {
+          var self = this;
+          if (!with_context) {
+            self = self.stripContext();
+          }
+          return self.query(new state_default(new timespan_default(fraction_default(0), fraction_default(1))));
+        }
+        /**
+         * Accessor for a list of values returned by querying the first cycle.
+         * @tags internals
+         * @noAutocomplete
+         */
+        get firstCycleValues() {
+          return this.firstCycle().map((hap) => hap.value);
+        }
+        /**
+         * More human-readable version of the `firstCycleValues` accessor.
+         * @tags internals
+         * @noAutocomplete
+         */
+        get showFirstCycle() {
+          return this.firstCycle().map(
+            (hap) => `${hap.value}: ${hap.whole.begin.toFraction()} - ${hap.whole.end.toFraction()}`
+          );
+        }
+        /**
+         * Returns a new pattern, which returns haps sorted in temporal order. Mainly
+         * of use when comparing two patterns for equality, in tests.
+         * @tags internals
+         * @returns Pattern
+         * @noAutocomplete
+         */
+        sortHapsByPart() {
+          return this.withHaps(
+            (haps) => haps.sort(
+              (a, b) => a.part.begin.sub(b.part.begin).or(a.part.end.sub(b.part.end)).or(a.whole.begin.sub(b.whole.begin).or(a.whole.end.sub(b.whole.end)))
+            )
+          );
+        }
+        /**
+         * Returns a new pattern with all values parsed as numerals.
+         * @tags internals
+         */
+        asNumber() {
+          return this.fmap(parseNumeral);
+        }
+        //////////////////////////////////////////////////////////////////////
+        // Operators - see 'make composers' later..
+        _opIn(other, func2) {
+          return this.fmap(func2).appLeft(reify(other));
+        }
+        _opOut(other, func2) {
+          return this.fmap(func2).appRight(reify(other));
+        }
+        _opMix(other, func2) {
+          return this.fmap(func2).appBoth(reify(other));
+        }
+        _opSqueeze(other, func2) {
+          const otherPat = reify(other);
+          return this.fmap((a) => otherPat.fmap((b) => func2(a)(b))).squeezeJoin();
+        }
+        _opSqueezeOut(other, func2) {
+          const thisPat = this;
+          const otherPat = reify(other);
+          return otherPat.fmap((a) => thisPat.fmap((b) => func2(b)(a))).squeezeJoin();
+        }
+        _opReset(other, func2) {
+          const otherPat = reify(other);
+          return otherPat.fmap((b) => this.fmap((a) => func2(a)(b))).resetJoin();
+        }
+        _opRestart(other, func2) {
+          const otherPat = reify(other);
+          return otherPat.fmap((b) => this.fmap((a) => func2(a)(b))).restartJoin();
+        }
+        _opPoly(other, func2) {
+          const otherPat = reify(other);
+          return this.fmap((b) => otherPat.fmap((a) => func2(a)(b))).polyJoin();
+        }
+        //////////////////////////////////////////////////////////////////////
+        // End-user methods.
+        // Those beginning with an underscore (_) are 'patternified',
+        // i.e. versions are created without the underscore, that are
+        // magically transformed to accept patterns for all their arguments.
+        //////////////////////////////////////////////////////////////////////
+        // Methods without corresponding toplevel functions
+        /**
+         * Layers the result of the given function(s). Like `superimpose`, but without the original pattern:
+         * @name layer
+         * @tags combiners
+         * @memberof Pattern
+         * @returns Pattern
+         * @example
+         * "<0 2 4 6 ~ 4 ~ 2 0!3 ~!5>*8"
+         *   .layer(x=>x.add("0,2"))
+         *   .scale('C minor').note()
+         */
+        layer(...funcs) {
+          return stack(...funcs.map((func2) => func2(this)));
+        }
+        /**
+         * Superimposes the result of the given function(s) on top of the original pattern:
+         * @name superimpose
+         * @tags combiners
+         * @memberof Pattern
+         * @returns Pattern
+         * @example
+         * "<0 2 4 6 ~ 4 ~ 2 0!3 ~!5>*8"
+         *   .superimpose(x=>x.add(2))
+         *   .scale('C minor').note()
+         */
+        superimpose(...funcs) {
+          return this.stack(...funcs.map((func2) => func2(this)));
+        }
+        //////////////////////////////////////////////////////////////////////
+        // Multi-pattern functions
+        stack(...pats) {
+          return stack(this, ...pats);
+        }
+        stackLeft(...pats) {
+          return stackLeft(this, ...pats);
+        }
+        stackRight(...pats) {
+          return stackRight(this, ...pats);
+        }
+        stackCenter(...pats) {
+          return stackCenter(this, ...pats);
+        }
+        stackCentre(...pats) {
+          return stackCentre(this, ...pats);
+        }
+        stackRepeat(...pats) {
+          return stackRepeat(this, ...pats);
+        }
+        sequence(...pats) {
+          return sequence(this, ...pats);
+        }
+        seq(...pats) {
+          return sequence(this, ...pats);
+        }
+        cat(...pats) {
+          return cat(this, ...pats);
+        }
+        fastcat(...pats) {
+          return fastcat(this, ...pats);
+        }
+        slowcat(...pats) {
+          return slowcat(this, ...pats);
+        }
+        //////////////////////////////////////////////////////////////////////
+        // Context methods - ones that deal with metadata
+        /**
+         * Attaches a function that is called for each hap onset.
+         * @name onSchedule
+         * @memberof Pattern
+         * @example
+         * s("bd sd").onSchedule((hap, time, cps) => {
+         *   console.log('hap scheduled', time, cps);
+         * })
+         */
+        onSchedule(onSchedule2, dominant = true) {
+          return this.withHap(
+            (hap) => hap.setContext({
+              ...hap.context,
+              onSchedule: (scheduleHap, t, cps2) => {
+                hap.context.onSchedule?.(scheduleHap, t, cps2);
+                onSchedule2(scheduleHap, t, cps2);
+              },
+              // if dominantSchedule is set to true, the default output (webaudio) will be disabled
+              // when using multiple triggers, you cannot flip this flag to false again!
+              // example: x.csound('CooLSynth').log() as well as x.log().csound('CooLSynth') should work the same
+              dominantSchedule: hap.context.dominantSchedule || dominant
+            })
+          );
+        }
+        // legacy:
+        onTrigger(onTrigger, dominant = true) {
+          console.warn("onTrigger is deprecated.. use onSchedule(hap, time, cps) instead");
+          return this.onSchedule((hap, t, cps2) => {
+            const currentTime = getClockTime();
+            return onTrigger(hap, currentTime, cps2, t);
+          }, dominant);
+        }
+        /**
+         * Writes the content of the current event to the console (visible in the side menu).
+         * @tags visualization
+         * @name log
+         * @memberof Pattern
+         * @example
+         * s("bd sd").log()
+         */
+        log(func2 = (hap) => `[hap] ${hap.showWhole(true)}`, getData = (hap) => ({ hap })) {
+          return this.onSchedule((...args) => {
+            logger(func2(...args), void 0, getData(...args));
+          }, false);
+        }
+        /**
+         * A simplified version of `log` which writes all "values" (various configurable parameters)
+         * within the event to the console (visible in the side menu).
+         * @tags visualization
+         * @name logValues
+         * @memberof Pattern
+         * @example
+         * s("bd sd").gain("0.25 0.5 1").n("2 1 0").logValues()
+         */
+        logValues(func2 = (value2) => `[hap] ${stringifyValues(value2, true)}`) {
+          return this.log((hap) => func2(hap.value));
+        }
+        //////////////////////////////////////////////////////////////////////
+        // Visualisation
+        drawLine() {
+          console.log(drawLine_default(this));
+          return this;
+        }
+        //////////////////////////////////////////////////////////////////////
+        // methods relating to breaking patterns into subcycles
+        // Breaks a pattern into a pattern of patterns, according to the structure of the given binary pattern.
+        unjoin(pieces, func2 = id) {
+          return pieces.withHap(
+            (hap) => hap.withValue((v2) => v2 ? func2(this.ribbon(hap.whole.begin, hap.whole.duration)) : this)
+          );
+        }
+        /**
+         * Breaks a pattern into pieces according to the structure of a given pattern.
+         * True values in the given pattern cause the corresponding subcycle of the
+         * source pattern to be looped, and for an (optional) given function to be
+         * applied. False values result in the corresponding part of the source pattern
+         * to be played unchanged.
+         * @tags temporal
+         * @name into
+         * @memberof Pattern
+         * @example
+         * sound("bd sd ht lt").into("1 0", hurry(2))
+         */
+        into(pieces, func2) {
+          return this.unjoin(pieces, func2).innerJoin();
+        }
+      };
+      congruent = (a, b) => a.spanEquals(b);
+      Pattern.prototype.collect = function() {
+        return this.withHaps(
+          (haps) => groupHapsBy(congruent, haps).map((_haps) => new hap_default(_haps[0].whole, _haps[0].part, _haps, {}))
+        );
+      };
+      arpWith = register("arpWith", (func2, pat) => {
+        return pat.collect().fmap((v2) => reify(func2(v2))).innerJoin().withHap((h3) => new hap_default(h3.whole, h3.part, h3.value.value, h3.combineContext(h3.value)));
+      });
+      arp = register(
+        "arp",
+        (indices, pat) => pat.arpWith((haps) => reify(indices).fmap((i3) => haps[_mod(i3, haps.length)])),
+        false
+      );
+      COMPOSERS = {
+        /**
+         * When called on a pattern `a`, with a input pattern `b` (`a.set(b)`),
+         * combines `a` and `b` such that anything defined in `b`
+         * and anything defined in `a` that is *not* defined in `b`
+         * will be in the resulting pattern.
+         *
+         * The structure is maintained from `a`,
+         * because the default pattern alignment is `in`,
+         * see the section on `Pattern Alignment`
+         * in the technical manual in the docs
+         *
+         * This is the inverse of `keep`
+         *
+         * See examples below
+         * @name set
+         * @param {Pattern} pat
+         * @returns {Pattern}
+         * @memberof Pattern
+         * @tags internals, combiners
+         * @example
+         * // because input pattern has `s` set,
+         * // it overrides the "sine" declared earlier
+         * note("c a f e").s("sine").set(s("triangle"))
+         */
+        set: [(a, b) => b],
+        /**
+         * When called on a pattern `a`, with a input pattern `b` (`a.keep(b)`),
+         * combines `a` and `b` such that anything defined in `a`,
+         * and anything defined in `b` that is *not* defined in `a`
+         * will be in the resulting pattern
+         *
+         * The structure is maintained from `a`,
+         * because the default pattern alignment is `in`,
+         * see the section on `Pattern Alignment`
+         * in the technical manual in the docs
+         *
+         * This is the inverse of `set`
+         *
+         * See examples below
+         * @name keep
+         * @param {Pattern} pat
+         * @memberof Pattern
+         * @returns {Pattern}
+         * @tags internals, combiners
+         * @example
+         * // notes, already defined, will stay "c a f e",
+         * // while "s", not defined, will be set to "piano"
+         * note("c a f e").keep(note("e f a c").s("piano"))
+         */
+        keep: [(a) => a],
+        keepif: [(a, b) => b ? a : void 0],
+        // numerical functions
+        /**
+         *
+         * Assumes a pattern of numbers. Adds the given number to each item in the pattern.
+         * @name add
+         * @memberof Pattern
+         * @tags math
+         * @example
+         * // Here, the triad 0, 2, 4 is shifted by different amounts
+         * n("0 2 4".add("<0 3 4 0>")).scale("C:major")
+         * // Without add, the equivalent would be:
+         * // n("<[0 2 4] [3 5 7] [4 6 8] [0 2 4]>").scale("C:major")
+         * @example
+         * // You can also use add with notes:
+         * note("c3 e3 g3".add("<0 5 7 0>"))
+         * // Behind the scenes, the notes are converted to midi numbers:
+         * // note("48 52 55".add("<0 5 7 0>"))
+         */
+        add: [numeralArgs((a, b) => a + b)],
+        // support string concatenation
+        /**
+         *
+         * Like add, but the given numbers are subtracted.
+         * @name sub
+         * @memberof Pattern
+         * @tags math
+         * @example
+         * n("0 2 4".sub("<0 1 2 3>")).scale("C4:minor")
+         * // See add for more information.
+         */
+        sub: [numeralArgs((a, b) => a - b)],
+        /**
+         *
+         * Multiplies each number by the given factor.
+         * @name mul
+         * @memberof Pattern
+         * @tags math
+         * @example
+         * "<1 1.5 [1.66, <2 2.33>]>*4".mul(150).freq()
+         */
+        mul: [numeralArgs((a, b) => a * b)],
+        /**
+         *
+         * Divides each number by the given factor.
+         * @name div
+         * @memberof Pattern
+         * @tags math
+         */
+        div: [numeralArgs((a, b) => a / b)],
+        /**
+         *
+         * Divides each number by the given factor and returns the remainder
+         * @name mod
+         * @memberof Pattern
+         * @tags math
+         */
+        mod: [numeralArgs(_mod)],
+        /**
+         *
+         * Raises each number to the power of the given factor
+         * @name pow
+         * @memberof Pattern
+         * @tags math
+         */
+        pow: [numeralArgs(Math.pow)],
+        /**
+         *
+         * Performs a bitwise `and` on each number and the given factor
+         * @name band
+         * @memberof Pattern
+         * @tags math
+         */
+        band: [numeralArgs((a, b) => a & b)],
+        /**
+         *
+         * Performs a bitwise `or` on each number and the given factor
+         * @name bor
+         * @memberof Pattern
+         * @tags math
+         */
+        bor: [numeralArgs((a, b) => a | b)],
+        /**
+         *
+         * Performs a bitwise `xor` on each number and the given factor
+         * @name bxor
+         * @memberof Pattern
+         * @tags math
+         */
+        bxor: [numeralArgs((a, b) => a ^ b)],
+        /**
+         *
+         * Performs a bitwise `left shift` on each number by the given factor
+         * @name blshift
+         * @memberof Pattern
+         * @tags math
+         */
+        blshift: [numeralArgs((a, b) => a << b)],
+        /**
+         *
+         * Performs a bitwise `right shift` on each number by the given factor
+         * @name brshift
+         * @memberof Pattern
+         * @tags math
+         */
+        brshift: [numeralArgs((a, b) => a >> b)],
+        // TODO - force numerical comparison if both look like numbers?
+        /**
+         * performs a < b
+         * @name lt
+         * @memberof Pattern
+         * @tags math
+         * @param {any} a
+         * @param {any} b
+         * @returns Pattern with boolean value(s)
+         */
+        lt: [(a, b) => a < b],
+        /**
+         * performs a > b
+         * @name gt
+         * @memberof Pattern
+         * @tags math
+         * @param {any} a
+         * @param {any} b
+         * @returns Pattern with boolean value(s)
+         */
+        gt: [(a, b) => a > b],
+        /**
+         * performs a <= b
+         * @name lte
+         * @memberof Pattern
+         * @tags math
+         * @param {any} a
+         * @param {any} b
+         * @returns Pattern with boolean value(s)
+         */
+        lte: [(a, b) => a <= b],
+        /**
+         * performs a >= b
+         * @name gte
+         * @memberof Pattern
+         * @tags math
+         * @param {any} a
+         * @param {any} b
+         * @returns Pattern with boolean value(s)
+         */
+        gte: [(a, b) => a >= b],
+        /**
+         * performs a == b
+         * @name eq
+         * @memberof Pattern
+         * @tags math
+         * @param {any} a
+         * @param {any} b
+         * @returns Pattern with boolean value(s)
+         */
+        eq: [(a, b) => a == b],
+        /**
+         * performs a === b (strictly equal)
+         * @name eqt
+         * @memberof Pattern
+         * @tags math
+         * @param {any} a
+         * @param {any} b
+         * @returns Pattern with boolean value(s)
+         */
+        eqt: [(a, b) => a === b],
+        /**
+         * performs a != b
+         * @name ne
+         * @memberof Pattern
+         * @tags math
+         * @param {any} a
+         * @param {any} b
+         * @returns Pattern with boolean value(s)
+         */
+        ne: [(a, b) => a != b],
+        /**
+         * performs a !== b (strictly not equal)
+         * @name net
+         * @memberof Pattern
+         * @tags math
+         * @param {any} a
+         * @param {any} b
+         * @returns Pattern with boolean value(s)
+         */
+        net: [(a, b) => a !== b],
+        /**
+         * performs a && b
+         * @name and
+         * @memberof Pattern
+         * @tags math
+         * @param {any} a
+         * @param {any} b
+         * @returns Pattern with boolean value(s)
+         */
+        and: [(a, b) => a && b],
+        /**
+         * performs a || b
+         * @name or
+         * @memberof Pattern
+         * @tags math
+         * @param {any} a
+         * @param {any} b
+         * @returns Pattern with boolean value(s)
+         */
+        or: [(a, b) => a || b],
+        //  bitwise ops
+        func: [(a, b) => b(a)]
+      };
+      _setupAlignments = () => {
+        for (const [what, [op, preprocess]] of Object.entries(COMPOSERS)) {
+          Pattern.prototype["_" + what] = function(value2) {
+            return this.fmap((x3) => op(x3, value2));
+          };
+          Object.defineProperty(Pattern.prototype, what, {
+            // Set to configurable so we can update if the default alignment changes
+            configurable: true,
+            // a getter that returns a function, so 'pat' can be
+            // accessed by closures that are methods of that function..
+            get: function() {
+              const pat = this;
+              const wrapper = (...other) => pat[what][DEFAULT_ALIGNMENT](...other);
+              for (const how of ALIGNMENTS) {
+                wrapper[how.toLowerCase()] = function(...other) {
+                  var howpat = pat;
+                  other = sequence(other);
+                  if (preprocess) {
+                    howpat = preprocess(howpat);
+                    other = preprocess(other);
+                  }
+                  var result;
+                  if (what === "keepif") {
+                    result = howpat["_op" + how](other, (a) => (b) => op(a, b));
+                    result = result.removeUndefineds();
+                  } else {
+                    result = howpat["_op" + how](other, (a) => (b) => _composeOp(a, b, op));
+                  }
+                  return result;
+                };
+              }
+              wrapper.squeezein = wrapper.squeeze;
+              return wrapper;
+            }
+          });
+        }
+      };
+      DEFAULT_ALIGNMENT = "in";
+      ALIGNMENTS = ["In", "Out", "Mix", "Squeeze", "SqueezeOut", "Reset", "Restart", "Poly"];
+      ALIGNMENT_KEYS = ALIGNMENTS.map((how) => how.toLowerCase());
+      (function() {
+        _setupAlignments();
+        for (const how of ALIGNMENTS) {
+          Pattern.prototype[how.toLowerCase()] = function(...args) {
+            return this.set[how.toLowerCase()](args);
+          };
+        }
+        Pattern.prototype.struct = function(...args) {
+          return this.keepif.out(...args);
+        };
+        Pattern.prototype.structAll = function(...args) {
+          return this.keep.out(...args);
+        };
+        Pattern.prototype.mask = function(...args) {
+          return this.keepif.in(...args);
+        };
+        Pattern.prototype.maskAll = function(...args) {
+          return this.keep.in(...args);
+        };
+        Pattern.prototype.reset = function(...args) {
+          return this.keepif.reset(...args);
+        };
+        Pattern.prototype.resetAll = function(...args) {
+          return this.keep.reset(...args);
+        };
+        Pattern.prototype.restart = function(...args) {
+          return this.keepif.restart(...args);
+        };
+        Pattern.prototype.restartAll = function(...args) {
+          return this.keep.restart(...args);
+        };
+      })();
+      setDefaultJoin = (alignment) => {
+        alignment = alignment?.toLowerCase();
+        if (DEFAULT_ALIGNMENT !== alignment && ALIGNMENT_KEYS.includes(alignment)) {
+          DEFAULT_ALIGNMENT = alignment;
+          _setupAlignments();
+        }
+      };
+      polyrhythm = stack;
+      pr = stack;
+      pm = polymeter;
+      gap = (steps4) => new Pattern(() => [], steps4);
+      silence = gap(1);
+      nothing = gap(0);
+      mask = curry((a, b) => reify(b).mask(a));
+      struct = curry((a, b) => reify(b).struct(a));
+      superimpose = curry((a, b) => reify(b).superimpose(...a));
+      withValue = curry((a, b) => reify(b).withValue(a));
+      bind = curry((a, b) => reify(b).bind(a));
+      innerBind = curry((a, b) => reify(b).innerBind(a));
+      outerBind = curry((a, b) => reify(b).outerBind(a));
+      squeezeBind = curry((a, b) => reify(b).squeezeBind(a));
+      stepBind = curry((a, b) => reify(b).stepBind(a));
+      polyBind = curry((a, b) => reify(b).polyBind(a));
+      set = curry((a, b) => reify(b).set(a));
+      keep = curry((a, b) => reify(b).keep(a));
+      keepif = curry((a, b) => reify(b).keepif(a));
+      add = curry((a, b) => reify(b).add(a));
+      sub = curry((a, b) => reify(b).sub(a));
+      mul2 = curry((a, b) => reify(b).mul(a));
+      div = curry((a, b) => reify(b).div(a));
+      mod = curry((a, b) => reify(b).mod(a));
+      pow = curry((a, b) => reify(b).pow(a));
+      band = curry((a, b) => reify(b).band(a));
+      bor = curry((a, b) => reify(b).bor(a));
+      bxor = curry((a, b) => reify(b).bxor(a));
+      blshift = curry((a, b) => reify(b).blshift(a));
+      brshift = curry((a, b) => reify(b).brshift(a));
+      lt = curry((a, b) => reify(b).lt(a));
+      gt = curry((a, b) => reify(b).gt(a));
+      lte = curry((a, b) => reify(b).lte(a));
+      gte = curry((a, b) => reify(b).gte(a));
+      eq = curry((a, b) => reify(b).eq(a));
+      eqt = curry((a, b) => reify(b).eqt(a));
+      ne = curry((a, b) => reify(b).ne(a));
+      net = curry((a, b) => reify(b).net(a));
+      and = curry((a, b) => reify(b).and(a));
+      or = curry((a, b) => reify(b).or(a));
+      func = curry((a, b) => reify(b).func(a));
+      round = register("round", function(pat) {
+        return pat.asNumber().fmap((v2) => Math.round(v2));
+      });
+      floor = register("floor", function(pat) {
+        return pat.asNumber().fmap((v2) => Math.floor(v2));
+      });
+      log2 = register("log2", (pat) => pat.asNumber().fmap((v2) => Math.log2(v2)));
+      ceil = register("ceil", function(pat) {
+        return pat.asNumber().fmap((v2) => Math.ceil(v2));
+      });
+      toBipolar = register("toBipolar", function(pat) {
+        return pat.fmap((x3) => x3 * 2 - 1);
+      });
+      fromBipolar = register("fromBipolar", function(pat) {
+        return pat.fmap((x3) => (x3 + 1) / 2);
+      });
+      range = register("range", function(min, max, pat) {
+        return pat.mul(max - min).add(min);
+      });
+      rangex = register("rangex", function(min, max, pat) {
+        return pat._range(Math.log(min), Math.log(max)).fmap(Math.exp);
+      });
+      range2 = register("range2", function(min, max, pat) {
+        return pat.fromBipolar()._range(min, max);
+      });
+      ratio = register(
+        "ratio",
+        (pat) => pat.fmap((v2) => {
+          if (!Array.isArray(v2)) {
+            return v2;
+          }
+          return v2.slice(1).reduce((acc, n2) => acc / n2, v2[0]);
+        })
+      );
+      compress = register("compress", function(b, e, pat) {
+        b = fraction_default(b);
+        e = fraction_default(e);
+        if (b.gt(e) || b.gt(1) || e.gt(1) || b.lt(0) || e.lt(0)) {
+          return silence;
+        }
+        return pat._fastGap(fraction_default(1).div(e.sub(b)))._late(b);
+      });
+      ({ compressSpan, compressspan } = register(["compressSpan", "compressspan"], function(span, pat) {
+        return pat._compress(span.begin, span.end);
+      }));
+      ({ fastGap, fastgap } = register(["fastGap", "fastgap"], function(factor, pat) {
+        const qf = function(span) {
+          const cycle = span.begin.sam();
+          const bpos = span.begin.sub(cycle).mul(factor).min(1);
+          const epos = span.end.sub(cycle).mul(factor).min(1);
+          if (bpos >= 1) {
+            return void 0;
+          }
+          return new timespan_default(cycle.add(bpos), cycle.add(epos));
+        };
+        const ef = function(hap) {
+          const begin2 = hap.part.begin;
+          const end2 = hap.part.end;
+          const cycle = begin2.sam();
+          const beginPos = begin2.sub(cycle).div(factor).min(1);
+          const endPos = end2.sub(cycle).div(factor).min(1);
+          const newPart = new timespan_default(cycle.add(beginPos), cycle.add(endPos));
+          const newWhole = !hap.whole ? void 0 : new timespan_default(
+            newPart.begin.sub(begin2.sub(hap.whole.begin).div(factor)),
+            newPart.end.add(hap.whole.end.sub(end2).div(factor))
+          );
+          return new hap_default(newWhole, newPart, hap.value, hap.context);
+        };
+        return pat.withQuerySpanMaybe(qf).withHap(ef).splitQueries();
+      }));
+      focus = register("focus", function(b, e, pat) {
+        b = fraction_default(b);
+        e = fraction_default(e);
+        return pat._early(b.sam())._fast(fraction_default(1).div(e.sub(b)))._late(b);
+      });
+      ({ focusSpan, focusspan } = register(["focusSpan", "focusspan"], function(span, pat) {
+        return pat._focus(span.begin, span.end);
+      }));
+      ply = register("ply", function(factor, pat) {
+        const result = pat.fmap((x3) => pure(x3)._fast(factor)).squeezeJoin();
+        if (__steps) {
+          result._steps = fraction_default(factor).mulmaybe(pat._steps);
+        }
+        return result;
+      });
+      fast = register(
+        "fast",
+        function(factor, pat) {
+          if (factor === 0) {
+            return silence;
+          }
+          factor = fraction_default(factor);
+          const fastQuery = pat.withQueryTime((t) => t.mul(factor));
+          return fastQuery.withHapTime((t) => t.div(factor)).setSteps(pat._steps);
+        },
+        true,
+        true
+      );
+      hurry = register("hurry", function(r2, pat) {
+        return pat._fast(r2).mul(pure({ speed: r2 }));
+      });
+      ({ slow, sparsity } = register(["slow", "sparsity"], function(factor, pat) {
+        if (factor === 0) {
+          return silence;
+        }
+        return pat._fast(fraction_default(1).div(factor));
+      }));
+      inside = register("inside", function(factor, f, pat) {
+        return f(pat._slow(factor))._fast(factor);
+      });
+      outside = register("outside", function(factor, f, pat) {
+        return f(pat._fast(factor))._slow(factor);
+      });
+      lastOf = register("lastOf", function(n2, func2, pat) {
+        const pats = Array(n2 - 1).fill(pat);
+        pats.push(func2(pat));
+        return slowcatPrime(...pats);
+      });
+      ({ firstOf, every } = register(["firstOf", "every"], function(n2, func2, pat) {
+        const pats = Array(n2 - 1).fill(pat);
+        pats.unshift(func2(pat));
+        return slowcatPrime(...pats);
+      }));
+      apply = register("apply", function(func2, pat) {
+        return func2(pat);
+      });
+      cpm = register("cpm", function(cpm2, pat) {
+        return pat._fast(cpm2 / 60 / 1);
+      });
+      early = register(
+        "early",
+        function(offset3, pat) {
+          offset3 = fraction_default(offset3);
+          return pat.withQueryTime((t) => t.add(offset3)).withHapTime((t) => t.sub(offset3));
+        },
+        true,
+        true
+      );
+      late = register(
+        "late",
+        function(offset3, pat) {
+          offset3 = fraction_default(offset3);
+          return pat._early(fraction_default(0).sub(offset3));
+        },
+        true,
+        true
+      );
+      zoom = register("zoom", function(s2, e, pat) {
+        e = fraction_default(e);
+        s2 = fraction_default(s2);
+        if (s2.gte(e)) {
+          return nothing;
+        }
+        const d = e.sub(s2);
+        const steps4 = __steps ? pat._steps?.mulmaybe(d) : void 0;
+        return pat.withQuerySpan((span) => span.withCycle((t) => t.mul(d).add(s2))).withHapSpan((span) => span.withCycle((t) => t.sub(s2).div(d))).splitQueries().setSteps(steps4);
+      });
+      ({ zoomArc, zoomarc } = register(["zoomArc", "zoomarc"], function(a, pat) {
+        return pat.zoom(a.begin, a.end);
+      }));
+      bite = register(
+        "bite",
+        (npat, ipat, pat) => {
+          return ipat.fmap((i3) => (n2) => {
+            const a = fraction_default(i3).div(n2).mod(1);
+            const b = a.add(fraction_default(1).div(n2));
+            return pat.zoom(a, b);
+          }).appLeft(npat).squeezeJoin();
+        },
+        false
+      );
+      ({ isobite, cyclestruct, cycleStruct } = register(
+        ["isobite", "cyclestruct", "cycleStruct"],
+        (structure, pat) => {
+          const structPat = new Pattern((state) => {
+            const haps_cycle = structure.withQuerySpan((span) => span.begin.wholeCycle()).query(state).filter((hap) => hap.value != 0).sort((a, b) => a.whole.begin - b.whole.begin).map((hap, i3) => hap.withValue((_) => i3));
+            const haps = [];
+            for (const hap of haps_cycle) {
+              const new_part = state.span.intersection(hap.part);
+              if (new_part) {
+                haps.push(new hap_default(hap.whole, new_part, hap.value, hap.context));
+              }
+            }
+            return haps;
+          }).splitQueries();
+          const stepsPattern = new Pattern((state) => {
+            const nrHaps = structure.withQuerySpan((span) => span.begin.wholeCycle()).query(state).filter((hap) => hap.value != 0).length;
+            return [new hap_default(state.span.begin.wholeCycle(), state.span, nrHaps, {})];
+          }).splitQueries();
+          return pat.fast(stepsPattern).bite(stepsPattern, structPat);
+        },
+        false
+      ));
+      linger = register(
+        "linger",
+        function(t, pat) {
+          if (t == 0) {
+            return silence;
+          } else if (t < 0) {
+            return pat._zoom(t.add(1), 1)._slow(t);
+          }
+          return pat._zoom(0, t)._slow(t);
+        },
+        true,
+        true
+      );
+      ({ segment, seg } = register(["segment", "seg"], function(rate, pat) {
+        return pat.struct(pure(true)._fast(rate)).setSteps(rate);
+      }));
+      swingBy = register("swingBy", (swing2, n2, pat) => pat.inside(n2, late(seq(0, swing2 / 2))));
+      swing = register("swing", (n2, pat) => pat.swingBy(1 / 3, n2));
+      ({ invert, inv } = register(
+        ["invert", "inv"],
+        function(pat) {
+          return pat.fmap((x3) => !x3);
+        },
+        true,
+        true
+      ));
+      when = register("when", function(on, func2, pat) {
+        return on ? func2(pat) : pat;
+      });
+      off = register("off", function(time_pat, func2, pat) {
+        return stack(pat, func2(pat.late(time_pat)));
+      });
+      brak = register("brak", function(pat) {
+        return pat.when(slowcat(false, true), (x3) => fastcat(x3, silence)._late(0.25));
+      });
+      rev = register(
+        "rev",
+        function(pat) {
+          const query = function(state) {
+            const span = state.span;
+            const cycle = span.begin.sam();
+            const next_cycle = span.begin.nextSam();
+            const reflect = function(to_reflect) {
+              const reflected = to_reflect.withTime((time4) => cycle.add(next_cycle.sub(time4)));
+              const tmp = reflected.begin;
+              reflected.begin = reflected.end;
+              reflected.end = tmp;
+              return reflected;
+            };
+            const haps = pat.query(state.setSpan(reflect(span)));
+            return haps.map((hap) => hap.withSpan(reflect));
+          };
+          return new Pattern(query).splitQueries();
+        },
+        false,
+        true
+      );
+      revv = register("revv", function(pat) {
+        const negateSpan = (span) => new timespan_default(fraction_default(0).sub(span.end), fraction_default(0).sub(span.begin));
+        return pat.withQuerySpan(negateSpan).withHapSpan(negateSpan);
+      });
+      pressBy = register("pressBy", function(r2, pat) {
+        return pat.fmap((x3) => pure(x3).compress(r2, 1)).squeezeJoin();
+      });
+      press = register("press", function(pat) {
+        return pat._pressBy(0.5);
+      });
+      Pattern.prototype.hush = function() {
+        return silence;
+      };
+      palindrome = register(
+        "palindrome",
+        function(pat) {
+          return pat.lastOf(2, rev);
+        },
+        true,
+        true
+      );
+      ({ juxBy, juxby } = register(["juxBy", "juxby"], function(by, func2, pat) {
+        by /= 2;
+        const elem_or = function(dict2, key, dflt) {
+          if (key in dict2) {
+            return dict2[key];
+          }
+          return dflt;
+        };
+        const left2 = pat.withValue((val2) => Object.assign({}, val2, { pan: elem_or(val2, "pan", 0.5) - by }));
+        const right2 = func2(pat.withValue((val2) => Object.assign({}, val2, { pan: elem_or(val2, "pan", 0.5) + by })));
+        return stack(left2, right2).setSteps(__steps ? lcm(left2._steps, right2._steps) : void 0);
+      }));
+      ({ juxFlipBy, juxflipby, fluxBy, fluxby } = register(
+        ["juxFlipBy", "juxflipby", "fluxBy", "fluxby"],
+        function(by, func2, pat) {
+          return pat.juxBy(slowcat(by, -by), func2);
+        }
+      ));
+      jux = register("jux", function(func2, pat) {
+        return pat._juxBy(1, func2, pat);
+      });
+      ({ juxFlip, flux } = register(["juxFlip", "juxflip", "flux"], function(func2, pat) {
+        return pat._juxFlipBy(1, func2, pat);
+      }));
+      ({ echoWith, echowith, stutWith, stutwith } = register(
+        ["echoWith", "echowith", "stutWith", "stutwith"],
+        function(times, time4, func2, pat) {
+          return stack(...listRange(0, times - 1).map((i3) => func2(pat.late(fraction_default(time4).mul(i3)), i3)));
+        }
+      ));
+      echo = register("echo", function(times, time4, feedback, pat) {
+        return pat._echoWith(times, time4, (pat2, i3) => pat2.gain(Math.pow(feedback, i3)));
+      });
+      stut = register("stut", function(times, feedback, time4, pat) {
+        return pat._echoWith(times, time4, (pat2, i3) => pat2.gain(Math.pow(feedback, i3)));
+      });
+      applyN = register("applyN", function(n2, func2, p) {
+        let result = p;
+        for (let i3 = 0; i3 < n2; i3++) {
+          result = func2(result);
+        }
+        return result;
+      });
+      plyWith = register(["plyWith", "plywith"], function(factor, func2, pat) {
+        const result = pat.fmap((x3) => cat(...listRange(0, factor - 1).map((i3) => applyN(i3, func2, x3)))._fast(factor)).squeezeJoin();
+        if (__steps) {
+          result._steps = fraction_default(factor).mulmaybe(pat._steps);
+        }
+        return result;
+      });
+      plyForEach = register(["plyForEach", "plyforeach"], function(factor, func2, pat) {
+        const result = pat.fmap((x3) => cat(cat(pure(x3), ...listRange(1, factor - 1).map((i3) => func2(pure(x3), i3))))._fast(factor)).squeezeJoin();
+        if (__steps) {
+          result._steps = fraction_default(factor).mulmaybe(pat._steps);
+        }
+        return result;
+      });
+      _iter = function(times, pat, back = false) {
+        times = fraction_default(times);
+        return slowcat(
+          ...listRange(0, times.sub(1)).map(
+            (i3) => back ? pat.late(fraction_default(i3).div(times)) : pat.early(fraction_default(i3).div(times))
+          )
+        );
+      };
+      iter = register(
+        "iter",
+        function(times, pat) {
+          return _iter(times, pat, false);
+        },
+        true,
+        true
+      );
+      ({ iterBack, iterback } = register(
+        ["iterBack", "iterback"],
+        function(times, pat) {
+          return _iter(times, pat, true);
+        },
+        true,
+        true
+      ));
+      ({ repeatCycles } = register(
+        "repeatCycles",
+        function(n2, pat) {
+          return new Pattern(function(state) {
+            const cycle = state.span.begin.sam();
+            const source_cycle = cycle.div(n2).sam();
+            const delta = cycle.sub(source_cycle);
+            state = state.withSpan((span) => span.withTime((spant) => spant.sub(delta)));
+            return pat.query(state).map((hap) => hap.withSpan((span) => span.withTime((spant) => spant.add(delta))));
+          }).splitQueries();
+        },
+        true,
+        true
+      ));
+      _chunk = function(n2, func2, pat, back = false, fast2 = false) {
+        const binary2 = Array(n2 - 1).fill(false);
+        binary2.unshift(true);
+        const binary_pat = _iter(n2, sequence(...binary2), !back);
+        if (!fast2) {
+          pat = pat.repeatCycles(n2);
+        }
+        return pat.when(binary_pat, func2);
+      };
+      ({ chunk, slowchunk, slowChunk } = register(
+        ["chunk", "slowchunk", "slowChunk"],
+        function(n2, func2, pat) {
+          return _chunk(n2, func2, pat, false, false);
+        },
+        true,
+        true
+      ));
+      ({ chunkBack, chunkback } = register(
+        ["chunkBack", "chunkback"],
+        function(n2, func2, pat) {
+          return _chunk(n2, func2, pat, true);
+        },
+        true,
+        true
+      ));
+      ({ fastchunk, fastChunk } = register(
+        ["fastchunk", "fastChunk"],
+        function(n2, func2, pat) {
+          return _chunk(n2, func2, pat, false, true);
+        },
+        true,
+        true
+      ));
+      ({ chunkinto, chunkInto } = register(["chunkinto", "chunkInto"], function(n2, func2, pat) {
+        return pat.into(fastcat(true, ...Array(n2 - 1).fill(false))._iterback(n2), func2);
+      }));
+      ({ chunkbackinto, chunkBackInto } = register(["chunkbackinto", "chunkBackInto"], function(n2, func2, pat) {
+        return pat.into(
+          fastcat(true, ...Array(n2 - 1).fill(false))._iter(n2)._early(1),
+          func2
+        );
+      }));
+      bypass = register(
+        "bypass",
+        function(on, pat) {
+          on = Boolean(parseInt(on));
+          return on ? silence : pat;
+        },
+        true,
+        true
+      );
+      ({ ribbon, rib } = register(
+        ["ribbon", "rib"],
+        (offset3, cycles, pat) => pat.early(offset3).restart(pure(1).slow(cycles))
+      ));
+      hsla = register("hsla", (h3, s2, l, a, pat) => {
+        return pat.color(`hsla(${h3}turn,${s2 * 100}%,${l * 100}%,${a})`);
+      });
+      hsl = register("hsl", (h3, s2, l, pat) => {
+        return pat.color(`hsl(${h3}turn,${s2 * 100}%,${l * 100}%)`);
+      });
+      Pattern.prototype.tag = function(tag) {
+        return this.withContext((ctx) => ({ ...ctx, tags: (ctx.tags || []).concat([tag]) }));
+      };
+      filter = register("filter", (test, pat) => pat.withHaps((haps) => haps.filter(test)));
+      filterWhen = register("filterWhen", (test, pat) => pat.filter((h3) => test(h3.whole.begin)));
+      within = register(
+        "within",
+        (a, b, fn, pat) => stack(
+          fn(pat.filterWhen((t) => t.cyclePos() >= a && t.cyclePos() <= b)),
+          pat.filterWhen((t) => t.cyclePos() < a || t.cyclePos() > b)
+        )
+      );
+      Pattern.prototype.stepJoin = function() {
+        const pp2 = this;
+        const first_t = stepcat(..._retime(_slices(pp2.queryArc(0, 1))))._steps;
+        const q2 = function(state) {
+          const shifted = pp2.early(state.span.begin.sam());
+          const haps = shifted.query(state.setSpan(new timespan_default(fraction_default(0), fraction_default(1))));
+          const pat = stepcat(..._retime(_slices(haps)));
+          return pat.query(state);
+        };
+        return new Pattern(q2, first_t);
+      };
+      Pattern.prototype.stepBind = function(func2) {
+        return this.fmap(func2).stepJoin();
+      };
+      pace = register("pace", function(targetSteps, pat) {
+        if (pat._steps === void 0) {
+          return pat;
+        }
+        if (pat._steps.eq(fraction_default(0))) {
+          return nothing;
+        }
+        return pat._fast(fraction_default(targetSteps).div(pat._steps)).setSteps(targetSteps);
+      });
+      take = stepRegister("take", function(i3, pat) {
+        if (!pat.hasSteps) {
+          return nothing;
+        }
+        if (pat._steps.lte(0)) {
+          return nothing;
+        }
+        i3 = fraction_default(i3);
+        if (i3.eq(0)) {
+          return nothing;
+        }
+        const flip = i3 < 0;
+        if (flip) {
+          i3 = i3.abs();
+        }
+        const frac = i3.div(pat._steps);
+        if (frac.lte(0)) {
+          return nothing;
+        }
+        if (frac.gte(1)) {
+          return pat;
+        }
+        if (flip) {
+          return pat.zoom(fraction_default(1).sub(frac), 1);
+        }
+        return pat.zoom(0, frac);
+      });
+      drop = stepRegister("drop", function(i3, pat) {
+        if (!pat.hasSteps) {
+          return nothing;
+        }
+        i3 = fraction_default(i3);
+        if (i3.lt(0)) {
+          return pat.take(pat._steps.add(i3));
+        }
+        return pat.take(fraction_default(0).sub(pat._steps.sub(i3)));
+      });
+      extend = stepRegister("extend", function(factor, pat) {
+        return pat.fast(factor).expand(factor);
+      });
+      replicate = stepRegister("replicate", function(factor, pat) {
+        return pat.repeatCycles(factor).fast(factor).expand(factor);
+      });
+      expand = stepRegister("expand", function(factor, pat) {
+        return pat.withSteps((t) => t.mul(fraction_default(factor)));
+      });
+      contract = stepRegister("contract", function(factor, pat) {
+        return pat.withSteps((t) => t.div(fraction_default(factor)));
+      });
+      Pattern.prototype.shrinklist = function(amount) {
+        const pat = this;
+        if (!pat.hasSteps) {
+          return [pat];
+        }
+        let [amountv, times] = Array.isArray(amount) ? amount : [amount, pat._steps];
+        amountv = fraction_default(amountv);
+        if (times === 0 || amountv === 0) {
+          return [pat];
+        }
+        const fromstart = amountv > 0;
+        const ranges = [];
+        if (fromstart) {
+          const seg2 = fraction_default(1).div(pat._steps).mul(amountv);
+          for (let i3 = 0; i3 < times; ++i3) {
+            const s2 = seg2.mul(i3);
+            if (s2.gt(1)) {
+              break;
+            }
+            ranges.push([s2, 1]);
+          }
+        } else {
+          amountv = fraction_default(0).sub(amountv);
+          const seg2 = fraction_default(1).div(pat._steps).mul(amountv);
+          for (let i3 = 0; i3 < times; ++i3) {
+            const e = fraction_default(1).sub(seg2.mul(i3));
+            if (e.lt(0)) {
+              break;
+            }
+            ranges.push([fraction_default(0), e]);
+          }
+        }
+        return ranges.map((x3) => pat.zoom(...x3));
+      };
+      shrinklist = (amount, pat) => pat.shrinklist(amount);
+      Pattern.prototype.growlist = function(amount) {
+        return this.shrinklist(amount).reverse();
+      };
+      growlist = (amount, pat) => pat.growlist(amount);
+      shrink = register(
+        "shrink",
+        function(amount, pat) {
+          if (!pat.hasSteps) {
+            return nothing;
+          }
+          const list2 = pat.shrinklist(amount);
+          const result = stepcat(...list2);
+          result._steps = list2.reduce((a, b) => a.add(b._steps), fraction_default(0));
+          return result;
+        },
+        true,
+        false,
+        (x3) => x3.stepJoin()
+      );
+      grow = register(
+        "grow",
+        function(amount, pat) {
+          if (!pat.hasSteps) {
+            return nothing;
+          }
+          const list2 = pat.shrinklist(fraction_default(0).sub(amount));
+          list2.reverse();
+          const result = stepcat(...list2);
+          result._steps = list2.reduce((a, b) => a.add(b._steps), fraction_default(0));
+          return result;
+        },
+        true,
+        false,
+        (x3) => x3.stepJoin()
+      );
+      tour = function(pat, ...many) {
+        return pat.tour(...many);
+      };
+      Pattern.prototype.tour = function(...many) {
+        return stepcat(
+          ...[].concat(
+            ...many.map((x3, i3) => [...many.slice(0, many.length - i3), this, ...many.slice(many.length - i3)]),
+            this,
+            ...many
+          )
+        );
+      };
+      zip = function(...pats) {
+        pats = pats.filter((pat) => pat.hasSteps);
+        const zipped = slowcat(...pats.map((pat) => pat._slow(pat._steps)));
+        const steps4 = lcm(...pats.map((x3) => x3._steps));
+        return zipped._fast(steps4).setSteps(steps4);
+      };
+      timecat = stepcat;
+      timeCat = stepcat;
+      s_cat = stepcat;
+      s_alt = stepalt;
+      s_polymeter = polymeter;
+      Pattern.prototype.s_polymeter = Pattern.prototype.polymeter;
+      s_taper = shrink;
+      Pattern.prototype.s_taper = Pattern.prototype.shrink;
+      s_taperlist = shrinklist;
+      Pattern.prototype.s_taperlist = Pattern.prototype.shrinklist;
+      s_add = take;
+      Pattern.prototype.s_add = Pattern.prototype.take;
+      s_sub = drop;
+      Pattern.prototype.s_sub = Pattern.prototype.drop;
+      s_expand = expand;
+      Pattern.prototype.s_expand = Pattern.prototype.expand;
+      s_extend = extend;
+      Pattern.prototype.s_extend = Pattern.prototype.extend;
+      s_contract = contract;
+      Pattern.prototype.s_contract = Pattern.prototype.contract;
+      s_tour = tour;
+      Pattern.prototype.s_tour = Pattern.prototype.tour;
+      s_zip = zip;
+      Pattern.prototype.s_zip = Pattern.prototype.zip;
+      steps = pace;
+      Pattern.prototype.steps = Pattern.prototype.pace;
+      chop = register("chop", function(n2, pat) {
+        const slices = Array.from({ length: n2 }, (x3, i3) => i3);
+        const slice_objects = slices.map((i3) => ({ begin: i3 / n2, end: (i3 + 1) / n2 }));
+        const merge = function(a, b) {
+          if ("begin" in a && "end" in a && a.begin !== void 0 && a.end !== void 0) {
+            const d = a.end - a.begin;
+            b = { begin: a.begin + b.begin * d, end: a.begin + b.end * d };
+          }
+          return Object.assign({}, a, b);
+        };
+        const func2 = function(o) {
+          return sequence(slice_objects.map((slice_o) => merge(o, slice_o)));
+        };
+        return pat.squeezeBind(func2).setSteps(__steps ? fraction_default(n2).mulmaybe(pat._steps) : void 0);
+      });
+      striate = register("striate", function(n2, pat) {
+        const slices = Array.from({ length: n2 }, (x3, i3) => i3);
+        const slice_objects = slices.map((i3) => ({ begin: i3 / n2, end: (i3 + 1) / n2 }));
+        const slicePat = slowcat(...slice_objects);
+        return pat.set(slicePat)._fast(n2).setSteps(__steps ? fraction_default(n2).mulmaybe(pat._steps) : void 0);
+      });
+      _loopAt = function(factor, pat, cps2 = 0.5) {
+        return pat.speed(1 / factor * cps2).unit("c").slow(factor);
+      };
+      ({ loopAt, loopat } = register(["loopAt", "loopat"], function(factor, pat) {
+        const steps4 = pat._steps ? pat._steps.div(factor) : void 0;
+        return new Pattern((state) => _loopAt(factor, pat, state.controls._cps).query(state), steps4);
+      }));
+      slice = register(
+        "slice",
+        function(npat, ipat, opat) {
+          return npat.innerBind(
+            (n2) => ipat.outerBind(
+              (i3) => opat.outerBind((o) => {
+                o = o instanceof Object ? o : { s: o };
+                const begin2 = Array.isArray(n2) ? n2[i3] : i3 / n2;
+                const end2 = Array.isArray(n2) ? n2[i3 + 1] : (i3 + 1) / n2;
+                return pure({ begin: begin2, end: end2, _slices: n2, ...o });
+              })
+            )
+          ).setSteps(ipat._steps);
+        },
+        false
+        // turns off auto-patternification
+      );
+      Pattern.prototype.onTriggerTime = function(func2) {
+        return this.onSchedule((hap, targetTime) => {
+          const diff = targetTime - getClockTime();
+          setTimeout(() => {
+            func2(hap);
+          }, diff * 1e3);
+        }, false);
+      };
+      splice = register(
+        "splice",
+        function(npat, ipat, opat) {
+          const sliced = slice(npat, ipat, opat);
+          return new Pattern((state) => {
+            const cps2 = state.controls._cps || 1;
+            const haps = sliced.query(state);
+            return haps.map(
+              (hap) => hap.withValue((v2) => ({
+                ...{
+                  speed: cps2 / v2._slices / hap.whole.duration * (v2.speed || 1),
+                  unit: "c"
+                },
+                ...v2
+              }))
+            );
+          }).setSteps(ipat._steps);
+        },
+        false
+        // turns off auto-patternification
+      );
+      fit = register(
+        "fit",
+        (pat) => pat.withHaps(
+          (haps, state) => haps.map(
+            (hap) => hap.withValue((v2) => {
+              const slicedur = ("end" in v2 ? v2.end : 1) - ("begin" in v2 ? v2.begin : 0);
+              return {
+                ...v2,
+                speed: (state.controls._cps || 1) / hap.whole.duration * slicedur,
+                unit: "c"
+              };
+            })
+          )
+        )
+      );
+      ({ loopAtCps, loopatcps } = register(["loopAtCps", "loopatcps"], function(factor, cps2, pat) {
+        return _loopAt(factor, pat, cps2);
+      }));
+      ref = (accessor) => pure(1).withValue(() => reify(accessor())).innerJoin();
+      fadeGain = (p) => p < 0.5 ? 1 : 1 - (p - 0.5) / 0.5;
+      xfade = (a, pos, b) => {
+        pos = reify(pos);
+        a = reify(a);
+        b = reify(b);
+        let gaina = pos.fmap((v2) => ({ gain: fadeGain(v2) }));
+        let gainb = pos.fmap((v2) => ({ gain: fadeGain(1 - v2) }));
+        return stack(a.mul(gaina), b.mul(gainb));
+      };
+      Pattern.prototype.xfade = function(pos, b) {
+        return xfade(this, pos, b);
+      };
+      __beat = (join) => (t, div2, pat) => {
+        t = fraction_default(t).mod(div2);
+        div2 = fraction_default(div2);
+        const b = t.div(div2);
+        const e = t.add(1).div(div2);
+        return join(pat.fmap((x3) => pure(x3)._compress(b, e)));
+      };
+      ({ beat } = register(
+        ["beat"],
+        __beat((x3) => x3.innerJoin())
+      ));
+      _morph = (from, to, by) => {
+        by = fraction_default(by);
+        const dur2 = fraction_default(1).div(from.length);
+        const positions = (list2) => {
+          const result = [];
+          for (const [pos, value2] of list2.entries()) {
+            if (value2) {
+              result.push([fraction_default(pos).div(list2.length), value2]);
+            }
+          }
+          return result;
+        };
+        const arcs = zipWith(
+          ([posa, valuea], [posb, valueb]) => {
+            const b = by.mul(posb - posa).add(posa);
+            const e = b.add(dur2);
+            return new timespan_default(b, e);
+          },
+          positions(from),
+          positions(to)
+        );
+        function query(state) {
+          const cycle = state.span.begin.sam();
+          const cycleArc = state.span.cycleArc();
+          const result = [];
+          for (const whole of arcs) {
+            const part = whole.intersection(cycleArc);
+            if (part !== void 0) {
+              result.push(
+                new hap_default(
+                  whole.withTime((x3) => x3.add(cycle)),
+                  part.withTime((x3) => x3.add(cycle)),
+                  true
+                )
+              );
+            }
+          }
+          return result;
+        }
+        return new Pattern(query).splitQueries();
+      };
+      morph = (frompat, topat, bypat) => {
+        frompat = reify(frompat);
+        topat = reify(topat);
+        bypat = reify(bypat);
+        return frompat.innerBind((from) => topat.innerBind((to) => bypat.innerBind((by) => _morph(from, to, by))));
+      };
+      _distortWithAlg = function(name3) {
+        const func2 = function(args, pat) {
+          const argsPat = reify(args).fmap((v2) => Array.isArray(v2) ? [...v2, name3] : [v2, 1, name3]);
+          if (!pat) {
+            return pure({}).distort(argsPat);
+          }
+          return pat.distort(argsPat);
+        };
+        Pattern.prototype[name3] = function(args) {
+          return func2(args, this);
+        };
+        return func2;
+      };
+      soft = _distortWithAlg("soft");
+      hard = _distortWithAlg("hard");
+      cubic = _distortWithAlg("cubic");
+      diode = _distortWithAlg("diode");
+      asym = _distortWithAlg("asym");
+      fold = _distortWithAlg("fold");
+      sinefold = _distortWithAlg("sinefold");
+      chebyshev = _distortWithAlg("chebyshev");
+      parray = (pats) => {
+        const pack = (...xs) => xs;
+        let acc = pure(curry(pack, null, pats.length));
+        for (const p of pats) acc = acc.appBoth(reify(p));
+        return acc;
+      };
+      _ensureListPattern = (list2) => {
+        if (Array.isArray(list2)) {
+          return parray(list2);
+        }
+        return reify(list2);
+      };
+      Pattern.prototype.partials = function(list2) {
+        return this.withValue((v2) => (l) => ({ ...v2, partials: l })).appLeft(_ensureListPattern(list2));
+      };
+      partials = (list2) => {
+        return _ensureListPattern(list2).as("partials");
+      };
+      Pattern.prototype.phases = function(list2) {
+        return this.withValue((v2) => (l) => ({ ...v2, phases: l })).appLeft(_ensureListPattern(list2));
+      };
+      phases = (list2) => {
+        return _ensureListPattern(list2).as("phases");
+      };
+      Pattern.prototype.FX = function(...effects) {
+        effects = effects.map(reify);
+        return this.withValue((v2) => (vEff) => {
+          const currFX = v2.FX ?? [];
+          return { ...v2, FX: currFX.concat(vEff) };
+        }).appLeft(parray(effects));
+      };
+      _asArrayPattern = (pats) => {
+        const pack = (...xs) => xs;
+        let acc = pure(curry(pack, null, pats.length));
+        for (const p of pats) acc = acc.appLeft(p);
+        return acc;
+      };
+      Pattern.prototype.worklet = function(src2, ...inputs) {
+        inputs = inputs.map(reify);
+        return this.outerBind((v2) => {
+          return _asArrayPattern(inputs).withValue((vInput) => {
+            const currInputs = v2.workletInputs ?? [];
+            return { ...v2, workletSrc: src2, workletInputs: currInputs.concat(vInput) };
+          });
+        });
+      };
+      worklet = (...args) => pure({}).worklet(...args);
+      base = (n2, b = 10, d = 0) => {
+        if (Array.isArray(n2)) {
+          n2 = sequence(n2);
+        }
+        n2 = reify(n2);
+        b = reify(b);
+        d = reify(d);
+        return d.withValue((e) => {
+          return b.withValue((c2) => {
+            return n2.withValue((v2) => {
+              let digits = [];
+              let value2 = v2;
+              while (value2 > 0) {
+                digits.unshift(value2 % c2);
+                value2 = Math.floor(value2 / c2);
+              }
+              if (e) {
+                const l = digits.length;
+                if (l > e) {
+                  digits = digits.slice(-1 * e);
+                }
+              }
+              return sequence(digits);
+            }).squeezeJoin();
+          }).squeezeJoin();
+        }).squeezeJoin();
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/controls.mjs
+  var controls_exports = {};
+  __export(controls_exports, {
+    FXr: () => FXr,
+    FXrel: () => FXrel,
+    FXrelease: () => FXrelease,
+    accelerate: () => accelerate,
+    activeLabel: () => activeLabel,
+    ad: () => ad,
+    adsr: () => adsr,
+    amp: () => amp,
+    analyze: () => analyze,
+    anchor: () => anchor,
+    ar: () => ar,
+    as: () => as,
+    att: () => att,
+    attack: () => attack,
+    bandf: () => bandf,
+    bandq: () => bandq,
+    bank: () => bank,
+    bbexpr: () => bbexpr,
+    bbst: () => bbst,
+    begin: () => begin,
+    bgain: () => bgain,
+    binshift: () => binshift,
+    bmod: () => bmod,
+    bp: () => bp,
+    bpa: () => bpa,
+    bpattack: () => bpattack,
+    bpd: () => bpd,
+    bpdc: () => bpdc,
+    bpdecay: () => bpdecay,
+    bpdepth: () => bpdepth,
+    bpdepthfreq: () => bpdepthfreq,
+    bpdepthfrequency: () => bpdepthfrequency,
+    bpe: () => bpe,
+    bpenv: () => bpenv,
+    bpf: () => bpf,
+    bpq: () => bpq,
+    bpr: () => bpr,
+    bprate: () => bprate,
+    bprelease: () => bprelease,
+    bps: () => bps,
+    bpshape: () => bpshape,
+    bpskew: () => bpskew,
+    bpsustain: () => bpsustain,
+    bpsync: () => bpsync,
+    bus: () => bus,
+    busgain: () => busgain,
+    byteBeatExpression: () => byteBeatExpression,
+    byteBeatStartTime: () => byteBeatStartTime,
+    ccn: () => ccn,
+    ccv: () => ccv,
+    ch: () => ch,
+    channel: () => channel,
+    channels: () => channels,
+    chord: () => chord,
+    chorus: () => chorus,
+    clip: () => clip,
+    coarse: () => coarse,
+    color: () => color,
+    colour: () => colour,
+    comb: () => comb,
+    compressor: () => compressor,
+    compressorAttack: () => compressorAttack,
+    compressorKnee: () => compressorKnee,
+    compressorRatio: () => compressorRatio,
+    compressorRelease: () => compressorRelease,
+    control: () => control,
+    cps: () => cps,
+    createParam: () => createParam,
+    createParams: () => createParams,
+    crush: () => crush,
+    ctf: () => ctf,
+    ctlNum: () => ctlNum,
+    ctranspose: () => ctranspose,
+    curve: () => curve,
+    cut: () => cut,
+    cutoff: () => cutoff,
+    dec: () => dec,
+    decay: () => decay,
+    degree: () => degree,
+    delay: () => delay,
+    delayfb: () => delayfb,
+    delayfeedback: () => delayfeedback,
+    delaysync: () => delaysync,
+    delayt: () => delayt,
+    delaytime: () => delaytime,
+    deltaSlide: () => deltaSlide,
+    density: () => density,
+    det: () => det,
+    detune: () => detune,
+    dfb: () => dfb,
+    dict: () => dict,
+    dictionary: () => dictionary,
+    dist: () => dist,
+    distort: () => distort,
+    distorttype: () => distorttype,
+    distortvol: () => distortvol,
+    djf: () => djf,
+    drive: () => drive,
+    dry: () => dry,
+    ds: () => ds,
+    dt: () => dt,
+    duck: () => duck,
+    duckattack: () => duckattack,
+    duckdepth: () => duckdepth,
+    duckonset: () => duckonset,
+    dur: () => dur,
+    duration: () => duration,
+    end: () => end,
+    enhance: () => enhance,
+    env: () => env,
+    expression: () => expression,
+    fadeInTime: () => fadeInTime,
+    fadeOutTime: () => fadeOutTime,
+    fadeTime: () => fadeTime,
+    fanchor: () => fanchor,
+    fft: () => fft,
+    fm: () => fm,
+    fm1: () => fm1,
+    fm2: () => fm2,
+    fm3: () => fm3,
+    fm4: () => fm4,
+    fm5: () => fm5,
+    fm6: () => fm6,
+    fm7: () => fm7,
+    fm8: () => fm8,
+    fmatt: () => fmatt,
+    fmatt1: () => fmatt1,
+    fmatt2: () => fmatt2,
+    fmatt3: () => fmatt3,
+    fmatt4: () => fmatt4,
+    fmatt5: () => fmatt5,
+    fmatt6: () => fmatt6,
+    fmatt7: () => fmatt7,
+    fmatt8: () => fmatt8,
+    fmattack: () => fmattack,
+    fmattack1: () => fmattack1,
+    fmattack2: () => fmattack2,
+    fmattack3: () => fmattack3,
+    fmattack4: () => fmattack4,
+    fmattack5: () => fmattack5,
+    fmattack6: () => fmattack6,
+    fmattack7: () => fmattack7,
+    fmattack8: () => fmattack8,
+    fmdec: () => fmdec,
+    fmdec1: () => fmdec1,
+    fmdec2: () => fmdec2,
+    fmdec3: () => fmdec3,
+    fmdec4: () => fmdec4,
+    fmdec5: () => fmdec5,
+    fmdec6: () => fmdec6,
+    fmdec7: () => fmdec7,
+    fmdec8: () => fmdec8,
+    fmdecay: () => fmdecay,
+    fmdecay1: () => fmdecay1,
+    fmdecay2: () => fmdecay2,
+    fmdecay3: () => fmdecay3,
+    fmdecay4: () => fmdecay4,
+    fmdecay5: () => fmdecay5,
+    fmdecay6: () => fmdecay6,
+    fmdecay7: () => fmdecay7,
+    fmdecay8: () => fmdecay8,
+    fme: () => fme,
+    fmenv: () => fmenv,
+    fmenv1: () => fmenv1,
+    fmenv2: () => fmenv2,
+    fmenv3: () => fmenv3,
+    fmenv4: () => fmenv4,
+    fmenv5: () => fmenv5,
+    fmenv6: () => fmenv6,
+    fmenv7: () => fmenv7,
+    fmenv8: () => fmenv8,
+    fmh: () => fmh,
+    fmh1: () => fmh1,
+    fmh2: () => fmh2,
+    fmh3: () => fmh3,
+    fmh4: () => fmh4,
+    fmh5: () => fmh5,
+    fmh6: () => fmh6,
+    fmh7: () => fmh7,
+    fmh8: () => fmh8,
+    fmi: () => fmi,
+    fmi1: () => fmi1,
+    fmi2: () => fmi2,
+    fmi3: () => fmi3,
+    fmi4: () => fmi4,
+    fmi5: () => fmi5,
+    fmi6: () => fmi6,
+    fmi7: () => fmi7,
+    fmi8: () => fmi8,
+    fmrel: () => fmrel,
+    fmrel1: () => fmrel1,
+    fmrel2: () => fmrel2,
+    fmrel3: () => fmrel3,
+    fmrel4: () => fmrel4,
+    fmrel5: () => fmrel5,
+    fmrel6: () => fmrel6,
+    fmrel7: () => fmrel7,
+    fmrel8: () => fmrel8,
+    fmrelease: () => fmrelease,
+    fmrelease1: () => fmrelease1,
+    fmrelease2: () => fmrelease2,
+    fmrelease3: () => fmrelease3,
+    fmrelease4: () => fmrelease4,
+    fmrelease5: () => fmrelease5,
+    fmrelease6: () => fmrelease6,
+    fmrelease7: () => fmrelease7,
+    fmrelease8: () => fmrelease8,
+    fmsus: () => fmsus,
+    fmsus1: () => fmsus1,
+    fmsus2: () => fmsus2,
+    fmsus3: () => fmsus3,
+    fmsus4: () => fmsus4,
+    fmsus5: () => fmsus5,
+    fmsus6: () => fmsus6,
+    fmsus7: () => fmsus7,
+    fmsus8: () => fmsus8,
+    fmsustain: () => fmsustain,
+    fmsustain1: () => fmsustain1,
+    fmsustain2: () => fmsustain2,
+    fmsustain3: () => fmsustain3,
+    fmsustain4: () => fmsustain4,
+    fmsustain5: () => fmsustain5,
+    fmsustain6: () => fmsustain6,
+    fmsustain7: () => fmsustain7,
+    fmsustain8: () => fmsustain8,
+    fmwave: () => fmwave,
+    fmwave1: () => fmwave1,
+    fmwave2: () => fmwave2,
+    fmwave3: () => fmwave3,
+    fmwave4: () => fmwave4,
+    fmwave5: () => fmwave5,
+    fmwave6: () => fmwave6,
+    fmwave7: () => fmwave7,
+    fmwave8: () => fmwave8,
+    frameRate: () => frameRate,
+    frames: () => frames,
+    freeze: () => freeze,
+    freq: () => freq,
+    fshift: () => fshift,
+    fshiftnote: () => fshiftnote,
+    fshiftphase: () => fshiftphase,
+    ftype: () => ftype,
+    fxr: () => fxr,
+    gain: () => gain,
+    gat: () => gat,
+    gate: () => gate,
+    getControlName: () => getControlName,
+    harmonic: () => harmonic,
+    hbrick: () => hbrick,
+    hcutoff: () => hcutoff,
+    hold: () => hold,
+    hours: () => hours,
+    hp: () => hp,
+    hpa: () => hpa,
+    hpattack: () => hpattack,
+    hpd: () => hpd,
+    hpdc: () => hpdc,
+    hpdecay: () => hpdecay,
+    hpdepth: () => hpdepth,
+    hpdepthfreq: () => hpdepthfreq,
+    hpdepthfrequency: () => hpdepthfrequency,
+    hpe: () => hpe,
+    hpenv: () => hpenv,
+    hpf: () => hpf,
+    hpq: () => hpq,
+    hpr: () => hpr,
+    hprate: () => hprate,
+    hprelease: () => hprelease,
+    hps: () => hps,
+    hpshape: () => hpshape,
+    hpskew: () => hpskew,
+    hpsustain: () => hpsustain,
+    hpsync: () => hpsync,
+    hresonance: () => hresonance,
+    i: () => i,
+    imag: () => imag,
+    ir: () => ir,
+    irbegin: () => irbegin,
+    iresponse: () => iresponse,
+    irspeed: () => irspeed,
+    isControlName: () => isControlName,
+    kcutoff: () => kcutoff,
+    krush: () => krush,
+    label: () => label,
+    lbrick: () => lbrick,
+    legato: () => legato,
+    leslie: () => leslie,
+    lfo: () => lfo,
+    lock: () => lock,
+    loop: () => loop,
+    loopBegin: () => loopBegin,
+    loopEnd: () => loopEnd,
+    loopb: () => loopb,
+    loope: () => loope,
+    lp: () => lp,
+    lpa: () => lpa,
+    lpattack: () => lpattack,
+    lpd: () => lpd,
+    lpdc: () => lpdc,
+    lpdecay: () => lpdecay,
+    lpdepth: () => lpdepth,
+    lpdepthfreq: () => lpdepthfreq,
+    lpdepthfrequency: () => lpdepthfrequency,
+    lpe: () => lpe,
+    lpenv: () => lpenv,
+    lpf: () => lpf,
+    lpq: () => lpq,
+    lpr: () => lpr,
+    lprate: () => lprate,
+    lprelease: () => lprelease,
+    lps: () => lps,
+    lpshape: () => lpshape,
+    lpskew: () => lpskew,
+    lpsustain: () => lpsustain,
+    lpsync: () => lpsync,
+    lrate: () => lrate,
+    lsize: () => lsize,
+    midibend: () => midibend,
+    midichan: () => midichan,
+    midicmd: () => midicmd,
+    midimap: () => midimap,
+    midiport: () => midiport,
+    miditouch: () => miditouch,
+    minutes: () => minutes,
+    mode: () => mode,
+    mtranspose: () => mtranspose,
+    n: () => n,
+    noise: () => noise,
+    note: () => note,
+    nrpnn: () => nrpnn,
+    nrpv: () => nrpv,
+    nudge: () => nudge,
+    oct: () => oct,
+    octave: () => octave,
+    octaveR: () => octaveR,
+    octaves: () => octaves,
+    octer: () => octer,
+    octersub: () => octersub,
+    octersubsub: () => octersubsub,
+    offset: () => offset,
+    orbit: () => orbit,
+    oschost: () => oschost,
+    oscport: () => oscport,
+    overgain: () => overgain,
+    overshape: () => overshape,
+    pan: () => pan,
+    panchor: () => panchor,
+    panorient: () => panorient,
+    panspan: () => panspan,
+    pansplay: () => pansplay,
+    panwidth: () => panwidth,
+    patt: () => patt,
+    pattack: () => pattack,
+    pcurve: () => pcurve,
+    pdec: () => pdec,
+    pdecay: () => pdecay,
+    penv: () => penv,
+    ph: () => ph,
+    phasdp: () => phasdp,
+    phaser: () => phaser,
+    phasercenter: () => phasercenter,
+    phaserdepth: () => phaserdepth,
+    phaserrate: () => phaserrate,
+    phasersweep: () => phasersweep,
+    phc: () => phc,
+    phd: () => phd,
+    phs: () => phs,
+    pitchJump: () => pitchJump,
+    pitchJumpTime: () => pitchJumpTime,
+    polyTouch: () => polyTouch,
+    postgain: () => postgain,
+    prel: () => prel,
+    prelease: () => prelease,
+    progNum: () => progNum,
+    psus: () => psus,
+    psustain: () => psustain,
+    pw: () => pw,
+    pwrate: () => pwrate,
+    pwsweep: () => pwsweep,
+    rdim: () => rdim,
+    real: () => real,
+    registerControl: () => registerControl,
+    registerMultiControl: () => registerMultiControl,
+    rel: () => rel,
+    release: () => release,
+    resonance: () => resonance,
+    rfade: () => rfade,
+    ring: () => ring,
+    ringdf: () => ringdf,
+    ringf: () => ringf,
+    rlp: () => rlp,
+    room: () => room,
+    roomdim: () => roomdim,
+    roomfade: () => roomfade,
+    roomlp: () => roomlp,
+    roomsize: () => roomsize,
+    rsize: () => rsize,
+    s: () => s,
+    scram: () => scram,
+    scrub: () => scrub,
+    seconds: () => seconds,
+    semitone: () => semitone,
+    shape: () => shape,
+    size: () => size,
+    slide: () => slide,
+    smear: () => smear,
+    songPtr: () => songPtr,
+    sound: () => sound,
+    source: () => source,
+    speed: () => speed,
+    spread: () => spread,
+    squiz: () => squiz,
+    src: () => src,
+    stepsPerOctave: () => stepsPerOctave,
+    stretch: () => stretch,
+    sus: () => sus,
+    sustain: () => sustain,
+    sustainpedal: () => sustainpedal,
+    sysex: () => sysex,
+    sysexdata: () => sysexdata,
+    sysexid: () => sysexid,
+    sz: () => sz,
+    transient: () => transient,
+    trem: () => trem,
+    tremolo: () => tremolo,
+    tremolodepth: () => tremolodepth,
+    tremolophase: () => tremolophase,
+    tremoloshape: () => tremoloshape,
+    tremoloskew: () => tremoloskew,
+    tremolosync: () => tremolosync,
+    triode: () => triode,
+    tsdelay: () => tsdelay,
+    uid: () => uid,
+    unison: () => unison,
+    unit: () => unit,
+    v: () => v,
+    val: () => val,
+    vel: () => vel,
+    velocity: () => velocity,
+    vib: () => vib,
+    vibmod: () => vibmod,
+    vibrato: () => vibrato,
+    vmod: () => vmod,
+    voice: () => voice,
+    vowel: () => vowel,
+    warp: () => warp,
+    warpatt: () => warpatt,
+    warpattack: () => warpattack,
+    warpdc: () => warpdc,
+    warpdec: () => warpdec,
+    warpdecay: () => warpdecay,
+    warpdepth: () => warpdepth,
+    warpenv: () => warpenv,
+    warpmode: () => warpmode,
+    warprate: () => warprate,
+    warprel: () => warprel,
+    warprelease: () => warprelease,
+    warpshape: () => warpshape,
+    warpskew: () => warpskew,
+    warpsus: () => warpsus,
+    warpsustain: () => warpsustain,
+    warpsync: () => warpsync,
+    waveloss: () => waveloss,
+    wavetablePhaseRand: () => wavetablePhaseRand,
+    wavetablePosition: () => wavetablePosition,
+    wavetableWarp: () => wavetableWarp,
+    wavetableWarpMode: () => wavetableWarpMode,
+    wt: () => wt,
+    wtatt: () => wtatt,
+    wtattack: () => wtattack,
+    wtdc: () => wtdc,
+    wtdec: () => wtdec,
+    wtdecay: () => wtdecay,
+    wtdepth: () => wtdepth,
+    wtenv: () => wtenv,
+    wtphaserand: () => wtphaserand,
+    wtrate: () => wtrate,
+    wtrel: () => wtrel,
+    wtrelease: () => wtrelease,
+    wtshape: () => wtshape,
+    wtskew: () => wtskew,
+    wtsus: () => wtsus,
+    wtsustain: () => wtsustain,
+    wtsync: () => wtsync,
+    xsdelay: () => xsdelay,
+    zcrush: () => zcrush,
+    zdelay: () => zdelay,
+    zmod: () => zmod,
+    znoise: () => znoise,
+    zrand: () => zrand,
+    zzfx: () => zzfx
+  });
+  function createParam(names10) {
+    let isMulti = Array.isArray(names10);
+    names10 = !isMulti ? [names10] : names10;
+    const name3 = names10[0];
+    const withVal = (xs) => {
+      let bag;
+      if (typeof xs === "object" && xs.value !== void 0) {
+        bag = { ...xs };
+        xs = xs.value;
+        delete bag.value;
+      }
+      if (isMulti && Array.isArray(xs)) {
+        const result = bag || {};
+        xs.forEach((x3, i3) => {
+          if (i3 < names10.length) {
+            result[names10[i3]] = x3;
+          }
+        });
+        return result;
+      } else if (bag) {
+        bag[name3] = xs;
+        return bag;
+      } else {
+        return { [name3]: xs };
+      }
+    };
+    const func2 = function(value2, pat) {
+      if (!pat) {
+        return reify(value2).withValue(withVal);
+      }
+      if (typeof value2 === "undefined") {
+        return pat.fmap(withVal);
+      }
+      return pat.set(reify(value2).withValue(withVal));
+    };
+    Pattern.prototype[name3] = function(value2) {
+      return func2(value2, this);
+    };
+    return func2;
+  }
+  function isControlName(name3) {
+    return controlAlias.has(name3);
+  }
+  function registerControl(names10, ...aliases) {
+    const name3 = Array.isArray(names10) ? names10[0] : names10;
+    let bag = {};
+    bag[name3] = createParam(names10);
+    controlAlias.set(name3, name3);
+    aliases.forEach((alias) => {
+      bag[alias] = bag[name3];
+      controlAlias.set(alias, name3);
+      Pattern.prototype[alias] = Pattern.prototype[name3];
+    });
+    return bag;
+  }
+  function registerMultiControl(names10, maxControls, ...aliases) {
+    names10 = Array.isArray(names10) ? names10 : [names10];
+    let bag = {};
+    for (let i3 = 1; i3 <= maxControls; i3++) {
+      let theseAliases = [...aliases];
+      let theseNames = [...names10];
+      if (i3 === 1) {
+        const aliases1 = theseAliases.map((a) => `${a}1`);
+        const names1 = theseNames.map((n2) => `${n2}1`);
+        theseAliases = theseAliases.concat(aliases1).concat(names1);
+      } else {
+        theseAliases = theseAliases.map((a) => `${a}${i3}`);
+        theseNames = theseNames.map((n2) => `${n2}${i3}`);
+      }
+      const subBag = registerControl(theseNames, ...theseAliases);
+      bag = { ...bag, ...subBag };
+    }
+    return bag;
+  }
+  var controlAlias, s, sound, wt, wavetablePosition, wtenv, wtattack, wtatt, wtdecay, wtdec, wtsustain, wtsus, wtrelease, wtrel, wtrate, wtsync, wtdepth, wtshape, wtdc, wtskew, warp, wavetableWarp, warpattack, warpatt, warpdecay, warpdec, warpsustain, warpsus, warprelease, warprel, warprate, warpdepth, warpshape, warpdc, warpskew, warpmode, wavetableWarpMode, wtphaserand, wavetablePhaseRand, warpenv, warpsync, source, src, n, i, note, accelerate, velocity, vel, gain, postgain, amp, fmh, fmh1, fmh2, fmh3, fmh4, fmh5, fmh6, fmh7, fmh8, fmi, fmi1, fmi2, fmi3, fmi4, fmi5, fmi6, fmi7, fmi8, fm, fm1, fm2, fm3, fm4, fm5, fm6, fm7, fm8, fmenv, fmenv1, fmenv2, fmenv3, fmenv4, fmenv5, fmenv6, fmenv7, fmenv8, fme, fmattack, fmattack1, fmattack2, fmattack3, fmattack4, fmattack5, fmattack6, fmattack7, fmattack8, fmatt, fmatt1, fmatt2, fmatt3, fmatt4, fmatt5, fmatt6, fmatt7, fmatt8, fmwave, fmwave1, fmwave2, fmwave3, fmwave4, fmwave5, fmwave6, fmwave7, fmwave8, fmdecay, fmdecay1, fmdecay2, fmdecay3, fmdecay4, fmdecay5, fmdecay6, fmdecay7, fmdecay8, fmdec, fmdec1, fmdec2, fmdec3, fmdec4, fmdec5, fmdec6, fmdec7, fmdec8, fmsustain, fmsustain1, fmsustain2, fmsustain3, fmsustain4, fmsustain5, fmsustain6, fmsustain7, fmsustain8, fmsus, fmsus1, fmsus2, fmsus3, fmsus4, fmsus5, fmsus6, fmsus7, fmsus8, fmrelease, fmrelease1, fmrelease2, fmrelease3, fmrelease4, fmrelease5, fmrelease6, fmrelease7, fmrelease8, fmrel, fmrel1, fmrel2, fmrel3, fmrel4, fmrel5, fmrel6, fmrel7, fmrel8, bank, chorus, analyze, fft, attack, att, decay, dec, sustain, sus, release, rel, hold, bandf, bpf, bp, bandq, bpq, begin, end, loop, loopBegin, loopb, loopEnd, loope, crush, coarse, tremolo, trem, tremolosync, tremolodepth, tremoloskew, tremolophase, tremoloshape, drive, duck, duckdepth, duckonset, duckattack, byteBeatExpression, bbexpr, byteBeatStartTime, bbst, channels, ch, pw, pwrate, pwsweep, phaserrate, ph, phaser, phasersweep, phs, phasercenter, phc, phaserdepth, phd, phasdp, channel, cut, cutoff, ctf, lpf, lp, lpenv, lpe, hpenv, hpe, bpenv, bpe, lpattack, lpa, hpattack, hpa, bpattack, bpa, lpdecay, lpd, hpdecay, hpd, bpdecay, bpd, lpsustain, lps, hpsustain, hps, bpsustain, bps, lprelease, lpr, hprelease, hpr, bprelease, bpr, ftype, fanchor, lprate, lpsync, lpdepth, lpdepthfrequency, lpdepthfreq, lpshape, lpdc, lpskew, bprate, bpsync, bpdepth, bpdepthfrequency, bpdepthfreq, bpshape, bpdc, bpskew, hprate, hpsync, hpdepth, hpdepthfrequency, hpdepthfreq, hpshape, hpdc, hpskew, vib, vibrato, v, noise, vibmod, vmod, hcutoff, hpf, hp, hresonance, hpq, resonance, lpq, djf, delay, delayfeedback, delayfb, dfb, delaytime, delayt, dt, delaysync, lock, detune, det, unison, spread, dry, fadeTime, fadeOutTime, fadeInTime, freq, pattack, patt, pdecay, pdec, psustain, psus, prelease, prel, penv, pcurve, panchor, gate, gat, leslie, lrate, lsize, activeLabel, label, degree, mtranspose, ctranspose, harmonic, stepsPerOctave, octaveR, nudge, octave, oct, orbit, bus, busgain, bgain, overgain, overshape, pan, panspan, pansplay, panwidth, panorient, slide, semitone, voice, chord, dictionary, dict, anchor, offset, octaves, mode, room, roomlp, rlp, roomdim, rdim, roomfade, rfade, ir, iresponse, irspeed, irbegin, roomsize, size, sz, rsize, shape, distort, dist, distortvol, distorttype, compressor, compressorKnee, compressorRatio, compressorAttack, compressorRelease, speed, stretch, unit, squiz, vowel, waveloss, density, expression, sustainpedal, fshift, fshiftnote, fshiftphase, triode, krush, kcutoff, octer, octersub, octersubsub, ring, ringf, ringdf, freeze, xsdelay, tsdelay, real, imag, enhance, comb, smear, scram, binshift, hbrick, lbrick, frameRate, frames, hours, minutes, seconds, songPtr, uid, val, cps, clip, legato, duration, dur, zrand, curve, deltaSlide, pitchJump, pitchJumpTime, znoise, zmod, zcrush, zdelay, zzfx, color, colour, createParams, adsr, ad, ds, ar, midichan, midimap, midiport, midicmd, control, ccn, ccv, ctlNum, nrpnn, nrpv, progNum, sysex, sysexid, sysexdata, midibend, miditouch, polyTouch, oschost, oscport, getControlName, as, scrub, subControlAliases, registerSubControl, registerSubControls, getMainSubcontrolName, lfo, env, bmod, transient, FXrelease, FXrel, FXr, fxr;
+  var init_controls = __esm({
+    "build/engine-src/strudel/packages/core/controls.mjs"() {
+      init_logger();
+      init_pattern();
+      controlAlias = /* @__PURE__ */ new Map();
+      ({ s, sound } = registerControl(["s", "n", "gain"], "sound"));
+      ({ wt, wavetablePosition } = registerControl("wt", "wavetablePosition"));
+      ({ wtenv } = registerControl("wtenv"));
+      ({ wtattack, wtatt } = registerControl("wtattack", "wtatt"));
+      ({ wtdecay, wtdec } = registerControl("wtdecay", "wtdec"));
+      ({ wtsustain, wtsus } = registerControl("wtsustain", "wtsus"));
+      ({ wtrelease, wtrel } = registerControl("wtrelease", "wtrel"));
+      ({ wtrate } = registerControl("wtrate"));
+      ({ wtsync } = registerControl("wtsync"));
+      ({ wtdepth } = registerControl("wtdepth"));
+      ({ wtshape } = registerControl("wtshape"));
+      ({ wtdc } = registerControl("wtdc"));
+      ({ wtskew } = registerControl("wtskew"));
+      ({ warp, wavetableWarp } = registerControl("warp", "wavetableWarp"));
+      ({ warpattack, warpatt } = registerControl("warpattack", "warpatt"));
+      ({ warpdecay, warpdec } = registerControl("warpdecay", "warpdec"));
+      ({ warpsustain, warpsus } = registerControl("warpsustain", "warpsus"));
+      ({ warprelease, warprel } = registerControl("warprelease", "warprel"));
+      ({ warprate } = registerControl("warprate"));
+      ({ warpdepth } = registerControl("warpdepth"));
+      ({ warpshape } = registerControl("warpshape"));
+      ({ warpdc } = registerControl("warpdc"));
+      ({ warpskew } = registerControl("warpskew"));
+      ({ warpmode, wavetableWarpMode } = registerControl("warpmode", "wavetableWarpMode"));
+      ({ wtphaserand, wavetablePhaseRand } = registerControl("wtphaserand", "wavetablePhaseRand"));
+      ({ warpenv } = registerControl("warpenv"));
+      ({ warpsync } = registerControl("warpsync"));
+      ({ source, src } = registerControl("source", "src"));
+      ({ n } = registerControl("n"));
+      ({ i } = registerControl("i"));
+      ({ note } = registerControl(["note", "n"]));
+      ({ accelerate } = registerControl("accelerate"));
+      ({ velocity, vel } = registerControl("velocity", "vel"));
+      ({ gain } = registerControl("gain"));
+      ({ postgain } = registerControl("postgain"));
+      ({ amp } = registerControl("amp"));
+      ({ fmh, fmh1, fmh2, fmh3, fmh4, fmh5, fmh6, fmh7, fmh8 } = registerMultiControl(["fmh", "fmi"], 8, "fmh"));
+      ({ fmi, fmi1, fmi2, fmi3, fmi4, fmi5, fmi6, fmi7, fmi8, fm, fm1, fm2, fm3, fm4, fm5, fm6, fm7, fm8 } = registerMultiControl(["fmi", "fmh"], 8, "fm"));
+      ({ fmenv, fmenv1, fmenv2, fmenv3, fmenv4, fmenv5, fmenv6, fmenv7, fmenv8, fme } = registerMultiControl(
+        "fmenv",
+        8,
+        "fme"
+      ));
+      ({
+        fmattack,
+        fmattack1,
+        fmattack2,
+        fmattack3,
+        fmattack4,
+        fmattack5,
+        fmattack6,
+        fmattack7,
+        fmattack8,
+        fmatt,
+        fmatt1,
+        fmatt2,
+        fmatt3,
+        fmatt4,
+        fmatt5,
+        fmatt6,
+        fmatt7,
+        fmatt8
+      } = registerMultiControl("fmattack", 8, "fmatt"));
+      ({ fmwave, fmwave1, fmwave2, fmwave3, fmwave4, fmwave5, fmwave6, fmwave7, fmwave8 } = registerMultiControl(
+        "fmwave",
+        8
+      ));
+      ({
+        fmdecay,
+        fmdecay1,
+        fmdecay2,
+        fmdecay3,
+        fmdecay4,
+        fmdecay5,
+        fmdecay6,
+        fmdecay7,
+        fmdecay8,
+        fmdec,
+        fmdec1,
+        fmdec2,
+        fmdec3,
+        fmdec4,
+        fmdec5,
+        fmdec6,
+        fmdec7,
+        fmdec8
+      } = registerMultiControl("fmdecay", 8, "fmdec"));
+      ({
+        fmsustain,
+        fmsustain1,
+        fmsustain2,
+        fmsustain3,
+        fmsustain4,
+        fmsustain5,
+        fmsustain6,
+        fmsustain7,
+        fmsustain8,
+        fmsus,
+        fmsus1,
+        fmsus2,
+        fmsus3,
+        fmsus4,
+        fmsus5,
+        fmsus6,
+        fmsus7,
+        fmsus8
+      } = registerMultiControl("fmsustain", 8, "fmsus"));
+      ({
+        fmrelease,
+        fmrelease1,
+        fmrelease2,
+        fmrelease3,
+        fmrelease4,
+        fmrelease5,
+        fmrelease6,
+        fmrelease7,
+        fmrelease8,
+        fmrel,
+        fmrel1,
+        fmrel2,
+        fmrel3,
+        fmrel4,
+        fmrel5,
+        fmrel6,
+        fmrel7,
+        fmrel8
+      } = registerMultiControl("fmrelease", 8, "fmrel"));
+      for (let i3 = 0; i3 <= 8; i3++) {
+        for (let j = 0; j <= 8; j++) {
+          registerControl(`fmi${i3}${j}`, `fm${i3}${j}`);
+        }
+      }
+      ({ bank } = registerControl("bank"));
+      ({ chorus } = registerControl("chorus"));
+      ({ analyze } = registerControl("analyze"));
+      ({ fft } = registerControl("fft"));
+      ({ attack, att } = registerControl("attack", "att"));
+      ({ decay, dec } = registerControl("decay", "dec"));
+      ({ sustain, sus } = registerControl("sustain", "sus"));
+      ({ release, rel } = registerControl("release", "rel"));
+      ({ hold } = registerControl("hold"));
+      ({ bandf, bpf, bp } = registerControl(["bandf", "bandq", "bpenv"], "bpf", "bp"));
+      ({ bandq, bpq } = registerControl("bandq", "bpq"));
+      ({ begin } = registerControl("begin"));
+      ({ end } = registerControl("end"));
+      ({ loop } = registerControl("loop"));
+      ({ loopBegin, loopb } = registerControl("loopBegin", "loopb"));
+      ({ loopEnd, loope } = registerControl("loopEnd", "loope"));
+      ({ crush } = registerControl("crush"));
+      ({ coarse } = registerControl("coarse"));
+      ({ tremolo, trem } = registerControl(["tremolo", "tremolodepth", "tremoloskew", "tremolophase"], "trem"));
+      ({ tremolosync } = registerControl(
+        ["tremolosync", "tremolodepth", "tremoloskew", "tremolophase"],
+        "tremsync"
+      ));
+      ({ tremolodepth } = registerControl("tremolodepth", "tremdepth"));
+      ({ tremoloskew } = registerControl("tremoloskew", "tremskew"));
+      ({ tremolophase } = registerControl("tremolophase", "tremphase"));
+      ({ tremoloshape } = registerControl("tremoloshape", "tremshape"));
+      ({ drive } = registerControl("drive"));
+      ({ duck } = registerControl("duckorbit", "duck"));
+      ({ duckdepth } = registerControl("duckdepth"));
+      ({ duckonset } = registerControl("duckonset", "duckons"));
+      ({ duckattack } = registerControl("duckattack", "duckatt", "datt"));
+      ({ byteBeatExpression, bbexpr } = registerControl("byteBeatExpression", "bbexpr", "bb"));
+      ({ byteBeatStartTime, bbst } = registerControl("byteBeatStartTime", "bbst"));
+      ({ channels, ch } = registerControl("channels", "ch"));
+      ({ pw } = registerControl(["pw", "pwrate", "pwsweep"]));
+      ({ pwrate } = registerControl("pwrate", "pwr"));
+      ({ pwsweep } = registerControl("pwsweep", "pws"));
+      ({ phaserrate, ph, phaser } = registerControl(
+        ["phaserrate", "phaserdepth", "phasercenter", "phasersweep"],
+        "ph",
+        "phaser"
+      ));
+      ({ phasersweep, phs } = registerControl("phasersweep", "phs"));
+      ({ phasercenter, phc } = registerControl("phasercenter", "phc"));
+      ({ phaserdepth, phd, phasdp } = registerControl("phaserdepth", "phd", "phasdp"));
+      ({ channel } = registerControl("channel"));
+      ({ cut } = registerControl("cut"));
+      ({ cutoff, ctf, lpf, lp } = registerControl(["cutoff", "resonance", "lpenv"], "ctf", "lpf", "lp"));
+      ({ lpenv, lpe } = registerControl("lpenv", "lpe"));
+      ({ hpenv, hpe } = registerControl("hpenv", "hpe"));
+      ({ bpenv, bpe } = registerControl("bpenv", "bpe"));
+      ({ lpattack, lpa } = registerControl("lpattack", "lpa"));
+      ({ hpattack, hpa } = registerControl("hpattack", "hpa"));
+      ({ bpattack, bpa } = registerControl("bpattack", "bpa"));
+      ({ lpdecay, lpd } = registerControl("lpdecay", "lpd"));
+      ({ hpdecay, hpd } = registerControl("hpdecay", "hpd"));
+      ({ bpdecay, bpd } = registerControl("bpdecay", "bpd"));
+      ({ lpsustain, lps } = registerControl("lpsustain", "lps"));
+      ({ hpsustain, hps } = registerControl("hpsustain", "hps"));
+      ({ bpsustain, bps } = registerControl("bpsustain", "bps"));
+      ({ lprelease, lpr } = registerControl("lprelease", "lpr"));
+      ({ hprelease, hpr } = registerControl("hprelease", "hpr"));
+      ({ bprelease, bpr } = registerControl("bprelease", "bpr"));
+      ({ ftype } = registerControl("ftype"));
+      ({ fanchor } = registerControl("fanchor"));
+      ({ lprate } = registerControl("lprate"));
+      ({ lpsync } = registerControl("lpsync"));
+      ({ lpdepth } = registerControl("lpdepth"));
+      ({ lpdepthfrequency, lpdepthfreq } = registerControl("lpdepthfrequency", "lpdepthfreq"));
+      ({ lpshape } = registerControl("lpshape"));
+      ({ lpdc } = registerControl("lpdc"));
+      ({ lpskew } = registerControl("lpskew"));
+      ({ bprate } = registerControl("bprate"));
+      ({ bpsync } = registerControl("bpsync"));
+      ({ bpdepth } = registerControl("bpdepth"));
+      ({ bpdepthfrequency, bpdepthfreq } = registerControl("bpdepthfrequency", "bpdepthfreq"));
+      ({ bpshape } = registerControl("bpshape"));
+      ({ bpdc } = registerControl("bpdc"));
+      ({ bpskew } = registerControl("bpskew"));
+      ({ hprate } = registerControl("hprate"));
+      ({ hpsync } = registerControl("hpsync"));
+      ({ hpdepth } = registerControl("hpdepth"));
+      ({ hpdepthfrequency, hpdepthfreq } = registerControl("hpdepthfrequency", "hpdepthfreq"));
+      ({ hpshape } = registerControl("hpshape"));
+      ({ hpdc } = registerControl("hpdc"));
+      ({ hpskew } = registerControl("hpskew"));
+      ({ vib, vibrato, v } = registerControl(["vib", "vibmod"], "vibrato", "v"));
+      ({ noise } = registerControl("noise"));
+      ({ vibmod, vmod } = registerControl(["vibmod", "vib"], "vmod"));
+      ({ hcutoff, hpf, hp } = registerControl(["hcutoff", "hresonance", "hpenv"], "hpf", "hp"));
+      ({ hresonance, hpq } = registerControl("hresonance", "hpq"));
+      ({ resonance, lpq } = registerControl("resonance", "lpq"));
+      ({ djf } = registerControl("djf"));
+      ({ delay } = registerControl(["delay", "delaytime", "delayfeedback"]));
+      ({ delayfeedback, delayfb, dfb } = registerControl("delayfeedback", "delayfb", "dfb"));
+      ({ delaytime, delayt, dt } = registerControl("delaytime", "delayt", "dt"));
+      ({ delaysync } = registerControl("delaysync", "delays", "ds"));
+      ({ lock } = registerControl("lock"));
+      ({ detune, det } = registerControl("detune", "det"));
+      ({ unison } = registerControl("unison"));
+      ({ spread } = registerControl("spread"));
+      ({ dry } = registerControl("dry"));
+      ({ fadeTime, fadeOutTime } = registerControl("fadeTime", "fadeOutTime"));
+      ({ fadeInTime } = registerControl("fadeInTime"));
+      ({ freq } = registerControl("freq"));
+      ({ pattack, patt } = registerControl("pattack", "patt"));
+      ({ pdecay, pdec } = registerControl("pdecay", "pdec"));
+      ({ psustain, psus } = registerControl("psustain", "psus"));
+      ({ prelease, prel } = registerControl("prelease", "prel"));
+      ({ penv } = registerControl("penv"));
+      ({ pcurve } = registerControl("pcurve"));
+      ({ panchor } = registerControl("panchor"));
+      ({ gate, gat } = registerControl("gate", "gat"));
+      ({ leslie } = registerControl("leslie"));
+      ({ lrate } = registerControl("lrate"));
+      ({ lsize } = registerControl("lsize"));
+      ({ activeLabel } = registerControl("activeLabel"));
+      ({ label } = registerControl(["label", "activeLabel"]));
+      ({ degree } = registerControl("degree"));
+      ({ mtranspose } = registerControl("mtranspose"));
+      ({ ctranspose } = registerControl("ctranspose"));
+      ({ harmonic } = registerControl("harmonic"));
+      ({ stepsPerOctave } = registerControl("stepsPerOctave"));
+      ({ octaveR } = registerControl("octaveR"));
+      ({ nudge } = registerControl("nudge"));
+      ({ octave, oct } = registerControl("octave", "oct"));
+      ({ orbit } = registerControl("orbit", "o"));
+      ({ bus } = registerControl("bus"));
+      ({ busgain, bgain } = registerControl("busgain", "bgain"));
+      ({ overgain } = registerControl("overgain"));
+      ({ overshape } = registerControl("overshape"));
+      ({ pan } = registerControl("pan"));
+      ({ panspan } = registerControl("panspan"));
+      ({ pansplay } = registerControl("pansplay"));
+      ({ panwidth } = registerControl("panwidth"));
+      ({ panorient } = registerControl("panorient"));
+      ({ slide } = registerControl("slide"));
+      ({ semitone } = registerControl("semitone"));
+      ({ voice } = registerControl("voice"));
+      ({ chord } = registerControl("chord"));
+      ({ dictionary, dict } = registerControl("dictionary", "dict"));
+      ({ anchor } = registerControl("anchor"));
+      ({ offset } = registerControl("offset"));
+      ({ octaves } = registerControl("octaves"));
+      ({ mode } = registerControl(["mode", "anchor"]));
+      ({ room } = registerControl(["room", "size"]));
+      ({ roomlp, rlp } = registerControl("roomlp", "rlp"));
+      ({ roomdim, rdim } = registerControl("roomdim", "rdim"));
+      ({ roomfade, rfade } = registerControl("roomfade", "rfade"));
+      ({ ir, iresponse } = registerControl(["ir", "i"], "iresponse"));
+      ({ irspeed } = registerControl("irspeed"));
+      ({ irbegin } = registerControl("irbegin"));
+      ({ roomsize, size, sz, rsize } = registerControl("roomsize", "size", "sz", "rsize"));
+      ({ shape } = registerControl(["shape", "shapevol"]));
+      ({ distort, dist } = registerControl(["distort", "distortvol", "distorttype"], "dist"));
+      ({ distortvol } = registerControl("distortvol", "distvol"));
+      ({ distorttype } = registerControl("distorttype", "disttype"));
+      ({ compressor } = registerControl([
+        "compressor",
+        "compressorRatio",
+        "compressorKnee",
+        "compressorAttack",
+        "compressorRelease"
+      ]));
+      ({ compressorKnee } = registerControl("compressorKnee"));
+      ({ compressorRatio } = registerControl("compressorRatio"));
+      ({ compressorAttack } = registerControl("compressorAttack"));
+      ({ compressorRelease } = registerControl("compressorRelease"));
+      ({ speed } = registerControl("speed"));
+      ({ stretch } = registerControl("stretch"));
+      ({ unit } = registerControl("unit"));
+      ({ squiz } = registerControl("squiz"));
+      ({ vowel } = registerControl("vowel"));
+      ({ waveloss } = registerControl("waveloss"));
+      ({ density } = registerControl("density"));
+      ({ expression } = registerControl("expression"));
+      ({ sustainpedal } = registerControl("sustainpedal"));
+      ({ fshift } = registerControl("fshift"));
+      ({ fshiftnote } = registerControl("fshiftnote"));
+      ({ fshiftphase } = registerControl("fshiftphase"));
+      ({ triode } = registerControl("triode"));
+      ({ krush } = registerControl("krush"));
+      ({ kcutoff } = registerControl("kcutoff"));
+      ({ octer } = registerControl("octer"));
+      ({ octersub } = registerControl("octersub"));
+      ({ octersubsub } = registerControl("octersubsub"));
+      ({ ring } = registerControl("ring"));
+      ({ ringf } = registerControl("ringf"));
+      ({ ringdf } = registerControl("ringdf"));
+      ({ freeze } = registerControl("freeze"));
+      ({ xsdelay } = registerControl("xsdelay"));
+      ({ tsdelay } = registerControl("tsdelay"));
+      ({ real } = registerControl("real"));
+      ({ imag } = registerControl("imag"));
+      ({ enhance } = registerControl("enhance"));
+      ({ comb } = registerControl("comb"));
+      ({ smear } = registerControl("smear"));
+      ({ scram } = registerControl("scram"));
+      ({ binshift } = registerControl("binshift"));
+      ({ hbrick } = registerControl("hbrick"));
+      ({ lbrick } = registerControl("lbrick"));
+      ({ frameRate } = registerControl("frameRate"));
+      ({ frames } = registerControl("frames"));
+      ({ hours } = registerControl("hours"));
+      ({ minutes } = registerControl("minutes"));
+      ({ seconds } = registerControl("seconds"));
+      ({ songPtr } = registerControl("songPtr"));
+      ({ uid } = registerControl("uid"));
+      ({ val } = registerControl("val"));
+      ({ cps } = registerControl("cps"));
+      ({ clip, legato } = registerControl("clip", "legato"));
+      ({ duration, dur } = registerControl("duration", "dur"));
+      ({ zrand } = registerControl("zrand"));
+      ({ curve } = registerControl("curve"));
+      ({ deltaSlide } = registerControl("deltaSlide"));
+      ({ pitchJump } = registerControl("pitchJump"));
+      ({ pitchJumpTime } = registerControl("pitchJumpTime"));
+      ({ znoise } = registerControl("znoise"));
+      ({ zmod } = registerControl("zmod"));
+      ({ zcrush } = registerControl("zcrush"));
+      ({ zdelay } = registerControl("zdelay"));
+      ({ zzfx } = registerControl("zzfx"));
+      ({ color, colour } = registerControl(["color", "colour"]));
+      createParams = (...names10) => names10.reduce((acc, name3) => Object.assign(acc, { [name3]: createParam(name3) }), {});
+      adsr = register("adsr", (adsr2, pat) => {
+        adsr2 = !Array.isArray(adsr2) ? [adsr2] : adsr2;
+        const [attack2, decay2, sustain2, release2] = adsr2;
+        return pat.set({ attack: attack2, decay: decay2, sustain: sustain2, release: release2 });
+      });
+      ad = register("ad", (t, pat) => {
+        t = !Array.isArray(t) ? [t] : t;
+        const [attack2, decay2 = attack2] = t;
+        return pat.attack(attack2).decay(decay2);
+      });
+      ds = register("ds", (t, pat) => {
+        t = !Array.isArray(t) ? [t] : t;
+        const [decay2, sustain2 = 0] = t;
+        return pat.set({ decay: decay2, sustain: sustain2 });
+      });
+      ar = register("ar", (t, pat) => {
+        t = !Array.isArray(t) ? [t] : t;
+        const [attack2, release2 = attack2] = t;
+        return pat.set({ attack: attack2, release: release2 });
+      });
+      ({ midichan } = registerControl("midichan"));
+      ({ midimap } = registerControl("midimap"));
+      ({ midiport } = registerControl("midiport"));
+      ({ midicmd } = registerControl("midicmd"));
+      control = register("control", (args, pat) => {
+        if (!Array.isArray(args)) {
+          throw new Error("control expects an array of [ccn, ccv]");
+        }
+        const [_ccn, _ccv] = args;
+        return pat.ccn(_ccn).ccv(_ccv);
+      });
+      ({ ccn } = registerControl("ccn"));
+      ({ ccv } = registerControl("ccv"));
+      ({ ctlNum } = registerControl("ctlNum"));
+      ({ nrpnn } = registerControl("nrpnn"));
+      ({ nrpv } = registerControl("nrpv"));
+      ({ progNum } = registerControl("progNum"));
+      sysex = register("sysex", (args, pat) => {
+        if (!Array.isArray(args)) {
+          throw new Error("sysex expects an array of [id, data]");
+        }
+        const [id2, data2] = args;
+        return pat.sysexid(id2).sysexdata(data2);
+      });
+      ({ sysexid } = registerControl("sysexid"));
+      ({ sysexdata } = registerControl("sysexdata"));
+      ({ midibend } = registerControl("midibend"));
+      ({ miditouch } = registerControl("miditouch"));
+      ({ polyTouch } = registerControl("polyTouch"));
+      ({ oschost } = registerControl("oschost"));
+      ({ oscport } = registerControl("oscport"));
+      getControlName = (alias) => {
+        if (controlAlias.has(alias)) {
+          return controlAlias.get(alias);
+        }
+        return alias;
+      };
+      as = register("as", (mapping, pat) => {
+        mapping = Array.isArray(mapping) ? mapping : [mapping];
+        return pat.fmap((v2) => {
+          v2 = Array.isArray(v2) ? v2 : [v2];
+          const entries4 = [];
+          for (let i3 = 0; i3 < mapping.length; ++i3) {
+            if (v2[i3] !== void 0) {
+              entries4.push([getControlName(mapping[i3]), v2[i3]]);
+            }
+          }
+          return Object.fromEntries(entries4);
+        });
+      });
+      scrub = register(
+        "scrub",
+        (beginPat, pat) => {
+          return beginPat.outerBind((v2) => {
+            if (!Array.isArray(v2)) {
+              v2 = [v2];
+            }
+            const [beginVal, speedMultiplier = 1] = v2;
+            return pat.begin(beginVal).mul(speed(speedMultiplier)).clip(1);
+          });
+        },
+        false
+      );
+      subControlAliases = /* @__PURE__ */ new Map();
+      registerSubControl = (control2, subControl, ...aliases) => {
+        const aliasMap = subControlAliases.get(control2) ?? /* @__PURE__ */ new Map();
+        const allKeys = /* @__PURE__ */ new Set([subControl, ...aliases]);
+        for (const alias of allKeys) {
+          aliasMap.set(String(alias).toLowerCase(), subControl);
+        }
+        subControlAliases.set(control2, aliasMap);
+      };
+      registerSubControls = (control2, subControlAliases2 = []) => {
+        for (const [subControl, ...aliases] of subControlAliases2) {
+          registerSubControl(control2, subControl, ...aliases);
+        }
+      };
+      getMainSubcontrolName = (control2, subKey) => {
+        const aliasMap = subControlAliases.get(control2);
+        if (!aliasMap) return subKey;
+        return aliasMap.get(String(subKey).toLowerCase()) ?? subKey;
+      };
+      registerSubControls("lfo", [
+        ["control", "c"],
+        ["subControl", "sc"],
+        ["rate", "r"],
+        ["depth", "dep", "dr"],
+        ["depthabs", "da"],
+        ["dcoffset", "dc"],
+        ["shape", "sh"],
+        ["skew", "sk"],
+        ["curve", "cu"],
+        ["sync", "s"],
+        ["retrig", "rt"],
+        ["fxi"]
+      ]);
+      registerSubControls("env", [
+        ["control", "c"],
+        ["subControl", "sc"],
+        ["attack", "att", "a"],
+        ["decay", "dec", "d"],
+        ["sustain", "sus", "s"],
+        ["release", "rel", "r"],
+        ["depth", "dep", "dr"],
+        ["depthabs", "da"],
+        ["acurve", "ac"],
+        ["dcurve", "dc"],
+        ["rcurve", "rc"],
+        ["fxi"]
+      ]);
+      registerSubControls("bmod", [
+        ["bus", "b"],
+        ["control", "c"],
+        ["subControl", "sc"],
+        ["depth", "dep", "dr"],
+        ["depthabs", "da"],
+        ["dc"],
+        ["fxi"]
+      ]);
+      Pattern.prototype.modulate = function(type, config, idPat) {
+        config = { control: void 0, ...config };
+        const modulatorKeys = ["lfo", "env", "bmod"];
+        if (!modulatorKeys.includes(type)) {
+          logger(`[core] Modulation type ${type} not found. Please use one of 'lfo', 'env', 'bmod'`);
+          return this;
+        }
+        let output = this;
+        let defaultValue = void 0;
+        output = output.fmap((v2) => (id2) => ({ v: v2, id: id2 })).appLeft(reify(idPat));
+        for (const [rawKey, value2] of Object.entries(config)) {
+          const key = getMainSubcontrolName(type, rawKey);
+          const valuePat = reify(value2);
+          output = output.fmap(({ v: v2, id: id2 }) => (c2) => {
+            if (defaultValue === void 0) {
+              let control2 = getControlName(Object.keys(v2).at(-1));
+              if (modulatorKeys.includes(control2)) {
+                control2 = `${control2}_${[...v2[control2].__ids].at(-1)}`;
+              }
+              defaultValue = control2;
+            }
+            v2[type] ??= { __ids: /* @__PURE__ */ new Set() };
+            const t = v2[type];
+            id2 ??= t.__ids.size;
+            t[id2] ??= { control: defaultValue };
+            t.__ids.add(id2);
+            if (c2 === void 0) return { v: v2, id: id2 };
+            if (key === "control" || key === "subControl") {
+              t[id2][key] = getControlName(c2);
+            } else {
+              t[id2][key] = c2;
+            }
+            return { v: v2, id: id2 };
+          }).appLeft(valuePat);
+        }
+        return output.fmap(({ v: v2 }) => v2);
+      };
+      Pattern.prototype.lfo = function(config, id2) {
+        return this.modulate("lfo", config, id2);
+      };
+      lfo = (config) => pure({}).lfo(config);
+      Pattern.prototype.env = function(config, id2) {
+        return this.modulate("env", config, id2);
+      };
+      env = (config) => pure({}).env(config);
+      Pattern.prototype.bmod = function(config, id2) {
+        return this.modulate("bmod", config, id2);
+      };
+      bmod = (config) => pure({}).bmod(config);
+      ({ transient } = registerControl(["transient", "transsustain"]));
+      ({ FXrelease, FXrel, FXr, fxr } = registerControl("FXrelease", "FXrel", "FXr", "fxr"));
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/euclid.mjs
+  var left, right, _bjorklund, bjorklund, _euclidRot, _euclidLegato, _euclid, euclid, bjork, euclidrot, euclidRot, euclidLegato, euclidLegatoRot, euclidish, eish;
+  var init_euclid = __esm({
+    "build/engine-src/strudel/packages/core/euclid.mjs"() {
+      init_pattern();
+      init_util();
+      init_fraction2();
+      left = function(n2, x3) {
+        const [ons, offs] = n2;
+        const [xs, ys] = x3;
+        const [_xs, __xs] = splitAt(offs, xs);
+        return [
+          [offs, ons - offs],
+          [zipWith((a, b) => a.concat(b), _xs, ys), __xs]
+        ];
+      };
+      right = function(n2, x3) {
+        const [ons, offs] = n2;
+        const [xs, ys] = x3;
+        const [_ys, __ys] = splitAt(ons, ys);
+        const result = [
+          [ons, offs - ons],
+          [zipWith((a, b) => a.concat(b), xs, _ys), __ys]
+        ];
+        return result;
+      };
+      _bjorklund = function(n2, x3) {
+        const [ons, offs] = n2;
+        return Math.min(ons, offs) <= 1 ? [n2, x3] : _bjorklund(...ons > offs ? left(n2, x3) : right(n2, x3));
+      };
+      bjorklund = function(ons, steps4) {
+        const inverted = ons < 0;
+        const absOns = Math.abs(ons);
+        const offs = steps4 - absOns;
+        const ones = Array(absOns).fill([1]);
+        const zeros = Array(offs).fill([0]);
+        const result = _bjorklund([absOns, offs], [ones, zeros]);
+        const pattern2 = flatten(result[1][0]).concat(flatten(result[1][1]));
+        return inverted ? pattern2.map((x3) => 1 - x3) : pattern2;
+      };
+      _euclidRot = function(pulses, steps4, rotation) {
+        const b = bjorklund(pulses, steps4);
+        if (rotation) {
+          return rotate(b, -rotation);
+        }
+        return b;
+      };
+      _euclidLegato = function(pulses, steps4, rotation, pat) {
+        var bin_pat = _euclidRot(pulses, steps4, 0);
+        const firstOnset = bin_pat.indexOf(1);
+        bin_pat = rotate(bin_pat, firstOnset);
+        steps4 = Math.abs(steps4);
+        const gapless = bin_pat.join("").split("1").slice(1).map((s2) => [s2.length + 1, true]);
+        return pat.struct(timeCat(...gapless).late(fraction_default(rotation + firstOnset).div(steps4)));
+      };
+      _euclid = function(pulses, steps4, rotation, pat) {
+        if (steps4 === 0 || pulses === 0) {
+          return silence;
+        }
+        const cycles = Math.ceil(Math.abs(pulses) / Math.abs(steps4));
+        const totalSteps = cycles * steps4;
+        if (totalSteps < 0) {
+          return _euclidLegato(pulses, -totalSteps, rotation, pat.fast(cycles)).slow(cycles);
+        }
+        return pat.fast(cycles).struct(_euclidRot(pulses, totalSteps, rotation)).slow(cycles);
+      };
+      euclid = register("euclid", function(pulses, steps4, pat) {
+        return _euclid(pulses, steps4, 0, pat);
+      });
+      bjork = register("bjork", function(euc, pat) {
+        if (!Array.isArray(euc)) {
+          euc = [euc];
+        }
+        const [pulses, steps4 = pulses, rot = 0] = euc;
+        return _euclid(pulses, steps4, rot, pat);
+      });
+      ({ euclidrot, euclidRot } = register(["euclidrot", "euclidRot"], function(pulses, steps4, rotation, pat) {
+        return _euclid(pulses, steps4, rotation, pat);
+      }));
+      euclidLegato = register(["euclidLegato"], function(pulses, steps4, pat) {
+        return _euclid(pulses, -steps4, 0, pat);
+      });
+      euclidLegatoRot = register(["euclidLegatoRot"], function(pulses, steps4, rotation, pat) {
+        return _euclid(pulses, -steps4, rotation, pat);
+      });
+      ({ euclidish, eish } = register(["euclidish", "eish"], function(pulses, steps4, perc, pat) {
+        const morphed = _morph(bjorklund(pulses, steps4), new Array(pulses).fill(1), perc);
+        return pat.struct(morphed).setSteps(steps4);
+      }));
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/zyklus.mjs
+  function createClock(getTime2, callback, duration2 = 0.05, interval3 = 0.1, overlap = 0.1, setInterval = globalThis.setInterval, clearInterval = globalThis.clearInterval, round2 = true) {
+    let tick = 0;
+    let phase = 0;
+    let precision = 10 ** 4;
+    let minLatency = 0.01;
+    const setDuration = (setter) => duration2 = setter(duration2);
+    overlap = overlap || interval3 / 2;
+    const onTick = () => {
+      const t = getTime2();
+      const lookahead2 = t + interval3 + overlap;
+      if (phase === 0) {
+        phase = t + minLatency;
+      }
+      while (phase < lookahead2) {
+        phase = round2 ? Math.round(phase * precision) / precision : phase;
+        callback(phase, duration2, tick, t);
+        phase += duration2;
+        tick++;
+      }
+    };
+    let intervalID;
+    const start = () => {
+      clear();
+      onTick();
+      intervalID = setInterval(onTick, interval3 * 1e3);
+    };
+    const clear = () => {
+      intervalID !== void 0 && clearInterval(intervalID);
+      intervalID = void 0;
+    };
+    const pause = () => clear();
+    const stop2 = () => {
+      tick = 0;
+      phase = 0;
+      clear();
+    };
+    const getPhase = () => phase;
+    return { setDuration, start, stop: stop2, pause, duration: duration2, interval: interval3, getPhase, minLatency };
+  }
+  var zyklus_default;
+  var init_zyklus = __esm({
+    "build/engine-src/strudel/packages/core/zyklus.mjs"() {
+      zyklus_default = createClock;
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/cyclist.mjs
+  var Cyclist;
+  var init_cyclist = __esm({
+    "build/engine-src/strudel/packages/core/cyclist.mjs"() {
+      init_zyklus();
+      init_logger();
+      Cyclist = class {
+        constructor({
+          interval: interval3,
+          onSchedule: onSchedule2,
+          onTrigger,
+          onToggle,
+          onError,
+          getTime: getTime2,
+          latency = 0.1,
+          setInterval,
+          clearInterval,
+          beforeStart
+        }) {
+          if (onTrigger) {
+            throw new Error(
+              "onTrigger has been dropped. use onSchedule(hap, time, cps) instead, see https://codeberg.org/uzu/strudel/pulls/2138"
+            );
+          }
+          this.started = false;
+          this.beforeStart = beforeStart;
+          this.cps = 0.5;
+          this.checkpoint = {
+            // new checkpoints are created when there's a change in cps
+            cycles: 0,
+            // number of cycles when cps was changed
+            seconds: 0
+            // clock phase when cps was changed
+          };
+          this.num_ticks_since_checkpoint = 0;
+          this.lastTick = 0;
+          this.lastBegin = 0;
+          this.lastEnd = 0;
+          this.getTime = getTime2;
+          this.onToggle = onToggle;
+          this.latency = latency;
+          this.clock = zyklus_default(
+            getTime2,
+            // called slightly before each cycle
+            (phase, duration2, _, t) => {
+              if (this.num_ticks_since_checkpoint === 0) {
+                this.checkpoint = {
+                  cycles: this.lastEnd,
+                  seconds: phase
+                };
+              }
+              this.num_ticks_since_checkpoint++;
+              try {
+                var begin2 = this.lastEnd;
+                this.lastBegin = begin2;
+                var end2 = this.checkpoint.cycles + this.num_ticks_since_checkpoint * duration2 * this.cps;
+                this.lastEnd = end2;
+                this.lastTick = phase;
+                if (phase < t) {
+                  console.log(`skip query: too late`);
+                  return;
+                }
+                const tickEndTime = phase + duration2;
+                var cpsChanged = false;
+                do {
+                  cpsChanged = false;
+                  const haps = this.pattern.queryArc(begin2, end2, { _cps: this.cps, cyclist: "cyclist" }).filter((hap) => hap.hasOnset()).sort((a, b) => {
+                    const aBegin = a.whole.begin;
+                    const bBegin = b.whole.begin;
+                    if (aBegin.eq(bBegin)) {
+                      if (a.value.cps !== void 0) {
+                        return b.value.cps !== void 0 ? 0 : -1;
+                      }
+                      if (b.value.cps !== void 0) {
+                        return 1;
+                      }
+                      return 0;
+                    }
+                    return aBegin.sub(bBegin);
+                  });
+                  haps.forEach((hap) => {
+                    const targetTime = (hap.whole.begin - this.checkpoint.cycles) / this.cps + this.checkpoint.seconds;
+                    if (tickEndTime < targetTime) {
+                      return;
+                    }
+                    onSchedule2?.(hap, targetTime + this.latency, hap.value.cps ?? this.cps);
+                    if (hap.value.cps !== void 0 && this.cps != hap.value.cps) {
+                      cpsChanged = true;
+                      this.cps = hap.value.cps;
+                      this.num_ticks_since_checkpoint = 0;
+                      this.checkpoint = {
+                        cycles: hap.whole.begin,
+                        seconds: targetTime
+                      };
+                    }
+                  });
+                  if (cpsChanged) {
+                    begin2 = end2;
+                    const remainingSecondsSinceCheckpoint = tickEndTime - this.checkpoint.seconds;
+                    const remainingCycles = remainingSecondsSinceCheckpoint * this.cps;
+                    end2 = this.checkpoint.cycles + remainingCycles;
+                    this.lastEnd = end2;
+                    if (end2 < begin2) {
+                      break;
+                    }
+                  }
+                } while (cpsChanged);
+              } catch (e) {
+                errorLogger(e);
+                onError?.(e);
+              }
+            },
+            interval3,
+            // duration of each cycle
+            0.1,
+            0.1,
+            setInterval,
+            clearInterval
+          );
+        }
+        now() {
+          if (!this.started) {
+            return 0;
+          }
+          const secondsSinceLastTick = this.getTime() - this.lastTick - this.clock.duration;
+          return this.lastBegin + secondsSinceLastTick * this.cps;
+        }
+        setStarted(v2) {
+          this.started = v2;
+          this.onToggle?.(v2);
+        }
+        async start() {
+          await this.beforeStart?.();
+          this.checkpoint = {
+            cycles: 0,
+            seconds: 0
+          };
+          this.num_ticks_since_checkpoint = 0;
+          if (!this.pattern) {
+            throw new Error("Scheduler: no pattern set! call .setPattern first.");
+          }
+          logger("[cyclist] start");
+          this.clock.start();
+          this.setStarted(true);
+        }
+        pause() {
+          logger("[cyclist] pause");
+          this.clock.pause();
+          this.setStarted(false);
+        }
+        stop() {
+          logger("[cyclist] stop");
+          this.clock.stop();
+          this.lastEnd = 0;
+          this.setStarted(false);
+        }
+        async setPattern(pat, autostart = false) {
+          this.pattern = pat;
+          if (autostart && !this.started) {
+            await this.start();
+          }
+        }
+        setCps(cps2 = 0.5) {
+          if (this.cps === cps2) {
+            return;
+          }
+          this.cps = cps2;
+          this.num_ticks_since_checkpoint = 0;
+        }
+        log(begin2, end2, haps) {
+          const onsets = haps.filter((h3) => h3.hasOnset());
+          console.log(`${begin2.toFixed(4)} - ${end2.toFixed(4)} ${Array(onsets.length).fill("I").join("")}`);
+        }
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/impure.mjs
+  var timelines, reset_state, reset_timelines, timeline;
+  var init_impure = __esm({
+    "build/engine-src/strudel/packages/core/impure.mjs"() {
+      init_pattern();
+      timelines = {};
+      reset_state = function() {
+        reset_timelines();
+      };
+      reset_timelines = function() {
+        timelines = {};
+      };
+      timeline = register(
+        "timeline",
+        function(tpat, pat) {
+          tpat = reify(tpat);
+          const f = function(state) {
+            const scheduler2 = !!state.controls.cyclist;
+            const timehaps = tpat.query(state);
+            const result = [];
+            for (const timehap of timehaps) {
+              const tlid = timehap.value;
+              let offset3;
+              if (tlid === 0) {
+                offset3 = 0;
+              } else if (tlid in timelines) {
+                offset3 = timelines[tlid];
+              } else {
+                const timearc = timehap.wholeOrPart();
+                if (!scheduler2 || state.span.begin.lt(timearc.midpoint())) {
+                  offset3 = timearc.begin;
+                } else {
+                  offset3 = timearc.end;
+                }
+              }
+              if (scheduler2) {
+                timelines[tlid] = offset3;
+                if (tlid !== 0) {
+                  delete timelines[-tlid];
+                }
+              }
+              const pathaps = pat.late(offset3).query(state.setSpan(timehap.part)).map((h3) => h3.setContext(h3.combineContext(timehap)));
+              result.push(...pathaps);
+            }
+            return result;
+          };
+          return new Pattern(f, pat._steps);
+        },
+        false
+      );
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/pick.mjs
+  var _pick, pick, __pick, pickmod, pickF, pickmodF, pickOut, pickmodOut, pickRestart, pickmodRestart, pickReset, pickmodReset, inhabit, pickSqueeze, inhabitmod, pickmodSqueeze, squeeze;
+  var init_pick = __esm({
+    "build/engine-src/strudel/packages/core/pick.mjs"() {
+      init_pattern();
+      init_util();
+      _pick = function(lookup, pat, modulo = true) {
+        const array = Array.isArray(lookup);
+        const len = Object.keys(lookup).length;
+        lookup = objectMap(lookup, reify);
+        if (len === 0) {
+          return silence;
+        }
+        return pat.fmap((i3) => {
+          let key = i3;
+          if (array) {
+            key = modulo ? Math.round(key) % len : clamp(Math.round(key), 0, lookup.length - 1);
+          }
+          return lookup[key];
+        });
+      };
+      pick = function(lookup, pat) {
+        if (Array.isArray(pat)) {
+          [pat, lookup] = [lookup, pat];
+        }
+        return __pick(lookup, pat);
+      };
+      __pick = register("pick", function(lookup, pat) {
+        return _pick(lookup, pat, false).innerJoin();
+      });
+      pickmod = register("pickmod", function(lookup, pat) {
+        return _pick(lookup, pat, true).innerJoin();
+      });
+      pickF = register("pickF", function(pickPattern, lookup, pat) {
+        return pat.apply(pick(lookup, pickPattern));
+      });
+      pickmodF = register("pickmodF", function(pickPattern, lookup, pat) {
+        return pat.apply(pickmod(lookup, pickPattern));
+      });
+      pickOut = register("pickOut", function(lookup, pat) {
+        return _pick(lookup, pat, false).outerJoin();
+      });
+      pickmodOut = register("pickmodOut", function(lookup, pat) {
+        return _pick(lookup, pat, true).outerJoin();
+      });
+      pickRestart = register("pickRestart", function(lookup, pat) {
+        return _pick(lookup, pat, false).restartJoin();
+      });
+      pickmodRestart = register("pickmodRestart", function(lookup, pat) {
+        return _pick(lookup, pat, true).restartJoin();
+      });
+      pickReset = register("pickReset", function(lookup, pat) {
+        return _pick(lookup, pat, false).resetJoin();
+      });
+      pickmodReset = register("pickmodReset", function(lookup, pat) {
+        return _pick(lookup, pat, true).resetJoin();
+      });
+      ({ inhabit, pickSqueeze } = register(["inhabit", "pickSqueeze"], function(lookup, pat) {
+        return _pick(lookup, pat, false).squeezeJoin();
+      }));
+      ({ inhabitmod, pickmodSqueeze } = register(["inhabitmod", "pickmodSqueeze"], function(lookup, pat) {
+        return _pick(lookup, pat, true).squeezeJoin();
+      }));
+      squeeze = (pat, xs) => {
+        xs = xs.map(reify);
+        if (xs.length == 0) {
+          return silence;
+        }
+        return pat.fmap((i3) => {
+          const key = _mod(Math.round(i3), xs.length);
+          return xs[key];
+        }).squeezeJoin();
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/neocyclist.mjs
+  var NeoCyclist;
+  var init_neocyclist = __esm({
+    "build/engine-src/strudel/packages/core/neocyclist.mjs"() {
+      init_logger();
+      init_util();
+      NeoCyclist = class {
+        constructor({ onSchedule: onSchedule2, onToggle, getTime: getTime2, onTrigger }) {
+          if (onTrigger) {
+            throw new Error(
+              "onTrigger has been dropped. use onSchedule(hap, time, cps) instead, see https://codeberg.org/uzu/strudel/pulls/2138"
+            );
+          }
+          this.started = false;
+          this.cps = 0.5;
+          this.getTime = getTime2;
+          this.time_at_last_tick_message = 0;
+          this.collator = new ClockCollator({ getTargetClockTime: getTime2 });
+          this.onToggle = onToggle;
+          this.latency = 0.1;
+          this.cycle = 0;
+          this.id = Math.round(Date.now() * Math.random());
+          this.worker = new SharedWorker(new URL("./clockworker.js", "file:///engine.js"));
+          this.worker.port.start();
+          this.channel = new BroadcastChannel("strudeltick");
+          const tickCallback = (payload) => {
+            const { cps: cps2, begin: begin2, end: end2, cycle, time: time4 } = payload;
+            this.cps = cps2;
+            this.cycle = cycle;
+            const currentTime = this.collator.calculateOffset(time4) + time4;
+            processHaps(begin2, end2, currentTime);
+            this.time_at_last_tick_message = currentTime;
+          };
+          const processHaps = (begin2, end2, currentTime) => {
+            if (this.started === false) {
+              return;
+            }
+            const haps = this.pattern.queryArc(begin2, end2, { _cps: this.cps, cyclist: "neocyclist" });
+            haps.forEach((hap) => {
+              if (hap.hasOnset()) {
+                const timeUntilTrigger = cycleToSeconds(hap.whole.begin - this.cycle, this.cps);
+                const targetTime = timeUntilTrigger + currentTime + this.latency;
+                onSchedule2?.(hap, targetTime, this.cps);
+              }
+            });
+          };
+          this.channel.onmessage = (message) => {
+            if (!this.started) {
+              return;
+            }
+            const { payload, type } = message.data;
+            switch (type) {
+              case "tick": {
+                tickCallback(payload);
+              }
+            }
+          };
+        }
+        sendMessage(type, payload) {
+          this.worker.port.postMessage({ type, payload, id: this.id });
+        }
+        now() {
+          const gap2 = (this.getTime() - this.time_at_last_tick_message) * this.cps;
+          return this.cycle + gap2;
+        }
+        setCps(cps2 = 1) {
+          this.sendMessage("cpschange", { cps: cps2 });
+        }
+        setCycle(cycle) {
+          this.sendMessage("setcycle", { cycle });
+        }
+        setStarted(started) {
+          this.sendMessage("toggle", { started });
+          this.started = started;
+          this.onToggle?.(started);
+        }
+        start() {
+          logger("[cyclist] start");
+          this.setStarted(true);
+        }
+        stop() {
+          logger("[cyclist] stop");
+          this.collator.reset();
+          this.setStarted(false);
+        }
+        setPattern(pat, autostart = false) {
+          this.pattern = pat;
+          if (autostart && !this.started) {
+            this.start();
+          }
+        }
+        log(begin2, end2, haps) {
+          const onsets = haps.filter((h3) => h3.hasOnset());
+          console.log(`${begin2.toFixed(4)} - ${end2.toFixed(4)} ${Array(onsets.length).fill("I").join("")}`);
+        }
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/repl.mjs
+  function repl({
+    onSchedule: onSchedule2,
+    defaultOutput,
+    onEvalError,
+    beforeEval,
+    beforeStart,
+    afterEval,
+    getTime: getTime2,
+    transpiler: transpiler2,
+    onToggle,
+    editPattern,
+    onUpdateState,
+    sync = false,
+    setInterval,
+    clearInterval,
+    id: id2,
+    mondo = false
+  }) {
+    if (defaultOutput) {
+      throw new Error(
+        "defaultOutput has been removed. use onSchedule(hap, time, cps) instead. see https://codeberg.org/uzu/strudel/pulls/2138/"
+      );
+    }
+    const state = {
+      schedulerError: void 0,
+      evalError: void 0,
+      code: "// LOADING",
+      activeCode: "// LOADING",
+      pattern: void 0,
+      miniLocations: [],
+      widgets: [],
+      pending: false,
+      started: false
+    };
+    const transpilerOptions = {
+      id: id2
+    };
+    const updateState = (update) => {
+      Object.assign(state, update);
+      state.isDirty = state.code !== state.activeCode;
+      state.error = state.evalError || state.schedulerError;
+      onUpdateState?.(state);
+    };
+    const schedulerOptions = {
+      onSchedule: getSchedule({ onSchedule: onSchedule2 }),
+      getTime: getTime2,
+      onToggle: (started) => {
+        updateState({ started });
+        setIsStarted(started);
+        onToggle?.(started);
+        if (!started) {
+          reset_state();
+        }
+      },
+      setInterval,
+      clearInterval,
+      beforeStart
+    };
+    const scheduler2 = sync && typeof SharedWorker != "undefined" ? new NeoCyclist(schedulerOptions) : new Cyclist(schedulerOptions);
+    setScheduleFunc(schedulerOptions.onSchedule);
+    setCpsFunc(() => scheduler2.cps);
+    let pPatterns = {};
+    let anonymousIndex = 0;
+    let allTransform;
+    let eachTransform;
+    const hush = function() {
+      pPatterns = {};
+      anonymousIndex = 0;
+      allTransform = void 0;
+      eachTransform = void 0;
+      return silence;
+    };
+    function unpure(pat) {
+      if (pat._Pattern) {
+        return pat.__pure;
+      }
+      return pat;
+    }
+    const setPattern2 = async (pattern2, autostart = true) => {
+      pattern2 = editPattern?.(pattern2) || pattern2;
+      await scheduler2.setPattern(pattern2, autostart);
+      setPattern(pattern2);
+      return pattern2;
+    };
+    setTime(() => scheduler2.now());
+    setClockTime(() => scheduler2.getTime());
+    const stop2 = () => scheduler2.stop();
+    const start = () => scheduler2.start();
+    const pause = () => scheduler2.pause();
+    const toggle = () => scheduler2.toggle();
+    const setCps2 = (cps2) => {
+      scheduler2.setCps(unpure(cps2));
+      return silence;
+    };
+    const setCpm = (cpm2) => {
+      scheduler2.setCps(unpure(cpm2) / 60);
+      return silence;
+    };
+    let allTransforms = [];
+    const all5 = function(transform) {
+      allTransforms.push(transform);
+      return silence;
+    };
+    const each = function(transform) {
+      eachTransform = transform;
+      return silence;
+    };
+    const injectPatternMethods = () => {
+      Pattern.prototype.p = function(id3) {
+        if (typeof id3 === "string" && (id3.startsWith("_") || id3.endsWith("_"))) {
+          return silence;
+        }
+        if (id3.includes("$")) {
+          id3 = `${id3}${anonymousIndex}`;
+          anonymousIndex++;
+        }
+        pPatterns[id3] = this;
+        return this;
+      };
+      Pattern.prototype.q = function(id3) {
+        return silence;
+      };
+      try {
+        for (let i3 = 1; i3 < 10; ++i3) {
+          Object.defineProperty(Pattern.prototype, `d${i3}`, {
+            get() {
+              return this.p(i3);
+            },
+            configurable: true
+          });
+          Object.defineProperty(Pattern.prototype, `p${i3}`, {
+            get() {
+              return this.p(i3);
+            },
+            configurable: true
+          });
+          Pattern.prototype[`q${i3}`] = silence;
+        }
+      } catch (err) {
+        console.warn("injectPatternMethods: error:", err);
+      }
+      const cpm2 = register("cpm", function(cpm3, pat) {
+        return pat._fast(cpm3 / 60 / scheduler2.cps);
+      });
+      return evalScope({
+        all: all5,
+        each,
+        hush,
+        cpm: cpm2,
+        setCps: setCps2,
+        setcps: setCps2,
+        setCpm,
+        setcpm: setCpm
+      });
+    };
+    const evaluate3 = async (code, autostart = true, shouldHush = true) => {
+      if (!code) {
+        throw new Error("no code to evaluate");
+      }
+      try {
+        updateState({ code, pending: true });
+        await injectPatternMethods();
+        setTime(() => scheduler2.now());
+        setClockTime(() => scheduler2.getTime());
+        await beforeEval?.({ code });
+        allTransforms = [];
+        shouldHush && hush();
+        if (mondo) {
+          code = `mondolang\`${code}\``;
+        }
+        let { pattern: pattern2, meta } = await evaluate(code, transpiler2, transpilerOptions);
+        if (Object.keys(pPatterns).length) {
+          let patterns = [];
+          let soloActive = false;
+          for (const [key, value2] of Object.entries(pPatterns)) {
+            const isSolod = key.length > 1 && key.startsWith("S");
+            if (isSolod && soloActive === false) {
+              patterns = [];
+              soloActive = true;
+            }
+            if (!soloActive || soloActive && isSolod) {
+              const valWithState = value2.withState((state2) => state2.setControls({ id: key }));
+              patterns.push(valWithState);
+            }
+          }
+          if (eachTransform) {
+            patterns = patterns.map((x3) => eachTransform(x3));
+          }
+          pattern2 = stack(...patterns);
+        } else if (eachTransform) {
+          pattern2 = eachTransform(pattern2);
+        }
+        if (allTransforms.length) {
+          for (const transform of allTransforms) {
+            pattern2 = transform(pattern2);
+          }
+        }
+        if (!isPattern(pattern2)) {
+          pattern2 = silence;
+        }
+        logger(`[eval] code updated`);
+        pattern2 = await setPattern2(pattern2, autostart);
+        updateState({
+          miniLocations: meta?.miniLocations || [],
+          widgets: meta?.widgets || [],
+          sliders: meta?.sliders || [],
+          activeCode: code,
+          pattern: pattern2,
+          evalError: void 0,
+          schedulerError: void 0,
+          pending: false
+        });
+        afterEval?.({ code, pattern: pattern2, meta });
+        return pattern2;
+      } catch (err) {
+        logger(`[eval] error: ${err.message}`, "error");
+        console.error(err);
+        updateState({ evalError: err, pending: false });
+        onEvalError?.(err);
+      }
+    };
+    const setCode = (code) => updateState({ code });
+    return { scheduler: scheduler2, evaluate: evaluate3, start, stop: stop2, pause, setCps: setCps2, setPattern: setPattern2, setCode, toggle, state };
+  }
+  var getSchedule;
+  var init_repl = __esm({
+    "build/engine-src/strudel/packages/core/repl.mjs"() {
+      init_neocyclist();
+      init_cyclist();
+      init_evaluate();
+      init_logger();
+      init_schedulerState();
+      init_evaluate();
+      init_pattern();
+      init_impure();
+      getSchedule = ({ onSchedule: onSchedule2 }) => async (hap, t, cps2) => {
+        try {
+          if (!hap.context.onSchedule || !hap.context.dominantSchedule) {
+            await onSchedule2(hap, t, cps2);
+          }
+          if (hap.context.onSchedule) {
+            await hap.context.onSchedule(hap, t, cps2);
+          }
+        } catch (err) {
+          errorLogger(err, "getSchedule");
+        }
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/signal.mjs
+  function steady(value2) {
+    return new Pattern((state) => [new Hap(void 0, state.span, value2)]);
+  }
+  function _perlin(t, seed2 = 0) {
+    let ta = Math.floor(t);
+    let tb = ta + 1;
+    const smootherStep = (x3) => 6 * x3 ** 5 - 15 * x3 ** 4 + 10 * x3 ** 3;
+    const interp = (x3) => (a) => (b) => a + smootherStep(x3) * (b - a);
+    const ra = getRandsAtTime(ta, 1, seed2);
+    const rb = getRandsAtTime(tb, 1, seed2);
+    const v2 = interp(t - ta)(ra)(rb);
+    return v2;
+  }
+  function _berlin(t, seed2 = 0) {
+    const prevRidgeStartIndex = Math.floor(t);
+    const nextRidgeStartIndex = prevRidgeStartIndex + 1;
+    const prevRidgeBottomPoint = getRandsAtTime(prevRidgeStartIndex, 1, seed2);
+    const height2 = getRandsAtTime(nextRidgeStartIndex, 1, seed2);
+    const nextRidgeTopPoint = prevRidgeBottomPoint + height2;
+    const currentPercent = (t - prevRidgeStartIndex) / (nextRidgeStartIndex - prevRidgeStartIndex);
+    const interp = (a, b, t2) => {
+      return a + t2 * (b - a);
+    };
+    return interp(prevRidgeBottomPoint, nextRidgeTopPoint, currentPercent) / 2;
+  }
+  function _keyDown(keyname) {
+    if (Array.isArray(keyname) === false) {
+      keyname = [keyname];
+    }
+    const keyState2 = getCurrentKeyboardState();
+    return keyname.every((x3) => {
+      const keyName = keyAlias.get(x3) ?? x3;
+      return keyState2[keyName];
+    });
+  }
+  var signal, saw, saw2, isaw, isaw2, sine2, sine, cosine, cosine2, square, square2, isquare, isquare2, tri, tri2, itri, itri2, time2, _mouseY, _mouseX, mousey, mouseY, mousex, mouseX, _murmurHashFinalizer, _tToT, _decorrelate, randAt, timeToRands, __xorwise, __frac, __timeToIntSeed, __intSeedToRand, __timeToRandsPrime, __timeToRands, RNG_MODE, getRandsAtTime, useRNG, run, binary, binaryN, binaryL, binaryNL, randL, randrun, _rearrangeWith, shuffle, scramble, withSeed, seed, rand, rand2, _brandBy, brandBy, brand, _irand, irand, __chooseWith, chooseWith, chooseInWith, choose, chooseIn, chooseCycles, randcat, _wchooseWith, wchooseWith, wchoose, wchooseCycles, wrandcat, perlin, berlin, degradeByWith, degradeBy, degrade, undegradeBy, undegrade, sometimesBy, sometimes, someCyclesBy, someCycles, often, rarely, almostNever, almostAlways, never, always, whenKey, keyDown, cyclesPer, per, perCycle, perx, open, close;
+  var init_signal = __esm({
+    "build/engine-src/strudel/packages/core/signal.mjs"() {
+      init_hap();
+      init_pattern();
+      init_util();
+      init_fraction2();
+      init_util();
+      signal = (func2) => {
+        const query = (state) => [new Hap(void 0, state.span, func2(state.span.begin, state.controls))];
+        return new Pattern(query);
+      };
+      saw = signal((t) => _mod(t, 1));
+      saw2 = saw.toBipolar();
+      isaw = signal((t) => 1 - _mod(t, 1));
+      isaw2 = isaw.toBipolar();
+      sine2 = signal((t) => Math.sin(Math.PI * 2 * t));
+      sine = sine2.fromBipolar();
+      cosine = sine._early(fraction_default(1).div(4));
+      cosine2 = sine2._early(fraction_default(1).div(4));
+      square = signal((t) => Math.floor(_mod(t * 2, 2)));
+      square2 = square.toBipolar();
+      isquare = signal((t) => 1 - Math.floor(_mod(t * 2, 2)));
+      isquare2 = isquare.toBipolar();
+      tri = fastcat(saw, isaw);
+      tri2 = fastcat(saw2, isaw2);
+      itri = fastcat(isaw, saw);
+      itri2 = fastcat(isaw2, saw2);
+      time2 = signal(id);
+      _mouseY = 0;
+      _mouseX = 0;
+      if (typeof window !== "undefined") {
+        document.addEventListener("mousemove", (e) => {
+          _mouseY = e.clientY / document.body.clientHeight;
+          _mouseX = e.clientX / document.body.clientWidth;
+        });
+      }
+      mousey = signal(() => _mouseY);
+      mouseY = signal(() => _mouseY);
+      mousex = signal(() => _mouseX);
+      mouseX = signal(() => _mouseX);
+      _murmurHashFinalizer = (x3) => {
+        x3 |= 0;
+        x3 ^= x3 >>> 16;
+        x3 = Math.imul(x3, 2246822507);
+        x3 ^= x3 >>> 13;
+        x3 = Math.imul(x3, 3266489909);
+        x3 ^= x3 >>> 16;
+        return x3 >>> 0;
+      };
+      _tToT = (t) => {
+        return Math.floor(t * 536870912);
+      };
+      _decorrelate = (T2, i3 = 0, seed2 = 0) => {
+        const lowBits = T2 >>> 0 >>> 0;
+        const highBits = Math.floor(T2 / 4294967296) >>> 0;
+        let key = lowBits ^ Math.imul(highBits ^ 2246822507, 3266489909);
+        key ^= Math.imul(i3 ^ 2135587861, 2654435769);
+        key ^= Math.imul(seed2 ^ 374761393, 668265261);
+        return key >>> 0;
+      };
+      randAt = (T2, i3 = 0, seed2 = 0) => {
+        return _murmurHashFinalizer(_decorrelate(T2, i3, seed2)) / 4294967296;
+      };
+      timeToRands = (t, n2, seed2 = 0) => {
+        const T2 = _tToT(t);
+        if (n2 === 1) {
+          return randAt(T2, 0, seed2);
+        }
+        const out = new Array(n2);
+        for (let i3 = 0; i3 < n2; i3++) out[i3] = randAt(T2, i3, seed2);
+        return out;
+      };
+      __xorwise = (x3) => {
+        const a = x3 << 13 ^ x3;
+        const b = a >> 17 ^ a;
+        return b << 5 ^ b;
+      };
+      __frac = (x3) => x3 - Math.trunc(x3);
+      __timeToIntSeed = (x3) => __xorwise(Math.trunc(__frac(x3 / 300) * 536870912));
+      __intSeedToRand = (x3) => x3 % 536870912 / 536870912;
+      __timeToRandsPrime = (seed2, n2) => {
+        if (n2 === 1) {
+          return Math.abs(__intSeedToRand(seed2));
+        }
+        const result = [];
+        for (let i3 = 0; i3 < n2; i3++) {
+          result.push(__intSeedToRand(seed2));
+          seed2 = __xorwise(seed2);
+        }
+        return result;
+      };
+      __timeToRands = (t, n2) => __timeToRandsPrime(__timeToIntSeed(t), n2);
+      RNG_MODE = "legacy";
+      getRandsAtTime = (t, n2 = 1, seed2 = 0) => {
+        return RNG_MODE === "legacy" ? __timeToRands(t + seed2, n2) : timeToRands(t, n2, seed2);
+      };
+      useRNG = (mode3 = "legacy") => RNG_MODE = mode3;
+      run = (n2) => saw.range(0, n2).round().segment(n2);
+      binary = (n2) => {
+        const nBits = reify(n2).log2().floor().add(1);
+        return binaryN(n2, nBits);
+      };
+      binaryN = (n2, nBits = 16) => {
+        nBits = reify(nBits);
+        const bitPos = run(nBits).mul(-1).add(nBits.sub(1));
+        return reify(n2).segment(nBits).brshift(bitPos).band(pure(1));
+      };
+      binaryL = (n2) => {
+        const nBits = reify(n2).log2().floor().add(1);
+        return binaryNL(n2, nBits);
+      };
+      binaryNL = (n2, nBits = 16) => {
+        return reify(n2).withValue((v2) => (bits) => {
+          const bList = [];
+          for (let i3 = bits - 1; i3 >= 0; i3--) {
+            bList.push(v2 >> i3 & 1);
+          }
+          return bList;
+        }).appLeft(reify(nBits));
+      };
+      randL = (n2) => {
+        return signal((t, controls) => (nVal) => getRandsAtTime(t, nVal, controls.randSeed).map(Math.abs)).appLeft(reify(n2));
+      };
+      randrun = (n2) => {
+        return signal((t, controls) => {
+          let rands = getRandsAtTime(t.floor().add(0.5), n2, controls.randSeed);
+          if (!Array.isArray(rands)) rands = [rands];
+          const nums = rands.map((n3, i4) => [n3, i4]).sort((a, b) => (a[0] > b[0]) - (a[0] < b[0])).map((x3) => x3[1]);
+          const i3 = _mod(t.cyclePos().mul(n2).floor(), n2);
+          return nums[i3];
+        })._segment(n2);
+      };
+      _rearrangeWith = (ipat, n2, pat) => {
+        const pats = [...Array(n2).keys()].map((i3) => pat.zoom(fraction_default(i3).div(n2), fraction_default(i3 + 1).div(n2)));
+        return ipat.fmap((i3) => pats[i3].repeatCycles(n2)._fast(n2)).innerJoin();
+      };
+      shuffle = register("shuffle", (n2, pat) => {
+        return _rearrangeWith(randrun(n2), n2, pat);
+      });
+      scramble = register("scramble", (n2, pat) => {
+        return _rearrangeWith(_irand(n2)._segment(n2), n2, pat);
+      });
+      withSeed = (func2, pat) => {
+        return new Pattern((state) => {
+          let { randSeed, ...controls } = state.controls;
+          randSeed = func2(randSeed);
+          return pat.query(state.setControls({ ...controls, randSeed }));
+        }, pat._steps);
+      };
+      seed = register("seed", (n2, pat) => {
+        return withSeed(() => n2, pat);
+      });
+      rand = signal((t, controls) => getRandsAtTime(t, 1, controls.randSeed));
+      rand2 = rand.toBipolar();
+      _brandBy = (p) => rand.fmap((x3) => x3 < p);
+      brandBy = (pPat) => reify(pPat).fmap(_brandBy).innerJoin();
+      brand = _brandBy(0.5);
+      _irand = (i3) => rand.fmap((x3) => Math.trunc(x3 * i3));
+      irand = (ipat) => reify(ipat).fmap(_irand).innerJoin();
+      __chooseWith = (pat, xs) => {
+        xs = xs.map(reify);
+        if (xs.length == 0) {
+          return silence;
+        }
+        return pat.range(0, xs.length).fmap((i3) => {
+          const key = Math.min(Math.max(Math.floor(i3), 0), xs.length - 1);
+          return xs[key];
+        });
+      };
+      chooseWith = (pat, xs) => {
+        return __chooseWith(pat, xs).outerJoin();
+      };
+      chooseInWith = (pat, xs) => {
+        return __chooseWith(pat, xs).innerJoin();
+      };
+      choose = (...xs) => chooseWith(rand, xs);
+      chooseIn = (...xs) => chooseInWith(rand, xs);
+      Pattern.prototype.choose = function(...xs) {
+        return chooseWith(this, xs);
+      };
+      Pattern.prototype.choose2 = function(...xs) {
+        return chooseWith(this.fromBipolar(), xs);
+      };
+      chooseCycles = (...xs) => chooseInWith(rand.segment(1), xs);
+      randcat = chooseCycles;
+      _wchooseWith = function(pat, ...pairs2) {
+        const values = pairs2.map((pair) => reify(pair[0]));
+        const weights = [];
+        let total = pure(0);
+        for (const pair of pairs2) {
+          total = total.add(pair[1]);
+          weights.push(total);
+        }
+        const weightspat = sequenceP(weights);
+        const match = function(r2) {
+          const findpat = total.mul(r2);
+          return weightspat.fmap((weights2) => (find) => values[weights2.findIndex((x3) => x3 > find, weights2)]).appLeft(findpat);
+        };
+        return pat.bind(match);
+      };
+      wchooseWith = (...args) => _wchooseWith(...args).outerJoin();
+      wchoose = (...pairs2) => wchooseWith(rand, ...pairs2);
+      wchooseCycles = (...pairs2) => _wchooseWith(rand.segment(1), ...pairs2).innerJoin();
+      wrandcat = wchooseCycles;
+      perlin = signal((t, controls) => _perlin(t, controls.randSeed));
+      berlin = signal((t, controls) => _berlin(t, controls.randSeed));
+      degradeByWith = register("degradeByWith", (withPat, x3, pat) => {
+        if (!isPattern(withPat)) withPat = pure(withPat);
+        return pat.fmap((a) => (_) => a).appLeft(withPat.filterValues((v2) => v2 > x3));
+      });
+      degradeBy = register(
+        "degradeBy",
+        function(x3, pat) {
+          return pat._degradeByWith(rand, x3);
+        },
+        true,
+        true
+      );
+      degrade = register("degrade", (pat) => pat._degradeBy(0.5), true, true);
+      undegradeBy = register(
+        "undegradeBy",
+        function(x3, pat) {
+          return pat._degradeByWith(
+            rand.fmap((r2) => 1 - r2),
+            x3
+          );
+        },
+        true,
+        true
+      );
+      undegrade = register("undegrade", (pat) => pat._undegradeBy(0.5), true, true);
+      sometimesBy = register("sometimesBy", function(patx, func2, pat) {
+        return reify(patx).fmap((x3) => stack(pat._degradeBy(x3), func2(pat._undegradeBy(1 - x3)))).innerJoin();
+      });
+      sometimes = register("sometimes", function(func2, pat) {
+        return pat._sometimesBy(0.5, func2);
+      });
+      someCyclesBy = register("someCyclesBy", function(patx, func2, pat) {
+        return reify(patx).fmap(
+          (x3) => stack(
+            pat._degradeByWith(rand._segment(1), x3),
+            func2(pat._degradeByWith(rand.fmap((r2) => 1 - r2)._segment(1), 1 - x3))
+          )
+        ).innerJoin();
+      });
+      someCycles = register("someCycles", function(func2, pat) {
+        return pat._someCyclesBy(0.5, func2);
+      });
+      often = register("often", function(func2, pat) {
+        return pat.sometimesBy(0.75, func2);
+      });
+      rarely = register("rarely", function(func2, pat) {
+        return pat.sometimesBy(0.25, func2);
+      });
+      almostNever = register("almostNever", function(func2, pat) {
+        return pat.sometimesBy(0.1, func2);
+      });
+      almostAlways = register("almostAlways", function(func2, pat) {
+        return pat.sometimesBy(0.9, func2);
+      });
+      never = register("never", function(_, pat) {
+        return pat;
+      });
+      always = register("always", function(func2, pat) {
+        return func2(pat);
+      });
+      whenKey = register("whenKey", function(input, func2, pat) {
+        return pat.when(_keyDown(input), func2);
+      });
+      keyDown = register("keyDown", function(pat) {
+        return pat.fmap(_keyDown);
+      });
+      cyclesPer = new Pattern(function(state) {
+        return [new Hap(void 0, state.span, state.span.duration)];
+      });
+      per = new Pattern(function(state) {
+        return [new Hap(void 0, state.span, fraction_default(1).div(state.span.duration))];
+      });
+      perCycle = per;
+      perx = new Pattern(function(state) {
+        const n2 = fraction_default(1).div(state.span.duration);
+        return [new Hap(void 0, state.span, Math.log(n2) / Math.log(2) + 1)];
+      });
+      open = signal((t) => t.min(1));
+      close = signal((t) => fraction_default(1).sub(t).max(0));
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/speak.mjs
+  function triggerSpeech(words, lang, voice2) {
+    synth.cancel();
+    const utterance = new SpeechSynthesisUtterance(words);
+    utterance.lang = lang;
+    allVoices = synth.getVoices();
+    const voices = allVoices.filter((v2) => v2.lang.includes(lang));
+    if (typeof voice2 === "number") {
+      utterance.voice = voices[voice2 % voices.length];
+    } else if (typeof voice2 === "string") {
+      utterance.voice = voices.find((voice3) => voice3.name === voice3);
+    }
+    speechSynthesis.speak(utterance);
+  }
+  var synth, allVoices, speak;
+  var init_speak = __esm({
+    "build/engine-src/strudel/packages/core/speak.mjs"() {
+      init_core();
+      try {
+        synth = window?.speechSynthesis;
+      } catch (err) {
+        console.warn("cannot use window: not in browser?");
+      }
+      allVoices = synth?.getVoices();
+      speak = register("speak", function(lang, voice2, pat) {
+        return pat.onSchedule((hap) => {
+          triggerSpeech(hap.value, lang, voice2);
+        });
+      });
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/ui.mjs
+  var backgroundImage, cleanupUi;
+  var init_ui = __esm({
+    "build/engine-src/strudel/packages/core/ui.mjs"() {
+      backgroundImage = function(src2, animateOptions = {}) {
+        const container = document.getElementById("code");
+        const bg = "background-image:url(" + src2 + ");background-size:contain;";
+        container.style = bg;
+        const { className: initialClassName } = container;
+        const handleOption = (option, value2) => {
+          ({
+            style: () => container.style = bg + ";" + value2,
+            className: () => container.className = value2 + " " + initialClassName
+          })[option]();
+        };
+        const funcOptions = Object.entries(animateOptions).filter(([_, v2]) => typeof v2 === "function");
+        const stringOptions = Object.entries(animateOptions).filter(([_, v2]) => typeof v2 === "string");
+        stringOptions.forEach(([option, value2]) => handleOption(option, value2));
+        if (funcOptions.length === 0) {
+          return;
+        }
+      };
+      cleanupUi = () => {
+        const container = document.getElementById("code");
+        if (container) {
+          container.style = "";
+        }
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/core/index.mjs
+  var core_exports = {};
+  __export(core_exports, {
+    ClockCollator: () => ClockCollator,
+    Cyclist: () => Cyclist,
+    FXr: () => FXr,
+    FXrel: () => FXrel,
+    FXrelease: () => FXrelease,
+    Fraction: () => fraction_default,
+    Hap: () => Hap,
+    Pattern: () => Pattern,
+    State: () => State,
+    TimeSpan: () => TimeSpan,
+    __chooseWith: () => __chooseWith,
+    _brandBy: () => _brandBy,
+    _fitslice: () => _fitslice,
+    _irand: () => _irand,
+    _keyDown: () => _keyDown,
+    _match: () => _match,
+    _mod: () => _mod,
+    _morph: () => _morph,
+    _polymeterListSteps: () => _polymeterListSteps,
+    _retime: () => _retime,
+    _slices: () => _slices,
+    accelerate: () => accelerate,
+    activeLabel: () => activeLabel,
+    ad: () => ad,
+    add: () => add,
+    adsr: () => adsr,
+    almostAlways: () => almostAlways,
+    almostNever: () => almostNever,
+    always: () => always,
+    amp: () => amp,
+    analyze: () => analyze,
+    anchor: () => anchor,
+    and: () => and,
+    apply: () => apply,
+    applyN: () => applyN,
+    ar: () => ar,
+    arp: () => arp,
+    arpWith: () => arpWith,
+    arrange: () => arrange,
+    as: () => as,
+    asym: () => asym,
+    att: () => att,
+    attack: () => attack,
+    averageArray: () => averageArray,
+    backgroundImage: () => backgroundImage,
+    band: () => band,
+    bandf: () => bandf,
+    bandq: () => bandq,
+    bank: () => bank,
+    base: () => base,
+    base64ToUnicode: () => base64ToUnicode,
+    bbexpr: () => bbexpr,
+    bbst: () => bbst,
+    beat: () => beat,
+    begin: () => begin,
+    berlin: () => berlin,
+    bgain: () => bgain,
+    binary: () => binary,
+    binaryL: () => binaryL,
+    binaryN: () => binaryN,
+    binaryNL: () => binaryNL,
+    bind: () => bind,
+    binshift: () => binshift,
+    bite: () => bite,
+    bjork: () => bjork,
+    bjorklund: () => bjorklund,
+    blshift: () => blshift,
+    bmod: () => bmod,
+    bor: () => bor,
+    bp: () => bp,
+    bpa: () => bpa,
+    bpattack: () => bpattack,
+    bpd: () => bpd,
+    bpdc: () => bpdc,
+    bpdecay: () => bpdecay,
+    bpdepth: () => bpdepth,
+    bpdepthfreq: () => bpdepthfreq,
+    bpdepthfrequency: () => bpdepthfrequency,
+    bpe: () => bpe,
+    bpenv: () => bpenv,
+    bpf: () => bpf,
+    bpq: () => bpq,
+    bpr: () => bpr,
+    bprate: () => bprate,
+    bprelease: () => bprelease,
+    bps: () => bps,
+    bpshape: () => bpshape,
+    bpskew: () => bpskew,
+    bpsustain: () => bpsustain,
+    bpsync: () => bpsync,
+    brak: () => brak,
+    brand: () => brand,
+    brandBy: () => brandBy,
+    brshift: () => brshift,
+    bus: () => bus,
+    busgain: () => busgain,
+    bxor: () => bxor,
+    bypass: () => bypass,
+    byteBeatExpression: () => byteBeatExpression,
+    byteBeatStartTime: () => byteBeatStartTime,
+    calculateSteps: () => calculateSteps,
+    cat: () => cat,
+    ccn: () => ccn,
+    ccv: () => ccv,
+    ceil: () => ceil,
+    ch: () => ch,
+    channel: () => channel,
+    channels: () => channels,
+    chebyshev: () => chebyshev,
+    choose: () => choose,
+    chooseCycles: () => chooseCycles,
+    chooseIn: () => chooseIn,
+    chooseInWith: () => chooseInWith,
+    chooseWith: () => chooseWith,
+    chop: () => chop,
+    chord: () => chord,
+    chorus: () => chorus,
+    chunk: () => chunk,
+    chunkBack: () => chunkBack,
+    chunkBackInto: () => chunkBackInto,
+    chunkInto: () => chunkInto,
+    chunkback: () => chunkback,
+    chunkbackinto: () => chunkbackinto,
+    chunkinto: () => chunkinto,
+    clamp: () => clamp,
+    cleanupUi: () => cleanupUi,
+    clip: () => clip,
+    close: () => close,
+    coarse: () => coarse,
+    code2hash: () => code2hash,
+    color: () => color,
+    colour: () => colour,
+    comb: () => comb,
+    compose: () => compose,
+    compress: () => compress,
+    compressSpan: () => compressSpan,
+    compressor: () => compressor,
+    compressorAttack: () => compressorAttack,
+    compressorKnee: () => compressorKnee,
+    compressorRatio: () => compressorRatio,
+    compressorRelease: () => compressorRelease,
+    compressspan: () => compressspan,
+    constant: () => constant,
+    contract: () => contract,
+    control: () => control,
+    controls: () => controls_exports,
+    cosine: () => cosine,
+    cosine2: () => cosine2,
+    cpm: () => cpm,
+    cps: () => cps,
+    createClock: () => zyklus_default,
+    createParam: () => createParam,
+    createParams: () => createParams,
+    crush: () => crush,
+    ctf: () => ctf,
+    ctlNum: () => ctlNum,
+    ctranspose: () => ctranspose,
+    cubic: () => cubic,
+    curry: () => curry,
+    curve: () => curve,
+    cut: () => cut,
+    cutoff: () => cutoff,
+    cycleStruct: () => cycleStruct,
+    cycleToSeconds: () => cycleToSeconds,
+    cyclesPer: () => cyclesPer,
+    cyclestruct: () => cyclestruct,
+    dec: () => dec,
+    decay: () => decay,
+    degrade: () => degrade,
+    degradeBy: () => degradeBy,
+    degradeByWith: () => degradeByWith,
+    degree: () => degree,
+    delay: () => delay,
+    delayfb: () => delayfb,
+    delayfeedback: () => delayfeedback,
+    delaysync: () => delaysync,
+    delayt: () => delayt,
+    delaytime: () => delaytime,
+    deltaSlide: () => deltaSlide,
+    density: () => density,
+    det: () => det,
+    detune: () => detune,
+    dfb: () => dfb,
+    dict: () => dict,
+    dictionary: () => dictionary,
+    diode: () => diode,
+    dist: () => dist,
+    distort: () => distort,
+    distorttype: () => distorttype,
+    distortvol: () => distortvol,
+    div: () => div,
+    djf: () => djf,
+    drawLine: () => drawLine_default,
+    drive: () => drive,
+    drop: () => drop,
+    dry: () => dry,
+    ds: () => ds,
+    dt: () => dt,
+    duck: () => duck,
+    duckattack: () => duckattack,
+    duckdepth: () => duckdepth,
+    duckonset: () => duckonset,
+    dur: () => dur,
+    duration: () => duration,
+    early: () => early,
+    echo: () => echo,
+    echoWith: () => echoWith,
+    echowith: () => echowith,
+    eish: () => eish,
+    end: () => end,
+    enhance: () => enhance,
+    env: () => env,
+    eq: () => eq,
+    eqt: () => eqt,
+    errorLogger: () => errorLogger,
+    euclid: () => euclid,
+    euclidLegato: () => euclidLegato,
+    euclidLegatoRot: () => euclidLegatoRot,
+    euclidRot: () => euclidRot,
+    euclidish: () => euclidish,
+    euclidrot: () => euclidrot,
+    evalScope: () => evalScope,
+    evaluate: () => evaluate,
+    every: () => every,
+    expand: () => expand,
+    expression: () => expression,
+    extend: () => extend,
+    fadeInTime: () => fadeInTime,
+    fadeOutTime: () => fadeOutTime,
+    fadeTime: () => fadeTime,
+    fanchor: () => fanchor,
+    fast: () => fast,
+    fastChunk: () => fastChunk,
+    fastGap: () => fastGap,
+    fastcat: () => fastcat,
+    fastchunk: () => fastchunk,
+    fastgap: () => fastgap,
+    fft: () => fft,
+    filter: () => filter,
+    filterWhen: () => filterWhen,
+    firstOf: () => firstOf,
+    fit: () => fit,
+    flatten: () => flatten,
+    floor: () => floor,
+    flux: () => flux,
+    fluxBy: () => fluxBy,
+    fluxby: () => fluxby,
+    fm: () => fm,
+    fm1: () => fm1,
+    fm2: () => fm2,
+    fm3: () => fm3,
+    fm4: () => fm4,
+    fm5: () => fm5,
+    fm6: () => fm6,
+    fm7: () => fm7,
+    fm8: () => fm8,
+    fmatt: () => fmatt,
+    fmatt1: () => fmatt1,
+    fmatt2: () => fmatt2,
+    fmatt3: () => fmatt3,
+    fmatt4: () => fmatt4,
+    fmatt5: () => fmatt5,
+    fmatt6: () => fmatt6,
+    fmatt7: () => fmatt7,
+    fmatt8: () => fmatt8,
+    fmattack: () => fmattack,
+    fmattack1: () => fmattack1,
+    fmattack2: () => fmattack2,
+    fmattack3: () => fmattack3,
+    fmattack4: () => fmattack4,
+    fmattack5: () => fmattack5,
+    fmattack6: () => fmattack6,
+    fmattack7: () => fmattack7,
+    fmattack8: () => fmattack8,
+    fmdec: () => fmdec,
+    fmdec1: () => fmdec1,
+    fmdec2: () => fmdec2,
+    fmdec3: () => fmdec3,
+    fmdec4: () => fmdec4,
+    fmdec5: () => fmdec5,
+    fmdec6: () => fmdec6,
+    fmdec7: () => fmdec7,
+    fmdec8: () => fmdec8,
+    fmdecay: () => fmdecay,
+    fmdecay1: () => fmdecay1,
+    fmdecay2: () => fmdecay2,
+    fmdecay3: () => fmdecay3,
+    fmdecay4: () => fmdecay4,
+    fmdecay5: () => fmdecay5,
+    fmdecay6: () => fmdecay6,
+    fmdecay7: () => fmdecay7,
+    fmdecay8: () => fmdecay8,
+    fme: () => fme,
+    fmenv: () => fmenv,
+    fmenv1: () => fmenv1,
+    fmenv2: () => fmenv2,
+    fmenv3: () => fmenv3,
+    fmenv4: () => fmenv4,
+    fmenv5: () => fmenv5,
+    fmenv6: () => fmenv6,
+    fmenv7: () => fmenv7,
+    fmenv8: () => fmenv8,
+    fmh: () => fmh,
+    fmh1: () => fmh1,
+    fmh2: () => fmh2,
+    fmh3: () => fmh3,
+    fmh4: () => fmh4,
+    fmh5: () => fmh5,
+    fmh6: () => fmh6,
+    fmh7: () => fmh7,
+    fmh8: () => fmh8,
+    fmi: () => fmi,
+    fmi1: () => fmi1,
+    fmi2: () => fmi2,
+    fmi3: () => fmi3,
+    fmi4: () => fmi4,
+    fmi5: () => fmi5,
+    fmi6: () => fmi6,
+    fmi7: () => fmi7,
+    fmi8: () => fmi8,
+    fmrel: () => fmrel,
+    fmrel1: () => fmrel1,
+    fmrel2: () => fmrel2,
+    fmrel3: () => fmrel3,
+    fmrel4: () => fmrel4,
+    fmrel5: () => fmrel5,
+    fmrel6: () => fmrel6,
+    fmrel7: () => fmrel7,
+    fmrel8: () => fmrel8,
+    fmrelease: () => fmrelease,
+    fmrelease1: () => fmrelease1,
+    fmrelease2: () => fmrelease2,
+    fmrelease3: () => fmrelease3,
+    fmrelease4: () => fmrelease4,
+    fmrelease5: () => fmrelease5,
+    fmrelease6: () => fmrelease6,
+    fmrelease7: () => fmrelease7,
+    fmrelease8: () => fmrelease8,
+    fmsus: () => fmsus,
+    fmsus1: () => fmsus1,
+    fmsus2: () => fmsus2,
+    fmsus3: () => fmsus3,
+    fmsus4: () => fmsus4,
+    fmsus5: () => fmsus5,
+    fmsus6: () => fmsus6,
+    fmsus7: () => fmsus7,
+    fmsus8: () => fmsus8,
+    fmsustain: () => fmsustain,
+    fmsustain1: () => fmsustain1,
+    fmsustain2: () => fmsustain2,
+    fmsustain3: () => fmsustain3,
+    fmsustain4: () => fmsustain4,
+    fmsustain5: () => fmsustain5,
+    fmsustain6: () => fmsustain6,
+    fmsustain7: () => fmsustain7,
+    fmsustain8: () => fmsustain8,
+    fmwave: () => fmwave,
+    fmwave1: () => fmwave1,
+    fmwave2: () => fmwave2,
+    fmwave3: () => fmwave3,
+    fmwave4: () => fmwave4,
+    fmwave5: () => fmwave5,
+    fmwave6: () => fmwave6,
+    fmwave7: () => fmwave7,
+    fmwave8: () => fmwave8,
+    focus: () => focus,
+    focusSpan: () => focusSpan,
+    focusspan: () => focusspan,
+    fold: () => fold,
+    fractionalArgs: () => fractionalArgs,
+    frameRate: () => frameRate,
+    frames: () => frames,
+    freeze: () => freeze,
+    freq: () => freq,
+    freqToMidi: () => freqToMidi,
+    fromBipolar: () => fromBipolar,
+    fshift: () => fshift,
+    fshiftnote: () => fshiftnote,
+    fshiftphase: () => fshiftphase,
+    ftype: () => ftype,
+    func: () => func,
+    fxr: () => fxr,
+    gain: () => gain,
+    gap: () => gap,
+    gat: () => gat,
+    gate: () => gate,
+    getAccidentalsOffset: () => getAccidentalsOffset,
+    getClockTime: () => getClockTime,
+    getControlName: () => getControlName,
+    getCps: () => getCps,
+    getCurrentKeyboardState: () => getCurrentKeyboardState,
+    getEventOffsetMs: () => getEventOffsetMs,
+    getFreq: () => getFreq,
+    getFrequency: () => getFrequency,
+    getIsStarted: () => getIsStarted,
+    getPattern: () => getPattern,
+    getPerformanceTimeSeconds: () => getPerformanceTimeSeconds,
+    getPlayableNoteValue: () => getPlayableNoteValue,
+    getRandsAtTime: () => getRandsAtTime,
+    getSchedule: () => getSchedule,
+    getScheduleFunc: () => getScheduleFunc,
+    getSoundIndex: () => getSoundIndex,
+    getTime: () => getTime,
+    grow: () => grow,
+    growlist: () => growlist,
+    gt: () => gt,
+    gte: () => gte,
+    hard: () => hard,
+    harmonic: () => harmonic,
+    hash2code: () => hash2code,
+    hbrick: () => hbrick,
+    hcutoff: () => hcutoff,
+    hold: () => hold,
+    hours: () => hours,
+    hp: () => hp,
+    hpa: () => hpa,
+    hpattack: () => hpattack,
+    hpd: () => hpd,
+    hpdc: () => hpdc,
+    hpdecay: () => hpdecay,
+    hpdepth: () => hpdepth,
+    hpdepthfreq: () => hpdepthfreq,
+    hpdepthfrequency: () => hpdepthfrequency,
+    hpe: () => hpe,
+    hpenv: () => hpenv,
+    hpf: () => hpf,
+    hpq: () => hpq,
+    hpr: () => hpr,
+    hprate: () => hprate,
+    hprelease: () => hprelease,
+    hps: () => hps,
+    hpshape: () => hpshape,
+    hpskew: () => hpskew,
+    hpsustain: () => hpsustain,
+    hpsync: () => hpsync,
+    hresonance: () => hresonance,
+    hsl: () => hsl,
+    hsla: () => hsla,
+    hurry: () => hurry,
+    i: () => i,
+    id: () => id,
+    imag: () => imag,
+    inhabit: () => inhabit,
+    inhabitmod: () => inhabitmod,
+    innerBind: () => innerBind,
+    inside: () => inside,
+    inv: () => inv,
+    invert: () => invert,
+    ir: () => ir,
+    irand: () => irand,
+    irbegin: () => irbegin,
+    iresponse: () => iresponse,
+    irspeed: () => irspeed,
+    isControlName: () => isControlName,
+    isNote: () => isNote,
+    isNoteWithOctave: () => isNoteWithOctave,
+    isPattern: () => isPattern,
+    isaw: () => isaw,
+    isaw2: () => isaw2,
+    isobite: () => isobite,
+    isquare: () => isquare,
+    isquare2: () => isquare2,
+    iter: () => iter,
+    iterBack: () => iterBack,
+    iterback: () => iterback,
+    itri: () => itri,
+    itri2: () => itri2,
+    jux: () => jux,
+    juxBy: () => juxBy,
+    juxFlip: () => juxFlip,
+    juxFlipBy: () => juxFlipBy,
+    juxby: () => juxby,
+    juxflipby: () => juxflipby,
+    kcutoff: () => kcutoff,
+    keep: () => keep,
+    keepif: () => keepif,
+    keyAlias: () => keyAlias,
+    keyDown: () => keyDown,
+    krush: () => krush,
+    label: () => label,
+    lastOf: () => lastOf,
+    late: () => late,
+    lbrick: () => lbrick,
+    legato: () => legato,
+    leslie: () => leslie,
+    lfo: () => lfo,
+    linger: () => linger,
+    listRange: () => listRange,
+    lock: () => lock,
+    log2: () => log2,
+    logKey: () => logKey,
+    logger: () => logger,
+    loop: () => loop,
+    loopAt: () => loopAt,
+    loopAtCps: () => loopAtCps,
+    loopBegin: () => loopBegin,
+    loopEnd: () => loopEnd,
+    loopat: () => loopat,
+    loopatcps: () => loopatcps,
+    loopb: () => loopb,
+    loope: () => loope,
+    lp: () => lp,
+    lpa: () => lpa,
+    lpattack: () => lpattack,
+    lpd: () => lpd,
+    lpdc: () => lpdc,
+    lpdecay: () => lpdecay,
+    lpdepth: () => lpdepth,
+    lpdepthfreq: () => lpdepthfreq,
+    lpdepthfrequency: () => lpdepthfrequency,
+    lpe: () => lpe,
+    lpenv: () => lpenv,
+    lpf: () => lpf,
+    lpq: () => lpq,
+    lpr: () => lpr,
+    lprate: () => lprate,
+    lprelease: () => lprelease,
+    lps: () => lps,
+    lpshape: () => lpshape,
+    lpskew: () => lpskew,
+    lpsustain: () => lpsustain,
+    lpsync: () => lpsync,
+    lrate: () => lrate,
+    lsize: () => lsize,
+    lt: () => lt,
+    lte: () => lte,
+    mapArgs: () => mapArgs,
+    mask: () => mask,
+    midi2note: () => midi2note,
+    midiToFreq: () => midiToFreq,
+    midibend: () => midibend,
+    midichan: () => midichan,
+    midicmd: () => midicmd,
+    midimap: () => midimap,
+    midiport: () => midiport,
+    miditouch: () => miditouch,
+    minutes: () => minutes,
+    mod: () => mod,
+    mode: () => mode,
+    morph: () => morph,
+    mouseX: () => mouseX,
+    mouseY: () => mouseY,
+    mousex: () => mousex,
+    mousey: () => mousey,
+    mtranspose: () => mtranspose,
+    mul: () => mul2,
+    n: () => n,
+    nanFallback: () => nanFallback,
+    ne: () => ne,
+    net: () => net,
+    never: () => never,
+    noise: () => noise,
+    note: () => note,
+    noteToMidi: () => noteToMidi,
+    nothing: () => nothing,
+    nrpnn: () => nrpnn,
+    nrpv: () => nrpv,
+    nudge: () => nudge,
+    numeralArgs: () => numeralArgs,
+    objectMap: () => objectMap,
+    oct: () => oct,
+    octave: () => octave,
+    octaveR: () => octaveR,
+    octaves: () => octaves,
+    octer: () => octer,
+    octersub: () => octersub,
+    octersubsub: () => octersubsub,
+    off: () => off,
+    offset: () => offset,
+    often: () => often,
+    open: () => open,
+    or: () => or,
+    orbit: () => orbit,
+    oschost: () => oschost,
+    oscport: () => oscport,
+    outerBind: () => outerBind,
+    outside: () => outside,
+    overgain: () => overgain,
+    overshape: () => overshape,
+    pace: () => pace,
+    pairs: () => pairs,
+    palindrome: () => palindrome,
+    pan: () => pan,
+    panchor: () => panchor,
+    panorient: () => panorient,
+    panspan: () => panspan,
+    pansplay: () => pansplay,
+    panwidth: () => panwidth,
+    parray: () => parray,
+    parseFractional: () => parseFractional,
+    parseNumeral: () => parseNumeral,
+    partials: () => partials,
+    patt: () => patt,
+    pattack: () => pattack,
+    pcurve: () => pcurve,
+    pdec: () => pdec,
+    pdecay: () => pdecay,
+    penv: () => penv,
+    per: () => per,
+    perCycle: () => perCycle,
+    perlin: () => perlin,
+    perx: () => perx,
+    ph: () => ph,
+    phasdp: () => phasdp,
+    phaser: () => phaser,
+    phasercenter: () => phasercenter,
+    phaserdepth: () => phaserdepth,
+    phaserrate: () => phaserrate,
+    phasersweep: () => phasersweep,
+    phases: () => phases,
+    phc: () => phc,
+    phd: () => phd,
+    phs: () => phs,
+    pick: () => pick,
+    pickF: () => pickF,
+    pickOut: () => pickOut,
+    pickReset: () => pickReset,
+    pickRestart: () => pickRestart,
+    pickSqueeze: () => pickSqueeze,
+    pickmod: () => pickmod,
+    pickmodF: () => pickmodF,
+    pickmodOut: () => pickmodOut,
+    pickmodReset: () => pickmodReset,
+    pickmodRestart: () => pickmodRestart,
+    pickmodSqueeze: () => pickmodSqueeze,
+    pipe: () => pipe,
+    pitchJump: () => pitchJump,
+    pitchJumpTime: () => pitchJumpTime,
+    ply: () => ply,
+    plyForEach: () => plyForEach,
+    plyWith: () => plyWith,
+    pm: () => pm,
+    polyBind: () => polyBind,
+    polyTouch: () => polyTouch,
+    polymeter: () => polymeter,
+    polyrhythm: () => polyrhythm,
+    postgain: () => postgain,
+    pow: () => pow,
+    pr: () => pr,
+    prel: () => prel,
+    prelease: () => prelease,
+    press: () => press,
+    pressBy: () => pressBy,
+    progNum: () => progNum,
+    psus: () => psus,
+    psustain: () => psustain,
+    pure: () => pure,
+    pw: () => pw,
+    pwrate: () => pwrate,
+    pwsweep: () => pwsweep,
+    rand: () => rand,
+    rand2: () => rand2,
+    randL: () => randL,
+    randcat: () => randcat,
+    randrun: () => randrun,
+    range: () => range,
+    range2: () => range2,
+    rangex: () => rangex,
+    rarely: () => rarely,
+    ratio: () => ratio,
+    rdim: () => rdim,
+    real: () => real,
+    ref: () => ref,
+    register: () => register,
+    registerControl: () => registerControl,
+    registerMultiControl: () => registerMultiControl,
+    reify: () => reify,
+    rel: () => rel,
+    release: () => release,
+    removeUndefineds: () => removeUndefineds,
+    repeatCycles: () => repeatCycles,
+    repl: () => repl,
+    replicate: () => replicate,
+    reset_state: () => reset_state,
+    reset_timelines: () => reset_timelines,
+    resonance: () => resonance,
+    rev: () => rev,
+    revv: () => revv,
+    rfade: () => rfade,
+    rib: () => rib,
+    ribbon: () => ribbon,
+    ring: () => ring,
+    ringdf: () => ringdf,
+    ringf: () => ringf,
+    rlp: () => rlp,
+    room: () => room,
+    roomdim: () => roomdim,
+    roomfade: () => roomfade,
+    roomlp: () => roomlp,
+    roomsize: () => roomsize,
+    rotate: () => rotate,
+    round: () => round,
+    rsize: () => rsize,
+    run: () => run,
+    s: () => s,
+    s_add: () => s_add,
+    s_alt: () => s_alt,
+    s_cat: () => s_cat,
+    s_contract: () => s_contract,
+    s_expand: () => s_expand,
+    s_extend: () => s_extend,
+    s_polymeter: () => s_polymeter,
+    s_sub: () => s_sub,
+    s_taper: () => s_taper,
+    s_taperlist: () => s_taperlist,
+    s_tour: () => s_tour,
+    s_zip: () => s_zip,
+    saw: () => saw,
+    saw2: () => saw2,
+    scram: () => scram,
+    scramble: () => scramble,
+    scrub: () => scrub,
+    seconds: () => seconds,
+    seed: () => seed,
+    seg: () => seg,
+    segment: () => segment,
+    semitone: () => semitone,
+    seq: () => seq,
+    seqPLoop: () => seqPLoop,
+    sequence: () => sequence,
+    sequenceP: () => sequenceP,
+    set: () => set,
+    setClockTime: () => setClockTime,
+    setCpsFunc: () => setCpsFunc,
+    setDefaultJoin: () => setDefaultJoin,
+    setIsStarted: () => setIsStarted,
+    setPattern: () => setPattern,
+    setScheduleFunc: () => setScheduleFunc,
+    setStringParser: () => setStringParser,
+    setTime: () => setTime,
+    shape: () => shape,
+    shrink: () => shrink,
+    shrinklist: () => shrinklist,
+    shuffle: () => shuffle,
+    signal: () => signal,
+    silence: () => silence,
+    sine: () => sine,
+    sine2: () => sine2,
+    sinefold: () => sinefold,
+    size: () => size,
+    slice: () => slice,
+    slide: () => slide,
+    slow: () => slow,
+    slowChunk: () => slowChunk,
+    slowcat: () => slowcat,
+    slowcatPrime: () => slowcatPrime,
+    slowchunk: () => slowchunk,
+    smear: () => smear,
+    soft: () => soft,
+    sol2note: () => sol2note,
+    someCycles: () => someCycles,
+    someCyclesBy: () => someCyclesBy,
+    sometimes: () => sometimes,
+    sometimesBy: () => sometimesBy,
+    songPtr: () => songPtr,
+    sound: () => sound,
+    source: () => source,
+    sparsity: () => sparsity,
+    speak: () => speak,
+    speed: () => speed,
+    splice: () => splice,
+    splitAt: () => splitAt,
+    spread: () => spread,
+    square: () => square,
+    square2: () => square2,
+    squeeze: () => squeeze,
+    squeezeBind: () => squeezeBind,
+    squiz: () => squiz,
+    src: () => src,
+    stack: () => stack,
+    stackBy: () => stackBy,
+    stackCenter: () => stackCenter,
+    stackCentre: () => stackCentre,
+    stackLeft: () => stackLeft,
+    stackRepeat: () => stackRepeat,
+    stackRight: () => stackRight,
+    steady: () => steady,
+    stepBind: () => stepBind,
+    stepalt: () => stepalt,
+    stepcat: () => stepcat,
+    steps: () => steps,
+    stepsPerOctave: () => stepsPerOctave,
+    stretch: () => stretch,
+    striate: () => striate,
+    stringifyValues: () => stringifyValues,
+    struct: () => struct,
+    strudelScope: () => strudelScope,
+    stut: () => stut,
+    stutWith: () => stutWith,
+    stutwith: () => stutwith,
+    sub: () => sub,
+    superimpose: () => superimpose,
+    sus: () => sus,
+    sustain: () => sustain,
+    sustainpedal: () => sustainpedal,
+    swing: () => swing,
+    swingBy: () => swingBy,
+    sysex: () => sysex,
+    sysexdata: () => sysexdata,
+    sysexid: () => sysexid,
+    sz: () => sz,
+    take: () => take,
+    time: () => time2,
+    timeCat: () => timeCat,
+    timecat: () => timecat,
+    timeline: () => timeline,
+    toBipolar: () => toBipolar,
+    tokenizeNote: () => tokenizeNote,
+    tour: () => tour,
+    transient: () => transient,
+    trem: () => trem,
+    tremolo: () => tremolo,
+    tremolodepth: () => tremolodepth,
+    tremolophase: () => tremolophase,
+    tremoloshape: () => tremoloshape,
+    tremoloskew: () => tremoloskew,
+    tremolosync: () => tremolosync,
+    tri: () => tri,
+    tri2: () => tri2,
+    triode: () => triode,
+    tsdelay: () => tsdelay,
+    uid: () => uid,
+    undegrade: () => undegrade,
+    undegradeBy: () => undegradeBy,
+    unicodeToBase64: () => unicodeToBase64,
+    uniq: () => uniq,
+    uniqsort: () => uniqsort,
+    uniqsortr: () => uniqsortr,
+    unison: () => unison,
+    unit: () => unit,
+    useRNG: () => useRNG,
+    v: () => v,
+    val: () => val,
+    valueToMidi: () => valueToMidi,
+    vel: () => vel,
+    velocity: () => velocity,
+    vib: () => vib,
+    vibmod: () => vibmod,
+    vibrato: () => vibrato,
+    vmod: () => vmod,
+    voice: () => voice,
+    vowel: () => vowel,
+    warp: () => warp,
+    warpatt: () => warpatt,
+    warpattack: () => warpattack,
+    warpdc: () => warpdc,
+    warpdec: () => warpdec,
+    warpdecay: () => warpdecay,
+    warpdepth: () => warpdepth,
+    warpenv: () => warpenv,
+    warpmode: () => warpmode,
+    warprate: () => warprate,
+    warprel: () => warprel,
+    warprelease: () => warprelease,
+    warpshape: () => warpshape,
+    warpskew: () => warpskew,
+    warpsus: () => warpsus,
+    warpsustain: () => warpsustain,
+    warpsync: () => warpsync,
+    waveloss: () => waveloss,
+    wavetablePhaseRand: () => wavetablePhaseRand,
+    wavetablePosition: () => wavetablePosition,
+    wavetableWarp: () => wavetableWarp,
+    wavetableWarpMode: () => wavetableWarpMode,
+    wchoose: () => wchoose,
+    wchooseCycles: () => wchooseCycles,
+    when: () => when,
+    whenKey: () => whenKey,
+    withSeed: () => withSeed,
+    withValue: () => withValue,
+    within: () => within,
+    worklet: () => worklet,
+    wrandcat: () => wrandcat,
+    wt: () => wt,
+    wtatt: () => wtatt,
+    wtattack: () => wtattack,
+    wtdc: () => wtdc,
+    wtdec: () => wtdec,
+    wtdecay: () => wtdecay,
+    wtdepth: () => wtdepth,
+    wtenv: () => wtenv,
+    wtphaserand: () => wtphaserand,
+    wtrate: () => wtrate,
+    wtrel: () => wtrel,
+    wtrelease: () => wtrelease,
+    wtshape: () => wtshape,
+    wtskew: () => wtskew,
+    wtsus: () => wtsus,
+    wtsustain: () => wtsustain,
+    wtsync: () => wtsync,
+    xfade: () => xfade,
+    xsdelay: () => xsdelay,
+    zcrush: () => zcrush,
+    zdelay: () => zdelay,
+    zip: () => zip,
+    zipWith: () => zipWith,
+    zmod: () => zmod,
+    znoise: () => znoise,
+    zoom: () => zoom,
+    zoomArc: () => zoomArc,
+    zoomarc: () => zoomarc,
+    zrand: () => zrand,
+    zzfx: () => zzfx
+  });
+  var init_core = __esm({
+    "build/engine-src/strudel/packages/core/index.mjs"() {
+      init_controls();
+      init_euclid();
+      init_fraction2();
+      init_zyklus();
+      init_logger();
+      init_controls();
+      init_cyclist();
+      init_evaluate();
+      init_hap();
+      init_impure();
+      init_logger();
+      init_pattern();
+      init_pick();
+      init_repl();
+      init_signal();
+      init_speak();
+      init_state();
+      init_schedulerState();
+      init_timespan();
+      init_ui();
+      init_util();
+      init_drawLine();
+      logger("\u{1F300} @strudel/core loaded \u{1F300}");
+      if (globalThis._strudelLoaded) {
+        console.warn(
+          `@strudel/core was loaded more than once...
+This might happen when you have multiple versions of strudel installed. 
+Please check with "npm ls @strudel/core".`
+        );
+      }
+      globalThis._strudelLoaded = true;
+    }
+  });
 
   // build/engine-src/strudel/node_modules/.pnpm/@tonaljs+pitch@5.0.2/node_modules/@tonaljs/pitch/dist/index.mjs
   function isNamedPitch(src2) {
@@ -85,11 +7558,11 @@
 
   // build/engine-src/strudel/node_modules/.pnpm/@tonaljs+pitch-interval@6.1.0/node_modules/@tonaljs/pitch-interval/dist/index.mjs
   function tokenizeInterval(str) {
-    const m2 = REGEX.exec(`${str}`);
-    if (m2 === null) {
+    const m3 = REGEX.exec(`${str}`);
+    if (m3 === null) {
       return ["", ""];
     }
-    return m2[1] ? [m2[1], m2[2]] : [m2[4], m2[3]];
+    return m3[1] ? [m3[1], m3[2]] : [m3[4], m3[3]];
   }
   function interval(src2) {
     return typeof src2 === "string" ? cache[src2] || (cache[src2] = parse2(src2)) : isPitch(src2) ? interval(pitchName(src2)) : isNamedPitch(src2) ? interval(src2.name) : NoInterval;
@@ -100,17 +7573,17 @@
       return NoInterval;
     }
     const num3 = +tokens[0];
-    const q = tokens[1];
+    const q2 = tokens[1];
     const step = (Math.abs(num3) - 1) % 7;
     const t = TYPES[step];
-    if (t === "M" && q === "P") {
+    if (t === "M" && q2 === "P") {
       return NoInterval;
     }
     const type = t === "M" ? "majorable" : "perfectable";
-    const name3 = "" + num3 + q;
+    const name3 = "" + num3 + q2;
     const dir = num3 < 0 ? -1 : 1;
     const simple2 = num3 === 8 || num3 === -8 ? num3 : dir * (step + 1);
-    const alt = qToAlt(type, q);
+    const alt = qToAlt(type, q2);
     const oct2 = Math.floor((Math.abs(num3) - 1) / 7);
     const semitones2 = dir * (SIZES[step] + alt + 12 * oct2);
     const chroma5 = (dir * (SIZES[step] + alt) % 12 + 12) % 12;
@@ -119,7 +7592,7 @@
       empty: false,
       name: name3,
       num: num3,
-      q,
+      q: q2,
       step,
       alt,
       dir,
@@ -137,8 +7610,8 @@
     const ivl = forceDescending || isDescending ? [-f, -o, -1] : [f, o, 1];
     return interval(pitch(ivl));
   }
-  function qToAlt(type, q) {
-    return q === "M" && type === "majorable" || q === "P" && type === "perfectable" ? 0 : q === "m" && type === "majorable" ? -1 : /^A+$/.test(q) ? q.length : /^d+$/.test(q) ? -1 * (type === "perfectable" ? q.length : q.length + 1) : 0;
+  function qToAlt(type, q2) {
+    return q2 === "M" && type === "majorable" || q2 === "P" && type === "perfectable" ? 0 : q2 === "m" && type === "majorable" ? -1 : /^A+$/.test(q2) ? q2.length : /^d+$/.test(q2) ? -1 * (type === "perfectable" ? q2.length : q2.length + 1) : 0;
   }
   function pitchName(props) {
     const { step, alt, oct: oct2 = 0, dir } = props;
@@ -206,8 +7679,8 @@
     return value2;
   }
   function tokenizeNote2(str) {
-    const m2 = REGEX2.exec(str);
-    return m2 ? [m2[1].toUpperCase(), m2[2].replace(/x/g, "##"), m2[3], m2[4]] : ["", "", "", ""];
+    const m3 = REGEX2.exec(str);
+    return m3 ? [m3[1].toUpperCase(), m3[2].replace(/x/g, "##"), m3[3], m3[4]] : ["", "", "", ""];
   }
   function coordToNote(noteCoord) {
     return note2(pitch(noteCoord));
@@ -279,7 +7752,7 @@
       altToAcc = (alt) => alt < 0 ? fillStr2("b", -alt) : fillStr2("#", alt);
       accToAlt = (acc) => acc[0] === "b" ? -acc.length : acc.length;
       REGEX2 = /^([a-gA-G]?)(#{1,}|b{1,}|x{1,}|)(-?\d*)\s*(.*)$/;
-      mod2 = (n2, m2) => (n2 % m2 + m2) % m2;
+      mod2 = (n2, m3) => (n2 % m3 + m3) % m3;
       SEMI = [0, 2, 4, 5, 7, 9, 11];
     }
   });
@@ -327,11 +7800,11 @@
 
   // build/engine-src/strudel/node_modules/.pnpm/@tonaljs+abc-notation@4.9.1/node_modules/@tonaljs/abc-notation/dist/index.mjs
   function tokenize(str) {
-    const m2 = REGEX3.exec(str);
-    if (!m2) {
+    const m3 = REGEX3.exec(str);
+    if (!m3) {
       return ["", "", ""];
     }
-    return [m2[1], m2[2], m2[3]];
+    return [m3[1], m3[2], m3[3]];
   }
   function abcToScientificNotation(str) {
     const [acc, letter, oct2] = tokenize(str);
@@ -421,11 +7894,11 @@
   function shuffle2(arr, rnd = Math.random) {
     let i3;
     let t;
-    let m2 = arr.length;
-    while (m2) {
-      i3 = Math.floor(rnd() * m2--);
-      t = arr[m2];
-      arr[m2] = arr[i3];
+    let m3 = arr.length;
+    while (m3) {
+      i3 = Math.floor(rnd() * m3--);
+      t = arr[m3];
+      arr[m3] = arr[i3];
       arr[i3] = t;
     }
     return arr;
@@ -475,11 +7948,11 @@
   function shuffle3(arr, rnd = Math.random) {
     let i3;
     let t;
-    let m2 = arr.length;
-    while (m2) {
-      i3 = Math.floor(rnd() * m2--);
-      t = arr[m2];
-      arr[m2] = arr[i3];
+    let m3 = arr.length;
+    while (m3) {
+      i3 = Math.floor(rnd() * m3--);
+      t = arr[m3];
+      arr[m3] = arr[i3];
       arr[i3] = t;
     }
     return arr;
@@ -537,8 +8010,8 @@
     const binary2 = pcs3.chroma.split("");
     return compact2(
       binary2.map((_, i3) => {
-        const r = rotate3(i3, binary2);
-        return normalize && r[0] === "0" ? null : r.join("");
+        const r2 = rotate3(i3, binary2);
+        return normalize && r2[0] === "0" ? null : r2.join("");
       })
     );
   }
@@ -846,7 +8319,7 @@
 
   // build/engine-src/strudel/node_modules/.pnpm/@tonaljs+chord-detect@4.9.1/node_modules/@tonaljs/chord-detect/dist/index.mjs
   function detect(source2, options = {}) {
-    const notes3 = source2.map((n2) => note2(n2).pc).filter((x) => x);
+    const notes3 = source2.map((n2) => note2(n2).pc).filter((x3) => x3);
     if (note2.length === 0) {
       return [];
     }
@@ -963,8 +8436,8 @@
       chroma2 = ({ step, alt }) => (SIZES2[step] + alt + 120) % 12;
       height = ({ step, alt, oct: oct2, dir = 1 }) => dir * (SIZES2[step] + alt + 12 * (oct2 === void 0 ? -100 : oct2));
       midi = (pitch22) => {
-        const h2 = height(pitch22);
-        return pitch22.oct !== void 0 && h2 >= -12 && h2 <= 115 ? h2 + 12 : null;
+        const h3 = height(pitch22);
+        return pitch22.oct !== void 0 && h3 >= -12 && h3 <= 115 ? h3 + 12 : null;
       };
       FIFTHS2 = [0, 2, 4, -1, 1, 3, 5];
       STEPS_TO_OCTS2 = FIFTHS2.map(
@@ -976,11 +8449,11 @@
 
   // build/engine-src/strudel/node_modules/.pnpm/@tonaljs+pitch-interval@5.0.2/node_modules/@tonaljs/pitch-interval/dist/index.mjs
   function tokenizeInterval2(str) {
-    const m2 = REGEX5.exec(`${str}`);
-    if (m2 === null) {
+    const m3 = REGEX5.exec(`${str}`);
+    if (m3 === null) {
       return ["", ""];
     }
-    return m2[1] ? [m2[1], m2[2]] : [m2[4], m2[3]];
+    return m3[1] ? [m3[1], m3[2]] : [m3[4], m3[3]];
   }
   function interval2(src2) {
     return typeof src2 === "string" ? cache4[src2] || (cache4[src2] = parse4(src2)) : isPitch2(src2) ? interval2(pitchName3(src2)) : isNamedPitch2(src2) ? interval2(src2.name) : NoInterval2;
@@ -991,17 +8464,17 @@
       return NoInterval2;
     }
     const num3 = +tokens[0];
-    const q = tokens[1];
+    const q2 = tokens[1];
     const step = (Math.abs(num3) - 1) % 7;
     const t = TYPES2[step];
-    if (t === "M" && q === "P") {
+    if (t === "M" && q2 === "P") {
       return NoInterval2;
     }
     const type = t === "M" ? "majorable" : "perfectable";
-    const name3 = "" + num3 + q;
+    const name3 = "" + num3 + q2;
     const dir = num3 < 0 ? -1 : 1;
     const simple2 = num3 === 8 || num3 === -8 ? num3 : dir * (step + 1);
-    const alt = qToAlt2(type, q);
+    const alt = qToAlt2(type, q2);
     const oct2 = Math.floor((Math.abs(num3) - 1) / 7);
     const semitones2 = dir * (SIZES3[step] + alt + 12 * oct2);
     const chroma5 = (dir * (SIZES3[step] + alt) % 12 + 12) % 12;
@@ -1010,7 +8483,7 @@
       empty: false,
       name: name3,
       num: num3,
-      q,
+      q: q2,
       step,
       alt,
       dir,
@@ -1028,8 +8501,8 @@
     const ivl = forceDescending || isDescending ? [-f, -o, -1] : [f, o, 1];
     return interval2(pitch2(ivl));
   }
-  function qToAlt2(type, q) {
-    return q === "M" && type === "majorable" || q === "P" && type === "perfectable" ? 0 : q === "m" && type === "majorable" ? -1 : /^A+$/.test(q) ? q.length : /^d+$/.test(q) ? -1 * (type === "perfectable" ? q.length : q.length + 1) : 0;
+  function qToAlt2(type, q2) {
+    return q2 === "M" && type === "majorable" || q2 === "P" && type === "perfectable" ? 0 : q2 === "m" && type === "majorable" ? -1 : /^A+$/.test(q2) ? q2.length : /^d+$/.test(q2) ? -1 * (type === "perfectable" ? q2.length : q2.length + 1) : 0;
   }
   function pitchName3(props) {
     const { step, alt, oct: oct2 = 0, dir } = props;
@@ -1083,8 +8556,8 @@
     return value2;
   }
   function tokenizeNote3(str) {
-    const m2 = REGEX6.exec(str);
-    return m2 ? [m2[1].toUpperCase(), m2[2].replace(/x/g, "##"), m2[3], m2[4]] : ["", "", "", ""];
+    const m3 = REGEX6.exec(str);
+    return m3 ? [m3[1].toUpperCase(), m3[2].replace(/x/g, "##"), m3[3], m3[4]] : ["", "", "", ""];
   }
   function coordToNote2(noteCoord) {
     return note3(pitch2(noteCoord));
@@ -1143,7 +8616,7 @@
       altToAcc2 = (alt) => alt < 0 ? fillStr5("b", -alt) : fillStr5("#", alt);
       accToAlt2 = (acc) => acc[0] === "b" ? -acc.length : acc.length;
       REGEX6 = /^([a-gA-G]?)(#{1,}|b{1,}|x{1,}|)(-?\d*)\s*(.*)$/;
-      mod3 = (n2, m2) => (n2 % m2 + m2) % m2;
+      mod3 = (n2, m3) => (n2 % m3 + m3) % m3;
       SEMI2 = [0, 2, 4, 5, 7, 9, 11];
     }
   });
@@ -1240,10 +8713,10 @@
     return index2[type] || NoChordType2;
   }
   function names() {
-    return dictionary3.map((chord3) => chord3.name).filter((x) => x);
+    return dictionary3.map((chord3) => chord3.name).filter((x3) => x3);
   }
   function symbols() {
-    return dictionary3.map((chord3) => chord3.aliases[0]).filter((x) => x);
+    return dictionary3.map((chord3) => chord3.aliases[0]).filter((x3) => x3);
   }
   function keys() {
     return Object.keys(index2);
@@ -1440,7 +8913,7 @@
 
   // build/engine-src/strudel/node_modules/.pnpm/@tonaljs+scale-type@4.9.1/node_modules/@tonaljs/scale-type/dist/index.mjs
   function names2() {
-    return dictionary4.map((scale3) => scale3.name);
+    return dictionary4.map((scale4) => scale4.name);
   }
   function get3(type) {
     return index3[type] || NoScaleType;
@@ -1456,16 +8929,16 @@
     index3 = {};
   }
   function add4(intervals2, name3, aliases = []) {
-    const scale3 = { ...get(intervals2), name: name3, intervals: intervals2, aliases };
-    dictionary4.push(scale3);
-    index3[scale3.name] = scale3;
-    index3[scale3.setNum] = scale3;
-    index3[scale3.chroma] = scale3;
-    scale3.aliases.forEach((alias) => addAlias3(scale3, alias));
-    return scale3;
+    const scale4 = { ...get(intervals2), name: name3, intervals: intervals2, aliases };
+    dictionary4.push(scale4);
+    index3[scale4.name] = scale4;
+    index3[scale4.setNum] = scale4;
+    index3[scale4.chroma] = scale4;
+    scale4.aliases.forEach((alias) => addAlias3(scale4, alias));
+    return scale4;
   }
-  function addAlias3(scale3, alias) {
-    index3[alias] = scale3;
+  function addAlias3(scale4, alias) {
+    index3[alias] = scale4;
   }
   var SCALES, data_default3, NoScaleType, dictionary4, index3, scaleType, entries2, scale_type_default;
   var init_dist17 = __esm({
@@ -1710,7 +9183,7 @@
   function chordScales(name3) {
     const s2 = get4(name3);
     const isChordIncluded = isSupersetOf(s2.chroma);
-    return all3().filter((scale3) => isChordIncluded(scale3.chroma)).map((scale3) => scale3.name);
+    return all3().filter((scale4) => isChordIncluded(scale4.chroma)).map((scale4) => scale4.name);
   }
   function extended(chordName) {
     const s2 = get4(chordName);
@@ -1883,9 +9356,9 @@
   function fromSemitones(semitones2) {
     const d = semitones2 < 0 ? -1 : 1;
     const n2 = Math.abs(semitones2);
-    const c = n2 % 12;
+    const c2 = n2 % 12;
     const o = Math.floor(n2 / 12);
-    return d * (IN[c] + 7 * o) + IQ[c];
+    return d * (IN[c2] + 7 * o) + IQ[c2];
   }
   function transposeFifths(interval3, fifths) {
     const ivl = get6(interval3);
@@ -2226,14 +9699,14 @@
   function keyScale(grades, triads3, chordTypes, harmonicFunctions, chordScales2) {
     return (tonic) => {
       const intervals2 = grades.map((gr) => get8(gr).interval || "");
-      const scale3 = intervals2.map((interval3) => transpose5(tonic, interval3));
-      const chords2 = mapScaleToType(scale3, chordTypes);
-      const secondaryDominants = scale3.map((note22) => transpose5(note22, "5P")).map(
+      const scale4 = intervals2.map((interval3) => transpose5(tonic, interval3));
+      const chords2 = mapScaleToType(scale4, chordTypes);
+      const secondaryDominants = scale4.map((note22) => transpose5(note22, "5P")).map(
         (note22) => (
           // A secondary dominant is a V chord which:
           // 1. is not diatonic to the key,
           // 2. it must have a diatonic root.
-          scale3.includes(note22) && !chords2.includes(note22 + "7") ? note22 + "7" : ""
+          scale4.includes(note22) && !chords2.includes(note22 + "7") ? note22 + "7" : ""
         )
       );
       const secondaryDominantSupertonics = supertonics(
@@ -2254,11 +9727,11 @@
         tonic,
         grades,
         intervals: intervals2,
-        scale: scale3,
-        triads: mapScaleToType(scale3, triads3),
+        scale: scale4,
+        triads: mapScaleToType(scale4, triads3),
         chords: chords2,
         chordsHarmonicFunction: harmonicFunctions.slice(),
-        chordScales: mapScaleToType(scale3, chordScales2, " "),
+        chordScales: mapScaleToType(scale4, chordScales2, " "),
         secondaryDominants,
         secondaryDominantSupertonics,
         substituteDominants,
@@ -2353,7 +9826,7 @@
         harmonic: NoKeyScale,
         melodic: NoKeyScale
       };
-      mapScaleToType = (scale3, list2, sep = "") => list2.map((type, i3) => `${scale3[i3]}${sep}${type}`);
+      mapScaleToType = (scale4, list2, sep = "") => list2.map((type, i3) => `${scale4[i3]}${sep}${type}`);
       supertonics = (dominants, targetTriads) => {
         return dominants.map((chord3, index5) => {
           if (!chord3) return "";
@@ -2524,8 +9997,8 @@
       });
       mode2 = get10;
       entries3 = all4;
-      triads = chords(MODES.map((x) => x[4]));
-      seventhChords = chords(MODES.map((x) => x[5]));
+      triads = chords(MODES.map((x3) => x3[4]));
+      seventhChords = chords(MODES.map((x3) => x3[5]));
       mode_default = {
         get: get10,
         names: names7,
@@ -2696,7 +10169,7 @@
     return all3().filter((scale22) => isSubset(scale22.chroma)).map((scale22) => scale22.name);
   }
   function scaleNotes(notes3) {
-    const pcset3 = notes3.map((n2) => note2(n2).pc).filter((x) => x);
+    const pcset3 = notes3.map((n2) => note2(n2).pc).filter((x3) => x3);
     const tonic = pcset3[0];
     const scale22 = sortedUniqNames(pcset3);
     return rotate3(scale22.indexOf(tonic), scale22);
@@ -2710,17 +10183,17 @@
     return modes(s2.chroma).map((chroma22, i3) => {
       const modeName = get12(chroma22).name;
       return modeName ? [tonics[i3], modeName] : ["", ""];
-    }).filter((x) => x[0]);
+    }).filter((x3) => x3[0]);
   }
   function getNoteNameOf(scale22) {
     const names22 = Array.isArray(scale22) ? scaleNotes(scale22) : get12(scale22).notes;
-    const chromas3 = names22.map((name3) => note2(name3).chroma);
+    const chromas4 = names22.map((name3) => note2(name3).chroma);
     return (noteOrMidi) => {
       const currNote = typeof noteOrMidi === "number" ? note2(fromMidi(noteOrMidi)) : note2(noteOrMidi);
       const height2 = currNote.height;
       if (height2 === void 0) return void 0;
       const chroma22 = height2 % 12;
-      const position = chromas3.indexOf(chroma22);
+      const position = chromas4.indexOf(chroma22);
       if (position === -1) return void 0;
       return enharmonic(currNote.name, names22[position]);
     };
@@ -2731,7 +10204,7 @@
       const from = note2(fromNote).height;
       const to = note2(toNote).height;
       if (from === void 0 || to === void 0) return [];
-      return range4(from, to).map(getName).filter((x) => x);
+      return range4(from, to).map(getName).filter((x3) => x3);
     };
   }
   function degrees2(scaleName) {
@@ -2846,7 +10319,7 @@
       REGEX9 = /^(\d*\d(?:\+\d)*)\/(\d+)$/;
       CACHE = /* @__PURE__ */ new Map();
       time_signature_default = { names: names9, parse: parse7, get: get13 };
-      isPowerOfTwo = (x) => Math.log(x) / Math.log(2) % 1 === 0;
+      isPowerOfTwo = (x3) => Math.log(x3) / Math.log(2) % 1 === 0;
     }
   });
 
@@ -3134,6 +10607,5140 @@
         triads: dictionaryVoicing_1.triads,
         minTopNoteDiff: minTopNoteDiff_1.minTopNoteDiff
       };
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/feedbackdelay.mjs
+  var init_feedbackdelay = __esm({
+    "build/engine-src/strudel/packages/superdough/feedbackdelay.mjs"() {
+      if (typeof DelayNode !== "undefined") {
+        class FeedbackDelayNode extends DelayNode {
+          constructor(ac, wet, time4, feedback) {
+            super(ac);
+            wet = Math.abs(wet);
+            this.delayTime.value = time4;
+            this.feedbackGain = ac.createGain();
+            this.feedbackGain.gain.value = Math.min(Math.abs(feedback), 0.995);
+            this.feedback = this.feedbackGain.gain;
+            this.delayGain = ac.createGain();
+            this.delayGain.gain.value = wet;
+            this.connect(this.feedbackGain);
+            this.connect(this.delayGain);
+            this.feedbackGain.connect(this);
+            this.connect = (target) => this.delayGain.connect(target);
+            return this;
+          }
+          start(t) {
+            this.delayGain.gain.setValueAtTime(this.delayGain.gain.value, t + this.delayTime.value);
+          }
+        }
+        BaseAudioContext.prototype.createFeedbackDelay = function(wet, time4, feedback) {
+          return new FeedbackDelayNode(this, wet, time4, feedback);
+        };
+      }
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/nodePools.mjs
+  var nodePools, POOL_KEY, isPoolable, clearNodePool, getNodeTime, getParams, releaseNodeToPool, isNodeAlive, getNodeFromPool;
+  var init_nodePools = __esm({
+    "build/engine-src/strudel/packages/superdough/nodePools.mjs"() {
+      init_helpers();
+      nodePools = /* @__PURE__ */ new Map();
+      POOL_KEY = /* @__PURE__ */ Symbol("nodePoolKey");
+      isPoolable = (node) => !!node[POOL_KEY];
+      clearNodePool = () => {
+        for (const pool of nodePools) {
+          for (const node of pool) {
+            if (node instanceof AudioNode) {
+              releaseAudioNode(node);
+            }
+          }
+        }
+        nodePools.clear();
+      };
+      getNodeTime = (node) => {
+        return node.context?.currentTime ?? 0;
+      };
+      getParams = (node) => {
+        const params = /* @__PURE__ */ new Set();
+        node.parameters?.forEach((param) => params.add(param));
+        const visited = /* @__PURE__ */ new Set();
+        let proto = node;
+        while (proto !== Object.prototype) {
+          for (const key of Object.getOwnPropertyNames(proto)) {
+            if (visited.has(key)) continue;
+            visited.add(key);
+            const value2 = node[key];
+            if (value2 instanceof AudioParam) {
+              params.add(value2);
+            }
+          }
+          proto = Object.getPrototypeOf(proto);
+        }
+        return params;
+      };
+      releaseNodeToPool = (node) => {
+        node.disconnect();
+        if (node instanceof AudioScheduledSourceNode) {
+          return;
+        }
+        const key = node[POOL_KEY];
+        if (key == null) return;
+        const now = getNodeTime(node);
+        getParams(node).forEach((param) => param.cancelScheduledValues(now));
+        const pool = nodePools.get(key) ?? [];
+        pool.push(new WeakRef(node));
+        nodePools.set(key, pool);
+      };
+      isNodeAlive = (node) => {
+        if (!(node instanceof AudioWorkletNode)) return true;
+        const now = getNodeTime(node);
+        const end2 = node?.parameters?.get("end").value ?? 0;
+        return now < end2 + 0.45;
+      };
+      getNodeFromPool = (key, factory) => {
+        const pool = nodePools.get(key) ?? [];
+        let node;
+        let found = false;
+        while (pool.length) {
+          const ref3 = pool.pop();
+          node = ref3?.deref();
+          if (node != null && isNodeAlive(node)) {
+            found = true;
+            break;
+          }
+        }
+        if (!found) {
+          node = factory();
+        }
+        node[POOL_KEY] = key;
+        return node;
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/clockbridge.mjs
+  function expDecay(a, b, decay2, dt2) {
+    return b + (a - b) * Math.exp(-decay2 * dt2);
+  }
+  var ClockBridge;
+  var init_clockbridge = __esm({
+    "build/engine-src/strudel/packages/superdough/clockbridge.mjs"() {
+      ClockBridge = class {
+        p;
+        // smoothed clock offset
+        lastTime;
+        audioContext;
+        constructor(audioContext2) {
+          this.audioContext = audioContext2;
+        }
+        // delta between audio and performance time in ms
+        getOffset() {
+          const { contextTime, performanceTime } = this.audioContext.getOutputTimestamp();
+          if (!contextTime || !performanceTime) {
+            return;
+          }
+          const offset3 = performanceTime - contextTime * 1e3;
+          const dt2 = performanceTime - (this.lastTime ?? performanceTime);
+          const deprivation = offset3 - this.p;
+          if (Math.abs(deprivation) > 20) {
+            console.log(`[ClockBridge] snap with ${(deprivation / 1e3).toFixed(2)}s deprivation`);
+            this.p = offset3;
+          } else {
+            const decay2 = 1 / 1e4;
+            this.p = expDecay(this.p ?? offset3, offset3, decay2, dt2);
+          }
+          this.lastTime = performanceTime;
+          return this.p;
+        }
+        getPerformanceTime(audioContextTime) {
+          const offset3 = this.getOffset();
+          return audioContextTime * 1e3 + offset3;
+        }
+        getAudioContextTime(performanceTime) {
+          const offset3 = this.getOffset();
+          return (performanceTime - offset3) / 1e3;
+        }
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/audioContext.mjs
+  function getClockBridge() {
+    if (!clockBridge) {
+      getAudioContext();
+    }
+    return clockBridge;
+  }
+  function getAudioContextCurrentTime() {
+    return getAudioContext().currentTime;
+  }
+  var audioContext, clockBridge, setDefaultAudioContext, setAudioContext, getAudioContext;
+  var init_audioContext = __esm({
+    "build/engine-src/strudel/packages/superdough/audioContext.mjs"() {
+      init_nodePools();
+      init_clockbridge();
+      setDefaultAudioContext = () => {
+        return setAudioContext(new AudioContext());
+      };
+      setAudioContext = (context) => {
+        clearNodePool();
+        if (audioContext && audioContext.state !== "closed") {
+          audioContext.close();
+        }
+        audioContext = context;
+        clockBridge = new ClockBridge(audioContext);
+        return audioContext;
+      };
+      getAudioContext = () => {
+        if (!audioContext) {
+          return setDefaultAudioContext();
+        }
+        return audioContext;
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/logger.mjs
+  function errorLogger2(e, origin = "superdough") {
+    if (false) {
+      console.error(e);
+    }
+    logger2(`[${origin}] error: ${e.message}`);
+  }
+  var log, logger2, setLogger;
+  var init_logger2 = __esm({
+    "build/engine-src/strudel/packages/superdough/logger.mjs"() {
+      log = (msg) => console.log(msg);
+      logger2 = (...args) => log(...args);
+      setLogger = (fn) => {
+        log = fn;
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/noise.mjs
+  function getNoiseBuffer(type, density2) {
+    const ac = getAudioContext();
+    if (noiseCache[type]) {
+      return noiseCache[type];
+    }
+    const bufferSize = 2 * ac.sampleRate;
+    const noiseBuffer = ac.createBuffer(1, bufferSize, ac.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    let lastOut = 0;
+    let b0, b1, b2, b3, b4, b5, b6;
+    b0 = b1 = b2 = b3 = b4 = b5 = b6 = 0;
+    for (let i3 = 0; i3 < bufferSize; i3++) {
+      if (type === "white") {
+        output[i3] = Math.random() * 2 - 1;
+      } else if (type === "brown") {
+        let white = Math.random() * 2 - 1;
+        output[i3] = (lastOut + 0.02 * white) / 1.02;
+        lastOut = output[i3];
+      } else if (type === "pink") {
+        let white = Math.random() * 2 - 1;
+        b0 = 0.99886 * b0 + white * 0.0555179;
+        b1 = 0.99332 * b1 + white * 0.0750759;
+        b2 = 0.969 * b2 + white * 0.153852;
+        b3 = 0.8665 * b3 + white * 0.3104856;
+        b4 = 0.55 * b4 + white * 0.5329522;
+        b5 = -0.7616 * b5 - white * 0.016898;
+        output[i3] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+        output[i3] *= 0.11;
+        b6 = white * 0.115926;
+      } else if (type === "crackle") {
+        const probability = density2 * 0.01;
+        if (Math.random() < probability) {
+          output[i3] = Math.random() * 2 - 1;
+        } else {
+          output[i3] = 0;
+        }
+      }
+    }
+    if (type !== "crackle") noiseCache[type] = noiseBuffer;
+    return noiseBuffer;
+  }
+  function getNoiseOscillator(type = "white", t, density2 = 0.02) {
+    const ac = getAudioContext();
+    const o = ac.createBufferSource();
+    o.buffer = getNoiseBuffer(type, density2);
+    o.loop = true;
+    o.start(t);
+    return {
+      node: o,
+      stop: (time4) => o.stop(time4)
+    };
+  }
+  function getNoiseMix(inputNode, wet, t) {
+    const noiseOscillator = getNoiseOscillator("pink", t);
+    const noiseMix = drywet(inputNode, noiseOscillator.node, wet);
+    onceEnded(noiseOscillator.node, () => {
+      releaseAudioNode(noiseOscillator.node);
+    });
+    return {
+      node: noiseMix.node,
+      stop: (time4) => noiseOscillator?.stop(time4),
+      teardown: noiseMix.teardown
+    };
+  }
+  var noiseCache;
+  var init_noise = __esm({
+    "build/engine-src/strudel/packages/superdough/noise.mjs"() {
+      init_helpers();
+      init_audioContext();
+      noiseCache = {};
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/util.mjs
+  function nanFallback2(value2, fallback = 0, silent) {
+    if (isNaN(Number(value2))) {
+      !silent && logger2(`"${value2}" is not a number, falling back to ${fallback}`, "warning");
+      return fallback;
+    }
+    return value2;
+  }
+  function cycleToSeconds2(cycle, cps2) {
+    return cycle / cps2;
+  }
+  function getCommonSampleInfo(hapValue, bank2) {
+    const { s: s2, n: n2 = 0 } = hapValue;
+    let midi3 = valueToMidi2(hapValue, 36);
+    let transpose7 = midi3 - 36;
+    let url;
+    let index5 = 0;
+    if (Array.isArray(bank2)) {
+      index5 = getSoundIndex2(n2, bank2.length);
+      url = bank2[index5];
+    } else {
+      const midiDiff = (noteA) => noteToMidi2(noteA) - midi3;
+      const closest = Object.keys(bank2).filter((k) => !k.startsWith("_")).reduce(
+        (closest2, key, j) => !closest2 || Math.abs(midiDiff(key)) < Math.abs(midiDiff(closest2)) ? key : closest2,
+        null
+      );
+      transpose7 = -midiDiff(closest);
+      index5 = getSoundIndex2(n2, bank2[closest].length);
+      url = bank2[closest][index5];
+    }
+    const label2 = `${s2}:${index5}`;
+    return { transpose: transpose7, url, index: index5, midi: midi3, label: label2 };
+  }
+  var tokenizeNote4, chromas3, accs3, getAccidentalsOffset2, noteToMidi2, midiToFreq3, clamp2, freqToMidi3, valueToMidi2, _mod2, getSoundIndex2, pickAndRename, getBaseURL;
+  var init_util2 = __esm({
+    "build/engine-src/strudel/packages/superdough/util.mjs"() {
+      init_logger2();
+      tokenizeNote4 = (note4) => {
+        if (typeof note4 !== "string") {
+          return [];
+        }
+        const [pc, acc = "", oct2] = note4.match(/^([a-gA-G])([#bsf]*)(-?[0-9]*)$/)?.slice(1) || [];
+        if (!pc) {
+          return [];
+        }
+        return [pc, acc, oct2 ? Number(oct2) : void 0];
+      };
+      chromas3 = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
+      accs3 = { "#": 1, b: -1, s: 1, f: -1 };
+      getAccidentalsOffset2 = (accidentals2) => {
+        return accidentals2?.split("").reduce((o, char) => o + accs3[char], 0) || 0;
+      };
+      noteToMidi2 = (note4, defaultOctave = 3) => {
+        const [pc, acc, oct2 = defaultOctave] = tokenizeNote4(note4);
+        if (!pc) {
+          throw new Error('not a note: "' + note4 + '"');
+        }
+        const chroma5 = chromas3[pc.toLowerCase()];
+        const offset3 = getAccidentalsOffset2(acc);
+        return (Number(oct2) + 1) * 12 + chroma5 + offset3;
+      };
+      midiToFreq3 = (n2) => {
+        return Math.pow(2, (n2 - 69) / 12) * 440;
+      };
+      clamp2 = (num3, min, max) => Math.min(Math.max(num3, min), max);
+      freqToMidi3 = (freq3) => {
+        return 12 * Math.log(freq3 / 440) / Math.LN2 + 69;
+      };
+      valueToMidi2 = (value2, fallbackValue) => {
+        if (typeof value2 !== "object") {
+          throw new Error("valueToMidi: expected object value");
+        }
+        let { freq: freq3, note: note4 } = value2;
+        if (typeof freq3 === "number") {
+          return freqToMidi3(freq3);
+        }
+        if (typeof note4 === "string") {
+          return noteToMidi2(note4);
+        }
+        if (typeof note4 === "number") {
+          return note4;
+        }
+        if (!fallbackValue) {
+          throw new Error("valueToMidi: expected freq or note to be set");
+        }
+        return fallbackValue;
+      };
+      _mod2 = (n2, m3) => (n2 % m3 + m3) % m3;
+      getSoundIndex2 = (n2, numSounds) => {
+        return _mod2(Math.round(nanFallback2(n2, 0)), numSounds);
+      };
+      pickAndRename = (source2, map3) => {
+        return Object.fromEntries(Object.entries(map3).map(([newKey, oldKey]) => [newKey, source2[oldKey]]));
+      };
+      getBaseURL = (url) => {
+        try {
+          return new URL(".", new URL(url)).href.replace(/\/$/, "");
+        } catch {
+          return url.split("/").slice(0, -1).join("/");
+        }
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/helpers.mjs
+  function gainNode(value2, audioContext2 = getAudioContext()) {
+    const node = audioContext2.createGain();
+    node.gain.value = value2;
+    return node;
+  }
+  function ensureMinimalOutput() {
+    if (constantNode && constantNodeAudioContext === getAudioContext()) {
+      return;
+    }
+    constantNodeAudioContext = getAudioContext();
+    constantNode = new ConstantSourceNode(constantNodeAudioContext);
+    constantNode.offset.value = 1e-7;
+    constantNode.connect(constantNodeAudioContext.destination);
+    constantNode.start();
+  }
+  function effectSend(input, effect, wet) {
+    const send = gainNode(wet);
+    input.connect(send);
+    send.connect(effect);
+    return send;
+  }
+  function getWorklet(ac, processor, params, config) {
+    const node = new AudioWorkletNode(ac, processor, config);
+    Object.entries(params).forEach(([key, value2]) => {
+      if (value2 !== void 0) {
+        node.parameters.get(key).value = value2;
+      }
+    });
+    return node;
+  }
+  function getModulationShapeInput(val2) {
+    if (typeof val2 === "number") {
+      return val2 % 5;
+    }
+    return { tri: 0, triangle: 0, sine: 1, ramp: 2, saw: 3, square: 4 }[val2] ?? 0;
+  }
+  function getEnvelope(audioContext2, properties = {}) {
+    return getWorklet(audioContext2, "envelope-processor", properties);
+  }
+  function getLfo(audioContext2, properties = {}) {
+    const {
+      shape: shape2 = 0,
+      begin: begin2 = 0,
+      end: end2 = 0,
+      time: time4,
+      depth = 1,
+      dcoffset = -0.5,
+      frequency = 1,
+      skew = 0.5,
+      phaseoffset = 0,
+      curve: curve2 = 1,
+      min,
+      max,
+      ...props
+    } = properties;
+    const lfoprops = {
+      begin: begin2,
+      end: end2,
+      time: time4 ?? begin2,
+      depth,
+      dcoffset,
+      frequency,
+      skew,
+      phaseoffset,
+      curve: curve2,
+      shape: getModulationShapeInput(shape2),
+      min: min ?? dcoffset * depth,
+      max: max ?? dcoffset * depth + depth,
+      ...props
+    };
+    return getWorklet(audioContext2, "lfo-processor", lfoprops);
+  }
+  function getCompressor(ac, threshold, ratio4, knee, attack2, release2) {
+    const node = getNodeFromPool("compressor", () => new DynamicsCompressorNode(ac, {}));
+    const options = {
+      threshold: threshold ?? -3,
+      ratio: ratio4 ?? 10,
+      knee: knee ?? 10,
+      attack: attack2 ?? 5e-3,
+      release: release2 ?? 0.05
+    };
+    Object.entries(options).forEach(([key, value2]) => {
+      node[key].value = value2;
+    });
+    return node;
+  }
+  function getParamLfo(audioContext2, param, start, end2, lfoValues) {
+    let { defaultDepth = 1, depth, dcoffset, ...getLfoInputs } = lfoValues;
+    if (depth == null) {
+      const hasLFOParams = Object.values(getLfoInputs).some((v2) => v2 != null);
+      depth = hasLFOParams ? defaultDepth : 0;
+    }
+    let lfo2;
+    if (depth) {
+      lfo2 = getLfo(audioContext2, {
+        begin: start,
+        end: end2,
+        depth,
+        dcoffset,
+        ...getLfoInputs
+      });
+      lfo2.connect(param);
+    }
+    return lfo2;
+  }
+  function applyParameterModulators(audioContext2, param, start, end2, envelopeValues, lfoValues) {
+    let { amount, offset: offset3, defaultAmount = 1, curve: curve2 = "linear", values, holdEnd, defaultValues } = envelopeValues;
+    if (amount == null) {
+      const hasADSRParams = values.some((p) => p != null);
+      amount = hasADSRParams ? defaultAmount : 0;
+    }
+    const min = offset3 ?? 0;
+    const max = amount + min;
+    const diff = Math.abs(max - min);
+    if (diff) {
+      const [attack2, decay2, sustain2, release2] = getADSRValues(values, curve2, defaultValues);
+      getParamADSR(param, attack2, decay2, sustain2, release2, min, max, start, holdEnd, curve2);
+    }
+    const lfo2 = getParamLfo(audioContext2, param, start, end2, lfoValues);
+    return lfo2;
+  }
+  function createFilter(context, start, end2, params, cps2, cycle) {
+    let {
+      frequency,
+      anchor: anchor2,
+      env: env2,
+      type,
+      model,
+      q: q2 = 1,
+      drive: drive2 = 0.69,
+      depth,
+      depthfrequency,
+      dcoffset = -0.5,
+      skew,
+      shape: shape2,
+      rate,
+      sync
+    } = params;
+    let frequencyParam, filter3;
+    if (model === "ladder") {
+      filter3 = getWorklet(context, "ladder-processor", { frequency, q: q2, drive: drive2 });
+      frequencyParam = filter3.parameters.get("frequency");
+    } else {
+      const factory = () => context.createBiquadFilter();
+      filter3 = getNodeFromPool("filter", factory);
+      filter3.type = type;
+      Object.entries({ Q: q2, frequency }).forEach(([key, value2]) => {
+        filter3[key].value = value2;
+      });
+      frequencyParam = filter3.frequency;
+    }
+    const envelopeValues = [params.attack, params.decay, params.sustain, params.release];
+    const [attack2, decay2, sustain2, release2] = getADSRValues(envelopeValues, "exponential", [5e-3, 0.14, 0, 0.1]);
+    const hasEnvelope = [...envelopeValues, env2].some((v2) => v2 !== void 0);
+    if (hasEnvelope) {
+      env2 = nanFallback2(env2, 1, true);
+      anchor2 = nanFallback2(anchor2, 0, true);
+      const envAbs = Math.abs(env2);
+      const offset3 = envAbs * anchor2;
+      let min = clamp2(2 ** -offset3 * frequency, 0, 2e4);
+      let max = clamp2(2 ** (envAbs - offset3) * frequency, 0, 2e4);
+      if (env2 < 0) [min, max] = [max, min];
+      getParamADSR(frequencyParam, attack2, decay2, sustain2, release2, min, max, start, end2, "exponential");
+    }
+    if (sync != null) {
+      rate = cps2 * sync;
+    }
+    const hasLFO = [depth, depthfrequency, skew, shape2, rate].some((v2) => v2 !== void 0);
+    let lfo2;
+    if (hasLFO) {
+      depth = depth ?? 1;
+      const time4 = cycle / cps2;
+      const modDepth = depthfrequency ?? (depth ?? 1) * frequency;
+      const lfoValues = {
+        depth: modDepth,
+        dcoffset,
+        skew,
+        shape: shape2,
+        frequency: rate ?? cps2,
+        min: -frequency + 30,
+        max: 2e4 - frequency,
+        time: time4,
+        curve: 1
+      };
+      lfo2 = getParamLfo(context, frequencyParam, start, end2, lfoValues);
+    }
+    return { filter: filter3, lfo: lfo2 };
+  }
+  function drywet(dry2, wet, wetAmount = 0) {
+    const ac = getAudioContext();
+    if (!wetAmount) {
+      return dry2;
+    }
+    let dry_gain = ac.createGain();
+    let wet_gain = ac.createGain();
+    dry2.connect(dry_gain);
+    wet.connect(wet_gain);
+    dry_gain.gain.value = wetfade(wetAmount);
+    wet_gain.gain.value = wetfade(1 - wetAmount);
+    let mix = ac.createGain();
+    dry_gain.connect(mix);
+    wet_gain.connect(mix);
+    return {
+      node: mix,
+      teardown: () => {
+        releaseAudioNode(dry_gain);
+        releaseAudioNode(wet_gain);
+        dry2.disconnect(dry_gain);
+        wet.disconnect(wet_gain);
+      }
+    };
+  }
+  function getPitchEnvelope(param, value2, t, holdEnd) {
+    const hasEnvelope = value2.pattack ?? value2.pdecay ?? value2.psustain ?? value2.prelease ?? value2.penv;
+    if (hasEnvelope === void 0) {
+      return;
+    }
+    const penv2 = nanFallback2(value2.penv, 1, true);
+    const curve2 = curves[value2.pcurve ?? 0];
+    let [pattack2, pdecay2, psustain2, prelease2] = getADSRValues(
+      [value2.pattack, value2.pdecay, value2.psustain, value2.prelease],
+      curve2,
+      [0.2, 1e-3, 1, 1e-3]
+    );
+    let panchor2 = value2.panchor ?? psustain2;
+    const cents = penv2 * 100;
+    const min = 0 - cents * panchor2;
+    const max = cents - cents * panchor2;
+    getParamADSR(param, pattack2, pdecay2, psustain2, prelease2, min, max, t, holdEnd, curve2);
+  }
+  function getVibratoOscillator(param, value2, t) {
+    const { vibmod: vibmod2 = 0.5, vib: vib2 } = value2;
+    let vibratoOscillator;
+    if (vib2 > 0) {
+      vibratoOscillator = getAudioContext().createOscillator();
+      vibratoOscillator.frequency.value = vib2;
+      const gain2 = getAudioContext().createGain();
+      gain2.gain.value = vibmod2 * 100;
+      vibratoOscillator.connect(gain2);
+      gain2.connect(param);
+      onceEnded(vibratoOscillator, () => {
+        releaseAudioNode(gain2);
+        releaseAudioNode(vibratoOscillator);
+      });
+      vibratoOscillator.start(t);
+      return { stop: (t2) => vibratoOscillator.stop(t2), nodes: { vib: [vibratoOscillator], vib_gain: [gain2] } };
+    }
+  }
+  function scheduleAtTime(callback, targetTime, audioContext2 = getAudioContext()) {
+    const currentTime = audioContext2.currentTime;
+    webAudioTimeout(audioContext2, callback, currentTime, targetTime);
+  }
+  function webAudioTimeout(audioContext2, onComplete, startTime, stopTime) {
+    const constantNode2 = new ConstantSourceNode(audioContext2);
+    const zeroGain = gainNode(0, audioContext2);
+    zeroGain.connect(audioContext2.destination);
+    constantNode2.connect(zeroGain);
+    onceEnded(constantNode2, () => {
+      releaseAudioNode(zeroGain);
+      releaseAudioNode(constantNode2);
+      onComplete();
+    });
+    constantNode2.start(startTime);
+    constantNode2.stop(stopTime);
+    return constantNode2;
+  }
+  function applyFM(param, value2, begin2) {
+    const ac = getAudioContext();
+    const toStop = [];
+    const fms = {};
+    const nodes = {};
+    for (let i3 = 1; i3 <= 8; i3++) {
+      for (let j = 0; j <= 8; j++) {
+        let control2;
+        if (i3 === j + 1) {
+          const iS = i3 === 1 ? "" : i3;
+          control2 = `fmi${iS}`;
+        } else {
+          control2 = `fmi${i3}${j}`;
+        }
+        const amt = value2[control2];
+        if (!amt) continue;
+        let io = [];
+        for (let [isMod, idx] of [
+          [true, i3],
+          // source
+          [false, j]
+          // target
+        ]) {
+          if (idx === 0) {
+            io.push(param);
+            continue;
+          }
+          if (!fms[idx]) {
+            const idxS = idx === 1 ? "" : idx;
+            const { osc: osc2, freq: freq4 } = fm9(param, value2[`fmh${idxS}`] ?? 1, value2[`fmwave${idxS}`] ?? "sine");
+            toStop.push(osc2);
+            const toCleanup2 = [osc2];
+            const adsr2 = ["attack", "decay", "sustain", "release"].map((s2) => value2[`fm${s2}${idxS}`]);
+            let output2 = osc2;
+            if (adsr2.some((v2) => v2 !== void 0)) {
+              const envGain = ac.createGain();
+              const [attack2, decay2, sustain2, release2] = getADSRValues(adsr2);
+              const holdEnd = begin2 + value2.duration;
+              const fmEnvelopeType = value2[`fmenv${idxS}`] ?? "exp";
+              getParamADSR(
+                envGain.gain,
+                attack2,
+                decay2,
+                sustain2,
+                release2,
+                0,
+                1,
+                begin2,
+                holdEnd,
+                fmEnvelopeType === "exp" ? "exponential" : "linear"
+              );
+              toCleanup2.push(envGain);
+              output2 = osc2.connect(envGain);
+            }
+            fms[idx] = { input: osc2.frequency, output: output2, freq: freq4, osc: osc2, toCleanup: toCleanup2 };
+            nodes[`fm_${idx}`] = [osc2];
+          }
+          const { input, output, freq: freq3, osc, toCleanup } = fms[idx];
+          const gAmt = gainNode(amt);
+          const gFreq = gainNode(freq3);
+          io.push(isMod ? output.connect(gAmt).connect(gFreq) : input);
+          cleanupOnEnd(osc, [...toCleanup, gAmt, gFreq]);
+          nodes[`fm_${idx}_gain`] = [gAmt];
+        }
+        if (!io[1]) {
+          logger2(
+            `[superdough] control ${control2} failed to connect FM ${i3} to target ${j} due to missing frequency parameter (likely because fm${j} is noise)`,
+            "warning"
+          );
+          continue;
+        }
+        io[0].connect(io[1]);
+      }
+    }
+    return {
+      nodes,
+      stop: (t) => toStop.forEach((m3) => m3?.stop(t))
+    };
+  }
+  var noises, constantNode, constantNodeAudioContext, getSlope, getParamADSR, getADSRValues, wetfade, curves, mod4, fm9, __squash, _mod3, _scurve, _soft, _hard, _fold, _sineFold, _cubic, _diode, _asym, _chebyshev, distortionAlgorithms, _algoNames, getDistortionAlgorithm, getDistortion, getFrequencyFromValue, onceEnded, releaseAudioNode, cleanupOnEnd;
+  var init_helpers = __esm({
+    "build/engine-src/strudel/packages/superdough/helpers.mjs"() {
+      init_audioContext();
+      init_logger2();
+      init_noise();
+      init_nodePools();
+      init_util2();
+      noises = ["pink", "white", "brown", "crackle"];
+      getSlope = (y1, y2, x1, x22) => {
+        const denom2 = x22 - x1;
+        if (denom2 === 0) {
+          return 0;
+        }
+        return (y2 - y1) / (x22 - x1);
+      };
+      getParamADSR = (param, attack2, decay2, sustain2, release2, min, max, begin2, end2, curve2 = "exponential") => {
+        attack2 = nanFallback2(attack2);
+        decay2 = nanFallback2(decay2);
+        sustain2 = nanFallback2(sustain2);
+        release2 = nanFallback2(release2);
+        const ramp = curve2 === "exponential" ? "exponentialRampToValueAtTime" : "linearRampToValueAtTime";
+        if (curve2 === "exponential") {
+          min = min === 0 ? 1e-3 : min;
+          max = max === 0 ? 1e-3 : max;
+        }
+        const range5 = max - min;
+        const sustainVal = min + sustain2 * range5;
+        const duration2 = end2 - begin2;
+        const envValAtTime = (time4) => {
+          let val2;
+          if (attack2 > time4) {
+            val2 = time4 * getSlope(min, max, 0, attack2) + min;
+          } else {
+            val2 = (time4 - attack2) * getSlope(max, sustainVal, 0, decay2) + max;
+          }
+          if (curve2 === "exponential") {
+            val2 = val2 || 1e-3;
+          }
+          return val2;
+        };
+        param.setValueAtTime(min, begin2);
+        if (attack2 > duration2) {
+          param[ramp](envValAtTime(duration2), end2);
+        } else if (attack2 + decay2 > duration2) {
+          param[ramp](envValAtTime(attack2), begin2 + attack2);
+          param[ramp](envValAtTime(duration2), end2);
+        } else {
+          param[ramp](envValAtTime(attack2), begin2 + attack2);
+          param[ramp](envValAtTime(attack2 + decay2), begin2 + attack2 + decay2);
+          param.setValueAtTime(sustainVal, end2);
+        }
+        param[ramp](min, end2 + release2);
+      };
+      getADSRValues = (params, curve2 = "linear", defaultValues) => {
+        const envmin = curve2 === "exponential" ? 1e-3 : 1e-3;
+        const releaseMin = 0.01;
+        const envmax = 1;
+        const [a, d, s2, r2] = params;
+        if (a == null && d == null && s2 == null && r2 == null) {
+          return defaultValues ?? [envmin, envmin, envmax, releaseMin];
+        }
+        const sustain2 = s2 != null ? s2 : a != null && d == null || a == null && d == null ? envmax : envmin;
+        return [Math.max(a ?? 0, envmin), Math.max(d ?? 0, envmin), Math.min(sustain2, envmax), Math.max(r2 ?? 0, releaseMin)];
+      };
+      wetfade = (d) => d < 0.5 ? 1 : 1 - (d - 0.5) / 0.5;
+      curves = ["linear", "exponential"];
+      mod4 = (freq3, type = "sine") => {
+        const ctx = getAudioContext();
+        let osc;
+        if (noises.includes(type)) {
+          osc = ctx.createBufferSource();
+          osc.buffer = getNoiseBuffer(type, 2);
+          osc.loop = true;
+        } else {
+          osc = ctx.createOscillator();
+          osc.type = type;
+          osc.frequency.value = freq3;
+        }
+        osc.start();
+        return osc;
+      };
+      fm9 = (frequencyparam, harmonicityRatio, wave = "sine") => {
+        const carrfreq = frequencyparam.value;
+        const modfreq = carrfreq * harmonicityRatio;
+        return { osc: mod4(modfreq, wave), freq: modfreq };
+      };
+      __squash = (x3) => x3 / (1 + x3);
+      _mod3 = (n2, m3) => (n2 % m3 + m3) % m3;
+      _scurve = (x3, k) => (1 + k) * x3 / (1 + k * Math.abs(x3));
+      _soft = (x3, k) => Math.tanh(x3 * (1 + k));
+      _hard = (x3, k) => clamp2((1 + k) * x3, -1, 1);
+      _fold = (x3, k) => {
+        let y2 = (1 + 0.5 * k) * x3;
+        const window2 = _mod3(y2 + 1, 4);
+        return 1 - Math.abs(window2 - 2);
+      };
+      _sineFold = (x3, k) => Math.sin(Math.PI / 2 * _fold(x3, k));
+      _cubic = (x3, k) => {
+        const t = __squash(Math.log1p(k));
+        const cubic2 = (x3 - t / 3 * x3 * x3 * x3) / (1 - t / 3);
+        return _soft(cubic2, k);
+      };
+      _diode = (x3, k, asym2 = false) => {
+        const g = 1 + 2 * k;
+        const t = __squash(Math.log1p(k));
+        const bias = 0.07 * t;
+        const pos = _soft(x3 + bias, 2 * k);
+        const neg = _soft(asym2 ? bias : -x3 + bias, 2 * k);
+        const y2 = pos - neg;
+        const sech = 1 / Math.cosh(g * bias);
+        const sech2 = sech * sech;
+        const denom2 = Math.max(1e-8, (asym2 ? 1 : 2) * g * sech2);
+        return _soft(y2 / denom2, k);
+      };
+      _asym = (x3, k) => _diode(x3, k, true);
+      _chebyshev = (x3, k) => {
+        const kl = 10 * Math.log1p(k);
+        let tnm1 = 1;
+        let tnm2 = x3;
+        let tn;
+        let y2 = 0;
+        for (let i3 = 1; i3 < 64; i3++) {
+          if (i3 < 2) {
+            y2 += i3 == 0 ? tnm1 : tnm2;
+            continue;
+          }
+          tn = 2 * x3 * tnm1 - tnm2;
+          tnm2 = tnm1;
+          tnm1 = tn;
+          if (i3 % 2 === 0) {
+            y2 += Math.min(1.3 * kl / i3, 2) * tn;
+          }
+        }
+        return _soft(y2, kl / 20);
+      };
+      distortionAlgorithms = {
+        scurve: _scurve,
+        soft: _soft,
+        hard: _hard,
+        cubic: _cubic,
+        diode: _diode,
+        asym: _asym,
+        fold: _fold,
+        sinefold: _sineFold,
+        chebyshev: _chebyshev
+      };
+      _algoNames = Object.freeze(Object.keys(distortionAlgorithms));
+      getDistortionAlgorithm = (algo) => {
+        let index5 = algo;
+        if (typeof algo === "string") {
+          index5 = _algoNames.indexOf(algo);
+          if (index5 === -1) {
+            logger2(`[superdough] Could not find waveshaping algorithm ${algo}.
+        Available options are ${_algoNames.join(", ")}.
+        Defaulting to ${_algoNames[0]}.`);
+            index5 = 0;
+          }
+        }
+        const name3 = _algoNames[index5 % _algoNames.length];
+        return distortionAlgorithms[name3];
+      };
+      getDistortion = (distort2, postgain2, algorithm) => {
+        return getWorklet(getAudioContext(), "distort-processor", { distort: distort2, postgain: postgain2 }, { processorOptions: { algorithm } });
+      };
+      getFrequencyFromValue = (value2, defaultNote = 36) => {
+        let { note: note4, freq: freq3, octave: octave3 = 0 } = value2;
+        note4 = note4 || defaultNote;
+        if (typeof note4 === "string") {
+          note4 = noteToMidi2(note4);
+        }
+        if (!freq3 && typeof note4 === "number") {
+          freq3 = midiToFreq3(note4);
+        }
+        freq3 *= Math.pow(2, octave3);
+        return Number(freq3);
+      };
+      onceEnded = (node, callback) => {
+        const onended = callback;
+        node.onended = function cleanup() {
+          onended && onended();
+          this.onended = null;
+        };
+      };
+      releaseAudioNode = (node) => {
+        if (node == null) return;
+        if (!(node instanceof AudioNode)) {
+          throw new Error("releaseAudioNode can only release an AudioNode");
+        }
+        node.disconnect();
+        if (node instanceof AudioScheduledSourceNode) {
+          if (false) {
+            logger2(
+              `[superdough] Deprecation warning: it seems your code path is setting 'node.onended = callback' instead of using the onceEnded helper`
+            );
+          }
+          try {
+            node.stop();
+          } catch (e) {
+            node.start(node.context.currentTime + 5);
+            node.stop();
+          }
+        }
+        if (node instanceof AudioWorkletNode) {
+          node.parameters.get("end")?.setValueAtTime(0, 0);
+        }
+      };
+      cleanupOnEnd = (anchor2, toCleanup) => {
+        onceEnded(anchor2, () => toCleanup.forEach((n2) => releaseAudioNode(n2)));
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/reverbGen.mjs
+  var reverbGen, applyGradualLowpass, getAllChannelData, randomSample, reverbGen_default;
+  var init_reverbGen = __esm({
+    "build/engine-src/strudel/packages/superdough/reverbGen.mjs"() {
+      init_helpers();
+      reverbGen = {};
+      reverbGen.generateReverb = function(params, callback) {
+        var audioContext2 = params.audioContext || new AudioContext();
+        var sampleRate = audioContext2.sampleRate;
+        var numChannels = params.numChannels || 2;
+        var totalTime = params.decayTime * 1.5;
+        var decaySampleFrames = Math.round(params.decayTime * sampleRate);
+        var numSampleFrames = Math.round(totalTime * sampleRate);
+        var fadeInSampleFrames = Math.round((params.fadeInTime || 0) * sampleRate);
+        var decayBase = Math.pow(1 / 1e3, 1 / decaySampleFrames);
+        var reverbIR = audioContext2.createBuffer(numChannels, numSampleFrames, sampleRate);
+        for (var i3 = 0; i3 < numChannels; i3++) {
+          var chan = reverbIR.getChannelData(i3);
+          for (var j = 0; j < numSampleFrames; j++) {
+            chan[j] = randomSample() * Math.pow(decayBase, j);
+          }
+          for (var j = 0; j < fadeInSampleFrames; j++) {
+            chan[j] *= j / fadeInSampleFrames;
+          }
+        }
+        applyGradualLowpass(reverbIR, params.lpFreqStart || 0, params.lpFreqEnd || 0, params.decayTime, callback);
+      };
+      reverbGen.generateGraph = function(data2, width, height2, min, max) {
+        var canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height2;
+        var gc = canvas.getContext("2d");
+        gc.fillStyle = "#000";
+        gc.fillRect(0, 0, canvas.width, canvas.height);
+        gc.fillStyle = "#fff";
+        var xscale = width / data2.length;
+        var yscale = height2 / (max - min);
+        for (var i3 = 0; i3 < data2.length; i3++) {
+          gc.fillRect(i3 * xscale, height2 - (data2[i3] - min) * yscale, 1, 1);
+        }
+        return canvas;
+      };
+      applyGradualLowpass = function(input, lpFreqStart, lpFreqEnd, lpFreqEndAt, callback) {
+        if (lpFreqStart == 0) {
+          callback(input);
+          return;
+        }
+        var channelData = getAllChannelData(input);
+        var context = new OfflineAudioContext(input.numberOfChannels, channelData[0].length, input.sampleRate);
+        var player = context.createBufferSource();
+        player.buffer = input;
+        var filter3 = context.createBiquadFilter();
+        lpFreqStart = Math.min(lpFreqStart, input.sampleRate / 2);
+        lpFreqEnd = Math.min(lpFreqEnd, input.sampleRate / 2);
+        filter3.type = "lowpass";
+        filter3.Q.value = 1e-4;
+        filter3.frequency.setValueAtTime(lpFreqStart, 0);
+        filter3.frequency.linearRampToValueAtTime(lpFreqEnd, lpFreqEndAt);
+        player.connect(filter3);
+        filter3.connect(context.destination);
+        player.start();
+        context.oncomplete = function(event) {
+          callback(event.renderedBuffer);
+          releaseAudioNode(filter3);
+          releaseAudioNode(player);
+        };
+        context.startRendering();
+        window.filterNode = filter3;
+      };
+      getAllChannelData = function(buffer) {
+        var channels2 = [];
+        for (var i3 = 0; i3 < buffer.numberOfChannels; i3++) {
+          channels2[i3] = buffer.getChannelData(i3);
+        }
+        return channels2;
+      };
+      randomSample = function() {
+        return Math.random() * 2 - 1;
+      };
+      reverbGen_default = reverbGen;
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/reverb.mjs
+  var init_reverb = __esm({
+    "build/engine-src/strudel/packages/superdough/reverb.mjs"() {
+      init_reverbGen();
+      init_util2();
+      if (typeof AudioContext !== "undefined") {
+        BaseAudioContext.prototype.adjustLength = function(duration2, buffer, speed2 = 1, offsetAmount = 0) {
+          const sampleOffset = Math.floor(clamp2(offsetAmount, 0, 1) * buffer.length);
+          const newLength = buffer.sampleRate * duration2;
+          const newBuffer = this.createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+          for (let channel2 = 0; channel2 < buffer.numberOfChannels; channel2++) {
+            let oldData = buffer.getChannelData(channel2);
+            let newData = newBuffer.getChannelData(channel2);
+            for (let i3 = 0; i3 < newLength; i3++) {
+              let position = (sampleOffset + i3 * Math.abs(speed2)) % oldData.length;
+              if (speed2 < 1) {
+                position = position * -1;
+              }
+              newData[i3] = oldData.at(position) || 0;
+            }
+          }
+          return newBuffer;
+        };
+        BaseAudioContext.prototype.createReverb = function(duration2, fade, lp2, dim, ir2, irspeed2, irbegin2) {
+          const convolver = this.createConvolver();
+          convolver.generate = (d = 2, fade2 = 0.1, lp3 = 15e3, dim2 = 1e3, ir3, irspeed3, irbegin3) => {
+            convolver.duration = d;
+            convolver.fade = fade2;
+            convolver.lp = lp3;
+            convolver.dim = dim2;
+            convolver.ir = ir3;
+            convolver.irspeed = irspeed3;
+            convolver.irbegin = irbegin3;
+            if (ir3) {
+              convolver.buffer = this.adjustLength(d, ir3, irspeed3, irbegin3);
+            } else {
+              reverbGen_default.generateReverb(
+                {
+                  audioContext: this,
+                  numChannels: 2,
+                  decayTime: d,
+                  fadeInTime: fade2,
+                  lpFreqStart: lp3,
+                  lpFreqEnd: dim2
+                },
+                (buffer) => {
+                  convolver.buffer = buffer;
+                }
+              );
+            }
+          };
+          convolver.generate(duration2, fade, lp2, dim, ir2, irspeed2, irbegin2);
+          return convolver;
+        };
+      }
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/vowel.mjs
+  var vowelFormant;
+  var init_vowel = __esm({
+    "build/engine-src/strudel/packages/superdough/vowel.mjs"() {
+      init_helpers();
+      vowelFormant = {
+        a: { freqs: [660, 1120, 2750, 3e3, 3350], gains: [1, 0.5012, 0.0708, 0.0631, 0.0126], qs: [80, 90, 120, 130, 140] },
+        e: { freqs: [440, 1800, 2700, 3e3, 3300], gains: [1, 0.1995, 0.1259, 0.1, 0.1], qs: [70, 80, 100, 120, 120] },
+        i: { freqs: [270, 1850, 2900, 3350, 3590], gains: [1, 0.0631, 0.0631, 0.0158, 0.0158], qs: [40, 90, 100, 120, 120] },
+        o: { freqs: [430, 820, 2700, 3e3, 3300], gains: [1, 0.3162, 0.0501, 0.0794, 0.01995], qs: [40, 80, 100, 120, 120] },
+        u: { freqs: [370, 630, 2750, 3e3, 3400], gains: [1, 0.1, 0.0708, 0.0316, 0.01995], qs: [40, 60, 100, 120, 120] },
+        ae: { freqs: [650, 1515, 2400, 3e3, 3350], gains: [1, 0.5, 0.1008, 0.0631, 0.0126], qs: [80, 90, 120, 130, 140] },
+        aa: { freqs: [560, 900, 2570, 3e3, 3300], gains: [1, 0.5, 0.0708, 0.0631, 0.0126], qs: [80, 90, 120, 130, 140] },
+        oe: { freqs: [500, 1430, 2300, 3e3, 3300], gains: [1, 0.2, 0.0708, 0.0316, 0.01995], qs: [40, 60, 100, 120, 120] },
+        ue: { freqs: [250, 1750, 2150, 3200, 3300], gains: [1, 0.1, 0.0708, 0.0316, 0.01995], qs: [40, 60, 100, 120, 120] },
+        y: { freqs: [400, 1460, 2400, 3e3, 3300], gains: [1, 0.2, 0.0708, 0.0316, 0.02995], qs: [40, 60, 100, 120, 120] },
+        uh: { freqs: [600, 1250, 2100, 3100, 3500], gains: [1, 0.3, 0.0608, 0.0316, 0.01995], qs: [40, 70, 100, 120, 130] },
+        un: { freqs: [500, 1240, 2280, 3e3, 3500], gains: [1, 0.1, 0.1708, 0.0216, 0.02995], qs: [40, 60, 100, 120, 120] },
+        en: { freqs: [600, 1480, 2450, 3200, 3300], gains: [1, 0.15, 0.0708, 0.0316, 0.02995], qs: [40, 60, 100, 120, 120] },
+        an: { freqs: [700, 1050, 2500, 3e3, 3300], gains: [1, 0.1, 0.0708, 0.0316, 0.02995], qs: [40, 60, 100, 120, 120] },
+        on: { freqs: [500, 1080, 2350, 3e3, 3300], gains: [1, 0.1, 0.0708, 0.0316, 0.02995], qs: [40, 60, 100, 120, 120] },
+        get \u00E6() {
+          return this.ae;
+        },
+        get \u00F8() {
+          return this.oe;
+        },
+        get \u0251() {
+          return this.aa;
+        },
+        get \u00E5() {
+          return this.aa;
+        },
+        get \u00F6() {
+          return this.oe;
+        },
+        get \u00FC() {
+          return this.ue;
+        },
+        get \u0131() {
+          return this.y;
+        }
+      };
+      if (typeof GainNode !== "undefined") {
+        class VowelNode extends GainNode {
+          constructor(ac, letter) {
+            super(ac);
+            if (!vowelFormant[letter]) {
+              throw new Error("vowel: unknown vowel " + letter);
+            }
+            const { gains, qs, freqs } = vowelFormant[letter];
+            this.makeupGain = ac.createGain();
+            this.filters = [];
+            this.gains = [];
+            for (let i3 = 0; i3 < 5; i3++) {
+              const gain2 = ac.createGain();
+              gain2.gain.value = gains[i3];
+              const filter3 = ac.createBiquadFilter();
+              filter3.type = "bandpass";
+              filter3.Q.value = qs[i3];
+              filter3.frequency.value = freqs[i3];
+              super.connect(filter3);
+              filter3.connect(gain2);
+              this.filters.push(filter3);
+              gain2.connect(this.makeupGain);
+              this.gains.push(gain2);
+            }
+            this.makeupGain.gain.value = 8;
+            return this;
+          }
+          connect(target) {
+            this.makeupGain.connect(target);
+          }
+          disconnect() {
+            releaseAudioNode(this.makeupGain);
+            this.filters.forEach(releaseAudioNode);
+            this.gains.forEach(releaseAudioNode);
+            super.disconnect();
+            this.makeupGain = null;
+            this.filters = null;
+            this.gains = null;
+          }
+        }
+        BaseAudioContext.prototype.createVowelFilter = function(letter) {
+          return new VowelNode(this, letter);
+        };
+      }
+    }
+  });
+
+  // stub:worklets
+  var worklets_default;
+  var init_worklets = __esm({
+    "stub:worklets"() {
+      worklets_default = "patchisserie:worklets.js";
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/nanostores@0.11.3/node_modules/nanostores/atom/index.js
+  var listenerQueue, lqIndex, QUEUE_ITEMS_PER_LISTENER, epoch, atom;
+  var init_atom = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/nanostores@0.11.3/node_modules/nanostores/atom/index.js"() {
+      listenerQueue = [];
+      lqIndex = 0;
+      QUEUE_ITEMS_PER_LISTENER = 4;
+      epoch = 0;
+      atom = (initialValue) => {
+        let listeners = [];
+        let $atom = {
+          get() {
+            if (!$atom.lc) {
+              $atom.listen(() => {
+              })();
+            }
+            return $atom.value;
+          },
+          lc: 0,
+          listen(listener) {
+            $atom.lc = listeners.push(listener);
+            return () => {
+              for (let i3 = lqIndex + QUEUE_ITEMS_PER_LISTENER; i3 < listenerQueue.length; ) {
+                if (listenerQueue[i3] === listener) {
+                  listenerQueue.splice(i3, QUEUE_ITEMS_PER_LISTENER);
+                } else {
+                  i3 += QUEUE_ITEMS_PER_LISTENER;
+                }
+              }
+              let index5 = listeners.indexOf(listener);
+              if (~index5) {
+                listeners.splice(index5, 1);
+                if (!--$atom.lc) $atom.off();
+              }
+            };
+          },
+          notify(oldValue, changedKey) {
+            epoch++;
+            let runListenerQueue = !listenerQueue.length;
+            for (let listener of listeners) {
+              listenerQueue.push(
+                listener,
+                $atom.value,
+                oldValue,
+                changedKey
+              );
+            }
+            if (runListenerQueue) {
+              for (lqIndex = 0; lqIndex < listenerQueue.length; lqIndex += QUEUE_ITEMS_PER_LISTENER) {
+                listenerQueue[lqIndex](
+                  listenerQueue[lqIndex + 1],
+                  listenerQueue[lqIndex + 2],
+                  listenerQueue[lqIndex + 3]
+                );
+              }
+              listenerQueue.length = 0;
+            }
+          },
+          /* It will be called on last listener unsubscribing.
+             We will redefine it in onMount and onStop. */
+          off() {
+          },
+          set(newValue) {
+            let oldValue = $atom.value;
+            if (oldValue !== newValue) {
+              $atom.value = newValue;
+              $atom.notify(oldValue);
+            }
+          },
+          subscribe(listener) {
+            let unbind = $atom.listen(listener);
+            listener($atom.value);
+            return unbind;
+          },
+          value: initialValue
+        };
+        if (false) {
+          $atom[clean] = () => {
+            listeners = [];
+            $atom.lc = 0;
+            $atom.off();
+          };
+        }
+        return $atom;
+      };
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/nanostores@0.11.3/node_modules/nanostores/map/index.js
+  var map2;
+  var init_map = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/nanostores@0.11.3/node_modules/nanostores/map/index.js"() {
+      init_atom();
+      map2 = (initial = {}) => {
+        let $map = atom(initial);
+        $map.setKey = function(key, value2) {
+          let oldMap = $map.value;
+          if (typeof value2 === "undefined" && key in $map.value) {
+            $map.value = { ...$map.value };
+            delete $map.value[key];
+            $map.notify(oldMap, key);
+          } else if ($map.value[key] !== value2) {
+            $map.value = {
+              ...$map.value,
+              [key]: value2
+            };
+            $map.notify(oldMap, key);
+          }
+        };
+        return $map;
+      };
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/nanostores@0.11.3/node_modules/nanostores/index.js
+  var init_nanostores = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/nanostores@0.11.3/node_modules/nanostores/index.js"() {
+      init_map();
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/superdoughdata.mjs
+  function getSuperdoughControlTargets() {
+    return CONTROL_TARGETS;
+  }
+  var CONTROL_TARGETS;
+  var init_superdoughdata = __esm({
+    "build/engine-src/strudel/packages/superdough/superdoughdata.mjs"() {
+      CONTROL_TARGETS = {
+        stretch: { node: "stretch", param: "pitchFactor" },
+        gain: { node: "gain", param: "gain" },
+        postgain: { node: "post", param: "gain" },
+        pan: { node: "pan", param: "pan" },
+        tremolo: { node: "tremolo", param: "frequency" },
+        tremolosync: { node: "tremolo", param: "frequency" },
+        tremolodepth: { node: "tremolo_gain", param: "gain" },
+        tremoloskew: { node: "tremolo", param: "skew" },
+        tremolophase: { node: "tremolo", param: "phase" },
+        tremoloshape: { node: "tremolo", param: "shape" },
+        // MODULATORS
+        lfo: { node: "lfo", param: "frequency" },
+        lfo_rate: { node: "lfo", param: "frequency" },
+        lfo_sync: { node: "lfo", param: "frequency" },
+        lfo_depth: { node: "lfo", param: "depth" },
+        lfo_depthabs: { node: "lfo", param: "depth" },
+        lfo_skew: { node: "lfo", param: "skew" },
+        lfo_curve: { node: "lfo", param: "curve" },
+        lfo_dcoffset: { node: "lfo", param: "dcoffset" },
+        env: { node: "env", param: "depth" },
+        env_attack: { node: "env", param: "attack" },
+        env_decay: { node: "env", param: "decay" },
+        env_sustain: { node: "env", param: "sustain" },
+        env_release: { node: "env", param: "release" },
+        bmod: { node: "bmod", param: "depth" },
+        bmod_depth: { node: "bmod", param: "depth" },
+        bmod_depthabs: { node: "bmod", param: "depth" },
+        // LPF
+        cutoff: { node: "lpf", param: "frequency" },
+        resonance: { node: "lpf", param: "Q" },
+        lprate: { node: "lpf_lfo", param: "rate" },
+        lpsync: { node: "lpf_lfo", param: "sync" },
+        lpdepth: { node: "lpf_lfo", param: "depth" },
+        lpdepthfrequency: { node: "lpf_lfo", param: "depth" },
+        lpshape: { node: "lpf_lfo", param: "shape" },
+        lpdc: { node: "lpf_lfo", param: "dcoffset" },
+        lpskew: { node: "lpf_lfo", param: "skew" },
+        // HPF
+        hcutoff: { node: "hpf", param: "frequency" },
+        hresonance: { node: "hpf", param: "Q" },
+        hprate: { node: "hpf_lfo", param: "rate" },
+        hpsync: { node: "hpf_lfo", param: "sync" },
+        hpdepth: { node: "hpf_lfo", param: "depth" },
+        hpdepthfrequency: { node: "hpf_lfo", param: "depth" },
+        hpshape: { node: "hpf_lfo", param: "shape" },
+        hpdc: { node: "hpf_lfo", param: "dcoffset" },
+        hpskew: { node: "hpf_lfo", param: "skew" },
+        // BPF
+        bandf: { node: "bpf", param: "frequency" },
+        bandq: { node: "bpf", param: "Q" },
+        bprate: { node: "bpf_lfo", param: "rate" },
+        bpsync: { node: "bpf_lfo", param: "sync" },
+        bpdepth: { node: "bpf_lfo", param: "depth" },
+        bpdepthfrequency: { node: "bpf_lfo", param: "depth" },
+        bpshape: { node: "bpf_lfo", param: "shape" },
+        bpdc: { node: "bpf_lfo", param: "dcoffset" },
+        bpskew: { node: "bpf_lfo", param: "skew" },
+        vowel: { node: "vowel", param: "frequency" },
+        // DISTORTION
+        coarse: { node: "coarse", param: "coarse" },
+        crush: { node: "crush", param: "crush" },
+        shape: { node: "shape", param: "shape" },
+        shapevol: { node: "shape", param: "postgain" },
+        distort: { node: "distort", param: "distort" },
+        distortvol: { node: "distort", param: "postgain" },
+        distorttype: { node: "distort", param: "distort" },
+        // COMPRESSOR
+        compressor: { node: "compressor", param: "threshold" },
+        compressorRatio: { node: "compressor", param: "ratio" },
+        compressorKnee: { node: "compressor", param: "knee" },
+        compressorAttack: { node: "compressor", param: "attack" },
+        compressorRelease: { node: "compressor", param: "release" },
+        // PHASER
+        phaserrate: { node: "phaser_lfo", param: "frequency" },
+        phasersweep: { node: "phaser_lfo", param: "depth" },
+        phasercenter: { node: "phaser", param: "frequency" },
+        phaserdepth: { node: "phaser", param: "Q" },
+        // ORBIT EFFECTS
+        delay: { node: "delay_mix", param: "gain" },
+        delaytime: { node: "delay", param: "delayTime" },
+        delayfeedback: { node: "delay", param: "feedback" },
+        delaysync: { node: "delay", param: "delayTime" },
+        dry: { node: "dry", param: "gain" },
+        room: { node: "room_mix", param: "gain" },
+        djf: { node: "djf", param: "value" },
+        busgain: { node: "bus", param: "gain" },
+        // SYNTHS
+        s: { node: "source", param: "frequency" },
+        detune: { node: "source", param: "freqspread" },
+        wt: { node: "source", param: "position" },
+        warp: { node: "source", param: "warp" },
+        freq: { node: "source", param: "frequency" },
+        note: { node: "source", param: "frequency" },
+        wtdc: { node: "wt_lfo", param: "dc" },
+        wtskew: { node: "wt_lfo", param: "skew" },
+        wtrate: { node: "wt_lfo", param: "frequency" },
+        wtsync: { node: "wt_lfo", param: "frequency" },
+        wtdepth: { node: "wt_lfo", param: "depth" },
+        warpdc: { node: "warp_lfo", param: "dc" },
+        warpskew: { node: "warp_lfo", param: "skew" },
+        warprate: { node: "warp_lfo", param: "frequency" },
+        warpsync: { node: "warp_lfo", param: "frequency" },
+        warpdepth: { node: "warp_lfo", param: "depth" },
+        fmi: { node: "fm_1_gain", param: "gain" },
+        fmi2: { node: "fm_2_gain", param: "gain" },
+        fmi3: { node: "fm_3_gain", param: "gain" },
+        fmi4: { node: "fm_4_gain", param: "gain" },
+        fmi5: { node: "fm_5_gain", param: "gain" },
+        fmi6: { node: "fm_6_gain", param: "gain" },
+        fmi7: { node: "fm_7_gain", param: "gain" },
+        fmi8: { node: "fm_8_gain", param: "gain" },
+        fmh: { node: "fm_1", param: "frequency" },
+        fmh2: { node: "fm_2", param: "frequency" },
+        fmh3: { node: "fm_3", param: "frequency" },
+        fmh4: { node: "fm_4", param: "frequency" },
+        fmh5: { node: "fm_5", param: "frequency" },
+        fmh6: { node: "fm_6", param: "frequency" },
+        fmh7: { node: "fm_7", param: "frequency" },
+        fmh8: { node: "fm_8", param: "frequency" },
+        pw: { node: "source", param: "pulsewidth" },
+        pwrate: { node: "pw_lfo", param: "frequency" },
+        pwsweep: { node: "pw_lfo", param: "depth" },
+        vib: { node: "vib", param: "frequency" },
+        vibmod: { node: "vib_gain", param: "gain" },
+        byteBeatStartTime: { node: "source", param: "byteBeatStartTime" },
+        spread: { node: "source", param: "panspread" },
+        transient: { node: "transient", param: "attack" }
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/modulators.mjs
+  var getNodeParam, controlTargets, getControlData, getRangeForParam, clampWithWaveShaper, getTargetParamsForControl, connectLFO, connectEnvelope, connectBusModulator;
+  var init_modulators = __esm({
+    "build/engine-src/strudel/packages/superdough/modulators.mjs"() {
+      init_audioContext();
+      init_helpers();
+      init_logger2();
+      init_superdoughdata();
+      init_util2();
+      getNodeParam = (node, name3) => {
+        if (node?.parameters) {
+          const p2 = node.parameters.get(name3);
+          if (p2 instanceof AudioParam) {
+            return p2;
+          }
+        }
+        let p = node?.[name3];
+        if (p === void 0 && name3 === "frequency") {
+          p = node?.["detune"] ?? node?.["playbackRate"];
+        }
+        if (p instanceof AudioParam) {
+          return p;
+        }
+        return void 0;
+      };
+      controlTargets = getSuperdoughControlTargets();
+      getControlData = (control2, subControl) => {
+        const controlNoIdx = control2.split("_")[0];
+        return controlTargets[`${controlNoIdx}_${subControl}`] ?? controlTargets[controlNoIdx];
+      };
+      getRangeForParam = (paramName, currentValue) => {
+        if (paramName === "frequency" && currentValue >= 30) {
+          return { min: 20 - currentValue, max: 24e3 - currentValue };
+        }
+        return { min: void 0, max: void 0 };
+      };
+      clampWithWaveShaper = (modulator, min, max) => {
+        const ac = getAudioContext();
+        const curve2 = new Float32Array(256);
+        for (let i3 = 0; i3 < curve2.length; i3++) {
+          const x3 = i3 / (curve2.length - 1) * 2 - 1;
+          curve2[i3] = clamp2(x3 * max, min, max);
+        }
+        const shaper = new WaveShaperNode(ac, { curve: curve2 });
+        const scaleGain = gainNode(1 / max);
+        modulator.connect(scaleGain).connect(shaper);
+        return { modulator, toCleanup: [shaper, scaleGain] };
+      };
+      getTargetParamsForControl = (control2, nodes, subControl) => {
+        const targetInfo = getControlData(control2, subControl);
+        if (!targetInfo) {
+          errorLogger2(
+            new Error(`Could not find control data for target '${control2}'. It may not be modulatable.`),
+            "superdough"
+          );
+          return { targetParams: [], paramName: control2 };
+        }
+        const paramName = targetInfo.param;
+        const nodeKey = nodes[targetInfo.node] ? targetInfo.node : control2;
+        const targetNodes = nodes[nodeKey];
+        if (!targetNodes) {
+          const keys3 = Object.keys(nodes);
+          errorLogger2(
+            new Error(`Could not connect to target '${nodeKey}' \u2014 it does not exist. Available targets: ${keys3.join(", ")}`),
+            "superdough"
+          );
+          return { targetParams: [], paramName };
+        }
+        const audioParams = [];
+        targetNodes.forEach((targetNode) => {
+          const targetParam = getNodeParam(targetNode, paramName);
+          audioParams.push(targetParam);
+        });
+        return { targetParams: audioParams, paramName };
+      };
+      connectLFO = (id2, params, nodeTracker) => {
+        const {
+          rate = 1,
+          sync,
+          cps: cps2,
+          cycle,
+          control: control2 = "lfo",
+          subControl,
+          fxi = "main",
+          depth = 1,
+          depthabs,
+          retrig = 0,
+          ...filteredParams
+        } = params;
+        const { targetParams, paramName } = getTargetParamsForControl(control2, nodeTracker[fxi], subControl);
+        if (!targetParams.length) return;
+        let currentValue = targetParams[0].value;
+        currentValue = currentValue === 0 ? 1 : currentValue;
+        const { min, max } = getRangeForParam(paramName, currentValue);
+        const depthValue = depthabs != null ? depthabs : depth * currentValue;
+        const modParams = {
+          ...filteredParams,
+          frequency: sync !== void 0 ? sync * cps2 : rate,
+          time: retrig > 0.5 ? 0 : cycle / cps2,
+          depth: depthValue,
+          min,
+          max
+        };
+        const lfoNode = getLfo(getAudioContext(), modParams);
+        nodeTracker.main[`lfo_${id2}`] = [lfoNode];
+        targetParams.forEach((t) => lfoNode.connect(t));
+        return lfoNode;
+      };
+      connectEnvelope = (id2, params, nodeTracker) => {
+        const { control: control2, subControl, acurve, dcurve, rcurve, depth = 1, depthabs, fxi = "main", ...filteredParams } = params;
+        const { targetParams, paramName } = getTargetParamsForControl(control2, nodeTracker[fxi], subControl);
+        if (!targetParams.length) return;
+        let currentValue = targetParams[0].value;
+        currentValue = currentValue === 0 ? 1 : currentValue;
+        const { min, max } = getRangeForParam(paramName, currentValue);
+        const depthValue = depthabs != null ? depthabs : depth * currentValue;
+        const envNode = getEnvelope(getAudioContext(), {
+          ...filteredParams,
+          depth: depthValue,
+          min,
+          max,
+          attackCurve: acurve,
+          decayCurve: dcurve,
+          releaseCurve: rcurve
+        });
+        nodeTracker.main[`env_${id2}`] = [envNode];
+        targetParams.forEach((t) => envNode.connect(t));
+        return envNode;
+      };
+      connectBusModulator = (params, nodeTracker, controller2) => {
+        const ac = getAudioContext();
+        const { control: control2, subControl, depth = 1, depthabs, fxi = "main" } = params;
+        const { targetParams, paramName } = getTargetParamsForControl(control2, nodeTracker[fxi], subControl);
+        if (!targetParams.length) return { toCleanup: [] };
+        const signal2 = controller2.getBus(params.bus);
+        const dc = new ConstantSourceNode(ac, { offset: params.dc ?? 0 });
+        dc.start(params.begin);
+        const shifted = dc.connect(gainNode(1));
+        signal2.connect(shifted);
+        let currentValue = targetParams[0].value;
+        currentValue = currentValue === 0 ? 1 : currentValue;
+        const { min, max } = getRangeForParam(paramName, currentValue);
+        const depthValue = depthabs != null ? depthabs : depth * currentValue;
+        const depthGain = gainNode(Math.sign(depthValue) * Math.abs(depthValue) / 0.3);
+        const unClamped = shifted.connect(depthGain);
+        const toCleanup = [];
+        let modulator = unClamped;
+        if (min !== void 0 && max !== void 0) {
+          const wsData = clampWithWaveShaper(unClamped, min, max);
+          modulator = wsData.modulator;
+          toCleanup.push(...wsData.toCleanup);
+        }
+        webAudioTimeout(
+          ac,
+          () => {
+            targetParams.forEach((t) => modulator.connect(t));
+          },
+          0,
+          params.begin
+        );
+        toCleanup.push(dc, shifted, depthGain);
+        return { modulator, toCleanup };
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/sampler.mjs
+  function humanFileSize(bytes, si) {
+    var thresh = si ? 1e3 : 1024;
+    if (bytes < thresh) return bytes + " B";
+    var units = si ? ["kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"] : ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB"];
+    var u = -1;
+    do {
+      bytes /= thresh;
+      ++u;
+    } while (bytes >= thresh);
+    return bytes.toFixed(1) + " " + units[u];
+  }
+  function getSampleInfo(hapValue, bank2) {
+    const { speed: speed2 = 1 } = hapValue;
+    const { transpose: transpose7, url, index: index5, midi: midi3, label: label2 } = getCommonSampleInfo(hapValue, bank2);
+    let playbackRate = Math.abs(speed2) * Math.pow(2, transpose7 / 12);
+    return { transpose: transpose7, url, index: index5, midi: midi3, label: label2, playbackRate };
+  }
+  function reverseBuffer(buffer) {
+    const ac = getAudioContext();
+    const reversed = ac.createBuffer(buffer.numberOfChannels, buffer.length, ac.sampleRate);
+    for (let channel2 = 0; channel2 < buffer.numberOfChannels; channel2++) {
+      reversed.copyToChannel(buffer.getChannelData(channel2).slice().reverse(), channel2, channel2);
+    }
+    return reversed;
+  }
+  function resolveSpecialPaths(base2) {
+    if (base2.startsWith("bubo:")) {
+      const [_, repo] = base2.split(":");
+      base2 = `github:Bubobubobubobubo/dough-${repo}`;
+    }
+    return base2;
+  }
+  function githubPath(base2, subpath = "") {
+    if (!base2.startsWith("github:")) {
+      throw new Error('expected "github:" at the start of pseudoUrl');
+    }
+    let path = base2.slice("github:".length);
+    path = path.endsWith("/") ? path.slice(0, -1) : path;
+    let components = path.split("/");
+    let user = components[0];
+    let repo = components.length >= 2 ? components[1] : "samples";
+    let branch = components.length >= 3 ? components[2] : "main";
+    let other = components.slice(3);
+    other.push(subpath ? subpath : "");
+    other = other.join("/");
+    return `https://raw.githubusercontent.com/${user}/${repo}/${branch}/${other}`;
+  }
+  function registerSamplesPrefix(prefix, resolve) {
+    resourcePrefixHandlers[prefix] = resolve;
+  }
+  function getSamplesPrefixHandler(url) {
+    const handler = Object.entries(resourcePrefixHandlers).find(([key]) => url.startsWith(key));
+    if (handler) {
+      return handler[1];
+    }
+    return;
+  }
+  async function fetchSampleMap(url) {
+    const handler = getSamplesPrefixHandler(url);
+    if (handler) {
+      return handler(url);
+    }
+    url = resolveSpecialPaths(url);
+    if (url.startsWith("github:")) {
+      url = githubPath(url, "strudel.json");
+    }
+    if (url.startsWith("local:")) {
+      url = `http://localhost:5432`;
+    }
+    if (url.startsWith("shabda:")) {
+      let [_, path] = url.split("shabda:");
+      url = `https://shabda.ndre.gr/${path}.json?strudel=1`;
+    }
+    if (url.startsWith("shabda/speech")) {
+      let [_, path] = url.split("shabda/speech");
+      path = path.startsWith("/") ? path.substring(1) : path;
+      let [params, words] = path.split(":");
+      let gender = "f";
+      let language = "en-GB";
+      if (params) {
+        [language, gender] = params.split("/");
+      }
+      url = `https://shabda.ndre.gr/speech/${words}.json?gender=${gender}&language=${language}&strudel=1'`;
+    }
+    if (typeof fetch !== "function") {
+      return;
+    }
+    const base2 = getBaseURL(url);
+    if (typeof fetch === "undefined") {
+      return;
+    }
+    const json = await fetch(url).then((res) => res.json()).catch((error) => {
+      console.error(error);
+      throw new Error(`error loading "${url}"`);
+    });
+    return [json, json._base || base2];
+  }
+  async function onTriggerSample(t, value2, onended, bank2, resolveUrl) {
+    let {
+      s: s2,
+      nudge: nudge2 = 0,
+      // TODO: is this in seconds?
+      cut: cut2,
+      loop: loop2,
+      clip: clip2 = void 0,
+      // if set, samples will be cut off when the hap ends
+      n: n2 = 0,
+      speed: speed2 = 1,
+      // sample playback speed
+      duration: duration2
+    } = value2;
+    if (speed2 === 0) {
+      return;
+    }
+    const ac = getAudioContext();
+    let [attack2, decay2, sustain2, release2] = getADSRValues([value2.attack, value2.decay, value2.sustain, value2.release]);
+    const { bufferSource, sliceDuration, offset: offset3 } = await getSampleBufferSource(value2, bank2, resolveUrl);
+    if (!bufferSource) {
+      logger2(`[sampler] could not load "${s2}:${n2}"`, "error");
+      return;
+    }
+    if (ac.currentTime > t) {
+      logger2(`[sampler] loading sound "${s2}:${n2}" took too long`, "highlight");
+      releaseAudioNode(bufferSource);
+      return;
+    }
+    const vibratoHandle = getVibratoOscillator(bufferSource.detune, value2, t);
+    const time4 = t + nudge2;
+    bufferSource.start(time4, offset3);
+    const envGain = ac.createGain();
+    const node = bufferSource.connect(envGain);
+    if (clip2 == null && loop2 == null && value2.release == null) {
+      duration2 = sliceDuration;
+    }
+    let holdEnd = t + duration2;
+    getParamADSR(node.gain, attack2, decay2, sustain2, release2, 0, 1, t, holdEnd, "linear");
+    getPitchEnvelope(bufferSource.detune, value2, t, holdEnd);
+    const out = ac.createGain();
+    node.connect(out);
+    onceEnded(bufferSource, function() {
+      releaseAudioNode(bufferSource);
+      vibratoHandle?.stop();
+      releaseAudioNode(node);
+      releaseAudioNode(out);
+      onended();
+    });
+    let envEnd = holdEnd + release2 + 0.01;
+    bufferSource.stop(envEnd);
+    const stop2 = (endTime) => {
+      bufferSource.stop(endTime);
+    };
+    const handle = { node: out, nodes: { source: [bufferSource], ...vibratoHandle?.nodes }, stop: stop2 };
+    if (cut2 !== void 0) {
+      const prev = cutGroups[cut2];
+      if (prev) {
+        prev.node.gain.setValueAtTime(1, time4);
+        prev.node.gain.linearRampToValueAtTime(0, time4 + 0.01);
+      }
+      cutGroups[cut2] = handle;
+    }
+    return handle;
+  }
+  function registerSample(key, bank2, params) {
+    registerSound(key, (t, hapValue, onended) => onTriggerSample(t, hapValue, onended, bank2), {
+      type: "sample",
+      samples: bank2,
+      ...params
+    });
+  }
+  function registerSampleSource(key, bank2, params) {
+    const isWavetable = key.startsWith("wt_");
+    if (isWavetable) {
+      registerWaveTable(key, bank2, params);
+    } else {
+      registerSample(key, bank2, params);
+    }
+  }
+  var bufferCache, loadCache, getCachedBuffer, getDuration, getDur, getSampleBuffer, getSampleBufferSource, loadBuffer, getLoadedBuffer, processSampleMap, resourcePrefixHandlers, samples, cutGroups;
+  var init_sampler = __esm({
+    "build/engine-src/strudel/packages/superdough/sampler.mjs"() {
+      init_util2();
+      init_superdough2();
+      init_audioContext();
+      init_helpers();
+      init_logger2();
+      bufferCache = {};
+      loadCache = {};
+      getCachedBuffer = (url) => bufferCache[url];
+      getDuration = (s2, n2 = 0) => {
+        return getSampleBufferSource({ s: s2, n: n2 }, soundMap.get(s2)[s2].data.samples).then((x3) => x3.bufferDuration);
+      };
+      getDur = getDuration;
+      getSampleBuffer = async (hapValue, bank2, resolveUrl) => {
+        let { url: sampleUrl, label: label2, playbackRate } = getSampleInfo(hapValue, bank2);
+        if (resolveUrl) {
+          sampleUrl = await resolveUrl(sampleUrl);
+        }
+        const ac = getAudioContext();
+        const buffer = await loadBuffer(sampleUrl, ac, label2);
+        if (hapValue.unit === "c") {
+          playbackRate = playbackRate * buffer.duration;
+        }
+        return { buffer, playbackRate };
+      };
+      getSampleBufferSource = async (hapValue, bank2, resolveUrl) => {
+        let { buffer, playbackRate } = await getSampleBuffer(hapValue, bank2, resolveUrl);
+        if (hapValue.speed < 0) {
+          buffer = reverseBuffer(buffer);
+        }
+        const ac = getAudioContext();
+        const bufferSource = ac.createBufferSource();
+        bufferSource.buffer = buffer;
+        bufferSource.playbackRate.value = playbackRate;
+        const { loopBegin: loopBegin2 = 0, loopEnd: loopEnd2 = 1, begin: begin2 = 0, end: end2 = 1 } = hapValue;
+        const bufferDuration = bufferSource.buffer.duration;
+        const offset3 = begin2 * bufferDuration;
+        const loop2 = hapValue.loop;
+        if (loop2) {
+          bufferSource.loop = true;
+          bufferSource.loopStart = loopBegin2 * bufferDuration;
+          bufferSource.loopEnd = loopEnd2 * bufferDuration;
+        }
+        const playbackDuration = bufferDuration / bufferSource.playbackRate.value;
+        const sliceDuration = (end2 - begin2) * playbackDuration;
+        return { bufferSource, offset: offset3, bufferDuration, playbackDuration, sliceDuration };
+      };
+      loadBuffer = (url, ac, s2, n2 = 0) => {
+        const label2 = s2 ? `sound "${s2}:${n2}"` : "sample";
+        url = url.replace("#", "%23");
+        if (!loadCache[url]) {
+          logger2(`[sampler] load ${label2}..`, "load-sample", { url });
+          const timestamp = Date.now();
+          loadCache[url] = fetch(url).then((res) => res.arrayBuffer()).then(async (res) => {
+            const took = Date.now() - timestamp;
+            const size2 = humanFileSize(res.byteLength);
+            logger2(`[sampler] load ${label2}... done! loaded ${size2} in ${took}ms`, "loaded-sample", { url });
+            const decoded = await ac.decodeAudioData(res);
+            bufferCache[url] = decoded;
+            return decoded;
+          });
+        }
+        return loadCache[url];
+      };
+      getLoadedBuffer = (url) => {
+        return bufferCache[url];
+      };
+      processSampleMap = (sampleMap, fn, baseUrl = sampleMap._base || "") => {
+        return Object.entries(sampleMap).forEach(([key, value2]) => {
+          if (typeof value2 === "string") {
+            value2 = [value2];
+          }
+          if (typeof value2 !== "object") {
+            throw new Error("wrong sample map format for " + key);
+          }
+          baseUrl = value2._base || baseUrl;
+          baseUrl = resolveSpecialPaths(baseUrl);
+          if (baseUrl.startsWith("github:")) {
+            baseUrl = githubPath(baseUrl, "");
+          }
+          const fullUrl = (v2) => baseUrl + v2;
+          if (Array.isArray(value2)) {
+            value2 = value2.map(fullUrl);
+          } else {
+            value2 = Object.fromEntries(
+              Object.entries(value2).map(([note4, samples2]) => {
+                return [note4, (typeof samples2 === "string" ? [samples2] : samples2).map(fullUrl)];
+              })
+            );
+          }
+          fn(key, value2);
+        });
+      };
+      resourcePrefixHandlers = {};
+      samples = async (sampleMap, baseUrl = sampleMap._base || "", options = {}) => {
+        if (typeof sampleMap === "string") {
+          const [json, base2] = await fetchSampleMap(sampleMap);
+          return samples(json, baseUrl || base2, options);
+        }
+        const { prebake, tag } = options;
+        processSampleMap(
+          sampleMap,
+          (key, bank2) => {
+            registerSampleSource(key, bank2, { baseUrl, prebake, tag });
+          },
+          baseUrl
+        );
+      };
+      cutGroups = [];
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/superdoughoutput.mjs
+  var hasChanged, getStereoNode, Orbit, SuperdoughOutput, SuperdoughAudioController;
+  var init_superdoughoutput = __esm({
+    "build/engine-src/strudel/packages/superdough/superdoughoutput.mjs"() {
+      init_helpers();
+      init_logger2();
+      init_util2();
+      hasChanged = (now, before) => now !== void 0 && now !== before;
+      getStereoNode = (ac) => new GainNode(ac, { gain: 1, channelCount: 2, channelCountMode: "explicit" });
+      Orbit = class {
+        reverbNode;
+        delayNode;
+        output;
+        summingNode;
+        djfNode;
+        audioContext;
+        constructor(audioContext2) {
+          this.audioContext = audioContext2;
+          this.output = getStereoNode(audioContext2);
+          this.summingNode = getStereoNode(audioContext2);
+          this.summingNode.connect(this.output);
+        }
+        disconnect() {
+          this.output.disconnect();
+          this.summingNode.disconnect();
+          this.delayNode?.disconnect();
+          this.reverbNode?.disconnect();
+        }
+        getDjf(value2, t = 0) {
+          if (this.djfNode == null) {
+            this.djfNode = getWorklet(this.audioContext, "djf-processor", { value: value2 });
+            this.summingNode.disconnect();
+            this.summingNode.connect(this.djfNode);
+            this.djfNode.connect(this.output);
+          }
+          const val2 = this.djfNode.parameters.get("value");
+          val2.setValueAtTime(value2, t);
+          return this.djfNode;
+        }
+        getDelay(delaytime2 = 0, feedback = 0.5, t) {
+          const maxfeedback = 0.98;
+          if (feedback > maxfeedback) {
+          }
+          feedback = clamp2(feedback, 0, 0.98);
+          if (this.delayNode == null) {
+            this.delayNode = this.audioContext.createFeedbackDelay(1, delaytime2, feedback);
+            this.delayNode.connect(this.summingNode);
+            this.delayNode.start?.(t);
+          }
+          this.delayNode.delayTime.value !== delaytime2 && this.delayNode.delayTime.setValueAtTime(delaytime2, t);
+          this.delayNode.feedback.value !== feedback && this.delayNode.feedback.setValueAtTime(feedback, t);
+          return this.delayNode;
+        }
+        getReverb(duration2, fade, lp2, dim, ir2, irspeed2, irbegin2) {
+          if (this.reverbNode == null) {
+            this.reverbNode = this.audioContext.createReverb(duration2, fade, lp2, dim, ir2, irspeed2, irbegin2);
+            this.reverbNode.connect(this.summingNode);
+          }
+          if (hasChanged(duration2, this.reverbNode.duration) || hasChanged(fade, this.reverbNode.fade) || hasChanged(lp2, this.reverbNode.lp) || hasChanged(dim, this.reverbNode.dim) || hasChanged(irspeed2, this.reverbNode.irspeed) || hasChanged(irbegin2, this.reverbNode.irbegin) || this.reverbNode.ir !== ir2) {
+            this.reverbNode.generate(duration2, fade, lp2, dim, ir2, irspeed2, irbegin2);
+          }
+          return this.reverbNode;
+        }
+        sendReverb(node, amount) {
+          return effectSend(node, this.reverbNode, amount);
+        }
+        sendDelay(node, amount) {
+          return effectSend(node, this.delayNode, amount);
+        }
+        duck(t, onsettime = 0, attacktime = 0.1, depth = 1) {
+          const onset = onsettime;
+          const attack2 = Math.max(attacktime, 2e-3);
+          const gainParam = this.output.gain;
+          webAudioTimeout(
+            this.audioContext,
+            () => {
+              const now = this.audioContext.currentTime;
+              const currVal = gainParam.value;
+              gainParam.cancelScheduledValues(now);
+              gainParam.setValueAtTime(currVal, now);
+              const t0 = Math.max(t, now);
+              const duckedVal = clamp2(1 - Math.sqrt(depth), 0.01, currVal);
+              gainParam.exponentialRampToValueAtTime(duckedVal, t0 + onset);
+              gainParam.exponentialRampToValueAtTime(1, t0 + onset + attack2);
+            },
+            0,
+            t - 0.01
+          );
+        }
+        connectToOutput(node) {
+          node.connect(this.summingNode);
+        }
+      };
+      SuperdoughOutput = class {
+        channelMerger;
+        destinationGain;
+        constructor(audioContext2) {
+          this.audioContext = audioContext2;
+          this.initializeAudio();
+        }
+        initializeAudio() {
+          const audioContext2 = this.audioContext;
+          const maxChannelCount = audioContext2.destination.maxChannelCount;
+          this.audioContext.destination.channelCount = maxChannelCount;
+          this.channelMerger = new ChannelMergerNode(audioContext2, { numberOfInputs: audioContext2.destination.channelCount });
+          this.destinationGain = new GainNode(audioContext2);
+          this.channelMerger.connect(this.destinationGain);
+          this.destinationGain.connect(audioContext2.destination);
+        }
+        reset() {
+          this.disconnect();
+          this.initializeAudio();
+        }
+        disconnect() {
+          this.channelMerger.disconnect();
+          this.destinationGain.disconnect();
+          this.destinationGain = null;
+          this.channelMerger = null;
+        }
+        connectToDestination = (input, channels2 = [0, 1]) => {
+          const stereoMix = new StereoPannerNode(this.audioContext);
+          input.connect(stereoMix);
+          const splitter = new ChannelSplitterNode(this.audioContext, {
+            numberOfOutputs: stereoMix.channelCount
+          });
+          stereoMix.connect(splitter);
+          channels2.forEach((ch2, i3) => {
+            splitter.connect(this.channelMerger, i3 % stereoMix.channelCount, ch2 % this.audioContext.destination.channelCount);
+          });
+        };
+      };
+      SuperdoughAudioController = class {
+        audioContext;
+        output;
+        nodes = {};
+        buses = {};
+        constructor(audioContext2) {
+          this.audioContext = audioContext2;
+          this.output = new SuperdoughOutput(audioContext2);
+        }
+        reset() {
+          Object.values(this.nodes).forEach((node) => {
+            node.disconnect();
+          });
+          Object.values(this.buses).forEach((bus2) => {
+            bus2.disconnect();
+          });
+          this.nodes = {};
+          this.buses = {};
+          this.output.reset();
+        }
+        duck(targetOrbits, t, onsettime = 0, attacktime = 0.1, depth = 1) {
+          const targetArr = [targetOrbits].flat();
+          const onsetArr = [onsettime].flat();
+          const attackArr = [attacktime].flat();
+          const depthArr = [depth].flat();
+          targetArr.forEach((target, idx) => {
+            const orbit2 = this.nodes[target];
+            if (orbit2 == null) {
+              errorLogger2(new Error(`duck target orbit ${target} does not exist`), "superdough");
+              return;
+            }
+            const onset = onsetArr[idx] ?? onsetArr[0];
+            const attack2 = Math.max(attackArr[idx] ?? attackArr[0], 2e-3);
+            const depth2 = depthArr[idx] ?? depthArr[0];
+            orbit2.duck(t, onset, attack2, depth2);
+          });
+        }
+        getOrbit(orbitNum, channels2) {
+          if (this.nodes[orbitNum] == null) {
+            this.nodes[orbitNum] = new Orbit(this.audioContext);
+            this.output.connectToDestination(this.nodes[orbitNum].output, channels2);
+          }
+          return this.nodes[orbitNum];
+        }
+        getBus(busNum) {
+          if (this.buses[busNum] == null) {
+            this.buses[busNum] = getStereoNode(this.audioContext);
+          }
+          return this.buses[busNum];
+        }
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/wavetable.mjs
+  function resetSeenKeys() {
+    seenKeys.clear();
+  }
+  async function getPayload(url, label2, frameLen = 2048) {
+    const key = `${url},${frameLen}`;
+    if (!seenKeys.has(key)) {
+      const buf = await loadBuffer2(url, label2);
+      const ch0 = buf.getChannelData(0);
+      const total = ch0.length;
+      const numFrames = Math.max(1, Math.floor(total / frameLen));
+      const frames2 = new Array(numFrames);
+      for (let i3 = 0; i3 < numFrames; i3++) {
+        const start = i3 * frameLen;
+        frames2[i3] = ch0.subarray(start, start + frameLen);
+      }
+      seenKeys.add(key);
+      return { frames: frames2, frameLen, numFrames, key };
+    }
+    return { frameLen, key };
+  }
+  function humanFileSize2(bytes, si) {
+    var thresh = si ? 1e3 : 1024;
+    if (bytes < thresh) return bytes + " B";
+    var units = si ? ["kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"] : ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB", "ZiB", "YiB"];
+    var u = -1;
+    do {
+      bytes /= thresh;
+      ++u;
+    } while (bytes >= thresh);
+    return bytes.toFixed(1) + " " + units[u];
+  }
+  function parseWavSampleRate(arrBuf) {
+    const dv = new DataView(arrBuf);
+    let p = 12;
+    while (p + 8 <= dv.byteLength) {
+      const id2 = String.fromCharCode(dv.getUint8(p), dv.getUint8(p + 1), dv.getUint8(p + 2), dv.getUint8(p + 3));
+      const size2 = dv.getUint32(p + 4, true);
+      if (id2 === "fmt ") {
+        return dv.getUint32(p + 12, true);
+      }
+      p += 8 + size2 + (size2 & 1);
+    }
+    return null;
+  }
+  async function decodeAtNativeRate(arr) {
+    const sr = parseWavSampleRate(arr) || 44100;
+    const tempAC = new OfflineAudioContext(1, 1, sr);
+    return await tempAC.decodeAudioData(arr);
+  }
+  function githubPath2(base2, subpath = "") {
+    if (!base2.startsWith("github:")) {
+      throw new Error('expected "github:" at the start of pseudoUrl');
+    }
+    let [_, path] = base2.split("github:");
+    path = path.endsWith("/") ? path.slice(0, -1) : path;
+    if (path.split("/").length === 2) {
+      path += "/main";
+    }
+    return `https://raw.githubusercontent.com/${path}/${subpath}`;
+  }
+  function registerWaveTable(key, tables2, params) {
+    registerSound(
+      key,
+      (t, hapValue, onended, cps2) => {
+        return onTriggerSynth(t, hapValue, onended, tables2, cps2, params?.frameLen ?? 2048);
+      },
+      {
+        type: "wavetable",
+        tables: tables2,
+        ...params
+      }
+    );
+  }
+  async function onTriggerSynth(t, value2, onended, tables2, cps2, frameLen) {
+    const { s: s2, n: n2 = 0, duration: duration2, clip: clip2 } = value2;
+    const ac = getAudioContext();
+    const [attack2, decay2, sustain2, release2] = getADSRValues([value2.attack, value2.decay, value2.sustain, value2.release]);
+    let { warpmode: warpmode2 } = value2;
+    if (typeof warpmode2 === "string") {
+      warpmode2 = Warpmode[warpmode2.toUpperCase()] ?? Warpmode.NONE;
+    }
+    const frequency = getFrequencyFromValue(value2);
+    const { url, label: label2 } = getCommonSampleInfo(value2, tables2);
+    const payload = await getPayload(url, label2, frameLen);
+    let holdEnd = t + duration2;
+    if (clip2 !== void 0) {
+      holdEnd = Math.min(t + clip2 * duration2, holdEnd);
+    }
+    const endWithRelease = holdEnd + release2;
+    const envEnd = endWithRelease + 0.01;
+    const params = {
+      begin: t,
+      end: envEnd,
+      frequency,
+      freqspread: value2.detune,
+      position: value2.wt,
+      warp: value2.warp,
+      warpMode: warpmode2,
+      voices: Math.max(value2.unison ?? 1, 1),
+      panspread: value2.spread,
+      phaserand: value2.wtphaserand ?? value2.unison > 1 ? 1 : 0
+    };
+    const factory = () => new AudioWorkletNode(ac, "wavetable-oscillator-processor", { outputChannelCount: [2] });
+    const source2 = getNodeFromPool("wavetable", factory);
+    Object.entries(params).forEach(([key, value3]) => {
+      const param = source2.parameters.get(key);
+      const target = value3 !== void 0 ? value3 : param.defaultValue;
+      param.value = target;
+    });
+    source2.port.postMessage({ type: "initialize", payload });
+    if (ac.currentTime > t) {
+      logger2(`[wavetable] still loading sound "${s2}:${n2}"`, "highlight");
+      return;
+    }
+    const posADSRParams = [value2.wtattack, value2.wtdecay, value2.wtsustain, value2.wtrelease];
+    const warpADSRParams = [value2.warpattack, value2.warpdecay, value2.warpsustain, value2.warprelease];
+    const wtParams = source2.parameters;
+    const positionParam = wtParams.get("position");
+    const warpParam = wtParams.get("warp");
+    let wtrate2 = value2.wtrate;
+    if (value2.wtsync != null) {
+      wtrate2 = cps2 * value2.wtsync;
+    }
+    const wtPosModulators = applyParameterModulators(
+      ac,
+      positionParam,
+      t,
+      endWithRelease,
+      {
+        offset: value2.wt,
+        amount: value2.wtenv,
+        defaultAmount: 0.5,
+        shape: "linear",
+        values: posADSRParams,
+        holdEnd,
+        defaultValues: [0, 0.5, 0, 0.1]
+      },
+      {
+        frequency: wtrate2,
+        depth: value2.wtdepth,
+        defaultDepth: 0.5,
+        shape: value2.wtshape,
+        skew: value2.wtskew,
+        dcoffset: value2.wtdc ?? 0
+      }
+    );
+    let warprate2 = value2.warprate;
+    if (value2.warpsync != null) {
+      warprate2 = warprate2 = cps2 * value2.warpsync;
+    }
+    const wtWarpModulators = applyParameterModulators(
+      ac,
+      warpParam,
+      t,
+      endWithRelease,
+      {
+        offset: value2.warp,
+        amount: value2.warpenv,
+        defaultAmount: 0.5,
+        shape: "linear",
+        values: warpADSRParams,
+        holdEnd,
+        defaultValues: [0, 0.5, 0, 0.1]
+      },
+      {
+        frequency: warprate2,
+        depth: value2.warpdepth,
+        defaultDepth: 0.5,
+        shape: value2.warpshape,
+        skew: value2.warpskew,
+        dcoffset: value2.warpdc ?? 0
+      }
+    );
+    const vibratoHandle = getVibratoOscillator(source2.parameters.get("detune"), value2, t);
+    const fmHandle = applyFM(source2.parameters.get("frequency"), value2, t);
+    const envGain = ac.createGain();
+    const node = source2.connect(envGain);
+    getParamADSR(node.gain, attack2, decay2, sustain2, release2, 0, 0.3, t, holdEnd, "linear");
+    getPitchEnvelope(source2.parameters.get("detune"), value2, t, holdEnd);
+    const handle = {
+      node,
+      nodes: {
+        source: [source2],
+        wt_lfo: [wtPosModulators],
+        warp_lfo: [wtWarpModulators],
+        ...fmHandle?.nodes,
+        ...vibratoHandle?.nodes
+      }
+    };
+    const timeoutNode = webAudioTimeout(
+      ac,
+      () => {
+        releaseNodeToPool(source2);
+        vibratoHandle?.stop();
+        fmHandle?.stop();
+        releaseAudioNode(wtPosModulators);
+        releaseAudioNode(wtWarpModulators);
+        onended();
+      },
+      t,
+      envEnd
+    );
+    handle.stop = (time4) => {
+      timeoutNode.stop(time4);
+    };
+    return handle;
+  }
+  var Warpmode, seenKeys, loadCache2, loadBuffer2, _processTables, tables;
+  var init_wavetable = __esm({
+    "build/engine-src/strudel/packages/superdough/wavetable.mjs"() {
+      init_superdough2();
+      init_util2();
+      init_helpers();
+      init_nodePools();
+      init_logger2();
+      Warpmode = Object.freeze({
+        NONE: 0,
+        ASYM: 1,
+        MIRROR: 2,
+        BENDP: 3,
+        BENDM: 4,
+        BENDMP: 5,
+        SYNC: 6,
+        QUANT: 7,
+        FOLD: 8,
+        PWM: 9,
+        ORBIT: 10,
+        SPIN: 11,
+        CHAOS: 12,
+        PRIMES: 13,
+        BINARY: 14,
+        BROWNIAN: 15,
+        RECIPROCAL: 16,
+        WORMHOLE: 17,
+        LOGISTIC: 18,
+        SIGMOID: 19,
+        FRACTAL: 20,
+        FLIP: 21
+      });
+      seenKeys = /* @__PURE__ */ new Set();
+      loadCache2 = {};
+      loadBuffer2 = (url, label2) => {
+        url = url.replace("#", "%23");
+        if (!loadCache2[url]) {
+          logger2(`[wavetable] load table ${label2}..`, "load-table", { url });
+          const timestamp = Date.now();
+          loadCache2[url] = fetch(url).then((res) => res.arrayBuffer()).then(async (res) => {
+            const took = Date.now() - timestamp;
+            const size2 = humanFileSize2(res.byteLength);
+            logger2(`[wavetable] load table ${label2}... done! loaded ${size2} in ${took}ms`, "loaded-table", { url });
+            const decoded = await decodeAtNativeRate(res);
+            return decoded;
+          });
+        }
+        return loadCache2[url];
+      };
+      _processTables = (json, baseUrl, frameLen, options = {}) => {
+        baseUrl = json._base || baseUrl;
+        return Object.entries(json).forEach(([key, tables2]) => {
+          if (key === "_base") return false;
+          if (typeof tables2 === "string") {
+            tables2 = [tables2];
+          }
+          if (typeof tables2 !== "object") {
+            throw new Error("wrong json format for " + key);
+          }
+          let resolvedUrl = baseUrl;
+          if (resolvedUrl.startsWith("github:")) {
+            resolvedUrl = githubPath2(resolvedUrl, "");
+          }
+          tables2 = tables2.map((t) => resolvedUrl + t).filter((t) => {
+            if (!t.toLowerCase().endsWith(".wav")) {
+              logger2(`[wavetable] skipping ${t} -- wavetables must be ".wav" format`);
+              return false;
+            }
+            return true;
+          });
+          if (tables2.length) {
+            registerWaveTable(key, tables2, { baseUrl, frameLen });
+          }
+        });
+      };
+      tables = async (url, frameLen, json, options = {}) => {
+        if (json !== void 0) return _processTables(json, url, frameLen);
+        if (url.startsWith("github:")) {
+          url = githubPath2(url, "strudel.json");
+        }
+        if (url.startsWith("local:")) {
+          url = `http://localhost:5432`;
+        }
+        const base2 = getBaseURL(url);
+        if (typeof fetch !== "function") {
+          return;
+        }
+        if (typeof fetch === "undefined") {
+          return;
+        }
+        return fetch(url).then((res) => res.json()).then((json2) => _processTables(json2, base2, frameLen, options)).catch((error) => {
+          console.error(error);
+          throw new Error(`error loading "${url}"`);
+        });
+      };
+    }
+  });
+
+  // stub:kabelsalat
+  var kabelsalat_exports = {};
+  __export(kabelsalat_exports, {
+    SalatRepl: () => SalatRepl
+  });
+  var SalatRepl;
+  var init_kabelsalat = __esm({
+    "stub:kabelsalat"() {
+      SalatRepl = class {
+        evaluate() {
+          throw new Error("kabelsalat is not available");
+        }
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/superdough.mjs
+  function setMaxPolyphony(polyphony) {
+    maxPolyphony = parseInt(polyphony) ?? DEFAULT_MAX_POLYPHONY;
+  }
+  function setMultiChannelOrbits(bool) {
+    multiChannelOrbits = bool == true;
+  }
+  function registerSound(key, onTrigger, data2 = {}) {
+    key = key.toLowerCase().replace(/\s+/g, "_");
+    soundMap.setKey(key, { onTrigger, data: data2 });
+  }
+  function applyGainCurve(val2) {
+    return gainCurveFunc(val2);
+  }
+  function setGainCurve(newGainCurveFunc) {
+    gainCurveFunc = newGainCurveFunc;
+  }
+  function aliasBankMap(aliasMap) {
+    for (const key in aliasMap) {
+      aliasMap[key.toLowerCase()] = aliasMap[key];
+    }
+    const soundDictionary = soundMap.get();
+    for (const key in soundDictionary) {
+      const [bank2, suffix] = key.split("_");
+      if (!suffix) continue;
+      const aliasValue = aliasMap[bank2];
+      if (aliasValue) {
+        if (typeof aliasValue === "string") {
+          soundDictionary[`${aliasValue}_${suffix}`.toLowerCase()] = soundDictionary[key];
+        } else if (Array.isArray(aliasValue)) {
+          for (const alias of aliasValue) {
+            soundDictionary[`${alias}_${suffix}`.toLowerCase()] = soundDictionary[key];
+          }
+        }
+      }
+    }
+    soundMap.set({ ...soundDictionary });
+  }
+  async function aliasBankPath(path) {
+    const response = await fetch(path);
+    const aliasMap = await response.json();
+    aliasBankMap(aliasMap);
+  }
+  async function aliasBank(...args) {
+    switch (args.length) {
+      case 1:
+        if (typeof args[0] === "string") {
+          return aliasBankPath(args[0]);
+        } else {
+          return aliasBankMap(args[0]);
+        }
+      case 2:
+        return aliasBankMap({ [args[0]]: args[1] });
+      default:
+        throw new Error("aliasMap expects 1 or 2 arguments, received " + args.length);
+    }
+  }
+  function soundAlias(original, alias) {
+    if (getSound(original) == null) {
+      logger2("soundAlias: original sound not found");
+      return;
+    }
+    soundMap.setKey(alias, getSound(original));
+  }
+  function getSound(s2) {
+    if (typeof s2 !== "string") {
+      console.warn(`getSound: expected string got "${s2}". fall back to triangle`);
+      return soundMap.get().triangle;
+    }
+    return soundMap.get()[s2.toLowerCase()];
+  }
+  function setDefault(control2, value2) {
+    defaultDefaultValues[control2] = value2;
+  }
+  function resetDefaults() {
+    defaultDefaultValues = { ...defaultDefaultDefaultValues };
+  }
+  function setDefaultValue(key, value2) {
+    defaultControls.set(key, value2);
+  }
+  function getDefaultValue(key) {
+    return defaultControls.get(key);
+  }
+  function setDefaultValues(defaultsobj) {
+    Object.keys(defaultsobj).forEach((key) => {
+      setDefaultValue(key, defaultsobj[key]);
+    });
+  }
+  function resetDefaultValues() {
+    defaultControls = new Map(Object.entries(defaultDefaultValues));
+  }
+  function setVersionDefaults(version2) {
+    resetDefaultValues();
+    if (version2 === "1.0") {
+      setDefaultValue("fanchor", 0.5);
+    }
+  }
+  function registerWorklet(url) {
+    externalWorklets.push(url);
+  }
+  function loadWorklets() {
+    if (!workletsLoading) {
+      const audioCtx = getAudioContext();
+      const allWorkletURLs = externalWorklets.concat([worklets_default]);
+      workletsLoading = Promise.all(allWorkletURLs.map((workletURL) => audioCtx.audioWorklet.addModule(workletURL))).then(
+        () => workletsLoading = void 0
+      );
+    }
+    return workletsLoading;
+  }
+  async function initKabelsalat() {
+    const { SalatRepl: SalatRepl2 } = await Promise.resolve().then(() => (init_kabelsalat(), kabelsalat_exports));
+    logger2("[kabelsalat] ready");
+    kabel = new SalatRepl2({ localScope: true });
+    return kabel;
+  }
+  async function initAudio(options = {}) {
+    const {
+      disableWorklets = false,
+      maxPolyphony: maxPolyphony2,
+      audioDeviceName = DEFAULT_AUDIO_DEVICE_NAME,
+      multiChannelOrbits: multiChannelOrbits2 = false
+    } = options;
+    setMaxPolyphony(maxPolyphony2);
+    setMultiChannelOrbits(multiChannelOrbits2);
+    resetSeenKeys();
+    if (typeof window === "undefined") {
+      return;
+    }
+    const audioCtx = getAudioContext();
+    if (audioDeviceName != null && audioDeviceName != DEFAULT_AUDIO_DEVICE_NAME) {
+      try {
+        const devices = await getAudioDevices();
+        const id2 = devices.get(audioDeviceName);
+        const isValidID = (id2 ?? "").length > 0;
+        if (audioCtx.sinkId !== id2 && isValidID) {
+          await audioCtx.setSinkId(id2);
+        }
+        logger2(
+          `[superdough] Audio Device set to ${audioDeviceName}, it might take a few seconds before audio plays on all output channels`
+        );
+      } catch {
+        logger2("[superdough] failed to set audio interface", "warning");
+      }
+    }
+    if (!audioCtx instanceof OfflineAudioContext) {
+      await audioCtx.resume();
+    }
+    if (disableWorklets) {
+      logger2("[superdough]: AudioWorklets disabled with disableWorklets");
+      return;
+    }
+    try {
+      await loadWorklets();
+      logger2("[superdough] AudioWorklets loaded");
+    } catch (err) {
+      console.warn("could not load AudioWorklet effects", err);
+    }
+    await initKabelsalat();
+    logger2("[superdough] ready");
+  }
+  async function initAudioOnFirstClick(options) {
+    if (!audioReady) {
+      audioReady = new Promise((resolve) => {
+        document.addEventListener("mousedown", async function listener() {
+          document.removeEventListener("mousedown", listener);
+          await initAudio(options);
+          resolve();
+        });
+      });
+    }
+    return audioReady;
+  }
+  function getSuperdoughAudioController() {
+    if (controller == null) {
+      controller = new SuperdoughAudioController(getAudioContext());
+    }
+    return controller;
+  }
+  function setSuperdoughAudioController(newController) {
+    controller = newController;
+    return controller;
+  }
+  function connectToDestination(input, channels2) {
+    const controller2 = getSuperdoughAudioController();
+    controller2.output.connectToDestination(input, channels2);
+  }
+  function getPhaser(begin2, end2, frequency = 1, depth = 0.5, centerFrequency = 1e3, sweep = 2e3) {
+    const ac = getAudioContext();
+    const lfo2 = getLfo(ac, { frequency, depth: sweep * 2, begin: begin2, end: end2 });
+    const numStages = 1;
+    let fOffset = 282;
+    const filterChain = [];
+    for (let i3 = 0; i3 < numStages; i3++) {
+      const filter3 = getNodeFromPool("filter", () => ac.createBiquadFilter());
+      filter3.type = "notch";
+      filter3.gain.value = 1;
+      filter3.frequency.value = centerFrequency + fOffset;
+      filter3.Q.value = 2 - Math.min(Math.max(depth * 2, 0), 1.9);
+      lfo2.connect(filter3.detune);
+      fOffset += 282;
+      filterChain.push(filter3);
+    }
+    return { filterChain, lfo: lfo2 };
+  }
+  function getFilterType(ftype2) {
+    ftype2 = ftype2 ?? 0;
+    const filterTypes = ["12db", "ladder", "24db"];
+    return typeof ftype2 === "number" ? filterTypes[Math.floor(_mod2(ftype2, filterTypes.length))] : ftype2;
+  }
+  function getAnalyserById(id2, fftSize = 1024, smoothingTimeConstant = 0.5) {
+    if (!analysers[id2] || analysers[id2].context != getAudioContext()) {
+      const analyserNode = getAudioContext().createAnalyser();
+      analyserNode.fftSize = fftSize;
+      analyserNode.smoothingTimeConstant = smoothingTimeConstant;
+      analysers[id2] = analyserNode;
+      analysersData[id2] = new Float32Array(analysers[id2].frequencyBinCount);
+    }
+    if (analysers[id2].fftSize !== fftSize) {
+      analysers[id2].fftSize = fftSize;
+      analysersData[id2] = new Float32Array(analysers[id2].frequencyBinCount);
+    }
+    return analysers[id2];
+  }
+  function getAnalyzerData(type = "time", id2 = 1) {
+    const getter = {
+      time: () => analysers[id2]?.getFloatTimeDomainData(analysersData[id2]),
+      frequency: () => analysers[id2]?.getFloatFrequencyData(analysersData[id2])
+    }[type];
+    if (!getter) {
+      throw new Error(`getAnalyzerData: ${type} not supported. use one of ${Object.keys(getter).join(", ")}`);
+    }
+    getter();
+    return analysersData[id2];
+  }
+  function resetGlobalEffects() {
+    controller?.reset();
+    analysers = {};
+    analysersData = {};
+  }
+  function mapChannelNumbers(channels2) {
+    return (Array.isArray(channels2) ? channels2 : [channels2]).map((ch2) => ch2 - 1);
+  }
+  var DEFAULT_MAX_POLYPHONY, DEFAULT_AUDIO_DEVICE_NAME, maxPolyphony, multiChannelOrbits, soundMap, gainCurveFunc, getAudioDevices, defaultDefaultValues, defaultDefaultDefaultValues, defaultControls, resetLoadedSounds, externalWorklets, workletsLoading, kabel, audioReady, controller, analysers, analysersData, activeSoundSources, Chain, compileKabel, superdough;
+  var init_superdough = __esm({
+    "build/engine-src/strudel/packages/superdough/superdough.mjs"() {
+      init_feedbackdelay();
+      init_reverb();
+      init_vowel();
+      init_util2();
+      init_worklets();
+      init_nodePools();
+      init_helpers();
+      init_nanostores();
+      init_logger2();
+      init_modulators();
+      init_sampler();
+      init_audioContext();
+      init_superdoughoutput();
+      init_wavetable();
+      DEFAULT_MAX_POLYPHONY = 128;
+      DEFAULT_AUDIO_DEVICE_NAME = "System Standard";
+      maxPolyphony = DEFAULT_MAX_POLYPHONY;
+      multiChannelOrbits = false;
+      soundMap = map2();
+      gainCurveFunc = (val2) => val2;
+      getAudioDevices = async () => {
+        await navigator.mediaDevices.getUserMedia({ audio: true });
+        let mediaDevices = await navigator.mediaDevices.enumerateDevices();
+        mediaDevices = mediaDevices.filter((device) => device.kind === "audiooutput" && device.deviceId !== "default");
+        const devicesMap = /* @__PURE__ */ new Map();
+        devicesMap.set(DEFAULT_AUDIO_DEVICE_NAME, "");
+        mediaDevices.forEach((device) => {
+          devicesMap.set(device.label, device.deviceId);
+        });
+        return devicesMap;
+      };
+      defaultDefaultValues = {
+        s: "triangle",
+        gain: 0.8,
+        postgain: 1,
+        density: ".03",
+        channels: [1, 2],
+        phaserdepth: 0.75,
+        shapevol: 1,
+        distortvol: 1,
+        distorttype: 0,
+        delay: 0,
+        busgain: 1,
+        byteBeatExpression: "0",
+        delayfeedback: 0.5,
+        delaysync: 3 / 16,
+        orbit: 1,
+        i: 1,
+        velocity: 1,
+        fft: 8,
+        tremolodepth: 1,
+        tremolophase: 0,
+        release: 0.01
+      };
+      defaultDefaultDefaultValues = Object.freeze({ ...defaultDefaultValues });
+      defaultControls = new Map(Object.entries(defaultDefaultValues));
+      resetLoadedSounds = () => soundMap.set({});
+      externalWorklets = [];
+      analysers = {};
+      analysersData = {};
+      activeSoundSources = /* @__PURE__ */ new Map();
+      Chain = class {
+        constructor() {
+          this.audioNodes = [];
+          this.tails = [];
+        }
+        connect(...nodes) {
+          nodes.forEach((node) => {
+            this.tails.forEach((tail) => {
+              tail.connect(node);
+            });
+          });
+          this.tails = nodes;
+          this.audioNodes.push(...nodes);
+          return this;
+        }
+        connectOne(idx, node) {
+          this.tails[idx].connect(node);
+          this.tails[idx] = node;
+          this.audioNodes.push(node);
+          return this;
+        }
+        releaseNodes() {
+          this.audioNodes.forEach((n2) => isPoolable(n2) ? releaseNodeToPool(n2) : releaseAudioNode(n2));
+          this.audioNodes = [];
+          this.tails = [];
+        }
+      };
+      compileKabel = (code) => {
+        if (!kabel) {
+          throw new Error("kabelsalat not loaded");
+        }
+        const node = kabel.evaluate(code);
+        return node.compile({ log: false });
+      };
+      superdough = async (value2, t, hapDuration, cps2 = 0.5, cycle = 0.5) => {
+        const nodes = { main: {} };
+        const ac = getAudioContext();
+        const audioController = getSuperdoughAudioController();
+        let { stretch: stretch2 } = value2;
+        if (stretch2 != null) {
+          const latency = 0.04;
+          t = t - latency;
+        }
+        if (typeof value2 !== "object") {
+          throw new Error(
+            `expected hap.value to be an object, but got "${value2}". Hint: append .note() or .s() to the end`,
+            "error"
+          );
+        }
+        value2.duration = hapDuration;
+        if (t < ac.currentTime) {
+          console.warn(
+            `[superdough]: cannot schedule sounds in the past (target: ${t.toFixed(2)}, now: ${ac.currentTime.toFixed(2)})`
+          );
+          return;
+        }
+        let {
+          s: s2 = getDefaultValue("s"),
+          bank: bank2,
+          source: source2,
+          postgain: postgain2 = getDefaultValue("postgain"),
+          duckorbit,
+          duckonset: duckonset2,
+          duckattack: duckattack2,
+          duckdepth: duckdepth2,
+          djf: djf2,
+          release: release2 = getDefaultValue("release"),
+          dry: dry2,
+          delay: delay2 = getDefaultValue("delay"),
+          delayfeedback: delayfeedback2 = getDefaultValue("delayfeedback"),
+          delaysync: delaysync2 = getDefaultValue("delaysync"),
+          delaytime: delaytime2,
+          orbit: orbit2 = getDefaultValue("orbit"),
+          bus: bus2,
+          busgain: busgain2 = getDefaultValue("busgain"),
+          room: room2,
+          roomfade: roomfade2,
+          roomlp: roomlp2,
+          roomdim: roomdim2,
+          roomsize: roomsize2,
+          ir: ir2,
+          irspeed: irspeed2,
+          irbegin: irbegin2,
+          i: i3 = getDefaultValue("i"),
+          analyze: analyze2,
+          // analyser wet
+          fft: fft2 = getDefaultValue("fft"),
+          // fftSize 0 - 10
+          FX = [],
+          FXrelease: FXrelease2
+        } = value2;
+        delaytime2 = delaytime2 ?? cycleToSeconds2(delaysync2, cps2);
+        const orbitChannels = mapChannelNumbers(
+          multiChannelOrbits && orbit2 > 0 ? [orbit2 * 2 - 1, orbit2 * 2] : getDefaultValue("channels")
+        );
+        const channels2 = value2.channels != null ? mapChannelNumbers(value2.channels) : orbitChannels;
+        const orbitBus = audioController.getOrbit(orbit2, channels2);
+        if (duckorbit != null) {
+          audioController.duck(duckorbit, t, duckonset2, duckattack2, duckdepth2);
+        }
+        postgain2 = applyGainCurve(postgain2);
+        delay2 = applyGainCurve(delay2);
+        busgain2 = applyGainCurve(busgain2);
+        const end2 = t + hapDuration;
+        const fullRelease = Math.max(release2, FXrelease2 ?? 0);
+        const endWithRelease = end2 + fullRelease;
+        const chainID = Math.round(Math.random() * 1e6);
+        for (let i4 = 0; i4 <= activeSoundSources.size - maxPolyphony; i4++) {
+          const ch2 = activeSoundSources.entries().next();
+          const source3 = ch2.value[1].deref();
+          const chainID2 = ch2.value[0];
+          const endTime = t + 0.25;
+          source3?.node?.gain?.linearRampToValueAtTime(0, endTime);
+          source3?.stop?.(endTime);
+          activeSoundSources.delete(chainID2);
+        }
+        if (["-", "~", "_"].includes(s2)) {
+          return;
+        }
+        if (bank2 && s2) {
+          s2 = `${bank2}_${s2}`;
+          value2.s = s2;
+        }
+        const chain = new Chain();
+        let sourceNode;
+        if (source2) {
+          sourceNode = source2(t, value2, hapDuration, cps2);
+          nodes.main["source"] = [sourceNode];
+        } else if (getSound(s2)) {
+          const { onTrigger } = getSound(s2);
+          const onEnded = () => webAudioTimeout(
+            ac,
+            () => {
+              chain.releaseNodes();
+              activeSoundSources.delete(chainID);
+            },
+            0,
+            endWithRelease
+          );
+          const soundHandle = await onTrigger(t, value2, onEnded, cps2);
+          if (soundHandle) {
+            sourceNode = soundHandle.node;
+            activeSoundSources.set(chainID, new WeakRef(soundHandle));
+            nodes.main = { ...nodes.main, ...soundHandle.nodes };
+          }
+        } else {
+          throw new Error(`sound ${s2} not found! Is it loaded?`);
+        }
+        if (!sourceNode) {
+          return;
+        }
+        if (ac.currentTime > t) {
+          logger2("[webaudio] skip hap: still loading", ac.currentTime - t);
+          return;
+        }
+        chain.connect(sourceNode);
+        FX = [...FX, value2];
+        for (let [idx, fx] of Object.entries(FX)) {
+          const key = idx == FX.length - 1 ? "main" : idx;
+          nodes[key] ??= {};
+          const fxNodes = nodes[key];
+          let {
+            gain: gain2 = getDefaultValue("gain"),
+            velocity: velocity2 = getDefaultValue("velocity"),
+            shapevol = getDefaultValue("shapevol"),
+            distorttype: distorttype2 = getDefaultValue("distorttype"),
+            distortvol: distortvol2 = getDefaultValue("distortvol"),
+            tremolodepth: tremolodepth2 = getDefaultValue("tremolodepth"),
+            phaserdepth: phaserdepth2 = getDefaultValue("phaserdepth"),
+            delay: delay3 = getDefaultValue("delay"),
+            delayfeedback: delayfeedback3 = getDefaultValue("delayfeedback"),
+            delaysync: delaysync3 = getDefaultValue("delaysync"),
+            delaytime: delaytime3,
+            i: i4 = getDefaultValue("i")
+          } = fx;
+          gain2 = applyGainCurve(nanFallback2(gain2, 1));
+          shapevol = applyGainCurve(shapevol);
+          distortvol2 = applyGainCurve(distortvol2);
+          velocity2 = applyGainCurve(velocity2);
+          tremolodepth2 = applyGainCurve(tremolodepth2);
+          gain2 *= velocity2;
+          delaytime3 = delaytime3 ?? cycleToSeconds2(delaysync3, cps2);
+          if (fx.workletSrc !== void 0) {
+            const workletNode = getWorklet(ac, "generic-processor", {}, { outputChannelCount: [2] });
+            chain.connect(workletNode);
+            const workletSrc = fx.workletSrc.replace(/\bpat\[(\d+)\]/g, (_, i5) => fx.workletInputs[i5]).replaceAll("sFreq", getFrequencyFromValue(value2)).replaceAll("sGate", `cc('strudel-gate-${chainID}')`);
+            const { src: src2, ugens, registers } = compileKabel(workletSrc);
+            workletNode.port.postMessage({ src: src2, schema: { ugens, registers }, start: t, gateEnd: end2, end: endWithRelease });
+          }
+          if (fx.stretch !== void 0) {
+            const phaseVocoder = getWorklet(ac, "phase-vocoder-processor", { pitchFactor: fx.stretch });
+            chain.connect(phaseVocoder);
+            fxNodes["stretch"] = [phaseVocoder];
+          }
+          if (fx.transient !== void 0) {
+            const transProcessor = getWorklet(
+              ac,
+              "transient-processor",
+              {},
+              {
+                processorOptions: {
+                  attack: fx.transient,
+                  sustain: fx.transsustain,
+                  begin: t,
+                  end: endWithRelease
+                }
+              }
+            );
+            chain.connect(transProcessor);
+            fxNodes["transient"] = transProcessor;
+          }
+          const initialGain = gainNode(gain2);
+          fxNodes["gain"] = [initialGain];
+          chain.connect(initialGain);
+          const ftype2 = getFilterType(value2.ftype);
+          const filt = (params) => createFilter(ac, t, end2, params, cps2, cycle);
+          if (fx.cutoff !== void 0) {
+            const lpMap = {
+              frequency: "cutoff",
+              q: "resonance",
+              attack: "lpattack",
+              decay: "lpdecay",
+              sustain: "lpsustain",
+              release: "lprelease",
+              env: "lpenv",
+              anchor: "fanchor",
+              model: "ftype",
+              drive: "drive",
+              rate: "lprate",
+              sync: "lpsync",
+              depth: "lpdepth",
+              depthfrequency: "lpdepthfrequency",
+              shape: "lpshape",
+              dcoffset: "lpdc",
+              skew: "lpskew"
+            };
+            const lpParams = pickAndRename(fx, lpMap);
+            lpParams.type = "lowpass";
+            const { filter: lpf1, lfo: lfo1 } = filt(lpParams);
+            fxNodes["lpf"] = [lpf1];
+            fxNodes["lpf_lfo"] = [lfo1];
+            chain.connect(lpf1);
+            lfo1 && chain.audioNodes.push(lfo1);
+            if (ftype2 === "24db") {
+              const { filter: lpf2, lfo: lfo2 } = filt(lpParams);
+              fxNodes["lpf"].push(lpf2);
+              fxNodes["lpf_lfo"].push(lfo2);
+              chain.connect(lpf2);
+              lfo2 && chain.audioNodes.push(lfo2);
+            }
+          }
+          if (fx.hcutoff !== void 0) {
+            const hpMap = {
+              frequency: "hcutoff",
+              q: "hresonance",
+              attack: "hpattack",
+              decay: "hpdecay",
+              sustain: "hpsustain",
+              release: "hprelease",
+              env: "hpenv",
+              anchor: "fanchor",
+              model: "ftype",
+              drive: "drive",
+              rate: "hprate",
+              sync: "hpsync",
+              depth: "hpdepth",
+              depthfrequency: "hpdepthfrequency",
+              shape: "hpshape",
+              dcoffset: "hpdc",
+              skew: "hpskew"
+            };
+            const hpParams = pickAndRename(fx, hpMap);
+            hpParams.type = "highpass";
+            const { filter: hpf1, lfo: lfo1 } = filt(hpParams);
+            fxNodes["hpf"] = [hpf1];
+            fxNodes["hpf_lfo"] = [lfo1];
+            lfo1 && chain.audioNodes.push(lfo1);
+            chain.connect(hpf1);
+            if (ftype2 === "24db") {
+              const { filter: hpf2, lfo: lfo2 } = filt(hpParams);
+              fxNodes["hpf"].push(hpf2);
+              fxNodes["hpf_lfo"].push(lfo2);
+              chain.connect(hpf2);
+              lfo2 && chain.audioNodes.push(lfo2);
+            }
+          }
+          if (fx.bandf !== void 0) {
+            const bpMap = {
+              frequency: "bandf",
+              q: "bandq",
+              attack: "bpattack",
+              decay: "bpdecay",
+              sustain: "bpsustain",
+              release: "bprelease",
+              env: "bpenv",
+              anchor: "fanchor",
+              model: "ftype",
+              drive: "drive",
+              rate: "bprate",
+              sync: "bpsync",
+              depth: "bpdepth",
+              depthfrequency: "bpdepthfrequency",
+              shape: "bpshape",
+              dcoffset: "bpdc",
+              skew: "bpskew"
+            };
+            const bpParams = pickAndRename(fx, bpMap);
+            bpParams.type = "bandpass";
+            const { filter: bpf1, lfo: lfo1 } = filt(bpParams);
+            fxNodes["bpf"] = [bpf1];
+            fxNodes["bpf_lfo"] = [lfo1];
+            chain.connect(bpf1);
+            lfo1 && chain.audioNodes.push(lfo1);
+            if (ftype2 === "24db") {
+              const { filter: bpf2, lfo: lfo2 } = filt(bpParams);
+              fxNodes["bpf"].push(bpf2);
+              fxNodes["bpf_lfo"].push(lfo2);
+              chain.connect(bpf2);
+              lfo2 && chain.audioNodes.push(lfo2);
+            }
+          }
+          if (fx.vowel !== void 0) {
+            const vowelNode = ac.createVowelFilter(fx.vowel);
+            fxNodes["vowel"] = vowelNode.filters;
+            chain.connect(vowelNode);
+          }
+          if (fx.coarse !== void 0) {
+            const coarseNode = getWorklet(ac, "coarse-processor", { coarse: fx.coarse });
+            fxNodes["coarse"] = [coarseNode];
+            chain.connect(coarseNode);
+          }
+          if (fx.crush !== void 0) {
+            const crushNode = getWorklet(ac, "crush-processor", { crush: fx.crush });
+            fxNodes["crush"] = [crushNode];
+            chain.connect(crushNode);
+          }
+          if (fx.shape !== void 0) {
+            const shapeNode = getWorklet(ac, "shape-processor", { shape: fx.shape, postgain: shapevol });
+            fxNodes["shape"] = [shapeNode];
+            chain.connect(shapeNode);
+          }
+          if (fx.distort !== void 0) {
+            const distortNode = getDistortion(fx.distort, distortvol2, distorttype2);
+            fxNodes["distort"] = [distortNode];
+            chain.connect(distortNode);
+          }
+          let tremolo2 = fx.tremolo;
+          if (fx.tremolosync != null) {
+            tremolo2 = cps2 * fx.tremolosync;
+          }
+          if (tremolo2 !== void 0) {
+            const gain3 = Math.max(1 - tremolodepth2, 0);
+            const amGain = new GainNode(ac, { gain: gain3 });
+            const time4 = cycle / cps2;
+            const lfo2 = getLfo(ac, {
+              skew: fx.tremoloskew ?? (fx.tremoloshape != null ? 0.5 : 1),
+              frequency: tremolo2,
+              depth: tremolodepth2,
+              time: time4,
+              dcoffset: 0,
+              shape: fx.tremoloshape,
+              phaseoffset: fx.tremolophase,
+              min: 0,
+              max: 1,
+              curve: 1.5,
+              begin: t,
+              end: endWithRelease
+            });
+            fxNodes["tremolo"] = [lfo2];
+            fxNodes["tremolo_gain"] = [amGain];
+            lfo2.connect(amGain.gain);
+            chain.audioNodes.push(lfo2);
+            chain.connect(amGain);
+          }
+          if (fx.compressor !== void 0) {
+            const compressorNode = getCompressor(
+              ac,
+              fx.compressor,
+              fx.compressorRatio,
+              fx.compressorKnee,
+              fx.compressorAttack,
+              fx.compressorRelease
+            );
+            fxNodes["compressor"] = [compressorNode];
+            chain.connect(compressorNode);
+          }
+          if (fx.pan !== void 0) {
+            const panner = ac.createStereoPanner();
+            fxNodes["pan"] = [panner];
+            panner.pan.value = 2 * fx.pan - 1;
+            chain.connect(panner);
+          }
+          if (fx.phaserrate !== void 0 && phaserdepth2 > 0) {
+            const { filterChain, lfo: lfo2 } = getPhaser(
+              t,
+              endWithRelease,
+              fx.phaserrate,
+              phaserdepth2,
+              fx.phasercenter,
+              fx.phasersweep
+            );
+            fxNodes["phaser"] = [...filterChain];
+            fxNodes["phaser_lfo"] = [lfo2];
+            filterChain.forEach((f) => chain.connect(f));
+            chain.audioNodes.push(lfo2);
+          }
+          if (key !== "main" && delay3 > 0 && delaytime3 > 0 && delayfeedback3 > 0) {
+            const dry3 = gainNode(1);
+            delayfeedback3 = clamp2(delayfeedback3, 0, 0.98);
+            const delayNode = ac.createFeedbackDelay(1, delaytime3, delayfeedback3);
+            const wetDelay = gainNode(delay3);
+            const dryDelay = gainNode(fx.dry ?? 1);
+            const sum = new GainNode(ac, { gain: 1, channelCount: 2, channelCountMode: "explicit" });
+            chain.connect(dry3).connect(dryDelay, delayNode).connectOne(1, wetDelay).connect(sum);
+            chain.audioNodes.push(delayNode.feedbackGain, delayNode.delayGain);
+            fxNodes["delay"] = [delayNode];
+            fxNodes["delay_mix"] = [wetDelay];
+          }
+          if (key !== "main" && fx.room > 0) {
+            let roomIR;
+            if (fx.ir !== void 0) {
+              let url;
+              let sample = getSound(fx.ir);
+              if (Array.isArray(sample)) {
+                url = sample.data.samples[fx.i % sample.data.samples.length];
+              } else if (typeof sample === "object") {
+                url = Object.values(sample.data.samples).flat()[i4 % Object.values(sample.data.samples).length];
+              }
+              roomIR = await loadBuffer(url, ac, fx.ir, 0);
+            }
+            const dry3 = gainNode(1);
+            const reverbNode = ac.createReverb(
+              fx.roomsize,
+              fx.roomfade,
+              fx.roomlp,
+              fx.roomdim,
+              roomIR,
+              fx.irspeed,
+              fx.irbegin
+            );
+            const wetReverb = gainNode(fx.room);
+            const dryReverb = gainNode(fx.dry ?? 1);
+            const sum = new GainNode(ac, { gain: 1, channelCount: 2, channelCountMode: "explicit" });
+            chain.connect(dry3).connect(dryReverb, reverbNode).connectOne(1, wetReverb).connect(sum);
+            fxNodes["room"] = [reverbNode];
+            fxNodes["room_mix"] = [wetReverb];
+          }
+        }
+        if (FXrelease2 !== void 0 && FXrelease2 > release2) {
+          const releaseNode = gainNode(1);
+          releaseNode.gain.setValueAtTime(1, end2 + release2);
+          releaseNode.gain.linearRampToValueAtTime(0, endWithRelease);
+          chain.connect(releaseNode);
+        }
+        const post = new GainNode(ac, { gain: postgain2 });
+        nodes.main["post"] = [post];
+        chain.connect(post);
+        if (delay2 > 0 && delaytime2 > 0 && delayfeedback2 > 0) {
+          const delayNode = orbitBus.getDelay(delaytime2, delayfeedback2, t);
+          nodes.main["delay"] = [delayNode];
+          const delaySend = orbitBus.sendDelay(post, delay2);
+          nodes.main["delay_mix"] = [delaySend];
+          chain.audioNodes.push(delaySend);
+        }
+        if (room2 > 0) {
+          let roomIR;
+          if (ir2 !== void 0) {
+            let url;
+            let sample = getSound(ir2);
+            if (Array.isArray(sample)) {
+              url = sample.data.samples[i3 % sample.data.samples.length];
+            } else if (typeof sample === "object") {
+              url = Object.values(sample.data.samples).flat()[i3 % Object.values(sample.data.samples).length];
+            }
+            roomIR = await loadBuffer(url, ac, ir2, 0);
+          }
+          const roomNode = orbitBus.getReverb(roomsize2, roomfade2, roomlp2, roomdim2, roomIR, irspeed2, irbegin2);
+          nodes.main["room"] = [roomNode];
+          const reverbSend = orbitBus.sendReverb(post, room2);
+          nodes.main["room_mix"] = [reverbSend];
+          chain.audioNodes.push(reverbSend);
+        }
+        if (bus2 != null) {
+          const busNode = audioController.getBus(bus2);
+          const busSend = effectSend(post, busNode, busgain2);
+          chain.audioNodes.push(busSend);
+        }
+        if (djf2 != null) {
+          const djfNode = orbitBus.getDjf(djf2, t);
+          nodes.main["djf"] = [djfNode];
+        }
+        if (analyze2 && !(ac instanceof OfflineAudioContext)) {
+          const analyserNode = getAnalyserById(analyze2, 2 ** (fft2 + 5));
+          const analyserSend = effectSend(post, analyserNode, 1);
+          chain.audioNodes.push(analyserSend);
+        }
+        if (dry2 != null) {
+          dry2 = applyGainCurve(dry2);
+          const dryGain = new GainNode(ac, { gain: dry2 });
+          chain.connect(dryGain);
+          orbitBus.connectToOutput(dryGain);
+        } else {
+          orbitBus.connectToOutput(post);
+        }
+        FX.forEach((fx, idx) => {
+          const key = idx === FX.length - 1 ? "main" : idx;
+          if (fx.lfo) {
+            for (const id2 of fx.lfo.__ids) {
+              const params = fx.lfo[id2];
+              params.fxi ??= key;
+              const lfo2 = connectLFO(
+                id2,
+                {
+                  ...params,
+                  cps: cps2,
+                  cycle,
+                  begin: t,
+                  end: endWithRelease
+                },
+                nodes
+              );
+              lfo2 && chain.audioNodes.push(lfo2);
+            }
+          }
+          if (fx.env) {
+            for (const id2 of fx.env.__ids) {
+              const params = fx.env[id2];
+              params.fxi ??= key;
+              const env2 = connectEnvelope(
+                id2,
+                {
+                  ...params,
+                  begin: t,
+                  end: endWithRelease
+                },
+                nodes
+              );
+              env2 && chain.audioNodes.push(env2);
+            }
+          }
+          if (fx.bmod) {
+            for (const id2 of fx.bmod.__ids) {
+              const params = fx.bmod[id2];
+              params.fxi ??= key;
+              const { toCleanup } = connectBusModulator({ ...params, begin: t, end: endWithRelease }, nodes, controller);
+              chain.audioNodes.push(...toCleanup);
+            }
+          }
+        });
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/synth.mjs
+  function makeSaturationCurve(amount, n_samples) {
+    const k = typeof amount === "number" ? amount : 50;
+    const curve2 = new Float32Array(n_samples);
+    for (let i3 = 0; i3 < n_samples; i3++) {
+      const x3 = i3 * 2 / n_samples - 1;
+      curve2[i3] = Math.tanh(x3 * k);
+    }
+    return curve2;
+  }
+  function registerSynthSounds() {
+    [...waveforms].forEach((s2) => {
+      registerSound(
+        s2,
+        (t, value2, onended) => {
+          const [attack2, decay2, sustain2, release2] = getADSRValues(
+            [value2.attack, value2.decay, value2.sustain, value2.release],
+            "linear",
+            [1e-3, 0.05, 0.6, 0.01]
+          );
+          const g = gainNode(0.3);
+          const sound2 = getOscillator(s2, t, value2, () => {
+            releaseAudioNode(g);
+            onended();
+          });
+          const { node: o, nodes, stop: stop2, triggerRelease } = sound2;
+          const { duration: duration2 } = value2;
+          const envGain = gainNode(1);
+          const node = o.connect(g).connect(envGain);
+          const holdEnd = t + duration2;
+          getParamADSR(node.gain, attack2, decay2, sustain2, release2, 0, 1, t, holdEnd, "linear");
+          const envEnd = holdEnd + release2 + 0.01;
+          triggerRelease?.(envEnd);
+          stop2(envEnd);
+          return {
+            node,
+            nodes,
+            stop: (endTime) => {
+              stop2(endTime);
+            }
+          };
+        },
+        { type: "synth", prebake: true }
+      );
+    });
+    registerSound(
+      "sbd",
+      (t, value2, onended) => {
+        const { duration: duration2, decay: decay2 = 0.5, pdecay: pdecay2 = 0.5, penv: penv2 = 36, clip: clip2 } = value2;
+        const ctx = getAudioContext();
+        const attackhold = 0.02;
+        const noiselvl = 1.2;
+        const noisedecay = 0.025;
+        const mixGain = 1;
+        const o = ctx.createOscillator();
+        o.type = "triangle";
+        o.frequency.value = getFrequencyFromValue(value2, 29);
+        o.detune.setValueAtTime(penv2 * 100, 0);
+        o.detune.setValueAtTime(penv2 * 100, t);
+        o.detune.exponentialRampToValueAtTime(1e-3, t + pdecay2);
+        const g = gainNode(1);
+        g.gain.setValueAtTime(1, t + attackhold);
+        g.gain.exponentialRampToValueAtTime(1e-3, t + attackhold + decay2);
+        o.start(t);
+        const noise2 = getNoiseOscillator("brown", t, 2);
+        const noiseGain = gainNode(1);
+        noiseGain.gain.setValueAtTime(noiselvl, t);
+        noiseGain.gain.exponentialRampToValueAtTime(1e-3, t + noisedecay);
+        const sat = new WaveShaperNode(ctx);
+        sat.curve = makeSaturationCurve(2, ctx.sampleRate);
+        const mix = gainNode(mixGain);
+        onceEnded(o, () => {
+          releaseAudioNode(o);
+          releaseAudioNode(g);
+          releaseAudioNode(sat);
+          releaseAudioNode(noise2.node);
+          releaseAudioNode(noiseGain);
+          releaseAudioNode(mix);
+          onended();
+        });
+        const node = o.connect(sat).connect(g).connect(mix);
+        noise2.node.connect(noiseGain).connect(mix);
+        const holdEnd = t + decay2;
+        let end2 = holdEnd + 0.01;
+        if (clip2 != null) {
+          end2 = Math.min(t + clip2 * duration2, end2);
+        }
+        mix.gain.setValueAtTime(mixGain, end2 - 0.01);
+        mix.gain.linearRampToValueAtTime(0, end2);
+        o.stop(end2);
+        noise2.stop(end2);
+        return {
+          node,
+          nodes: { source: [o] },
+          stop: (endTime) => {
+            o.stop(endTime);
+          }
+        };
+      },
+      { type: "synth", prebake: true }
+    );
+    registerSound(
+      "supersaw",
+      (begin2, value2, onended) => {
+        const ac = getAudioContext();
+        let { duration: duration2, n: n2, unison: unison2 = 5, spread: spread2 = 0.6, detune: detune2 } = value2;
+        detune2 = detune2 ?? n2 ?? 0.18;
+        const frequency = getFrequencyFromValue(value2);
+        const [attack2, decay2, sustain2, release2] = getADSRValues(
+          [value2.attack, value2.decay, value2.sustain, value2.release],
+          "linear",
+          [1e-3, 0.05, 0.6, 0.01]
+        );
+        const holdend = begin2 + duration2;
+        const end2 = holdend + release2 + 0.01;
+        const voices = clamp2(unison2, 1, 100);
+        let panspread = voices > 1 ? clamp2(spread2, 0, 1) : 0;
+        const params = {
+          frequency,
+          begin: begin2,
+          end: end2,
+          freqspread: detune2,
+          voices,
+          panspread
+        };
+        const factory = () => new AudioWorkletNode(ac, "supersaw-oscillator", { outputChannelCount: [2] });
+        const o = getNodeFromPool("supersaw", factory);
+        Object.entries(params).forEach(([key, value3]) => {
+          const param = o.parameters.get(key);
+          const target = value3 !== void 0 ? value3 : param.defaultValue;
+          param.value = target;
+        });
+        o.port.postMessage({ type: "initialize" });
+        const gainAdjustment = 1 / Math.sqrt(voices);
+        getPitchEnvelope(o.parameters.get("detune"), value2, begin2, holdend);
+        const vibratoHandle = getVibratoOscillator(o.parameters.get("detune"), value2, begin2);
+        const fmHandle = applyFM(o.parameters.get("frequency"), value2, begin2);
+        let envGain = gainNode(1);
+        envGain = o.connect(envGain);
+        getParamADSR(envGain.gain, attack2, decay2, sustain2, release2, 0, 0.3 * gainAdjustment, begin2, holdend, "linear");
+        let timeoutNode = webAudioTimeout(
+          ac,
+          () => {
+            releaseNodeToPool(o);
+            onended();
+            fmHandle?.stop();
+            vibratoHandle?.stop();
+          },
+          begin2,
+          end2
+        );
+        return {
+          node: envGain,
+          nodes: { source: [o], ...fmHandle?.nodes, ...vibratoHandle?.nodes },
+          stop: (time4) => {
+            timeoutNode.stop(time4);
+          }
+        };
+      },
+      { prebake: true, type: "synth" }
+    );
+    registerSound(
+      "bytebeat",
+      (begin2, value2, onended) => {
+        const defaultBeats = [
+          "(t%255 >= t/255%255)*255",
+          "(t*(t*8%60 <= 300)|(-t)*(t*4%512 < 256))+t/400",
+          "t",
+          "t*(t >> 10^t)",
+          "t&128",
+          "t&t>>8",
+          "((t%255+t%128+t%64+t%32+t%16+t%127.8+t%64.8+t%32.8+t%16.8)/3)",
+          "((t%64+t%63.8+t%64.15+t%64.35+t%63.5)/1.25)",
+          "(t&(t>>7)-t)",
+          "(sin(t*PI/128)*127+127)",
+          "((t^t/2+t+64*(sin((t*PI/64)+(t*PI/32768))+64))%128*2)",
+          "((t^t/2+t+64*(cos >> 0))%127.85*2)",
+          "((t^t/2+t+64)%128*2)",
+          "(((t * .25)^(t * .25)/100+(t * .25))%128)*2",
+          "((t^t/2+t+64)%7 * 24)"
+        ];
+        const { n: n2 = 0 } = value2;
+        const frequency = getFrequencyFromValue(value2);
+        const { byteBeatExpression: byteBeatExpression2 = defaultBeats[n2 % defaultBeats.length], byteBeatStartTime: byteBeatStartTime2 } = value2;
+        const ac = getAudioContext();
+        let { duration: duration2 } = value2;
+        const [attack2, decay2, sustain2, release2] = getADSRValues(
+          [value2.attack, value2.decay, value2.sustain, value2.release],
+          "linear",
+          [1e-3, 0.05, 0.6, 0.01]
+        );
+        const holdend = begin2 + duration2;
+        const end2 = holdend + release2 + 0.01;
+        let o = getWorklet(
+          ac,
+          "byte-beat-processor",
+          {
+            frequency,
+            begin: begin2,
+            end: end2
+          },
+          {
+            outputChannelCount: [2]
+          }
+        );
+        o.port.postMessage({ codeText: byteBeatExpression2, byteBeatStartTime: byteBeatStartTime2, frequency });
+        let envGain = gainNode(1);
+        envGain = o.connect(envGain);
+        getParamADSR(envGain.gain, attack2, decay2, sustain2, release2, 0, 1, begin2, holdend, "linear");
+        let timeoutNode = webAudioTimeout(
+          ac,
+          () => {
+            releaseAudioNode(o);
+            onended();
+          },
+          begin2,
+          end2
+        );
+        return {
+          node: envGain,
+          source: o,
+          stop: (time4) => {
+            timeoutNode.stop(time4);
+          }
+        };
+      },
+      { prebake: true, type: "synth" }
+    );
+    registerSound(
+      "pulse",
+      (begin2, value2, onended) => {
+        const ac = getAudioContext();
+        let { pwrate: pwrate2, pwsweep: pwsweep2 } = value2;
+        if (pwsweep2 == null) {
+          if (pwrate2 != null) {
+            pwsweep2 = 0.3;
+          } else {
+            pwsweep2 = 0;
+          }
+        }
+        if (pwrate2 == null && pwsweep2 != null) {
+          pwrate2 = 1;
+        }
+        let { duration: duration2, pw: pulsewidth = 0.5 } = value2;
+        const frequency = getFrequencyFromValue(value2);
+        const [attack2, decay2, sustain2, release2] = getADSRValues(
+          [value2.attack, value2.decay, value2.sustain, value2.release],
+          "linear",
+          [1e-3, 0.05, 0.6, 0.01]
+        );
+        const holdend = begin2 + duration2;
+        const end2 = holdend + release2 + 0.01;
+        let o = getWorklet(
+          ac,
+          "pulse-oscillator",
+          {
+            frequency,
+            begin: begin2,
+            end: end2,
+            pulsewidth
+          },
+          {
+            outputChannelCount: [2]
+          }
+        );
+        getPitchEnvelope(o.parameters.get("detune"), value2, begin2, holdend);
+        const vibratoHandle = getVibratoOscillator(o.parameters.get("detune"), value2, begin2);
+        const fmHandle = applyFM(o.parameters.get("frequency"), value2, begin2);
+        let envGain = gainNode(1);
+        envGain = o.connect(envGain);
+        getParamADSR(envGain.gain, attack2, decay2, sustain2, release2, 0, 1, begin2, holdend, "linear");
+        let pw_lfo;
+        if (pwsweep2 != 0) {
+          pw_lfo = getLfo(ac, { frequency: pwrate2, depth: pwsweep2, begin: begin2, end: end2 });
+          pw_lfo.connect(o.parameters.get("pulsewidth"));
+        }
+        let timeoutNode = webAudioTimeout(
+          ac,
+          () => {
+            releaseAudioNode(o);
+            releaseAudioNode(pw_lfo);
+            onended();
+            fmHandle?.stop();
+            vibratoHandle?.stop();
+          },
+          begin2,
+          end2
+        );
+        return {
+          node: envGain,
+          nodes: { source: [o], pw_lfo: [pw_lfo], ...fmHandle?.nodes, ...vibratoHandle?.nodes },
+          stop: (time4) => {
+            timeoutNode.stop(time4);
+          }
+        };
+      },
+      { prebake: true, type: "synth" }
+    );
+    registerSound(
+      "bus",
+      (begin2, value2, onended) => {
+        const ac = getAudioContext();
+        const [attack2, decay2, sustain2, release2] = getADSRValues(
+          [value2.attack, value2.decay, value2.sustain, value2.release],
+          "linear",
+          [1e-3, 0.05, 1, 0.01]
+        );
+        const holdend = begin2 + value2.duration;
+        const end2 = holdend + release2 + 0.01;
+        const bus2 = getSuperdoughAudioController().getBus(value2.n ?? 0);
+        const envGain = bus2.connect(gainNode(0));
+        getParamADSR(envGain.gain, attack2, decay2, sustain2, release2, 0, 1, begin2, holdend, "linear");
+        const timeoutNode = webAudioTimeout(
+          ac,
+          () => {
+            bus2.disconnect(envGain);
+            onended();
+          },
+          begin2,
+          end2
+        );
+        return {
+          node: envGain,
+          nodes: { source: [bus2] },
+          stop: (time4) => {
+            timeoutNode.stop(time4);
+          }
+        };
+      },
+      { prebake: true, type: "input" }
+    );
+    [...noises].forEach((s2) => {
+      registerSound(
+        s2,
+        (t, value2, onended) => {
+          const [attack2, decay2, sustain2, release2] = getADSRValues(
+            [value2.attack, value2.decay, value2.sustain, value2.release],
+            "linear",
+            [1e-3, 0.05, 0.6, 0.01]
+          );
+          let sound2;
+          let { density: density2 } = value2;
+          sound2 = getNoiseOscillator(s2, t, density2);
+          let { node: o, stop: stop2, triggerRelease } = sound2;
+          const g = gainNode(0.3);
+          const { duration: duration2 } = value2;
+          onceEnded(o, () => {
+            releaseAudioNode(o);
+            releaseAudioNode(g);
+            onended();
+          });
+          const envGain = gainNode(1);
+          let node = o.connect(g).connect(envGain);
+          const holdEnd = t + duration2;
+          getParamADSR(node.gain, attack2, decay2, sustain2, release2, 0, 1, t, holdEnd, "linear");
+          const envEnd = holdEnd + release2 + 0.01;
+          triggerRelease?.(envEnd);
+          stop2(envEnd);
+          return {
+            node,
+            nodes: { source: [o] },
+            stop: (endTime) => {
+              stop2(endTime);
+            }
+          };
+        },
+        { type: "synth", prebake: true }
+      );
+    });
+    waveformAliases.forEach(([alias, actual]) => soundMap.set({ ...soundMap.get(), [alias]: soundMap.get()[actual] }));
+  }
+  function waveformN(partials2, phases2, type) {
+    const isList = typeof partials2 === "object";
+    partials2 = isList ? partials2 : new Float32Array(partials2).fill(1);
+    const len = partials2.length;
+    const real2 = new Float32Array(len + 1);
+    const imag2 = new Float32Array(len + 1);
+    const ac = getAudioContext();
+    const osc = ac.createOscillator();
+    const terms = {
+      sawtooth: (n2) => [0, -1 / n2],
+      square: (n2) => [0, n2 % 2 === 0 ? 0 : 1 / n2],
+      triangle: (n2) => [n2 % 2 === 0 ? 0 : 1 / (n2 * n2), 0],
+      user: (_n) => [0, 1]
+    };
+    if (!terms[type]) {
+      throw new Error(`unknown wave type ${type}`);
+    }
+    for (let n2 = 0; n2 < len; n2++) {
+      const mag = partials2[n2];
+      const [r2, i3] = terms[type](n2 + 1);
+      const phase = phases2?.[n2] ?? 0;
+      let R = r2 * mag;
+      let I = i3 * mag;
+      if (phase !== 0) {
+        const c2 = Math.cos(PI2 * phase);
+        const s2 = Math.sin(PI2 * phase);
+        const R0 = R;
+        const I0 = I;
+        R = c2 * R0 - s2 * I0;
+        I = s2 * R0 + c2 * I0;
+      }
+      real2[n2 + 1] = R;
+      imag2[n2 + 1] = I;
+    }
+    const wave = ac.createPeriodicWave(real2, imag2);
+    osc.setPeriodicWave(wave);
+    return osc;
+  }
+  function getOscillator(s2, t, value2, onended) {
+    const { duration: duration2, noise: noise2 = 0 } = value2;
+    const partials2 = value2.partials ?? value2.n;
+    let o;
+    if (s2 === "user" && !partials2) {
+      logger2(
+        `[superdough] Synth 'user' was selected, but partials not specified. Defaulting to triangle. Use pat.partials to setup custom waveform`
+      );
+      s2 = "triangle";
+    }
+    s2 = s2 === "user" && !partials2 ? "triangle" : s2;
+    if (s2 === "one") {
+      o = new ConstantSourceNode(getAudioContext(), { offset: 1 });
+      o.start(t);
+      return {
+        node: o,
+        nodes: { source: o },
+        stop: (time4) => o?.stop(time4)
+      };
+    } else if (!partials2 || partials2?.length === 0 || s2 === "sine") {
+      o = getAudioContext().createOscillator();
+      o.type = s2 || "triangle";
+    } else {
+      o = waveformN(partials2, value2.phases, s2);
+    }
+    o.frequency.value = getFrequencyFromValue(value2);
+    const vibratoHandle = getVibratoOscillator(o.detune, value2, t);
+    getPitchEnvelope(o.detune, value2, t, t + duration2);
+    const fmHandle = applyFM(o.frequency, value2, t);
+    let noiseMix;
+    if (noise2) {
+      noiseMix = getNoiseMix(o, noise2, t);
+    }
+    onceEnded(o, () => {
+      noiseMix?.teardown();
+      releaseAudioNode(o);
+      releaseAudioNode(noiseMix?.node);
+      onended();
+    });
+    o.start(t);
+    return {
+      node: noiseMix?.node || o,
+      nodes: { source: [o], ...vibratoHandle?.nodes, ...fmHandle?.nodes },
+      stop: (time4) => {
+        fmHandle.stop(time4);
+        vibratoHandle?.stop(time4);
+        noiseMix?.stop(time4);
+        o.stop(time4);
+      },
+      triggerRelease: (time4) => {
+      }
+    };
+  }
+  var waveforms, waveformAliases, PI2;
+  var init_synth = __esm({
+    "build/engine-src/strudel/packages/superdough/synth.mjs"() {
+      init_util2();
+      init_superdough();
+      init_audioContext();
+      init_helpers();
+      init_logger2();
+      init_noise();
+      init_nodePools();
+      waveforms = ["triangle", "square", "sawtooth", "sine", "user", "one"];
+      waveformAliases = [
+        ["tri", "triangle"],
+        ["sqr", "square"],
+        ["saw", "sawtooth"],
+        ["sin", "sine"]
+      ];
+      PI2 = 2 * Math.PI;
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/zzfx_fork.mjs
+  function buildSamples(volume = 1, randomness = 0.05, frequency = 220, attack2 = 0, sustain2 = 0, release2 = 0.1, shape2 = 0, shapeCurve = 1, slide2 = 0, deltaSlide2 = 0, pitchJump2 = 0, pitchJumpTime2 = 0, repeatTime = 0, noise2 = 0, modulation = 0, bitCrush = 0, delay2 = 0, sustainVolume = 1, decay2 = 0, tremolo2 = 0) {
+    let PI22 = Math.PI * 2, sampleRate = getAudioContext().sampleRate, sign = (v2) => v2 > 0 ? 1 : -1, startSlide = slide2 *= 500 * PI22 / sampleRate / sampleRate, startFrequency = frequency *= (1 + randomness * 2 * Math.random() - randomness) * PI22 / sampleRate, b = [], t = 0, tm = 0, i3 = 0, j = 1, r2 = 0, c2 = 0, s2 = 0, f, length;
+    attack2 = attack2 * sampleRate + 9;
+    decay2 *= sampleRate;
+    sustain2 *= sampleRate;
+    release2 *= sampleRate;
+    delay2 *= sampleRate;
+    deltaSlide2 *= 500 * PI22 / sampleRate ** 3;
+    modulation *= PI22 / sampleRate;
+    pitchJump2 *= PI22 / sampleRate;
+    pitchJumpTime2 *= sampleRate;
+    repeatTime = repeatTime * sampleRate | 0;
+    for (length = attack2 + decay2 + sustain2 + release2 + delay2 | 0; i3 < length; b[i3++] = s2) {
+      if (!(++c2 % (bitCrush * 100 | 0))) {
+        s2 = shape2 ? shape2 > 1 ? shape2 > 2 ? shape2 > 3 ? Math.sin((t % PI22) ** 3) : Math.max(Math.min(Math.tan(t), 1), -1) : 1 - (2 * t / PI22 % 2 + 2) % 2 : 1 - 4 * Math.abs(Math.round(t / PI22) - t / PI22) : Math.sin(t);
+        s2 = (repeatTime ? 1 - tremolo2 + tremolo2 * Math.sin(PI22 * i3 / repeatTime) : 1) * sign(s2) * Math.abs(s2) ** shapeCurve * // curve 0=square, 2=pointy
+        volume * 1 * // envelope
+        (i3 < attack2 ? i3 / attack2 : i3 < attack2 + decay2 ? 1 - (i3 - attack2) / decay2 * (1 - sustainVolume) : i3 < attack2 + decay2 + sustain2 ? sustainVolume : i3 < length - delay2 ? (length - i3 - delay2) / release2 * // release falloff
+        sustainVolume : 0);
+        s2 = delay2 ? s2 / 2 + (delay2 > i3 ? 0 : (i3 < length - delay2 ? 1 : (length - i3) / delay2) * // release delay
+        b[i3 - delay2 | 0] / 2) : s2;
+      }
+      f = (frequency += slide2 += deltaSlide2) * // frequency
+      Math.cos(modulation * tm++);
+      t += f - f * noise2 * (1 - (Math.sin(i3) + 1) * 1e9 % 2);
+      if (j && ++j > pitchJumpTime2) {
+        frequency += pitchJump2;
+        startFrequency += pitchJump2;
+        j = 0;
+      }
+      if (repeatTime && !(++r2 % repeatTime)) {
+        frequency = startFrequency;
+        slide2 = startSlide;
+        j ||= 1;
+      }
+    }
+    return b;
+  }
+  var init_zzfx_fork = __esm({
+    "build/engine-src/strudel/packages/superdough/zzfx_fork.mjs"() {
+      init_audioContext();
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/zzfx.mjs
+  function registerZZFXSounds() {
+    ["zzfx", "z_sine", "z_sawtooth", "z_triangle", "z_square", "z_tan", "z_noise"].forEach((wave) => {
+      registerSound(
+        wave,
+        (t, value2, onended) => {
+          const { node: o } = getZZFX({ s: wave, ...value2 }, t);
+          onceEnded(o, () => {
+            releaseAudioNode(o);
+            onended();
+          });
+          return {
+            node: o,
+            nodes: { source: [o] },
+            stop: () => {
+            }
+          };
+        },
+        { type: "synth", prebake: true }
+      );
+    });
+  }
+  var getZZFX;
+  var init_zzfx = __esm({
+    "build/engine-src/strudel/packages/superdough/zzfx.mjs"() {
+      init_util2();
+      init_superdough();
+      init_audioContext();
+      init_zzfx_fork();
+      init_helpers();
+      getZZFX = (value2, t) => {
+        let {
+          s: s2,
+          note: note4 = 36,
+          freq: freq3,
+          //
+          zrand: zrand2 = 0,
+          attack: attack2 = 0,
+          decay: decay2 = 0,
+          sustain: sustain2 = 0.8,
+          release: release2 = 0.1,
+          curve: curve2 = 1,
+          slide: slide2 = 0,
+          deltaSlide: deltaSlide2 = 0,
+          pitchJump: pitchJump2 = 0,
+          pitchJumpTime: pitchJumpTime2 = 0,
+          lfo: lfo2 = 0,
+          znoise: znoise2 = 0,
+          zmod: zmod2 = 0,
+          zcrush: zcrush2 = 0,
+          zdelay: zdelay2 = 0,
+          tremolo: tremolo2 = 0,
+          duration: duration2 = 0.2,
+          zzfx: zzfx2
+        } = value2;
+        const sustainTime = Math.max(duration2 - attack2 - decay2, 0);
+        if (typeof note4 === "string") {
+          note4 = noteToMidi2(note4);
+        }
+        if (!freq3 && typeof note4 === "number") {
+          freq3 = midiToFreq3(note4);
+        }
+        s2 = s2.replace("z_", "");
+        const shape2 = ["sine", "triangle", "sawtooth", "tan", "noise"].indexOf(s2) || 0;
+        curve2 = s2 === "square" ? 0 : curve2;
+        const params = zzfx2 || [
+          0.25,
+          // volume
+          zrand2,
+          freq3,
+          attack2,
+          sustainTime,
+          release2,
+          shape2,
+          curve2,
+          slide2,
+          deltaSlide2,
+          pitchJump2,
+          pitchJumpTime2,
+          lfo2,
+          znoise2,
+          zmod2,
+          zcrush2,
+          zdelay2,
+          sustain2,
+          // sustain volume!
+          decay2,
+          tremolo2
+        ];
+        const samples2 = (
+          /* ZZFX. */
+          buildSamples(...params)
+        );
+        const context = getAudioContext();
+        const buffer = context.createBuffer(1, samples2.length, context.sampleRate);
+        buffer.getChannelData(0).set(samples2);
+        const source2 = getAudioContext().createBufferSource();
+        source2.buffer = buffer;
+        source2.start(t);
+        return {
+          node: source2
+        };
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/dspworklet.mjs
+  async function dspWorklet(ac, code) {
+    const name3 = `dsp-worklet-${Date.now()}`;
+    const workletCode = `${code}
+let __q = []; // trigger queue
+class MyProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.t = 0;
+    this.stopped = false;
+    this.port.onmessage = (e) => {
+      if(e.data==='stop') {
+        this.stopped = true;
+      } else if(e.data?.dough) {
+        __q.push(e.data)
+      } else {
+        msg?.(e.data)
+      }
+    };
+  }
+  process(inputs, outputs, parameters) {
+    const output = outputs[0];
+    if(__q.length) {
+      for(let i=0;i<__q.length;++i) {
+        const deadline = __q[i].time-currentTime;
+        if(deadline<=0) {
+          trigger(__q[i].dough)
+          __q.splice(i,1)
+        }
+      }
+    }
+    for (let i = 0; i < output[0].length; i++) {
+      const out = dsp(this.t / sampleRate);
+      output.forEach((channel) => {
+        channel[i] = out;
+      });
+      this.t++;
+    }
+  return !this.stopped;
+  }
+}
+registerProcessor('${name3}', MyProcessor);
+`;
+    const base64String = btoa(workletCode);
+    const dataURL = `data:text/javascript;base64,${base64String}`;
+    await ac.audioWorklet.addModule(dataURL);
+    const node = new AudioWorkletNode(ac, name3);
+    const stop2 = () => node.port.postMessage("stop");
+    return { node, stop: stop2 };
+  }
+  function rawdspOutput(hap, time4, cps2) {
+    const currentTime = getAudioContext().currentTime;
+    window.postMessage({ time: time4, dough: hap.value, currentTime, duration: hap.duration, cps: cps2 });
+  }
+  var worklet2, stop, rawdsp;
+  var init_dspworklet = __esm({
+    "build/engine-src/strudel/packages/superdough/dspworklet.mjs"() {
+      init_audioContext();
+      stop = () => {
+        if (worklet2) {
+          worklet2?.stop();
+          worklet2?.node?.disconnect();
+        }
+      };
+      if (typeof window !== "undefined") {
+        window.addEventListener("message", (e) => {
+          if (e.data === "strudel-stop") {
+            stop();
+          } else if (e.data?.dough) {
+            worklet2?.node.port.postMessage(e.data);
+          }
+        });
+      }
+      rawdsp = async (code) => {
+        const ac = getAudioContext();
+        stop();
+        worklet2 = await dspWorklet(ac, code);
+        worklet2.node.connect(ac.destination);
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/superdough/index.mjs
+  var init_superdough2 = __esm({
+    "build/engine-src/strudel/packages/superdough/index.mjs"() {
+      init_superdough();
+      init_sampler();
+      init_helpers();
+      init_synth();
+      init_zzfx();
+      init_logger2();
+      init_modulators();
+      init_dspworklet();
+      init_audioContext();
+      init_wavetable();
+      init_clockbridge();
+    }
+  });
+
+  // build/engine-src/strudel/packages/webaudio/webaudio.mjs
+  async function renderPatternAudio(pattern2, cps2, begin2, end2, sampleRate, maxPolyphony2, multiChannelOrbits2, downloadName = void 0) {
+    let audioContext2 = getAudioContext();
+    await audioContext2.close();
+    audioContext2 = new OfflineAudioContext(2, (end2 - begin2) / cps2 * sampleRate, sampleRate);
+    setAudioContext(audioContext2);
+    setSuperdoughAudioController(new SuperdoughAudioController(audioContext2));
+    await initAudio({
+      maxPolyphony: maxPolyphony2,
+      multiChannelOrbits: multiChannelOrbits2
+    });
+    return (audioContext2.suspend === void 0 ? renderPatternAudioWhole(audioContext2, pattern2, cps2, begin2, end2) : renderPatternAudioInChunks(audioContext2, pattern2, cps2, begin2, end2, 1)).then((renderedBuffer) => {
+      const wavBuffer = audioBufferToWav(renderedBuffer);
+      const blob = new Blob([wavBuffer], { type: "audio/wav" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      downloadName = downloadName ? `${downloadName}.wav` : `${(/* @__PURE__ */ new Date()).toISOString()}.wav`;
+      a.download = `${downloadName}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }).finally(async () => {
+      setAudioContext(null);
+      setSuperdoughAudioController(null);
+      resetGlobalEffects();
+    });
+  }
+  async function renderPatternAudioWhole(audioContext2, pattern2, cps2, begin2, end2) {
+    logger3(`[webaudio] preloading`);
+    await scheduleHapsChunk(pattern2, cps2, begin2, begin2, end2);
+    logger3("[webaudio] start rendering");
+    return audioContext2.startRendering();
+  }
+  async function renderPatternAudioInChunks(audioContext2, pattern2, cps2, begin2, end2, chunkSizeInCycles) {
+    let currentCycle = begin2;
+    let renderPromise = null;
+    logger3("[webaudio] start rendering");
+    while (currentCycle <= end2) {
+      const chunkStart = currentCycle;
+      const chunkEnd = Math.min(currentCycle + chunkSizeInCycles, end2);
+      logger3(`[webaudio] preloading cycles ${chunkStart} - ${chunkEnd}`);
+      await scheduleHapsChunk(pattern2, cps2, begin2, chunkStart, chunkEnd);
+      logger3(`[webaudio] rendering cycles ${chunkStart} - ${chunkEnd}`);
+      currentCycle += chunkSizeInCycles;
+      var suspendPromise;
+      if (currentCycle < end2) {
+        suspendPromise = audioContext2.suspend((currentCycle - begin2 - 1) / cps2);
+      }
+      if (renderPromise === null) {
+        renderPromise = audioContext2.startRendering();
+      } else {
+        await audioContext2.resume();
+      }
+      if (currentCycle < end2) {
+        await suspendPromise;
+      }
+    }
+    logger3("[webaudio] finish rendering");
+    return renderPromise;
+  }
+  async function scheduleHapsChunk(pattern2, cps2, begin2, chunkStart, chunkEnd) {
+    let haps = pattern2.queryArc(chunkStart, chunkEnd, { _cps: cps2 }).sort((a, b) => a.whole.begin.valueOf() - b.whole.begin.valueOf());
+    for (const hap of haps) {
+      if (hap.hasOnset()) {
+        try {
+          await superdough(
+            hap2value(hap),
+            (hap.whole.begin.valueOf() - begin2) / cps2,
+            hap.duration / cps2,
+            cps2,
+            (hap.whole?.begin.valueOf() - begin2) / cps2
+          );
+        } catch (err) {
+          errorLogger2(err, "webaudio");
+        }
+      }
+    }
+  }
+  function webaudioRepl(options = {}) {
+    const audioContext2 = options.audioContext ?? getAudioContext();
+    setAudioContext(audioContext2);
+    options = {
+      getTime: () => audioContext2.currentTime,
+      onSchedule: webaudioOutput,
+      ...options
+    };
+    return repl2(options);
+  }
+  function audioBufferToWav(buffer, opt) {
+    opt = opt || {};
+    var numChannels = buffer.numberOfChannels;
+    var sampleRate = buffer.sampleRate;
+    var format = opt.float32 ? 3 : 1;
+    var bitDepth = format === 3 ? 32 : 16;
+    var result;
+    if (numChannels === 2) {
+      result = interleave(buffer.getChannelData(0), buffer.getChannelData(1));
+    } else {
+      result = buffer.getChannelData(0);
+    }
+    return encodeWAV(result, format, sampleRate, numChannels, bitDepth);
+  }
+  function encodeWAV(samples2, format, sampleRate, numChannels, bitDepth) {
+    var bytesPerSample = bitDepth / 8;
+    var blockAlign = numChannels * bytesPerSample;
+    var buffer = new ArrayBuffer(44 + samples2.length * bytesPerSample);
+    var view = new DataView(buffer);
+    writeString(view, 0, "RIFF");
+    view.setUint32(4, 36 + samples2.length * bytesPerSample, true);
+    writeString(view, 8, "WAVE");
+    writeString(view, 12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, format, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitDepth, true);
+    writeString(view, 36, "data");
+    view.setUint32(40, samples2.length * bytesPerSample, true);
+    if (format === 1) {
+      floatTo16BitPCM(view, 44, samples2);
+    } else {
+      writeFloat32(view, 44, samples2);
+    }
+    return buffer;
+  }
+  function interleave(inputL, inputR) {
+    var length = inputL.length + inputR.length;
+    var result = new Float32Array(length);
+    var index5 = 0;
+    var inputIndex = 0;
+    while (index5 < length) {
+      result[index5++] = inputL[inputIndex];
+      result[index5++] = inputR[inputIndex];
+      inputIndex++;
+    }
+    return result;
+  }
+  function writeFloat32(output, offset3, input) {
+    for (var i3 = 0; i3 < input.length; i3++, offset3 += 4) {
+      output.setFloat32(offset3, input[i3], true);
+    }
+  }
+  function floatTo16BitPCM(output, offset3, input) {
+    for (var i3 = 0; i3 < input.length; i3++, offset3 += 2) {
+      var s2 = Math.max(-1, Math.min(1, input[i3]));
+      output.setInt16(offset3, s2 < 0 ? s2 * 32768 : s2 * 32767, true);
+    }
+  }
+  function writeString(view, offset3, string) {
+    for (var i3 = 0; i3 < string.length; i3++) {
+      view.setUint8(offset3 + i3, string.charCodeAt(i3));
+    }
+  }
+  var Pattern2, logger3, repl2, hap2value, webaudioOutput;
+  var init_webaudio = __esm({
+    "build/engine-src/strudel/packages/webaudio/webaudio.mjs"() {
+      init_core();
+      init_superdough2();
+      init_superdoughoutput();
+      ({ Pattern: Pattern2, logger: logger3, repl: repl2 } = core_exports);
+      setLogger(logger3);
+      hap2value = (hap) => {
+        hap.ensureObjectValue();
+        return hap.value;
+      };
+      webaudioOutput = (hap, t, cps2) => {
+        const hapDuration = hap.duration / cps2;
+        return superdough(hap2value(hap), t, hapDuration, cps2, hap.whole?.begin.valueOf());
+      };
+      Pattern2.prototype.rawdsp = function() {
+        return this.onSchedule(rawdspOutput, 1);
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/draw/draw.mjs
+  function stopAnimationFrame(id2) {
+    if (animationFrames[id2] !== void 0) {
+      cancelAnimationFrame(animationFrames[id2]);
+      delete animationFrames[id2];
+    }
+  }
+  function getTheme() {
+    return theme;
+  }
+  var getDrawContext, animationFrames, memory, theme;
+  var init_draw = __esm({
+    "build/engine-src/strudel/packages/draw/draw.mjs"() {
+      init_core();
+      getDrawContext = (id2 = "test-canvas", options) => {
+        let { contextType = "2d", pixelated = false, pixelRatio = window.devicePixelRatio } = options || {};
+        let canvas = document.querySelector("#" + id2);
+        if (!canvas) {
+          canvas = document.createElement("canvas");
+          canvas.id = id2;
+          canvas.width = window.innerWidth * pixelRatio;
+          canvas.height = window.innerHeight * pixelRatio;
+          canvas.style = "pointer-events:none;width:100%;height:100%;position:fixed;top:0;left:0";
+          pixelated && (canvas.style.imageRendering = "pixelated");
+          document.body.prepend(canvas);
+          let timeout;
+          window.addEventListener("resize", () => {
+            timeout && clearTimeout(timeout);
+            timeout = setTimeout(() => {
+              canvas.width = window.innerWidth * pixelRatio;
+              canvas.height = window.innerHeight * pixelRatio;
+            }, 200);
+          });
+        }
+        return canvas.getContext(contextType, { willReadFrequently: true });
+      };
+      animationFrames = {};
+      memory = {};
+      Pattern.prototype.draw = function(fn, options) {
+        if (typeof window === "undefined") {
+          return this;
+        }
+        let { id: id2 = 1, lookbehind = 0, lookahead: lookahead2 = 0 } = options;
+        let __t = Math.max(getTime(), 0);
+        stopAnimationFrame(id2);
+        lookbehind = Math.abs(lookbehind);
+        memory[id2] = (memory[id2] || []).filter((h3) => !h3.isInFuture(__t));
+        let newFuture = this.queryArc(__t, __t + lookahead2).filter((h3) => h3.hasOnset());
+        memory[id2] = memory[id2].concat(newFuture);
+        let last;
+        const animate = () => {
+          const _t = getTime();
+          const t = _t + lookahead2;
+          memory[id2] = memory[id2].filter((h3) => h3.isInNearPast(lookbehind, _t));
+          let begin2 = Math.max(last || t, t - 1 / 10);
+          const haps = this.queryArc(begin2, t).filter((h3) => h3.hasOnset());
+          memory[id2] = memory[id2].concat(haps);
+          last = t;
+          fn(memory[id2], _t, t, this);
+          animationFrames[id2] = requestAnimationFrame(animate);
+        };
+        animationFrames[id2] = requestAnimationFrame(animate);
+        return this;
+      };
+      Pattern.prototype.onPaint = function(painter) {
+        return this.withState((state) => {
+          if (!state.controls.painters) {
+            state.controls.painters = [];
+          }
+          state.controls.painters.push(painter);
+          return state;
+        });
+      };
+      Pattern.prototype.getPainters = function() {
+        let painters = [];
+        this.queryArc(0, 0, { painters });
+        return painters;
+      };
+      theme = {
+        background: "#222",
+        foreground: "#75baff",
+        caret: "#ffcc00",
+        selection: "rgba(128, 203, 196, 0.5)",
+        selectionMatch: "#036dd626",
+        lineHighlight: "#00000050",
+        gutterBackground: "transparent",
+        gutterForeground: "#8a919966"
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/draw/animate.mjs
+  var clearColor, x, y, w, h2, angle, r, fill, smear2, rescale, moveXY, zoomIn;
+  var init_animate = __esm({
+    "build/engine-src/strudel/packages/draw/animate.mjs"() {
+      init_core();
+      init_draw();
+      clearColor = "#22222210";
+      Pattern.prototype.animate = function({ callback, sync = false, smear: smear3 = 0.5 } = {}) {
+        window.frame && cancelAnimationFrame(window.frame);
+        const ctx = getDrawContext();
+        let { clientWidth: ww, clientHeight: wh } = ctx.canvas;
+        ww *= window.devicePixelRatio;
+        wh *= window.devicePixelRatio;
+        let smearPart = smear3 === 0 ? "99" : Number((1 - smear3) * 100).toFixed(0);
+        smearPart = smearPart.length === 1 ? `0${smearPart}` : smearPart;
+        clearColor = `#200010${smearPart}`;
+        const render = (t) => {
+          let frame;
+          t = Math.round(t);
+          frame = this.slow(1e3).queryArc(t, t);
+          ctx.fillStyle = clearColor;
+          ctx.fillRect(0, 0, ww, wh);
+          frame.forEach((f) => {
+            let { x: x3, y: y2, w: w3, h: h3, s: s2, r: r2, angle: angle2 = 0, fill: fill2 = "darkseagreen" } = f.value;
+            w3 *= ww;
+            h3 *= wh;
+            if (r2 !== void 0 && angle2 !== void 0) {
+              const radians = angle2 * 2 * Math.PI;
+              const [cx, cy] = [(ww - w3) / 2, (wh - h3) / 2];
+              x3 = cx + Math.cos(radians) * r2 * cx;
+              y2 = cy + Math.sin(radians) * r2 * cy;
+            } else {
+              x3 *= ww - w3;
+              y2 *= wh - h3;
+            }
+            const val2 = { ...f.value, x: x3, y: y2, w: w3, h: h3 };
+            ctx.fillStyle = fill2;
+            if (s2 === "rect") {
+              ctx.fillRect(x3, y2, w3, h3);
+            } else if (s2 === "ellipse") {
+              ctx.beginPath();
+              ctx.ellipse(x3 + w3 / 2, y2 + h3 / 2, w3 / 2, h3 / 2, 0, 0, 2 * Math.PI);
+              ctx.fill();
+            }
+            callback && callback(ctx, val2, f);
+          });
+          window.frame = requestAnimationFrame(render);
+        };
+        window.frame = requestAnimationFrame(render);
+        return silence;
+      };
+      ({ x, y, w, h: h2, angle, r, fill, smear: smear2 } = createParams("x", "y", "w", "h", "angle", "r", "fill", "smear"));
+      rescale = register("rescale", function(f, pat) {
+        return pat.mul(x(f).w(f).y(f).h(f));
+      });
+      moveXY = register("moveXY", function(dx, dy, pat) {
+        return pat.add(x(dx).y(dy));
+      });
+      zoomIn = register("zoomIn", function(f, pat) {
+        const d = pure(1).sub(f).div(2);
+        return pat.rescale(f).move(d, d);
+      });
+    }
+  });
+
+  // build/engine-src/strudel/packages/draw/color.mjs
+  var init_color = __esm({
+    "build/engine-src/strudel/packages/draw/color.mjs"() {
+    }
+  });
+
+  // build/engine-src/strudel/packages/draw/pianoroll.mjs
+  function __pianoroll({
+    time: time4,
+    haps,
+    cycles = 4,
+    playhead = 0.5,
+    flipTime = 0,
+    flipValues = 0,
+    hideNegative = false,
+    inactive = getTheme().foreground,
+    active = getTheme().foreground,
+    background = "transparent",
+    smear: smear3 = 0,
+    playheadColor = getTheme().foreground,
+    minMidi = 10,
+    maxMidi = 90,
+    autorange = 0,
+    timeframe: timeframeProp,
+    fold: fold2 = 1,
+    vertical = 0,
+    labels = false,
+    fill: fill2 = 1,
+    fillActive = false,
+    strokeActive = true,
+    stroke,
+    hideInactive = 0,
+    colorizeInactive = 1,
+    fontFamily,
+    ctx,
+    id: id2
+  } = {}) {
+    const w3 = ctx.canvas.width;
+    const h3 = ctx.canvas.height;
+    let from = -cycles * playhead;
+    let to = cycles * (1 - playhead);
+    if (id2) {
+      haps = haps.filter((hap) => hap.hasTag(id2));
+    }
+    if (timeframeProp) {
+      console.warn("timeframe is deprecated! use from/to instead");
+      from = 0;
+      to = timeframeProp;
+    }
+    const timeAxis = vertical ? h3 : w3;
+    const valueAxis = vertical ? w3 : h3;
+    let timeRange = vertical ? [timeAxis, 0] : [0, timeAxis];
+    const timeExtent = to - from;
+    const valueRange = vertical ? [0, valueAxis] : [valueAxis, 0];
+    let valueExtent = maxMidi - minMidi + 1;
+    let barThickness = valueAxis / valueExtent;
+    let foldValues = [];
+    flipTime && timeRange.reverse();
+    flipValues && valueRange.reverse();
+    const { min, max, values } = haps.reduce(
+      ({ min: min2, max: max2, values: values2 }, e) => {
+        const v2 = getValue(e);
+        return {
+          min: v2 < min2 ? v2 : min2,
+          max: v2 > max2 ? v2 : max2,
+          values: values2.includes(v2) ? values2 : [...values2, v2]
+        };
+      },
+      { min: Infinity, max: -Infinity, values: [] }
+    );
+    if (autorange) {
+      minMidi = min;
+      maxMidi = max;
+      valueExtent = maxMidi - minMidi + 1;
+    }
+    foldValues = values.sort(
+      (a, b) => typeof a === "number" && typeof b === "number" ? a - b : typeof a === "number" ? 1 : String(a).localeCompare(String(b))
+    );
+    barThickness = fold2 ? valueAxis / foldValues.length : valueAxis / valueExtent;
+    ctx.fillStyle = background;
+    ctx.globalAlpha = 1;
+    if (!smear3) {
+      ctx.clearRect(0, 0, w3, h3);
+      ctx.fillRect(0, 0, w3, h3);
+    }
+    haps.forEach((event) => {
+      const isActive = event.whole.begin <= time4 && event.endClipped > time4;
+      let strokeCurrent = stroke ?? (strokeActive && isActive);
+      let fillCurrent = !isActive && fill2 || isActive && fillActive;
+      if (hideInactive && !isActive) {
+        return;
+      }
+      let color2 = event.value?.color;
+      active = color2 || active;
+      inactive = colorizeInactive ? color2 || inactive : inactive;
+      color2 = isActive ? active : inactive;
+      ctx.fillStyle = fillCurrent ? color2 : "transparent";
+      ctx.strokeStyle = color2;
+      const { velocity: velocity2 = 1, gain: gain2 = 1 } = event.value || {};
+      ctx.globalAlpha = velocity2 * gain2;
+      const timeProgress = (event.whole.begin - (flipTime ? to : from)) / timeExtent;
+      const timePx = scale3(timeProgress, ...timeRange);
+      let durationPx = scale3(event.duration / timeExtent, 0, timeAxis);
+      const value2 = getValue(event);
+      const valueProgress = fold2 ? foldValues.indexOf(value2) / foldValues.length : (Number(value2) - minMidi) / valueExtent;
+      const valuePx = scale3(valueProgress, ...valueRange);
+      let margin = 0;
+      const offset3 = scale3(time4 / timeExtent, ...timeRange);
+      let coords;
+      if (vertical) {
+        coords = [
+          valuePx + 1 - (flipValues ? barThickness : 0),
+          // x
+          timeAxis - offset3 + timePx + margin + 1 - (flipTime ? 0 : durationPx),
+          // y
+          barThickness - 2,
+          // width
+          durationPx - 2
+          // height
+        ];
+      } else {
+        coords = [
+          timePx - offset3 + margin + 1 - (flipTime ? durationPx : 0),
+          // x
+          valuePx + 1 - (flipValues ? 0 : barThickness),
+          // y
+          durationPx - 2,
+          // widith
+          barThickness - 2
+          // height
+        ];
+      }
+      if (strokeCurrent) {
+        ctx.strokeRect(...coords);
+      }
+      if (fillCurrent) {
+        ctx.fillRect(...coords);
+      }
+      if (labels) {
+        const defaultLabel = event.value.note ?? event.value.s + (event.value.n ? `:${event.value.n}` : "");
+        const { label: inactiveLabel, activeLabel: activeLabel2 } = event.value;
+        const customLabel = isActive ? activeLabel2 || inactiveLabel : inactiveLabel;
+        const label2 = customLabel ?? defaultLabel;
+        let measure = vertical ? durationPx : barThickness * 0.75;
+        ctx.font = `${measure}px ${fontFamily || "monospace"}`;
+        ctx.fillStyle = /* isActive &&  */
+        !fillCurrent ? color2 : "black";
+        ctx.textBaseline = "top";
+        ctx.fillText(label2, ...coords);
+      }
+    });
+    ctx.globalAlpha = 1;
+    const playheadPosition = scale3(-from / timeExtent, ...timeRange);
+    ctx.strokeStyle = playheadColor;
+    ctx.beginPath();
+    if (vertical) {
+      ctx.moveTo(0, playheadPosition);
+      ctx.lineTo(valueAxis, playheadPosition);
+    } else {
+      ctx.moveTo(playheadPosition, 0);
+      ctx.lineTo(playheadPosition, valueAxis);
+    }
+    ctx.stroke();
+    return this;
+  }
+  function getDrawOptions(drawTime, options = {}) {
+    let [lookbehind, lookahead2] = drawTime;
+    lookbehind = Math.abs(lookbehind);
+    const cycles = lookahead2 + lookbehind;
+    const playhead = cycles !== 0 ? lookbehind / cycles : 0;
+    return { fold: 1, ...options, cycles, playhead };
+  }
+  var scale3, getValue, getPunchcardPainter;
+  var init_pianoroll = __esm({
+    "build/engine-src/strudel/packages/draw/pianoroll.mjs"() {
+      init_core();
+      init_draw();
+      scale3 = (normalized, min, max) => normalized * (max - min) + min;
+      getValue = (e) => {
+        let { value: value2 } = e;
+        if (typeof e.value !== "object") {
+          value2 = { value: value2 };
+        }
+        let { note: note4, n: n2, freq: freq3, s: s2 } = value2;
+        if (freq3) {
+          return freqToMidi(freq3);
+        }
+        note4 = note4 ?? n2;
+        if (typeof note4 === "string") {
+          try {
+            return noteToMidi(note4);
+          } catch (err) {
+            return 0;
+          }
+        }
+        if (typeof note4 === "number") {
+          return note4;
+        }
+        if (s2) {
+          return "_" + s2;
+        }
+        return value2;
+      };
+      Pattern.prototype.pianoroll = function(options = {}) {
+        let { cycles = 4, playhead = 0.5, overscan = 0, hideNegative = false, ctx = getDrawContext(), id: id2 = 1 } = options;
+        let from = -cycles * playhead;
+        let to = cycles * (1 - playhead);
+        const inFrame = (hap, t) => (!hideNegative || hap.whole.begin >= 0) && hap.isWithinTime(t + from, t + to);
+        this.draw(
+          (haps, time4) => {
+            __pianoroll({
+              ...options,
+              time: time4,
+              ctx,
+              haps: haps.filter((hap) => inFrame(hap, time4))
+            });
+          },
+          {
+            lookbehind: from - overscan,
+            lookahead: to + overscan,
+            id: id2
+          }
+        );
+        return this;
+      };
+      getPunchcardPainter = (options = {}) => (ctx, time4, haps, drawTime) => __pianoroll({ ctx, time: time4, haps, ...getDrawOptions(drawTime, options) });
+      Pattern.prototype.punchcard = function(options) {
+        return this.onPaint(getPunchcardPainter(options));
+      };
+      Pattern.prototype.wordfall = function(options) {
+        return this.punchcard({ vertical: 1, labels: 1, stroke: 0, fillActive: 1, active: "white", ...options });
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/draw/spiral.mjs
+  function fromPolar(angle2, radius, cx, cy) {
+    const radians = (angle2 - 90) * Math.PI / 180;
+    return [cx + Math.cos(radians) * radius, cy + Math.sin(radians) * radius];
+  }
+  function spiralSegment(options) {
+    let {
+      ctx,
+      from = 0,
+      to = 3,
+      margin = 50,
+      cx = 100,
+      cy = 100,
+      rotate: rotate4 = 0,
+      thickness = margin / 2,
+      color: color2 = getTheme().foreground,
+      cap = "round",
+      stretch: stretch2 = 1,
+      fromOpacity = 1,
+      toOpacity = 1
+    } = options;
+    from *= stretch2;
+    to *= stretch2;
+    rotate4 *= stretch2;
+    ctx.lineWidth = thickness;
+    ctx.lineCap = cap;
+    ctx.strokeStyle = color2;
+    ctx.globalAlpha = fromOpacity;
+    ctx.beginPath();
+    let [sx, sy] = xyOnSpiral(from, margin, cx, cy, rotate4);
+    ctx.moveTo(sx, sy);
+    const increment = 1 / 60;
+    let angle2 = from;
+    while (angle2 <= to) {
+      const [x3, y2] = xyOnSpiral(angle2, margin, cx, cy, rotate4);
+      ctx.globalAlpha = (angle2 - from) / (to - from) * toOpacity;
+      ctx.lineTo(x3, y2);
+      angle2 += increment;
+    }
+    ctx.stroke();
+  }
+  function drawSpiral(options) {
+    let {
+      stretch: stretch2 = 1,
+      size: size2 = 80,
+      thickness = size2 / 2,
+      cap = "butt",
+      // round butt squar,
+      inset = 3,
+      // start angl,
+      playheadColor = "#ffffff",
+      playheadLength = 0.02,
+      playheadThickness = thickness,
+      padding = 0,
+      steady: steady2 = 1,
+      activeColor = getTheme().foreground,
+      inactiveColor = getTheme().gutterForeground,
+      colorizeInactive = 0,
+      fade = true,
+      // logSpiral = true,
+      ctx,
+      time: time4,
+      haps,
+      drawTime,
+      id: id2
+    } = options;
+    if (id2) {
+      haps = haps.filter((hap) => hap.hasTag(id2));
+    }
+    const [w3, h3] = [ctx.canvas.width, ctx.canvas.height];
+    ctx.clearRect(0, 0, w3 * 2, h3 * 2);
+    const [cx, cy] = [w3 / 2, h3 / 2];
+    const settings = {
+      margin: size2 / stretch2,
+      cx,
+      cy,
+      stretch: stretch2,
+      cap,
+      thickness
+    };
+    const playhead = {
+      ...settings,
+      thickness: playheadThickness,
+      from: inset - playheadLength,
+      to: inset,
+      color: playheadColor
+    };
+    const [min] = drawTime;
+    const rotate4 = steady2 * time4;
+    haps.forEach((hap) => {
+      const isActive = hap.whole.begin <= time4 && hap.endClipped > time4;
+      const from = hap.whole.begin - time4 + inset;
+      const to = hap.endClipped - time4 + inset - padding;
+      const hapColor = hap.value?.color || activeColor;
+      const color2 = colorizeInactive || isActive ? hapColor : inactiveColor;
+      const opacity = fade ? 1 - Math.abs((hap.whole.begin - time4) / min) : 1;
+      spiralSegment({
+        ctx,
+        ...settings,
+        from,
+        to,
+        rotate: rotate4,
+        color: color2,
+        fromOpacity: opacity,
+        toOpacity: opacity
+      });
+    });
+    spiralSegment({
+      ctx,
+      ...playhead,
+      rotate: rotate4
+    });
+  }
+  var xyOnSpiral;
+  var init_spiral = __esm({
+    "build/engine-src/strudel/packages/draw/spiral.mjs"() {
+      init_core();
+      init_draw();
+      xyOnSpiral = (angle2, margin, cx, cy, rotate4 = 0) => fromPolar((angle2 + rotate4) * 360, margin * angle2, cx, cy);
+      Pattern.prototype.spiral = function(options = {}) {
+        return this.onPaint((ctx, time4, haps, drawTime) => drawSpiral({ ctx, time: time4, haps, drawTime, ...options }));
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/draw/pitchwheel.mjs
+  function pitchwheel({
+    haps,
+    ctx,
+    id: id2,
+    hapcircles = 1,
+    circle = 0,
+    edo: edo2 = 12,
+    root = c,
+    thickness = 3,
+    hapRadius = 6,
+    mode: mode3 = "flake",
+    margin = 10
+  } = {}) {
+    const connectdots = mode3 === "polygon";
+    const centerlines = mode3 === "flake";
+    const w3 = ctx.canvas.width;
+    const h3 = ctx.canvas.height;
+    ctx.clearRect(0, 0, w3, h3);
+    const color2 = getTheme().foreground;
+    const size2 = Math.min(w3, h3);
+    const radius = size2 / 2 - thickness / 2 - hapRadius - margin;
+    const centerX = w3 / 2;
+    const centerY = h3 / 2;
+    if (id2) {
+      haps = haps.filter((hap) => hap.hasTag(id2));
+    }
+    ctx.strokeStyle = color2;
+    ctx.fillStyle = color2;
+    ctx.globalAlpha = 1;
+    ctx.lineWidth = thickness;
+    if (circle) {
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    if (edo2) {
+      edo2 = haps.length >= 1 && haps[0].value && haps[0].value.edo ? haps[0].value.edo : edo2;
+      root = haps.length >= 1 && haps[0].value && haps[0].value.root ? haps[0].value.root : root;
+      const degreeIndexes = haps.length >= 1 && haps[0].value && haps[0].value.degreeIndexes ? haps[0].value.degreeIndexes : null;
+      const intLabels = haps.length >= 1 && haps[0].value && haps[0].value.intLabels ? haps[0].value.intLabels : null;
+      ctx.font = "20px sans-serif";
+      const label2 = `${edo2} EDO`;
+      ctx.fillText(label2, centerX + radius - ctx.measureText(label2).width + 15, centerY + radius);
+      Array.from({ length: edo2 }, (_, i3) => {
+        const angle2 = freq2angle(root * Math.pow(2, i3 / edo2), root);
+        const [x3, y2] = circlePos(centerX, centerY, radius, angle2);
+        ctx.beginPath();
+        if (degreeIndexes === null || degreeIndexes.includes(i3)) {
+          ctx.globalAlpha = 1;
+          ctx.arc(x3, y2, hapRadius, 0, 2 * Math.PI);
+          if (intLabels !== null) {
+            const degree2 = degreeIndexes.indexOf(i3);
+            if (intLabels[degree2]) {
+              if (angle2 < 0.32 && angle2 > 0.125) {
+                ctx.fillText(intLabels[degree2], x3 - 34, y2);
+              } else {
+                if (angle2 < 0.1 && angle2 > -1.125) {
+                  ctx.fillText(intLabels[degree2], x3 - 7, y2 - 12);
+                } else {
+                  ctx.fillText(intLabels[degree2], x3 + 9, y2);
+                }
+              }
+            }
+          }
+        } else {
+          ctx.globalAlpha = 0.15;
+          ctx.arc(x3, y2, hapRadius, 0, 2 * Math.PI);
+        }
+        ctx.fill();
+      });
+      ctx.stroke();
+    }
+    let shape2 = [];
+    ctx.lineWidth = hapRadius;
+    haps.forEach((hap) => {
+      let freq3;
+      try {
+        freq3 = getFrequency(hap);
+      } catch (err) {
+        return;
+      }
+      const angle2 = freq2angle(freq3, root);
+      const [x3, y2] = circlePos(centerX, centerY, radius, angle2);
+      const hapColor = hap.value.color || color2;
+      ctx.strokeStyle = hapColor;
+      ctx.fillStyle = hapColor;
+      const { velocity: velocity2 = 1, gain: gain2 = 1 } = hap.value || {};
+      const alpha = velocity2 * gain2;
+      ctx.globalAlpha = alpha;
+      shape2.push([x3, y2, angle2, hapColor, alpha]);
+      ctx.beginPath();
+      if (hapcircles) {
+        ctx.moveTo(x3 + hapRadius, y2);
+        ctx.arc(x3, y2, hapRadius, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+      if (centerlines) {
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(x3, y2);
+      }
+      ctx.stroke();
+    });
+    ctx.strokeStyle = color2;
+    ctx.globalAlpha = 1;
+    if (connectdots && shape2.length) {
+      shape2 = shape2.sort((a, b) => a[2] - b[2]);
+      ctx.beginPath();
+      ctx.moveTo(shape2[0][0], shape2[0][1]);
+      shape2.forEach(([x3, y2, _, color3, alpha]) => {
+        ctx.strokeStyle = color3;
+        ctx.globalAlpha = alpha;
+        ctx.lineTo(x3, y2);
+      });
+      ctx.lineTo(shape2[0][0], shape2[0][1]);
+      ctx.stroke();
+    }
+    return;
+  }
+  var c, circlePos, freq2angle;
+  var init_pitchwheel = __esm({
+    "build/engine-src/strudel/packages/draw/pitchwheel.mjs"() {
+      init_core();
+      init_draw();
+      c = midiToFreq(36);
+      circlePos = (cx, cy, radius, angle2) => {
+        angle2 = angle2 * Math.PI * 2;
+        const x3 = Math.sin(angle2) * radius + cx;
+        const y2 = Math.cos(angle2) * radius + cy;
+        return [x3, y2];
+      };
+      freq2angle = (freq3, root) => {
+        return 0.5 - Math.log2(freq3 / root) % 1;
+      };
+      Pattern.prototype.pitchwheel = function(options = {}) {
+        let { ctx = getDrawContext(), id: id2 = 1 } = options;
+        return this.tag(id2).onPaint(
+          (_, time4, haps) => pitchwheel({
+            ...options,
+            time: time4,
+            ctx,
+            haps: haps.filter((hap) => hap.isActive(time4)),
+            id: id2
+          })
+        );
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/draw/index.mjs
+  var init_draw2 = __esm({
+    "build/engine-src/strudel/packages/draw/index.mjs"() {
+      init_animate();
+      init_color();
+      init_draw();
+      init_pianoroll();
+      init_spiral();
+      init_pitchwheel();
+    }
+  });
+
+  // build/engine-src/strudel/packages/webaudio/scope.mjs
+  function drawTimeScope(analyser, {
+    align = true,
+    color: color2 = "white",
+    thickness = 3,
+    scale: scale4 = 0.25,
+    pos = 0.75,
+    trigger = 0,
+    ctx = getDrawContext(),
+    id: id2 = 1
+  } = {}) {
+    ctx.lineWidth = thickness;
+    ctx.strokeStyle = color2;
+    let canvas = ctx.canvas;
+    if (!analyser) {
+      ctx.beginPath();
+      let y2 = pos * canvas.height;
+      ctx.moveTo(0, y2);
+      ctx.lineTo(canvas.width, y2);
+      ctx.stroke();
+      return;
+    }
+    const dataArray = getAnalyzerData("time", id2);
+    ctx.beginPath();
+    const bufferSize = analyser.frequencyBinCount;
+    let triggerIndex = align ? Array.from(dataArray).findIndex((v2, i3, arr) => i3 && arr[i3 - 1] > -trigger && v2 <= -trigger) : 0;
+    triggerIndex = Math.max(triggerIndex, 0);
+    const sliceWidth = canvas.width * 1 / bufferSize;
+    let x3 = 0;
+    for (let i3 = triggerIndex; i3 < bufferSize; i3++) {
+      const v2 = dataArray[i3] + 1;
+      const y2 = (pos - scale4 * (v2 - 1)) * canvas.height;
+      if (i3 === 0) {
+        ctx.moveTo(x3, y2);
+      } else {
+        ctx.lineTo(x3, y2);
+      }
+      x3 += sliceWidth;
+    }
+    ctx.stroke();
+  }
+  function drawFrequencyScope(analyser, { color: color2 = "white", scale: scale4 = 0.25, pos = 0.75, lean = 0.5, min = -150, max = 0, ctx = getDrawContext(), id: id2 = 1 } = {}) {
+    if (!analyser) {
+      ctx.beginPath();
+      let y2 = pos * canvas.height;
+      ctx.moveTo(0, y2);
+      ctx.lineTo(canvas.width, y2);
+      ctx.stroke();
+      return;
+    }
+    const dataArray = getAnalyzerData("frequency", id2);
+    const canvas = ctx.canvas;
+    ctx.fillStyle = color2;
+    const bufferSize = analyser.frequencyBinCount;
+    const sliceWidth = canvas.width * 1 / bufferSize;
+    let x3 = 0;
+    for (let i3 = 0; i3 < bufferSize; i3++) {
+      const normalized = clamp((dataArray[i3] - min) / (max - min), 0, 1);
+      const v2 = normalized * scale4;
+      const h3 = v2 * canvas.height;
+      const y2 = (pos - v2 * lean) * canvas.height;
+      ctx.fillRect(x3, y2, Math.max(sliceWidth, 1), h3);
+      x3 += sliceWidth;
+    }
+  }
+  function clearScreen(smear3 = 0, smearRGB = `0,0,0`, ctx = getDrawContext()) {
+    if (!smear3) {
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    } else {
+      ctx.fillStyle = `rgba(${smearRGB},${1 - smear3})`;
+      ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    }
+  }
+  var latestColor;
+  var init_scope = __esm({
+    "build/engine-src/strudel/packages/webaudio/scope.mjs"() {
+      init_core();
+      init_draw2();
+      init_superdough2();
+      Pattern.prototype.fscope = function(config = {}) {
+        let id2 = config.id ?? 1;
+        return this.analyze(id2).draw(
+          () => {
+            clearScreen(config.smear, "0,0,0", config.ctx);
+            analysers[id2] && drawFrequencyScope(analysers[id2], config);
+          },
+          { id: id2 }
+        );
+      };
+      latestColor = {};
+      Pattern.prototype.tscope = function(config = {}) {
+        let id2 = config.id ?? 1;
+        return this.analyze(id2).draw(
+          (haps) => {
+            config.color = haps[0]?.value?.color || getTheme().foreground;
+            latestColor[id2] = config.color;
+            clearScreen(config.smear, "0,0,0", config.ctx);
+            drawTimeScope(analysers[id2], config);
+          },
+          { id: id2 }
+        );
+      };
+      Pattern.prototype.scope = Pattern.prototype.tscope;
+    }
+  });
+
+  // build/engine-src/strudel/packages/webaudio/spectrum.mjs
+  function drawSpectrum(analyser, { thickness = 3, speed: speed2 = 1, min = -80, max = 0, ctx = getDrawContext(), id: id2 = 1, color: color2 } = {}) {
+    ctx.lineWidth = thickness;
+    ctx.strokeStyle = color2;
+    if (!analyser) {
+      return;
+    }
+    const scrollSize = speed2;
+    const dataArray = getAnalyzerData("frequency", id2);
+    const canvas = ctx.canvas;
+    ctx.fillStyle = color2;
+    const bufferSize = analyser.frequencyBinCount;
+    let imageData = lastFrames.get(id2) || ctx.getImageData(0, 0, canvas.width, canvas.height);
+    lastFrames.set(id2, imageData);
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.putImageData(imageData, -scrollSize, 0);
+    let q2 = canvas.width - speed2;
+    for (let i3 = 0; i3 < bufferSize; i3++) {
+      const normalized = clamp((dataArray[i3] - min) / (max - min), 0, 1);
+      ctx.globalAlpha = normalized;
+      const next = Math.log(i3 + 1) / Math.log(bufferSize) * canvas.height;
+      const size2 = 2;
+      ctx.fillRect(q2, canvas.height - next, scrollSize, size2);
+    }
+    lastFrames.set(id2, ctx.getImageData(0, 0, canvas.width, canvas.height));
+  }
+  var latestColor2, lastFrames;
+  var init_spectrum = __esm({
+    "build/engine-src/strudel/packages/webaudio/spectrum.mjs"() {
+      init_core();
+      init_draw2();
+      init_superdough2();
+      latestColor2 = {};
+      Pattern.prototype.spectrum = function(config = {}) {
+        let id2 = config.id ?? 1;
+        return this.analyze(id2).draw(
+          (haps) => {
+            config.color = haps[0]?.value?.color || latestColor2[id2] || getTheme().foreground;
+            latestColor2[id2] = config.color;
+            drawSpectrum(analysers[id2], config);
+          },
+          { id: id2 }
+        );
+      };
+      Pattern.prototype.scope = Pattern.prototype.tscope;
+      lastFrames = /* @__PURE__ */ new Map();
+    }
+  });
+
+  // build/engine-src/strudel/packages/webaudio/index.mjs
+  var webaudio_exports = {};
+  __export(webaudio_exports, {
+    ClockBridge: () => ClockBridge,
+    DEFAULT_MAX_POLYPHONY: () => DEFAULT_MAX_POLYPHONY,
+    Warpmode: () => Warpmode,
+    aliasBank: () => aliasBank,
+    analysers: () => analysers,
+    analysersData: () => analysersData,
+    applyFM: () => applyFM,
+    applyGainCurve: () => applyGainCurve,
+    applyParameterModulators: () => applyParameterModulators,
+    cleanupOnEnd: () => cleanupOnEnd,
+    connectBusModulator: () => connectBusModulator,
+    connectEnvelope: () => connectEnvelope,
+    connectLFO: () => connectLFO,
+    connectToDestination: () => connectToDestination,
+    createFilter: () => createFilter,
+    distortionAlgorithms: () => distortionAlgorithms,
+    drawFrequencyScope: () => drawFrequencyScope,
+    drawTimeScope: () => drawTimeScope,
+    drywet: () => drywet,
+    dspWorklet: () => dspWorklet,
+    effectSend: () => effectSend,
+    ensureMinimalOutput: () => ensureMinimalOutput,
+    errorLogger: () => errorLogger2,
+    expDecay: () => expDecay,
+    fetchSampleMap: () => fetchSampleMap,
+    gainNode: () => gainNode,
+    getADSRValues: () => getADSRValues,
+    getAnalyserById: () => getAnalyserById,
+    getAnalyzerData: () => getAnalyzerData,
+    getAudioContext: () => getAudioContext,
+    getAudioContextCurrentTime: () => getAudioContextCurrentTime,
+    getAudioDevices: () => getAudioDevices,
+    getCachedBuffer: () => getCachedBuffer,
+    getClockBridge: () => getClockBridge,
+    getCompressor: () => getCompressor,
+    getDefaultValue: () => getDefaultValue,
+    getDistortion: () => getDistortion,
+    getDistortionAlgorithm: () => getDistortionAlgorithm,
+    getDur: () => getDur,
+    getDuration: () => getDuration,
+    getEnvelope: () => getEnvelope,
+    getFrequencyFromValue: () => getFrequencyFromValue,
+    getLfo: () => getLfo,
+    getLoadedBuffer: () => getLoadedBuffer,
+    getOscillator: () => getOscillator,
+    getParamADSR: () => getParamADSR,
+    getParamLfo: () => getParamLfo,
+    getPitchEnvelope: () => getPitchEnvelope,
+    getSampleBuffer: () => getSampleBuffer,
+    getSampleBufferSource: () => getSampleBufferSource,
+    getSampleInfo: () => getSampleInfo,
+    getSound: () => getSound,
+    getSuperdoughAudioController: () => getSuperdoughAudioController,
+    getVibratoOscillator: () => getVibratoOscillator,
+    getWorklet: () => getWorklet,
+    getZZFX: () => getZZFX,
+    initAudio: () => initAudio,
+    initAudioOnFirstClick: () => initAudioOnFirstClick,
+    loadBuffer: () => loadBuffer,
+    loadWorklets: () => loadWorklets,
+    logger: () => logger2,
+    maxPolyphony: () => maxPolyphony,
+    multiChannelOrbits: () => multiChannelOrbits,
+    noises: () => noises,
+    onTriggerSample: () => onTriggerSample,
+    onTriggerSynth: () => onTriggerSynth,
+    onceEnded: () => onceEnded,
+    processSampleMap: () => processSampleMap,
+    rawdsp: () => rawdsp,
+    rawdspOutput: () => rawdspOutput,
+    registerSampleSource: () => registerSampleSource,
+    registerSamplesPrefix: () => registerSamplesPrefix,
+    registerSound: () => registerSound,
+    registerSynthSounds: () => registerSynthSounds,
+    registerWaveTable: () => registerWaveTable,
+    registerWorklet: () => registerWorklet,
+    registerZZFXSounds: () => registerZZFXSounds,
+    releaseAudioNode: () => releaseAudioNode,
+    renderPatternAudio: () => renderPatternAudio,
+    resetDefaultValues: () => resetDefaultValues,
+    resetDefaults: () => resetDefaults,
+    resetGlobalEffects: () => resetGlobalEffects,
+    resetLoadedSounds: () => resetLoadedSounds,
+    resetSeenKeys: () => resetSeenKeys,
+    reverseBuffer: () => reverseBuffer,
+    samples: () => samples,
+    scheduleAtTime: () => scheduleAtTime,
+    setAudioContext: () => setAudioContext,
+    setDefault: () => setDefault,
+    setDefaultAudioContext: () => setDefaultAudioContext,
+    setDefaultValue: () => setDefaultValue,
+    setDefaultValues: () => setDefaultValues,
+    setGainCurve: () => setGainCurve,
+    setLogger: () => setLogger,
+    setMaxPolyphony: () => setMaxPolyphony,
+    setMultiChannelOrbits: () => setMultiChannelOrbits,
+    setSuperdoughAudioController: () => setSuperdoughAudioController,
+    setVersionDefaults: () => setVersionDefaults,
+    soundAlias: () => soundAlias,
+    soundMap: () => soundMap,
+    superdough: () => superdough,
+    tables: () => tables,
+    waveformN: () => waveformN,
+    webAudioTimeout: () => webAudioTimeout,
+    webaudioOutput: () => webaudioOutput,
+    webaudioRepl: () => webaudioRepl
+  });
+  var init_webaudio2 = __esm({
+    "build/engine-src/strudel/packages/webaudio/index.mjs"() {
+      init_webaudio();
+      init_scope();
+      init_spectrum();
+      init_superdough2();
     }
   });
 
@@ -3641,12 +16248,12 @@
           return outer.root;
         };
         function traverse(root, visitor) {
-          var controller = new Controller();
-          return controller.traverse(root, visitor);
+          var controller2 = new Controller();
+          return controller2.traverse(root, visitor);
         }
         function replace(root, visitor) {
-          var controller = new Controller();
-          return controller.replace(root, visitor);
+          var controller2 = new Controller();
+          return controller2.replace(root, visitor);
         }
         function extendCommentRange(comment, tokens) {
           var target;
@@ -4871,22 +17478,22 @@
         }, this);
       };
       SourceMapGenerator.prototype.toJSON = function SourceMapGenerator_toJSON() {
-        var map2 = {
+        var map3 = {
           version: this._version,
           sources: this._sources.toArray(),
           names: this._names.toArray(),
           mappings: this._serializeMappings()
         };
         if (this._file != null) {
-          map2.file = this._file;
+          map3.file = this._file;
         }
         if (this._sourceRoot != null) {
-          map2.sourceRoot = this._sourceRoot;
+          map3.sourceRoot = this._sourceRoot;
         }
         if (this._sourcesContents) {
-          map2.sourcesContent = this._generateSourcesContent(map2.sources, map2.sourceRoot);
+          map3.sourcesContent = this._generateSourcesContent(map3.sources, map3.sourceRoot);
         }
-        return map2;
+        return map3;
       };
       SourceMapGenerator.prototype.toString = function SourceMapGenerator_toString() {
         return JSON.stringify(this.toJSON());
@@ -4954,30 +17561,30 @@
   // build/engine-src/strudel/node_modules/.pnpm/source-map@0.6.1/node_modules/source-map/lib/quick-sort.js
   var require_quick_sort = __commonJS({
     "build/engine-src/strudel/node_modules/.pnpm/source-map@0.6.1/node_modules/source-map/lib/quick-sort.js"(exports) {
-      function swap(ary, x, y) {
-        var temp = ary[x];
-        ary[x] = ary[y];
-        ary[y] = temp;
+      function swap(ary, x3, y2) {
+        var temp = ary[x3];
+        ary[x3] = ary[y2];
+        ary[y2] = temp;
       }
       function randomIntInRange(low, high) {
         return Math.round(low + Math.random() * (high - low));
       }
-      function doQuickSort(ary, comparator, p, r) {
-        if (p < r) {
-          var pivotIndex = randomIntInRange(p, r);
+      function doQuickSort(ary, comparator, p, r2) {
+        if (p < r2) {
+          var pivotIndex = randomIntInRange(p, r2);
           var i3 = p - 1;
-          swap(ary, pivotIndex, r);
-          var pivot = ary[r];
-          for (var j = p; j < r; j++) {
+          swap(ary, pivotIndex, r2);
+          var pivot = ary[r2];
+          for (var j = p; j < r2; j++) {
             if (comparator(ary[j], pivot) <= 0) {
               i3 += 1;
               swap(ary, i3, j);
             }
           }
           swap(ary, i3 + 1, j);
-          var q = i3 + 1;
-          doQuickSort(ary, comparator, p, q - 1);
-          doQuickSort(ary, comparator, q + 1, r);
+          var q2 = i3 + 1;
+          doQuickSort(ary, comparator, p, q2 - 1);
+          doQuickSort(ary, comparator, q2 + 1, r2);
         }
       }
       exports.quickSort = function(ary, comparator) {
@@ -5028,8 +17635,8 @@
         }
       });
       SourceMapConsumer.prototype._charIsMappingSeparator = function SourceMapConsumer_charIsMappingSeparator(aStr, index5) {
-        var c = aStr.charAt(index5);
-        return c === ";" || c === ",";
+        var c2 = aStr.charAt(index5);
+        return c2 === ";" || c2 === ",";
       };
       SourceMapConsumer.prototype._parseMappings = function SourceMapConsumer_parseMappings(aStr, aSourceRoot) {
         throw new Error("Subclasses must implement _parseMappings");
@@ -5779,7 +18386,7 @@
           line: 1,
           column: 0
         };
-        var map2 = new SourceMapGenerator(aArgs);
+        var map3 = new SourceMapGenerator(aArgs);
         var sourceMappingActive = false;
         var lastOriginalSource = null;
         var lastOriginalLine = null;
@@ -5789,7 +18396,7 @@
           generated.code += chunk2;
           if (original.source !== null && original.line !== null && original.column !== null) {
             if (lastOriginalSource !== original.source || lastOriginalLine !== original.line || lastOriginalColumn !== original.column || lastOriginalName !== original.name) {
-              map2.addMapping({
+              map3.addMapping({
                 source: original.source,
                 original: {
                   line: original.line,
@@ -5808,7 +18415,7 @@
             lastOriginalName = original.name;
             sourceMappingActive = true;
           } else if (sourceMappingActive) {
-            map2.addMapping({
+            map3.addMapping({
               generated: {
                 line: generated.line,
                 column: generated.column
@@ -5825,7 +18432,7 @@
                 lastOriginalSource = null;
                 sourceMappingActive = false;
               } else if (sourceMappingActive) {
-                map2.addMapping({
+                map3.addMapping({
                   source: original.source,
                   original: {
                     line: original.line,
@@ -5844,9 +18451,9 @@
           }
         });
         this.walkSourceContents(function(sourceFile, sourceContent) {
-          map2.setSourceContent(sourceFile, sourceContent);
+          map3.setSourceContent(sourceFile, sourceContent);
         });
-        return { code: generated.code, map: map2 };
+        return { code: generated.code, map: map3 };
       };
       exports.SourceNode = SourceNode;
     }
@@ -8014,7308 +20621,5448 @@
     }
   });
 
+  // build/engine-src/strudel/packages/soundfonts/gm.mjs
+  var gm_default;
+  var init_gm = __esm({
+    "build/engine-src/strudel/packages/soundfonts/gm.mjs"() {
+      gm_default = {
+        gm_piano: [
+          //'gm_acoustic_piano': [
+          // Acoustic Grand Piano: Piano
+          "0000_JCLive_sf2_file",
+          "0000_FluidR3_GM_sf2_file",
+          "0000_Aspirin_sf2_file",
+          "0000_Chaos_sf2_file",
+          "0000_GeneralUserGS_sf2_file",
+          //0000_SBLive_sf2
+          //0000_SoundBlasterOld_sf2
+          "0001_FluidR3_GM_sf2_file",
+          "0001_GeneralUserGS_sf2_file",
+          //],
+          //'gm_bright_acoustic_piano': [
+          // Bright Acoustic Piano: Piano
+          "0010_Aspirin_sf2_file",
+          "0010_Chaos_sf2_file",
+          "0010_FluidR3_GM_sf2_file",
+          "0010_GeneralUserGS_sf2_file",
+          "0010_JCLive_sf2_file",
+          //0010_SBLive_sf2
+          //0010_SoundBlasterOld_sf2
+          "0011_Aspirin_sf2_file",
+          "0011_FluidR3_GM_sf2_file",
+          "0011_GeneralUserGS_sf2_file",
+          "0012_GeneralUserGS_sf2_file",
+          //],
+          //'gm_electric_grand_piano': [
+          // Electric Grand Piano: Piano
+          "0020_Aspirin_sf2_file",
+          "0020_Chaos_sf2_file",
+          "0020_FluidR3_GM_sf2_file",
+          "0020_GeneralUserGS_sf2_file",
+          "0020_JCLive_sf2_file",
+          //0020_SBLive_sf2
+          //0020_SoundBlasterOld_sf2
+          "0021_Aspirin_sf2_file",
+          "0021_GeneralUserGS_sf2_file",
+          // ?
+          "0022_Aspirin_sf2_file",
+          //],
+          //'gm_honky_tonk_piano': [
+          // Honky_tonk Piano: Piano
+          "0030_Aspirin_sf2_file",
+          "0030_Chaos_sf2_file",
+          "0030_FluidR3_GM_sf2_file",
+          "0030_GeneralUserGS_sf2_file",
+          "0030_JCLive_sf2_file",
+          //0030_SBLive_sf2
+          //0030_SoundBlasterOld_sf2
+          "0031_Aspirin_sf2_file",
+          "0031_FluidR3_GM_sf2_file",
+          "0031_GeneralUserGS_sf2_file"
+          //0031_SoundBlasterOld_sf2 // pianos until her
+        ],
+        gm_epiano1: [
+          // Electric Piano 1: Piano
+          "0040_JCLive_sf2_file",
+          "0040_FluidR3_GM_sf2_file",
+          "0040_Aspirin_sf2_file",
+          "0040_Chaos_sf2_file",
+          "0040_GeneralUserGS_sf2_file",
+          //0040_SBLive_sf2 // ?
+          //0040_SoundBlasterOld_sf2 // ?
+          "0041_FluidR3_GM_sf2_file",
+          "0041_GeneralUserGS_sf2_file",
+          //0041_SoundBlasterOld_sf2 // ?
+          "0042_GeneralUserGS_sf2_file",
+          "0043_GeneralUserGS_sf2_file",
+          "0044_GeneralUserGS_sf2_file",
+          //0045_GeneralUserGS_sf2_file // ?
+          "0046_GeneralUserGS_sf2_file"
+        ],
+        gm_epiano2: [
+          // Electric Piano 2: Piano
+          "0050_JCLive_sf2_file",
+          "0050_FluidR3_GM_sf2_file",
+          "0050_Aspirin_sf2_file",
+          "0050_Chaos_sf2_file",
+          // ?
+          "0050_GeneralUserGS_sf2_file",
+          // cont
+          //0050_SBLive_sf2 // ?
+          //0050_SoundBlasterOld_sf2 // ?
+          "0051_FluidR3_GM_sf2_file",
+          "0051_GeneralUserGS_sf2_file",
+          //0052_GeneralUserGS_sf2_file // ?
+          "0053_GeneralUserGS_sf2_file",
+          // normal piano...
+          "0054_GeneralUserGS_sf2_file"
+        ],
+        gm_harpsichord: [
+          // Harpsichord: Piano
+          "0060_JCLive_sf2_file",
+          "0060_FluidR3_GM_sf2_file",
+          "0060_Aspirin_sf2_file",
+          "0060_Chaos_sf2_file",
+          "0060_GeneralUserGS_sf2_file",
+          //0060_SBLive_sf2
+          //0060_SoundBlasterOld_sf2
+          "0061_Aspirin_sf2_file",
+          "0061_GeneralUserGS_sf2_file",
+          //0061_SoundBlasterOld_sf2
+          "0062_GeneralUserGS_sf2_file"
+        ],
+        gm_clavinet: [
+          // Clavinet: Piano
+          "0070_JCLive_sf2_file",
+          "0070_FluidR3_GM_sf2_file",
+          "0070_Aspirin_sf2_file",
+          "0070_Chaos_sf2_file"
+          // 0070_GeneralUserGS_sf2_file // half broken
+          //0070_SBLive_sf2
+          //0070_SoundBlasterOld_sf2
+          // 0071_GeneralUserGS_sf2_file // half broke
+        ],
+        gm_celesta: [
+          // Celesta: Chromatic Percussion
+          "0080_JCLive_sf2_file",
+          "0080_Aspirin_sf2_file",
+          "0080_Chaos_sf2_file",
+          "0080_FluidR3_GM_sf2_file",
+          "0080_GeneralUserGS_sf2_file",
+          //0080_SBLive_sf2
+          //0080_SoundBlasterOld_sf2
+          "0081_FluidR3_GM_sf2_file"
+          // 0081_GeneralUserGS_sf2_file // weird detuned
+          //0081_SoundBlasterOld_sf
+        ],
+        gm_glockenspiel: [
+          // Glockenspiel: Chromatic Percussion
+          "0090_JCLive_sf2_file",
+          "0090_Aspirin_sf2_file",
+          "0090_Chaos_sf2_file",
+          "0090_FluidR3_GM_sf2_file",
+          "0090_GeneralUserGS_sf2_file"
+          //0090_SBLive_sf2
+          //0090_SoundBlasterOld_sf2
+          //0091_SoundBlasterOld_sf
+        ],
+        gm_music_box: [
+          // Music Box: Chromatic Percussion
+          "0100_JCLive_sf2_file",
+          "0100_Aspirin_sf2_file",
+          "0100_Chaos_sf2_file",
+          "0100_FluidR3_GM_sf2_file",
+          "0100_GeneralUserGS_sf2_file"
+          //0100_SBLive_sf2
+          //0100_SoundBlasterOld_sf2
+          // 0101_GeneralUserGS_sf2_file // weird detuned
+          //0101_SoundBlasterOld_sf
+        ],
+        gm_vibraphone: [
+          // Vibraphone: Chromatic Percussion
+          "0110_JCLive_sf2_file",
+          "0110_Aspirin_sf2_file",
+          "0110_Chaos_sf2_file",
+          "0110_FluidR3_GM_sf2_file",
+          "0110_GeneralUserGS_sf2_file",
+          //0110_SBLive_sf2
+          //0110_SoundBlasterOld_sf2
+          "0111_FluidR3_GM_sf2_file"
+        ],
+        gm_marimba: [
+          // Marimba: Chromatic Percussion
+          "0120_JCLive_sf2_file",
+          "0120_Aspirin_sf2_file",
+          "0120_Chaos_sf2_file",
+          "0120_FluidR3_GM_sf2_file",
+          "0120_GeneralUserGS_sf2_file",
+          //0120_SBLive_sf2
+          //0120_SoundBlasterOld_sf2
+          "0121_FluidR3_GM_sf2_file",
+          "0121_GeneralUserGS_sf2_file"
+        ],
+        gm_xylophone: [
+          // Xylophone: Chromatic Percussion
+          "0130_JCLive_sf2_file",
+          "0130_Aspirin_sf2_file",
+          "0130_Chaos_sf2_file",
+          "0130_FluidR3_GM_sf2_file",
+          "0130_GeneralUserGS_sf2_file",
+          //0130_SBLive_sf2
+          //0130_SoundBlasterOld_sf2
+          "0131_FluidR3_GM_sf2_file"
+        ],
+        gm_tubular_bells: [
+          // Tubular Bells: Chromatic Percussion
+          "0140_JCLive_sf2_file",
+          "0140_Aspirin_sf2_file",
+          // 0140_Chaos_sf2_file // same as aspirin?
+          "0140_FluidR3_GM_sf2_file",
+          "0140_GeneralUserGS_sf2_file",
+          //0140_SBLive_sf2
+          //0140_SoundBlasterOld_sf2
+          "0141_FluidR3_GM_sf2_file",
+          //0141_GeneralUserGS_sf2_file
+          "0142_GeneralUserGS_sf2_file"
+          // 0143_GeneralUserGS_sf2_file // bugg
+        ],
+        gm_dulcimer: [
+          // Dulcimer: Chromatic Percussion
+          "0150_Aspirin_sf2_file",
+          "0150_Chaos_sf2_file",
+          "0150_FluidR3_GM_sf2_file",
+          "0150_GeneralUserGS_sf2_file",
+          // 0150_JCLive_sf2_file // detuned???
+          //0150_SBLive_sf2
+          //0150_SoundBlasterOld_sf2
+          "0151_FluidR3_GM_sf2_file"
+        ],
+        gm_drawbar_organ: [
+          // Drawbar Organ: Organ
+          "0160_JCLive_sf2_file",
+          "0160_Aspirin_sf2_file",
+          "0160_Chaos_sf2_file",
+          "0160_FluidR3_GM_sf2_file",
+          "0160_GeneralUserGS_sf2_file",
+          //0160_SBLive_sf2
+          //0160_SoundBlasterOld_sf2
+          "0161_Aspirin_sf2_file",
+          "0161_FluidR3_GM_sf2_file"
+          //0161_SoundBlasterOld_sf
+        ],
+        gm_percussive_organ: [
+          // Percussive Organ: Organ
+          "0170_JCLive_sf2_file",
+          "0170_Aspirin_sf2_file",
+          "0170_Chaos_sf2_file",
+          "0170_FluidR3_GM_sf2_file",
+          // 0170_GeneralUserGS_sf2_file // repitched
+          //0170_SBLive_sf2
+          //0170_SoundBlasterOld_sf2
+          "0171_FluidR3_GM_sf2_file",
+          // 0171_GeneralUserGS_sf2_file  // repitched
+          "0172_FluidR3_GM_sf2_file"
+        ],
+        gm_rock_organ: [
+          // Rock Organ: Organ
+          "0180_JCLive_sf2_file",
+          "0180_Aspirin_sf2_file",
+          "0180_Chaos_sf2_file",
+          "0180_FluidR3_GM_sf2_file",
+          "0180_GeneralUserGS_sf2_file"
+          //0180_SBLive_sf2
+          //0180_SoundBlasterOld_sf2
+          //0181_Aspirin_sf2_file // flute
+          //0181_GeneralUserGS_sf2_file // marimbalike
+          //0181_SoundBlasterOld_sf
+        ],
+        gm_church_organ: [
+          // Church Organ: Organ
+          "0190_JCLive_sf2_file",
+          "0190_Aspirin_sf2_file",
+          "0190_Chaos_sf2_file",
+          "0190_FluidR3_GM_sf2_file",
+          "0190_GeneralUserGS_sf2_file"
+          //0190_SBLive_sf2
+          //0190_SoundBlasterOld_sf2
+          //0191_Aspirin_sf2_file // string??
+          //0191_GeneralUserGS_sf2_file // weird organ
+          //0191_SoundBlasterOld_sf
+        ],
+        gm_reed_organ: [
+          // Reed Organ: Organ
+          "0200_JCLive_sf2_file",
+          "0200_Aspirin_sf2_file",
+          "0200_Chaos_sf2_file",
+          "0200_FluidR3_GM_sf2_file",
+          "0200_GeneralUserGS_sf2_file",
+          //0200_SBLive_sf2
+          //0200_SoundBlasterOld_sf2
+          "0201_Aspirin_sf2_file",
+          "0201_FluidR3_GM_sf2_file",
+          "0201_GeneralUserGS_sf2_file"
+          //0201_SoundBlasterOld_sf2
+          //0210_Aspirin_sf2_file // buggy
+          //0210_Chaos_sf2_file // bugg
+        ],
+        gm_accordion: [
+          // Accordion: Organ
+          "0210_JCLive_sf2_file",
+          "0210_FluidR3_GM_sf2_file",
+          "0210_GeneralUserGS_sf2_file",
+          //0210_SBLive_sf2
+          //0210_SoundBlasterOld_sf2
+          "0211_Aspirin_sf2_file",
+          "0211_FluidR3_GM_sf2_file",
+          "0211_GeneralUserGS_sf2_file",
+          //0211_SoundBlasterOld_sf2
+          "0212_GeneralUserGS_sf2_file"
+        ],
+        gm_harmonica: [
+          // Harmonica: Organ
+          "0220_FluidR3_GM_sf2_file",
+          "0220_JCLive_sf2_file",
+          "0220_Aspirin_sf2_file",
+          "0220_Chaos_sf2_file",
+          "0220_GeneralUserGS_sf2_file",
+          //0220_SBLive_sf2
+          //0220_SoundBlasterOld_sf2
+          "0221_FluidR3_GM_sf2_file"
+        ],
+        gm_bandoneon: [
+          // Tango Accordion: Organ
+          "0230_Aspirin_sf2_file",
+          "0230_JCLive_sf2_file",
+          "0230_Chaos_sf2_file",
+          "0230_FluidR3_GM_sf2_file",
+          "0230_GeneralUserGS_sf2_file",
+          //0230_SBLive_sf2
+          //0230_SoundBlasterOld_sf2
+          "0231_FluidR3_GM_sf2_file",
+          "0231_GeneralUserGS_sf2_file",
+          "0231_JCLive_sf2_file",
+          //0231_SoundBlasterOld_sf2
+          "0232_FluidR3_GM_sf2_file",
+          "0233_FluidR3_GM_sf2_file"
+        ],
+        gm_acoustic_guitar_nylon: [
+          // Acoustic Guitar (nylon): Guitar
+          "0240_JCLive_sf2_file",
+          "0240_Aspirin_sf2_file",
+          "0240_Chaos_sf2_file",
+          "0240_FluidR3_GM_sf2_file",
+          "0240_GeneralUserGS_sf2_file",
+          "0240_LK_Godin_Nylon_SF2_file",
+          //0240_SBLive_sf2
+          //0240_SoundBlasterOld_sf2
+          // 0241_GeneralUserGS_sf2_file // organ like
+          "0241_JCLive_sf2_file",
+          "0242_JCLive_sf2_file",
+          "0243_JCLive_sf2_file"
+        ],
+        gm_acoustic_guitar_steel: [
+          // Acoustic Guitar (steel): Guitar
+          "0253_Acoustic_Guitar_sf2_file",
+          "0250_Aspirin_sf2_file",
+          "0250_Chaos_sf2_file",
+          "0250_FluidR3_GM_sf2_file",
+          "0250_GeneralUserGS_sf2_file",
+          // 0250_JCLive_sf2_file // detuned
+          "0250_LK_AcousticSteel_SF2_file",
+          //0250_SBLive_sf2
+          //0250_SoundBlasterOld_sf2
+          //0251_Acoustic_Guitar_sf2_file // detuned?
+          // 0251_GeneralUserGS_sf2_file // broken: missing pitches
+          // 0252_Acoustic_Guitar_sf2_file // detuned..
+          // 0252_GeneralUserGS_sf2_file // broken: missing pitches
+          "0253_Acoustic_Guitar_sf2_file",
+          "0253_GeneralUserGS_sf2_file",
+          "0254_Acoustic_Guitar_sf2_file",
+          "0254_GeneralUserGS_sf2_file"
+          //0255_GeneralUserGS_sf2_file // no guitar.
+        ],
+        gm_electric_guitar_jazz: [
+          // Electric Guitar (jazz): Guitar
+          "0260_JCLive_sf2_file",
+          "0260_Aspirin_sf2_file",
+          "0260_Chaos_sf2_file",
+          "0260_FluidR3_GM_sf2_file",
+          "0260_GeneralUserGS_sf2_file",
+          //0260_SBLive_sf2
+          //0260_SoundBlasterOld_sf2
+          "0260_Stratocaster_sf2_file",
+          "0261_GeneralUserGS_sf2_file",
+          //0261_SoundBlasterOld_sf2
+          "0261_Stratocaster_sf2_file",
+          "0262_Stratocaster_sf2_file"
+        ],
+        gm_electric_guitar_clean: [
+          // Electric Guitar (clean): Guitar
+          "0270_Aspirin_sf2_file",
+          "0270_Chaos_sf2_file",
+          "0270_FluidR3_GM_sf2_file",
+          "0270_GeneralUserGS_sf2_file",
+          //0270_Gibson_Les_Paul_sf2_file // detuned
+          // 0270_JCLive_sf2_file // broken: missing notes
+          "0270_SBAWE32_sf2_file",
+          //0270_SBLive_sf2
+          //0270_SoundBlasterOld_sf2
+          "0270_Stratocaster_sf2_file",
+          "0271_GeneralUserGS_sf2_file",
+          "0271_Stratocaster_sf2_file",
+          "0272_Stratocaster_sf2_file"
+        ],
+        gm_electric_guitar_muted: [
+          // Electric Guitar (muted): Guitar
+          "0280_Aspirin_sf2_file",
+          "0280_Chaos_sf2_file",
+          // 0280_FluidR3_GM_sf2_file // broken: wrong notes
+          "0280_GeneralUserGS_sf2_file",
+          "0280_JCLive_sf2_file",
+          //0280_LesPaul_sf2 // missing
+          "0280_LesPaul_sf2_file",
+          "0280_SBAWE32_sf2_file",
+          //0280_SBLive_sf2
+          //0280_SoundBlasterOld_sf2
+          "0281_Aspirin_sf2_file",
+          "0281_FluidR3_GM_sf2_file",
+          "0281_GeneralUserGS_sf2_file",
+          "0282_FluidR3_GM_sf2_file"
+          // 0282_GeneralUserGS_sf2_file // broken: missing notes
+          // 0283_GeneralUserGS_sf2_file // missin
+        ],
+        gm_overdriven_guitar: [
+          // Overdriven Guitar: Guitar
+          "0290_FluidR3_GM_sf2_file",
+          "0290_Aspirin_sf2_file",
+          "0290_Chaos_sf2_file",
+          "0290_GeneralUserGS_sf2_file",
+          //0290_JCLive_sf2_file // detuned....
+          //0290_LesPaul_sf2 // broken
+          "0290_LesPaul_sf2_file",
+          "0290_SBAWE32_sf2_file",
+          //0290_SBLive_sf2
+          //0290_SoundBlasterOld_sf2
+          // 0291_Aspirin_sf2_file // broken
+          // 0291_LesPaul_sf2 // broken
+          "0291_LesPaul_sf2_file",
+          "0291_SBAWE32_sf2_file",
+          //0291_SoundBlasterOld_sf2
+          "0292_Aspirin_sf2_file",
+          // 0292_LesPaul_sf2 // broken
+          "0292_LesPaul_sf2_file"
+        ],
+        gm_distortion_guitar: [
+          // Distortion Guitar: Guitar
+          "0300_FluidR3_GM_sf2_file",
+          "0300_Aspirin_sf2_file",
+          "0300_Chaos_sf2_file",
+          "0300_GeneralUserGS_sf2_file",
+          // 0300_JCLive_sf2_file // broken
+          // 0300_LesPaul_sf2 // broken
+          "0300_LesPaul_sf2_file",
+          //0300_SBAWE32_sf2_file // _2 octave
+          //0300_SBLive_sf2
+          //0300_SoundBlasterOld_sf2
+          // 0301_Aspirin_sf2_file // missing
+          //0301_FluidR3_GM_sf2_file // weird broken bell
+          // 0301_GeneralUserGS_sf2_file // broken
+          // 0301_JCLive_sf2_file // broken
+          // 0301_LesPaul_sf2 // missing
+          // 0301_LesPaul_sf2_file // + 1 oct?
+          "0302_Aspirin_sf2_file",
+          // 0302_GeneralUserGS_sf2_file // not a guitar..
+          //0302_JCLive_sf2_file // broken...
+          // 0303_Aspirin_sf2_file // guitar harmonic??
+          "0304_Aspirin_sf2_file"
+        ],
+        gm_guitar_harmonics: [
+          // Guitar Harmonics: Guitar
+          "0310_Aspirin_sf2_file",
+          "0310_FluidR3_GM_sf2_file",
+          "0310_Chaos_sf2_file"
+          //0310_GeneralUserGS_sf2_file // weird..
+          // 0310_JCLive_sf2_file // weird
+          //0310_LesPaul_sf2 // missing
+          //0310_LesPaul_sf2_file // wrong pitches
+          //0310_SBAWE32_sf2_file // wrong pitches
+          //0310_SBLive_sf2
+          //0310_SoundBlasterOld_sf2
+          //0311_FluidR3_GM_sf2_file // knackt
+          //0311_GeneralUserGS_sf2_file // wrong note
+        ],
+        gm_acoustic_bass: [
+          // Acoustic Bass: Bass
+          "0320_JCLive_sf2_file",
+          "0320_FluidR3_GM_sf2_file",
+          "0320_Aspirin_sf2_file",
+          "0320_Chaos_sf2_file"
+          // 0320_GeneralUserGS_sf2_file // missing notes
+          //0320_SBLive_sf2
+          //0320_SoundBlasterOld_sf2
+          // 0321_GeneralUserGS_sf2_file // nice sound but missing notes
+          // 0322_GeneralUserGS_sf2_file // missing note
+        ],
+        gm_electric_bass_finger: [
+          // Electric Bass (finger): Bass
+          "0330_JCLive_sf2_file",
+          "0330_FluidR3_GM_sf2_file",
+          "0330_Aspirin_sf2_file",
+          //0330_Chaos_sf2_file // same as last
+          "0330_GeneralUserGS_sf2_file"
+          //0330_SBLive_sf2
+          //0330_SoundBlasterOld_sf2
+          //0331_GeneralUserGS_sf2_file // knackt
+          // 0332_GeneralUserGS_sf2_file // missin
+        ],
+        gm_electric_bass_pick: [
+          // Electric Bass (pick): Bass
+          "0340_JCLive_sf2_file",
+          "0340_FluidR3_GM_sf2_file",
+          "0340_Aspirin_sf2_file",
+          //0340_Chaos_sf2_file // same as last
+          "0340_GeneralUserGS_sf2_file",
+          //0340_SBLive_sf2
+          //0340_SoundBlasterOld_sf2
+          "0341_Aspirin_sf2_file"
+          //0341_GeneralUserGS_sf2_file // knack
+        ],
+        gm_fretless_bass: [
+          // Fretless Bass: Bass
+          "0350_Aspirin_sf2_file",
+          // 0350_Chaos_sf2_file // same as last
+          //0350_FluidR3_GM_sf2_file // knackt
+          //0350_GeneralUserGS_sf2_file // _1 oct + knackt
+          "0350_JCLive_sf2_file"
+          //0350_SBLive_sf2
+          //0350_SoundBlasterOld_sf2
+          //0351_GeneralUserGS_sf2_file // missin
+        ],
+        gm_slap_bass_1: [
+          // Slap Bass 1: Bass
+          "0360_Aspirin_sf2_file",
+          "0360_JCLive_sf2_file",
+          "0360_FluidR3_GM_sf2_file",
+          "0360_Chaos_sf2_file"
+          //0360_GeneralUserGS_sf2_file // _1 oct
+          //0360_SBLive_sf2
+          //0360_SoundBlasterOld_sf2
+          //0361_GeneralUserGS_sf2_file // missin
+        ],
+        gm_slap_bass_2: [
+          // Slap Bass 2: Bass
+          "0370_Aspirin_sf2_file",
+          // 0370_Chaos_sf2_file // same as last
+          "0370_FluidR3_GM_sf2_file",
+          "0370_GeneralUserGS_sf2_file",
+          "0370_JCLive_sf2_file"
+          //0370_SBLive_sf2
+          //0370_SoundBlasterOld_sf2
+          //0371_GeneralUserGS_sf2_file // missing
+          //0372_GeneralUserGS_sf2_file // detuned
+          //0385_GeneralUserGS_sf2_file // missin
+        ],
+        gm_synth_bass_1: [
+          // Synth Bass 1: Bass
+          // '0380_Aspirin_sf2_file', // broken in safari https://codeberg.org/uzu/strudel/issues/1384
+          "0380_Chaos_sf2_file",
+          "0380_FluidR3_GM_sf2_file",
+          // 0380_GeneralUserGS_sf2_file // laut
+          "0380_JCLive_sf2_file",
+          //0380_SBLive_sf2
+          //0380_SoundBlasterOld_sf2
+          "0381_FluidR3_GM_sf2_file",
+          "0381_GeneralUserGS_sf2_file",
+          //0382_FluidR3_GM_sf2_file // kein synth bass
+          "0382_GeneralUserGS_sf2_file",
+          "0383_GeneralUserGS_sf2_file",
+          "0384_GeneralUserGS_sf2_file",
+          //0386_GeneralUserGS_sf2_file // knackt
+          "0387_GeneralUserGS_sf2_file"
+        ],
+        gm_synth_bass_2: [
+          // Synth Bass 2: Bass
+          "0390_Aspirin_sf2_file",
+          // 0390_Chaos_sf2_file // same as last
+          "0390_FluidR3_GM_sf2_file",
+          "0390_GeneralUserGS_sf2_file",
+          "0390_JCLive_sf2_file",
+          //0390_SBLive_sf2
+          //0390_SoundBlasterOld_sf2
+          "0391_FluidR3_GM_sf2_file",
+          // 0391_GeneralUserGS_sf2_file // missing
+          //0391_SoundBlasterOld_sf2
+          "0392_FluidR3_GM_sf2_file",
+          //0392_GeneralUserGS_sf2_file // kein synth und _1oct
+          "0393_GeneralUserGS_sf2_file"
+        ],
+        gm_violin: [
+          // Violin: Strings
+          "0400_Aspirin_sf2_file",
+          "0400_Chaos_sf2_file",
+          "0400_JCLive_sf2_file",
+          "0400_FluidR3_GM_sf2_file",
+          "0400_GeneralUserGS_sf2_file",
+          //0400_SBLive_sf2
+          //0400_SoundBlasterOld_sf2
+          "0401_Aspirin_sf2_file",
+          "0401_FluidR3_GM_sf2_file",
+          "0401_GeneralUserGS_sf2_file",
+          "0402_GeneralUserGS_sf2_file"
+        ],
+        gm_viola: [
+          // Viola: Strings
+          "0410_Aspirin_sf2_file",
+          // 0410_Chaos_sf2_file // laut und sehr unstringy
+          "0410_FluidR3_GM_sf2_file",
+          "0410_GeneralUserGS_sf2_file",
+          "0410_JCLive_sf2_file",
+          //0410_SBLive_sf2
+          //0410_SoundBlasterOld_sf2
+          "0411_FluidR3_GM_sf2_file"
+        ],
+        gm_cello: [
+          // Cello: Strings
+          "0420_Aspirin_sf2_file",
+          // 0420_Chaos_sf2_file // kein cello und laut
+          "0420_FluidR3_GM_sf2_file",
+          "0420_GeneralUserGS_sf2_file",
+          "0420_JCLive_sf2_file",
+          //0420_SBLive_sf2
+          //0420_SoundBlasterOld_sf2
+          "0421_FluidR3_GM_sf2_file",
+          "0421_GeneralUserGS_sf2_file"
+        ],
+        gm_contrabass: [
+          // Contrabass: Strings
+          "0430_Aspirin_sf2_file",
+          "0430_Chaos_sf2_file",
+          // 0430_FluidR3_GM_sf2_file // missing notes
+          "0430_GeneralUserGS_sf2_file"
+          //0430_JCLive_sf2_file // _1 oct und meh
+          //0430_SBLive_sf2
+          //0430_SoundBlasterOld_sf2
+          // 0431_FluidR3_GM_sf2_file // missing note
+        ],
+        gm_tremolo_strings: [
+          // Tremolo Strings: Strings
+          "0440_Aspirin_sf2_file",
+          "0440_Chaos_sf2_file",
+          //0440_FluidR3_GM_sf2_file // huuuge
+          "0440_GeneralUserGS_sf2_file",
+          "0440_JCLive_sf2_file",
+          //0440_SBLive_sf2
+          //0440_SoundBlasterOld_sf2
+          "0441_GeneralUserGS_sf2_file",
+          "0442_GeneralUserGS_sf2_file"
+        ],
+        gm_pizzicato_strings: [
+          // Pizzicato Strings: Strings
+          "0450_Aspirin_sf2_file",
+          "0450_Chaos_sf2_file",
+          "0450_FluidR3_GM_sf2_file",
+          "0450_GeneralUserGS_sf2_file",
+          "0450_JCLive_sf2_file",
+          //0450_SBLive_sf2
+          //0450_SoundBlasterOld_sf2
+          "0451_FluidR3_GM_sf2_file"
+        ],
+        gm_orchestral_harp: [
+          // Orchestral Harp: Strings
+          "0460_Aspirin_sf2_file",
+          // 0460_Chaos_sf2_file // knackt
+          "0460_FluidR3_GM_sf2_file",
+          "0460_GeneralUserGS_sf2_file",
+          "0460_JCLive_sf2_file",
+          //0460_SBLive_sf2
+          //0460_SoundBlasterOld_sf2
+          "0461_FluidR3_GM_sf2_file"
+        ],
+        gm_timpani: [
+          // Timpani: Strings
+          "0470_Aspirin_sf2_file",
+          "0470_Chaos_sf2_file",
+          "0470_FluidR3_GM_sf2_file",
+          "0470_GeneralUserGS_sf2_file",
+          // 0470_JCLive_sf2_file // wrong pitches
+          //0470_SBLive_sf2
+          //0470_SoundBlasterOld_sf2
+          "0471_FluidR3_GM_sf2_file",
+          "0471_GeneralUserGS_sf2_file"
+        ],
+        gm_string_ensemble_1: [
+          // String Ensemble 1: Ensemble
+          "0480_Aspirin_sf2_file",
+          "0480_Chaos_sf2_file",
+          "0480_FluidR3_GM_sf2_file",
+          "0480_GeneralUserGS_sf2_file",
+          "0480_JCLive_sf2_file",
+          //0480_SBLive_sf2
+          //0480_SoundBlasterOld_sf2
+          // these dont work..
+          //04810_GeneralUserGS_sf2_file // missing notes + brass
+          //04811_GeneralUserGS_sf2_file  // missing notes + brass
+          //04812_GeneralUserGS_sf2_file
+          //04813_GeneralUserGS_sf2_file
+          //04814_GeneralUserGS_sf2_file
+          //04815_GeneralUserGS_sf2_file
+          //04816_GeneralUserGS_sf2_file
+          //04817_GeneralUserGS_sf2_file
+          "0481_Aspirin_sf2_file",
+          "0481_FluidR3_GM_sf2_file",
+          "0481_GeneralUserGS_sf2_file",
+          "0482_Aspirin_sf2_file",
+          "0482_GeneralUserGS_sf2_file",
+          "0483_GeneralUserGS_sf2_file"
+          // another block of buggyness:
+          //0484_GeneralUserGS_sf2_file // keys?! + knackt
+          //0485_GeneralUserGS_sf2_file // missing notes
+          //0486_GeneralUserGS_sf2_file
+          //0487_GeneralUserGS_sf2_file
+          //0488_GeneralUserGS_sf2_file
+          //0489_GeneralUserGS_sf2_fil
+        ],
+        gm_string_ensemble_2: [
+          // String Ensemble 2: Ensemble
+          "0490_Aspirin_sf2_file",
+          "0490_Chaos_sf2_file",
+          "0490_FluidR3_GM_sf2_file",
+          "0490_GeneralUserGS_sf2_file",
+          "0490_JCLive_sf2_file",
+          //0490_SBLive_sf2
+          //0490_SoundBlasterOld_sf2
+          "0491_GeneralUserGS_sf2_file",
+          "0492_GeneralUserGS_sf2_file"
+        ],
+        gm_synth_strings_1: [
+          // Synth Strings 1: Ensemble
+          "0500_Aspirin_sf2_file",
+          // 0500_Chaos_sf2_file // same as above
+          //0500_FluidR3_GM_sf2_file // detune + knack
+          "0500_GeneralUserGS_sf2_file",
+          "0500_JCLive_sf2_file",
+          //0500_SBLive_sf2
+          //0500_SoundBlasterOld_sf2
+          "0501_FluidR3_GM_sf2_file",
+          // 0501_GeneralUserGS_sf2_file // crackles
+          // 0502_FluidR3_GM_sf2_file // missing
+          "0502_GeneralUserGS_sf2_file",
+          "0503_FluidR3_GM_sf2_file",
+          // 0504_FluidR3_GM_sf2_file // missing
+          "0505_FluidR3_GM_sf2_file"
+        ],
+        gm_synth_strings_2: [
+          // Synth Strings 2: Ensemble
+          "0510_Aspirin_sf2_file",
+          "0510_Chaos_sf2_file",
+          // 0510_FluidR3_GM_sf2_file // detune + crackle
+          "0510_GeneralUserGS_sf2_file",
+          //0510_JCLive_sf2_file // laarge and meh
+          //0510_SBLive_sf2 // missing
+          //0510_SoundBlasterOld_sf2
+          "0511_GeneralUserGS_sf2_file"
+          //0511_SoundBlasterOld_sf
+        ],
+        gm_choir_aahs: [
+          // Choir Aahs: Ensemble
+          "0520_Aspirin_sf2_file",
+          "0520_Chaos_sf2_file",
+          "0520_FluidR3_GM_sf2_file",
+          "0520_GeneralUserGS_sf2_file",
+          "0520_JCLive_sf2_file",
+          //0520_SBLive_sf2
+          "0520_Soul_Ahhs_sf2_file",
+          //0520_SoundBlasterOld_sf2
+          "0521_FluidR3_GM_sf2_file",
+          "0521_Soul_Ahhs_sf2_file",
+          //0521_SoundBlasterOld_sf2
+          "0522_Soul_Ahhs_sf2_file"
+        ],
+        gm_voice_oohs: [
+          // Voice Oohs: Ensemble
+          "0530_Aspirin_sf2_file",
+          "0530_Chaos_sf2_file",
+          "0530_FluidR3_GM_sf2_file",
+          "0530_GeneralUserGS_sf2_file",
+          //0530_JCLive_sf2_file // same as above
+          //0530_SBLive_sf2
+          // 0530_Soul_Ahhs_sf2_file // not ooh
+          //0530_SoundBlasterOld_sf2
+          "0531_FluidR3_GM_sf2_file",
+          // 0531_GeneralUserGS_sf2_file // ends crackle
+          "0531_JCLive_sf2_file"
+          //0531_SoundBlasterOld_sf
+        ],
+        gm_synth_choir: [
+          // Synth Choir: Ensemble
+          "0540_Aspirin_sf2_file",
+          "0540_Chaos_sf2_file",
+          "0540_FluidR3_GM_sf2_file",
+          "0540_GeneralUserGS_sf2_file",
+          //0540_JCLive_sf2_file // large + crackles
+          //0540_SBLive_sf2
+          //0540_SoundBlasterOld_sf2
+          "0541_FluidR3_GM_sf2_file"
+        ],
+        gm_orchestra_hit: [
+          // Orchestra Hit: Ensemble
+          "0550_Aspirin_sf2_file",
+          "0550_Chaos_sf2_file",
+          "0550_FluidR3_GM_sf2_file",
+          "0550_GeneralUserGS_sf2_file",
+          //0550_JCLive_sf2_file // same as above
+          //0550_SBLive_sf2
+          //0550_SoundBlasterOld_sf2
+          //0551_Aspirin_sf2_file // not an orch hit..
+          "0551_FluidR3_GM_sf2_file"
+        ],
+        gm_trumpet: [
+          // Trumpet: Brass
+          "0560_FluidR3_GM_sf2_file",
+          "0560_JCLive_sf2_file",
+          "0560_Aspirin_sf2_file",
+          "0560_Chaos_sf2_file"
+          //0560_GeneralUserGS_sf2_file // _1 oct
+          //0560_SBLive_sf2
+          //0560_SoundBlasterOld_sf
+        ],
+        gm_trombone: [
+          // Trombone: Brass
+          "0570_Aspirin_sf2_file",
+          "0570_Chaos_sf2_file",
+          "0570_FluidR3_GM_sf2_file",
+          "0570_GeneralUserGS_sf2_file",
+          //0570_JCLive_sf2_file // _1oct
+          //0570_SBLive_sf2
+          //0570_SoundBlasterOld_sf2
+          "0571_GeneralUserGS_sf2_file"
+        ],
+        gm_tuba: [
+          // Tuba: Brass
+          "0580_FluidR3_GM_sf2_file",
+          "0580_Aspirin_sf2_file",
+          "0580_Chaos_sf2_file",
+          "0580_GeneralUserGS_sf2_file"
+          //0580_JCLive_sf2_file // _1oct
+          //0580_SBLive_sf2
+          //0580_SoundBlasterOld_sf2
+          //0581_GeneralUserGS_sf2_file // missin
+        ],
+        gm_muted_trumpet: [
+          // Muted Trumpet: Brass
+          "0590_JCLive_sf2_file",
+          "0590_Aspirin_sf2_file",
+          "0590_Chaos_sf2_file",
+          "0590_FluidR3_GM_sf2_file",
+          "0590_GeneralUserGS_sf2_file"
+          //0590_SBLive_sf2
+          //0590_SoundBlasterOld_sf2
+          // 0591_GeneralUserGS_sf2_file // missin
+        ],
+        gm_french_horn: [
+          // French Horn: Brass
+          "0600_Aspirin_sf2_file",
+          //0600_Chaos_sf2_file // weird jumps
+          "0600_FluidR3_GM_sf2_file",
+          "0600_GeneralUserGS_sf2_file",
+          "0600_JCLive_sf2_file",
+          //0600_SBLive_sf2
+          //0600_SoundBlasterOld_sf2
+          "0601_FluidR3_GM_sf2_file"
+          //0601_GeneralUserGS_sf2_file // tiny crackles
+          // 0602_GeneralUserGS_sf2_file // bad gain diffs
+          // 0603_GeneralUserGS_sf2_file // tiny crackle
+        ],
+        gm_brass_section: [
+          // Brass Section: Brass
+          "0610_JCLive_sf2_file",
+          "0610_Aspirin_sf2_file",
+          "0610_Chaos_sf2_file",
+          "0610_FluidR3_GM_sf2_file",
+          "0610_GeneralUserGS_sf2_file"
+          //0610_SBLive_sf2
+          //0610_SoundBlasterOld_sf2
+          // 0611_GeneralUserGS_sf2_file // missing sounds
+          // 0612_GeneralUserGS_sf2_file
+          //0613_GeneralUserGS_sf2_file // _1 oct
+          // 0614_GeneralUserGS_sf2_file // missing sounds
+          // 0615_GeneralUserGS_sf2_file // missing sound
+        ],
+        gm_synth_brass_1: [
+          // Synth Brass 1: Brass
+          "0620_Aspirin_sf2_file",
+          //0620_Chaos_sf2_file // weird gain diff
+          "0620_FluidR3_GM_sf2_file",
+          //0620_GeneralUserGS_sf2_file // loooud
+          // 0620_JCLive_sf2_file // weird gain diff
+          //0620_SBLive_sf2
+          //0620_SoundBlasterOld_sf2
+          "0621_Aspirin_sf2_file",
+          "0621_FluidR3_GM_sf2_file"
+          // 0621_GeneralUserGS_sf2_file // detune + loooud
+          //0622_FluidR3_GM_sf2_file // loud..
+          //0622_GeneralUserGS_sf2_file // loud + crackle
+        ],
+        gm_synth_brass_2: [
+          // Synth Brass 2: Brass
+          "0630_Aspirin_sf2_file",
+          "0630_Chaos_sf2_file",
+          "0630_FluidR3_GM_sf2_file",
+          //0630_GeneralUserGS_sf2_file // detune + looud
+          "0630_JCLive_sf2_file",
+          //0630_SBLive_sf2
+          //0630_SoundBlasterOld_sf2
+          // 0631_Aspirin_sf2_file // looud + detune + gain diffs
+          "0631_FluidR3_GM_sf2_file",
+          //0631_GeneralUserGS_sf2_file // crackles
+          "0632_FluidR3_GM_sf2_file",
+          "0633_FluidR3_GM_sf2_file"
+        ],
+        gm_soprano_sax: [
+          // Soprano Sax: Reed
+          "0640_JCLive_sf2_file",
+          "0640_Aspirin_sf2_file",
+          "0640_Chaos_sf2_file",
+          "0640_FluidR3_GM_sf2_file",
+          // 0640_GeneralUserGS_sf2_file // crackles
+          //0640_SBLive_sf2
+          //0640_SoundBlasterOld_sf2
+          "0641_FluidR3_GM_sf2_file"
+        ],
+        gm_alto_sax: [
+          // Alto Sax: Reed
+          //0650_Aspirin_sf2_file // this is not an alto sax
+          "0650_JCLive_sf2_file",
+          "0650_Chaos_sf2_file",
+          "0650_FluidR3_GM_sf2_file",
+          "0650_GeneralUserGS_sf2_file",
+          //0650_SBLive_sf2
+          //0650_SoundBlasterOld_sf2
+          "0651_Aspirin_sf2_file",
+          "0651_FluidR3_GM_sf2_file"
+        ],
+        gm_tenor_sax: [
+          // Tenor Sax: Reed
+          "0660_JCLive_sf2_file",
+          "0660_Aspirin_sf2_file",
+          "0660_Chaos_sf2_file",
+          //0660_FluidR3_GM_sf2_file // weird pitches
+          "0660_GeneralUserGS_sf2_file"
+          //0660_SBLive_sf2
+          //0660_SoundBlasterOld_sf2
+          // 0661_FluidR3_GM_sf2_file // weird pitches
+          // 0661_GeneralUserGS_sf2_file // missin
+        ],
+        gm_baritone_sax: [
+          // Baritone Sax: Reed
+          "0670_JCLive_sf2_file",
+          "0670_Aspirin_sf2_file",
+          "0670_Chaos_sf2_file",
+          "0670_FluidR3_GM_sf2_file",
+          "0670_GeneralUserGS_sf2_file",
+          //0670_SBLive_sf2
+          //0670_SoundBlasterOld_sf2
+          "0671_FluidR3_GM_sf2_file"
+        ],
+        gm_oboe: [
+          // Oboe: Reed
+          //0680_Aspirin_sf2_file // tiny crackles
+          "0680_JCLive_sf2_file",
+          "0680_Chaos_sf2_file",
+          "0680_FluidR3_GM_sf2_file",
+          "0680_GeneralUserGS_sf2_file",
+          //0680_SBLive_sf2
+          //0680_SoundBlasterOld_sf2
+          "0681_FluidR3_GM_sf2_file"
+        ],
+        gm_english_horn: [
+          // English Horn: Reed
+          "0690_JCLive_sf2_file",
+          "0690_Aspirin_sf2_file",
+          //0690_Chaos_sf2_file // detuned
+          "0690_FluidR3_GM_sf2_file",
+          //0690_GeneralUserGS_sf2_file // +1 oct
+          //0690_SBLive_sf2
+          //0690_SoundBlasterOld_sf2
+          "0691_FluidR3_GM_sf2_file"
+        ],
+        gm_bassoon: [
+          // Bassoon: Reed
+          "0700_JCLive_sf2_file",
+          //0700_Aspirin_sf2_file // detune + gain diffs
+          // 0700_Chaos_sf2_file // detune + crackles
+          "0700_FluidR3_GM_sf2_file",
+          "0700_GeneralUserGS_sf2_file",
+          //0700_SBLive_sf2
+          //0700_SoundBlasterOld_sf2
+          "0701_FluidR3_GM_sf2_file"
+          //0701_GeneralUserGS_sf2_file // missin
+        ],
+        gm_clarinet: [
+          // Clarinet: Reed
+          "0710_JCLive_sf2_file",
+          "0710_Aspirin_sf2_file",
+          "0710_Chaos_sf2_file",
+          "0710_FluidR3_GM_sf2_file",
+          "0710_GeneralUserGS_sf2_file",
+          //0710_SBLive_sf2
+          //0710_SoundBlasterOld_sf2
+          "0711_FluidR3_GM_sf2_file"
+        ],
+        gm_piccolo: [
+          // Piccolo: Pipe
+          "0720_JCLive_sf2_file",
+          "0720_Aspirin_sf2_file",
+          // 0720_Chaos_sf2_file // not a piccolo
+          "0720_FluidR3_GM_sf2_file",
+          "0720_GeneralUserGS_sf2_file",
+          //0720_SBLive_sf2
+          //0720_SoundBlasterOld_sf2
+          "0721_FluidR3_GM_sf2_file"
+          //0721_SoundBlasterOld_sf
+        ],
+        gm_flute: [
+          // Flute: Pipe
+          "0730_JCLive_sf2_file",
+          "0730_Aspirin_sf2_file",
+          //0730_Chaos_sf2_file // etune
+          "0730_FluidR3_GM_sf2_file",
+          "0730_GeneralUserGS_sf2_file",
+          //0730_SBLive_sf2
+          //0730_SoundBlasterOld_sf2
+          //0731_Aspirin_sf2_file // not a flute
+          "0731_FluidR3_GM_sf2_file"
+          //0731_SoundBlasterOld_sf
+        ],
+        gm_recorder: [
+          // Recorder: Pipe
+          "0740_JCLive_sf2_file",
+          "0740_Aspirin_sf2_file",
+          "0740_Chaos_sf2_file",
+          "0740_FluidR3_GM_sf2_file",
+          "0740_GeneralUserGS_sf2_file"
+          //0740_SBLive_sf2
+          //0740_SoundBlasterOld_sf2
+          // 0741_GeneralUserGS_sf2_file // missin
+        ],
+        gm_pan_flute: [
+          // Pan Flute: Pipe
+          "0750_JCLive_sf2_file",
+          "0750_FluidR3_GM_sf2_file",
+          "0750_Aspirin_sf2_file",
+          "0750_Chaos_sf2_file",
+          "0750_GeneralUserGS_sf2_file",
+          //0750_SBLive_sf2
+          //0750_SoundBlasterOld_sf2
+          "0751_Aspirin_sf2_file",
+          "0751_FluidR3_GM_sf2_file",
+          "0751_GeneralUserGS_sf2_file"
+          //0751_SoundBlasterOld_sf
+        ],
+        gm_blown_bottle: [
+          // Blown bottle: Pipe
+          "0760_FluidR3_GM_sf2_file",
+          "0760_JCLive_sf2_file",
+          // 0760_Aspirin_sf2_file // same as below w crackle
+          "0760_Chaos_sf2_file",
+          "0760_GeneralUserGS_sf2_file",
+          //0760_SBLive_sf2
+          //0760_SoundBlasterOld_sf2
+          "0761_FluidR3_GM_sf2_file"
+          // 0761_GeneralUserGS_sf2_file // missing
+          //0761_SoundBlasterOld_sf2
+          // 0762_GeneralUserGS_sf2_file // missin
+        ],
+        gm_shakuhachi: [
+          // Shakuhachi: Pipe
+          "0770_JCLive_sf2_file",
+          "0771_FluidR3_GM_sf2_file",
+          "0770_Aspirin_sf2_file",
+          //0770_Chaos_sf2_file // not shakuhachi
+          "0770_FluidR3_GM_sf2_file",
+          "0770_GeneralUserGS_sf2_file"
+          //0770_SBLive_sf2
+          //0770_SoundBlasterOld_sf2
+          // 0771_GeneralUserGS_sf2_file // missing
+          // 0772_GeneralUserGS_sf2_file // missin
+        ],
+        gm_whistle: [
+          // Whistle: Pipe
+          "0780_FluidR3_GM_sf2_file",
+          "0780_JCLive_sf2_file",
+          "0780_Aspirin_sf2_file",
+          "0780_Chaos_sf2_file"
+          //0780_GeneralUserGS_sf2_file // loud..
+          //0780_SBLive_sf2
+          //0780_SoundBlasterOld_sf2
+          // 0781_GeneralUserGS_sf2_file // detune + crackle
+        ],
+        gm_ocarina: [
+          // Ocarina: Pipe
+          "0790_FluidR3_GM_sf2_file",
+          "0790_JCLive_sf2_file",
+          "0790_Aspirin_sf2_file",
+          //0790_Chaos_sf2_file // same as above
+          "0790_GeneralUserGS_sf2_file"
+          //0790_SBLive_sf2
+          //0790_SoundBlasterOld_sf2
+          //0791_GeneralUserGS_sf2_file // missin
+        ],
+        gm_lead_1_square: [
+          // Lead 1 (square): Synth Lead
+          "0800_Aspirin_sf2_file",
+          "0800_Chaos_sf2_file",
+          "0800_FluidR3_GM_sf2_file"
+          // 0800_GeneralUserGS_sf2_file // detuned
+          // 0800_JCLive_sf2_file // detuned
+          //0800_SBLive_sf2
+          //0800_SoundBlasterOld_sf2
+          //0801_FluidR3_GM_sf2_file // detune
+          // 0801_GeneralUserGS_sf2_file // detun
+        ],
+        gm_lead_2_sawtooth: [
+          // Lead 2 (sawtooth): Synth Lead
+          "0810_JCLive_sf2_file",
+          "0810_Aspirin_sf2_file",
+          "0810_Chaos_sf2_file",
+          "0810_FluidR3_GM_sf2_file",
+          "0810_GeneralUserGS_sf2_file",
+          //0810_SBLive_sf2
+          //0810_SoundBlasterOld_sf2
+          "0811_Aspirin_sf2_file",
+          "0811_GeneralUserGS_sf2_file"
+          //0811_SoundBlasterOld_sf
+        ],
+        gm_lead_3_calliope: [
+          // Lead 3 (calliope): Synth Lead
+          "0820_JCLive_sf2_file",
+          "0820_Aspirin_sf2_file",
+          "0820_Chaos_sf2_file",
+          "0820_FluidR3_GM_sf2_file",
+          "0820_GeneralUserGS_sf2_file",
+          //0820_SBLive_sf2
+          //0820_SoundBlasterOld_sf2
+          "0821_FluidR3_GM_sf2_file",
+          "0821_GeneralUserGS_sf2_file"
+          //0821_SoundBlasterOld_sf2
+          // 0822_GeneralUserGS_sf2_file // missing
+          //0823_GeneralUserGS_sf2_file // missin
+        ],
+        gm_lead_4_chiff: [
+          // Lead 4 (chiff): Synth Lead
+          "0830_JCLive_sf2_file",
+          "0830_Aspirin_sf2_file",
+          // 0830_Chaos_sf2_file // same as above
+          "0830_FluidR3_GM_sf2_file",
+          "0830_GeneralUserGS_sf2_file",
+          //0830_SBLive_sf2
+          //0830_SoundBlasterOld_sf2
+          "0831_FluidR3_GM_sf2_file",
+          "0831_GeneralUserGS_sf2_file"
+          //0831_SoundBlasterOld_sf
+        ],
+        gm_lead_5_charang: [
+          // Lead 5 (charang): Synth Lead
+          "0840_JCLive_sf2_file",
+          "0840_FluidR3_GM_sf2_file",
+          "0840_Aspirin_sf2_file",
+          "0840_Chaos_sf2_file",
+          "0840_GeneralUserGS_sf2_file",
+          //0840_SBLive_sf2
+          //0840_SoundBlasterOld_sf2
+          "0841_Aspirin_sf2_file",
+          "0841_Chaos_sf2_file",
+          "0841_FluidR3_GM_sf2_file",
+          "0841_GeneralUserGS_sf2_file",
+          //0841_JCLive_sf2_file // +1oct + detune
+          //0841_SoundBlasterOld_sf2
+          "0842_FluidR3_GM_sf2_file"
+        ],
+        gm_lead_6_voice: [
+          // Lead 6 (voice): Synth Lead
+          "0850_JCLive_sf2_file",
+          "0850_Aspirin_sf2_file",
+          // 0850_Chaos_sf2_file // same as above
+          "0850_FluidR3_GM_sf2_file",
+          // 0850_GeneralUserGS_sf2_file // no voice
+          //0850_SBLive_sf2
+          //0850_SoundBlasterOld_sf2
+          "0851_FluidR3_GM_sf2_file",
+          "0851_GeneralUserGS_sf2_file",
+          "0851_JCLive_sf2_file"
+          //0851_SoundBlasterOld_sf
+        ],
+        gm_lead_7_fifths: [
+          // Lead 7 (fifths): Synth Lead
+          "0860_JCLive_sf2_file",
+          "0860_Aspirin_sf2_file",
+          "0860_Chaos_sf2_file",
+          // 0860_FluidR3_GM_sf2_file // loud and not fitting
+          "0860_GeneralUserGS_sf2_file",
+          //0860_SBLive_sf2
+          //0860_SoundBlasterOld_sf2
+          "0861_Aspirin_sf2_file"
+          // 0861_FluidR3_GM_sf2_file // lout and not fitting
+          //0861_SoundBlasterOld_sf
+        ],
+        gm_lead_8_bass_lead: [
+          // Lead 8 (bass + lead): Synth Lead
+          "0870_JCLive_sf2_file",
+          "0870_Aspirin_sf2_file",
+          "0870_Chaos_sf2_file",
+          "0870_FluidR3_GM_sf2_file",
+          "0870_GeneralUserGS_sf2_file"
+          //0870_SBLive_sf2
+          //0870_SoundBlasterOld_sf2
+          // 0871_GeneralUserGS_sf2_file // loud + detune
+          //0872_GeneralUserGS_sf2_file // loud
+          //0873_GeneralUserGS_sf2_file // lou
+        ],
+        gm_pad_new_age: [
+          // Pad 1 (new age): Synth Pad
+          "0880_JCLive_sf2_file",
+          "0880_Aspirin_sf2_file",
+          "0880_Chaos_sf2_file",
+          "0880_FluidR3_GM_sf2_file",
+          "0880_GeneralUserGS_sf2_file",
+          //0880_SBLive_sf2
+          //0880_SoundBlasterOld_sf2
+          "0881_Aspirin_sf2_file",
+          "0881_FluidR3_GM_sf2_file",
+          "0881_GeneralUserGS_sf2_file",
+          //0881_SoundBlasterOld_sf2
+          "0882_Aspirin_sf2_file",
+          // 0882_FluidR3_GM_sf2_file // missing
+          "0882_GeneralUserGS_sf2_file",
+          //0883_GeneralUserGS_sf2_file // missing
+          // 0884_GeneralUserGS_sf2_file // broken
+          "0885_GeneralUserGS_sf2_file",
+          //0886_GeneralUserGS_sf2_file // not a pad
+          "0887_GeneralUserGS_sf2_file"
+          //0888_GeneralUserGS_sf2_file // not a pad
+          //0889_GeneralUserGS_sf2_file // not a pa
+        ],
+        gm_pad_warm: [
+          // Pad 2 (warm): Synth Pad
+          "0890_JCLive_sf2_file",
+          "0890_Aspirin_sf2_file",
+          "0890_Chaos_sf2_file",
+          "0890_FluidR3_GM_sf2_file",
+          "0890_GeneralUserGS_sf2_file",
+          //0890_SBLive_sf2
+          //0890_SoundBlasterOld_sf2
+          "0891_Aspirin_sf2_file",
+          "0891_FluidR3_GM_sf2_file"
+          // 0891_GeneralUserGS_sf2_file // nois
+        ],
+        gm_pad_poly: [
+          // Pad 3 (polysynth): Synth Pad
+          //0900_Aspirin_sf2_file // same as belo
+          "0900_JCLive_sf2_file",
+          "0900_Chaos_sf2_file",
+          "0900_FluidR3_GM_sf2_file",
+          "0900_GeneralUserGS_sf2_file",
+          //0900_SBLive_sf2
+          //0900_SoundBlasterOld_sf2
+          "0901_Aspirin_sf2_file",
+          "0901_FluidR3_GM_sf2_file",
+          "0901_GeneralUserGS_sf2_file"
+          //0901_SoundBlasterOld_sf
+        ],
+        gm_pad_choir: [
+          // Pad 4 (choir): Synth Pad
+          "0910_FluidR3_GM_sf2_file",
+          "0910_JCLive_sf2_file",
+          "0910_Aspirin_sf2_file",
+          //0910_Chaos_sf2_file // +1oct
+          "0910_GeneralUserGS_sf2_file",
+          //0910_SBLive_sf2
+          //0910_SoundBlasterOld_sf2
+          // 0911_Aspirin_sf2_file // fluty crackles
+          "0911_GeneralUserGS_sf2_file",
+          "0911_JCLive_sf2_file"
+          //0911_SoundBlasterOld_sf
+        ],
+        gm_pad_bowed: [
+          // Pad 5 (bowed): Synth Pad
+          "0920_JCLive_sf2_file",
+          "0920_Aspirin_sf2_file",
+          //0920_Chaos_sf2_file // same as above
+          //0920_FluidR3_GM_sf2_file // detuned?
+          "0920_GeneralUserGS_sf2_file",
+          //0920_SBLive_sf2
+          //0920_SoundBlasterOld_sf2
+          "0921_Aspirin_sf2_file",
+          "0921_GeneralUserGS_sf2_file"
+          //0921_SoundBlasterOld_sf
+        ],
+        gm_pad_metallic: [
+          // Pad 6 (metallic): Synth Pad
+          "0930_Aspirin_sf2_file",
+          "0930_Chaos_sf2_file",
+          "0930_FluidR3_GM_sf2_file",
+          "0930_GeneralUserGS_sf2_file",
+          // 0930_JCLive_sf2_file // buggy zones: guitar / synth
+          //0930_SBLive_sf2
+          //0930_SoundBlasterOld_sf2
+          "0931_Aspirin_sf2_file",
+          "0931_FluidR3_GM_sf2_file",
+          "0931_GeneralUserGS_sf2_file"
+          //0931_SoundBlasterOld_sf
+        ],
+        gm_pad_halo: [
+          // Pad 7 (halo): Synth Pad
+          // 0940_Aspirin_sf2_file // same as below
+          "0940_Chaos_sf2_file",
+          "0940_FluidR3_GM_sf2_file",
+          "0940_GeneralUserGS_sf2_file",
+          "0940_JCLive_sf2_file",
+          //0940_SBLive_sf2
+          //0940_SoundBlasterOld_sf2
+          "0941_Aspirin_sf2_file",
+          "0941_FluidR3_GM_sf2_file",
+          "0941_GeneralUserGS_sf2_file",
+          "0941_JCLive_sf2_file"
+        ],
+        gm_pad_sweep: [
+          // Pad 8 (sweep): Synth Pad
+          "0950_Aspirin_sf2_file",
+          "0950_Chaos_sf2_file",
+          "0950_FluidR3_GM_sf2_file",
+          "0950_GeneralUserGS_sf2_file",
+          "0950_JCLive_sf2_file",
+          //0950_SBLive_sf2
+          //0950_SoundBlasterOld_sf2
+          "0951_FluidR3_GM_sf2_file",
+          "0951_GeneralUserGS_sf2_file"
+        ],
+        gm_fx_rain: [
+          // FX 1 (rain): Synth Effects
+          //0960_Aspirin_sf2_file //mixed samples?
+          "0960_FluidR3_GM_sf2_file",
+          "0960_Chaos_sf2_file",
+          "0960_GeneralUserGS_sf2_file",
+          // 0960_JCLive_sf2_file // mixed samples?
+          //0960_SBLive_sf2
+          //0960_SoundBlasterOld_sf2
+          "0961_Aspirin_sf2_file",
+          "0961_FluidR3_GM_sf2_file",
+          // 0961_GeneralUserGS_sf2_file // ?!?!
+          //0961_SoundBlasterOld_sf2
+          "0962_GeneralUserGS_sf2_file"
+        ],
+        gm_fx_soundtrack: [
+          // FX 2 (soundtrack): Synth Effects
+          "0970_FluidR3_GM_sf2_file",
+          "0970_Aspirin_sf2_file",
+          //0970_Chaos_sf2_file // wrong pitch
+          "0970_GeneralUserGS_sf2_file",
+          //0970_JCLive_sf2_file // wrong pitch
+          //0970_SBLive_sf2
+          //0970_SoundBlasterOld_sf2
+          "0971_FluidR3_GM_sf2_file",
+          "0971_GeneralUserGS_sf2_file"
+          //0971_SoundBlasterOld_sf
+        ],
+        gm_fx_crystal: [
+          // FX 3 (crystal): Synth Effects
+          "0980_Aspirin_sf2_file",
+          "0980_JCLive_sf2_file",
+          "0980_Chaos_sf2_file",
+          // 0980_FluidR3_GM_sf2_file // some notes are weird
+          "0980_GeneralUserGS_sf2_file",
+          "0981_FluidR3_GM_sf2_file",
+          //0980_SBLive_sf2
+          //0980_SoundBlasterOld_sf2
+          "0981_Aspirin_sf2_file",
+          "0981_GeneralUserGS_sf2_file",
+          //0981_SoundBlasterOld_sf2
+          "0982_GeneralUserGS_sf2_file",
+          "0983_GeneralUserGS_sf2_file",
+          "0984_GeneralUserGS_sf2_file"
+        ],
+        gm_fx_atmosphere: [
+          // FX 4 (atmosphere): Synth Effects
+          "0990_JCLive_sf2_file",
+          "0990_Aspirin_sf2_file",
+          "0990_Chaos_sf2_file",
+          "0990_FluidR3_GM_sf2_file",
+          "0990_GeneralUserGS_sf2_file",
+          //0990_SBLive_sf2
+          //0990_SoundBlasterOld_sf2
+          "0991_Aspirin_sf2_file",
+          "0991_FluidR3_GM_sf2_file",
+          "0991_GeneralUserGS_sf2_file",
+          "0991_JCLive_sf2_file",
+          //0991_SoundBlasterOld_sf2
+          "0992_FluidR3_GM_sf2_file",
+          "0992_JCLive_sf2_file",
+          "0993_JCLive_sf2_file",
+          "0994_JCLive_sf2_file"
+        ],
+        gm_fx_brightness: [
+          // FX 5 (brightness): Synth Effects
+          "1000_JCLive_sf2_file",
+          "1000_Aspirin_sf2_file",
+          "1000_Chaos_sf2_file",
+          "1000_FluidR3_GM_sf2_file",
+          "1000_GeneralUserGS_sf2_file",
+          //1000_SBLive_sf2
+          //1000_SoundBlasterOld_sf2
+          "1001_Aspirin_sf2_file",
+          "1001_FluidR3_GM_sf2_file",
+          "1001_GeneralUserGS_sf2_file",
+          "1001_JCLive_sf2_file",
+          //1001_SoundBlasterOld_sf2
+          "1002_Aspirin_sf2_file",
+          "1002_FluidR3_GM_sf2_file",
+          "1002_GeneralUserGS_sf2_file"
+        ],
+        gm_fx_goblins: [
+          // FX 6 (goblins): Synth Effects
+          "1010_FluidR3_GM_sf2_file",
+          "1010_JCLive_sf2_file",
+          "1010_Aspirin_sf2_file",
+          "1010_Chaos_sf2_file",
+          "1010_GeneralUserGS_sf2_file",
+          //1010_SBLive_sf2
+          //1010_SoundBlasterOld_sf2
+          "1011_Aspirin_sf2_file",
+          "1011_FluidR3_GM_sf2_file",
+          "1011_JCLive_sf2_file",
+          "1012_Aspirin_sf2_file"
+        ],
+        gm_fx_echoes: [
+          // FX 7 (echoes): Synth Effects
+          "1020_FluidR3_GM_sf2_file",
+          "1020_JCLive_sf2_file",
+          "1020_Aspirin_sf2_file",
+          "1020_Chaos_sf2_file",
+          "1020_GeneralUserGS_sf2_file",
+          //1020_SBLive_sf2
+          //1020_SoundBlasterOld_sf2
+          "1021_Aspirin_sf2_file",
+          "1021_FluidR3_GM_sf2_file",
+          "1021_GeneralUserGS_sf2_file",
+          "1021_JCLive_sf2_file",
+          //1021_SoundBlasterOld_sf2
+          "1022_GeneralUserGS_sf2_file"
+        ],
+        gm_fx_sci_fi: [
+          // FX 8 (sci_fi): Synth Effects
+          "1030_FluidR3_GM_sf2_file",
+          "1030_Aspirin_sf2_file",
+          "1030_Chaos_sf2_file",
+          "1030_GeneralUserGS_sf2_file",
+          "1030_JCLive_sf2_file",
+          //1030_SBLive_sf2
+          //1030_SoundBlasterOld_sf2
+          "1031_Aspirin_sf2_file",
+          "1031_FluidR3_GM_sf2_file",
+          "1031_GeneralUserGS_sf2_file",
+          //1031_SoundBlasterOld_sf2
+          "1032_FluidR3_GM_sf2_file"
+        ],
+        gm_sitar: [
+          // Sitar: Ethnic
+          "1040_Aspirin_sf2_file",
+          "1040_FluidR3_GM_sf2_file",
+          "1040_JCLive_sf2_file",
+          "1040_Chaos_sf2_file",
+          "1040_GeneralUserGS_sf2_file",
+          //1040_SBLive_sf2
+          //1040_SoundBlasterOld_sf2
+          "1041_FluidR3_GM_sf2_file",
+          "1041_GeneralUserGS_sf2_file"
+        ],
+        gm_banjo: [
+          // Banjo: Ethnic
+          "1050_FluidR3_GM_sf2_file",
+          "1050_JCLive_sf2_file",
+          "1050_Aspirin_sf2_file",
+          "1050_Chaos_sf2_file",
+          "1050_GeneralUserGS_sf2_file",
+          //1050_SBLive_sf2
+          //1050_SoundBlasterOld_sf2
+          "1051_GeneralUserGS_sf2_file"
+        ],
+        gm_shamisen: [
+          // Shamisen: Ethnic
+          "1060_JCLive_sf2_file",
+          "1060_FluidR3_GM_sf2_file",
+          "1060_Aspirin_sf2_file",
+          "1060_Chaos_sf2_file",
+          "1060_GeneralUserGS_sf2_file",
+          //1060_SBLive_sf2
+          //1060_SoundBlasterOld_sf2
+          "1061_FluidR3_GM_sf2_file",
+          "1061_GeneralUserGS_sf2_file"
+          //1061_SoundBlasterOld_sf
+        ],
+        gm_koto: [
+          // Koto: Ethnic
+          "1070_FluidR3_GM_sf2_file",
+          "1070_JCLive_sf2_file",
+          "1070_Aspirin_sf2_file",
+          "1070_Chaos_sf2_file",
+          "1070_GeneralUserGS_sf2_file",
+          //1070_SBLive_sf2
+          //1070_SoundBlasterOld_sf2
+          "1071_FluidR3_GM_sf2_file",
+          "1071_GeneralUserGS_sf2_file",
+          "1072_GeneralUserGS_sf2_file",
+          "1073_GeneralUserGS_sf2_file"
+        ],
+        gm_kalimba: [
+          // Kalimba: Ethnic
+          "1080_JCLive_sf2_file",
+          "1080_FluidR3_GM_sf2_file",
+          "1080_Aspirin_sf2_file",
+          "1080_Chaos_sf2_file",
+          "1080_GeneralUserGS_sf2_file"
+          //1080_SBLive_sf2
+          //1080_SoundBlasterOld_sf2
+          //1081_SoundBlasterOld_sf
+        ],
+        gm_bagpipe: [
+          // Bagpipe: Ethnic
+          "1090_Aspirin_sf2_file"
+          // '1090_Chaos_sf2_file', // broken pitches
+          // '1090_GeneralUserGS_sf2_file', // broken pitches
+          // '1090_FluidR3_GM_sf2_file', // broken pitches ?
+          // '1090_JCLive_sf2_file', // broken pitches ?
+          //1090_SBLive_sf2
+          //1090_SoundBlasterOld_sf2
+          //1091_SoundBlasterOld_sf
+        ],
+        gm_fiddle: [
+          // Fiddle: Ethnic
+          "1100_JCLive_sf2_file",
+          "1100_Aspirin_sf2_file",
+          "1100_Chaos_sf2_file",
+          "1100_FluidR3_GM_sf2_file",
+          "1100_GeneralUserGS_sf2_file",
+          //1100_SBLive_sf2
+          //1100_SoundBlasterOld_sf2
+          "1101_Aspirin_sf2_file",
+          "1101_FluidR3_GM_sf2_file",
+          "1101_GeneralUserGS_sf2_file",
+          "1102_GeneralUserGS_sf2_file"
+        ],
+        gm_shanai: [
+          // Shanai: Ethnic
+          "1110_Aspirin_sf2_file",
+          "1110_FluidR3_GM_sf2_file",
+          "1110_JCLive_sf2_file",
+          "1110_Chaos_sf2_file",
+          "1110_GeneralUserGS_sf2_file"
+          //1110_SBLive_sf2
+          //1110_SoundBlasterOld_sf
+        ],
+        gm_tinkle_bell: [
+          // Tinkle Bell: Percussive
+          "1120_Aspirin_sf2_file"
+          // '1120_Chaos_sf2_file', // same as above
+          // '1120_GeneralUserGS_sf2_file', // sounds exactly as Aspirin
+          // '1120_FluidR3_GM_sf2_file', // +1oct
+          // '1120_JCLive_sf2_file', // +1oct
+          //1120_SBLive_sf2
+          //1120_SoundBlasterOld_sf2
+          //1121_SoundBlasterOld_sf
+        ],
+        gm_agogo: [
+          // Agogo: Percussive
+          "1130_JCLive_sf2_file",
+          "1130_Aspirin_sf2_file",
+          "1130_Chaos_sf2_file",
+          "1130_FluidR3_GM_sf2_file",
+          "1130_GeneralUserGS_sf2_file",
+          //1130_SBLive_sf2
+          //1130_SoundBlasterOld_sf2
+          "1131_FluidR3_GM_sf2_file"
+          //1131_SoundBlasterOld_sf
+        ],
+        gm_steel_drums: [
+          // Steel Drums: Percussive
+          "1140_FluidR3_GM_sf2_file",
+          "1140_Aspirin_sf2_file",
+          "1140_JCLive_sf2_file",
+          "1140_Chaos_sf2_file",
+          "1140_GeneralUserGS_sf2_file",
+          //1140_SBLive_sf2
+          //1140_SoundBlasterOld_sf2
+          "1141_FluidR3_GM_sf2_file"
+        ],
+        gm_woodblock: [
+          // Woodblock: Percussive
+          "1150_JCLive_sf2_file",
+          "1150_Aspirin_sf2_file",
+          "1150_Chaos_sf2_file",
+          "1150_FluidR3_GM_sf2_file",
+          "1150_GeneralUserGS_sf2_file",
+          //1150_SBLive_sf2
+          //1150_SoundBlasterOld_sf2
+          "1151_FluidR3_GM_sf2_file",
+          "1151_GeneralUserGS_sf2_file",
+          "1152_FluidR3_GM_sf2_file",
+          "1152_GeneralUserGS_sf2_file"
+        ],
+        gm_taiko_drum: [
+          // Taiko Drum: Percussive
+          "1160_JCLive_sf2_file",
+          "1160_FluidR3_GM_sf2_file",
+          "1160_Aspirin_sf2_file",
+          "1160_Chaos_sf2_file",
+          "1160_GeneralUserGS_sf2_file",
+          //1160_SBLive_sf2
+          //1160_SoundBlasterOld_sf2
+          "1161_FluidR3_GM_sf2_file",
+          "1161_GeneralUserGS_sf2_file",
+          //1161_SoundBlasterOld_sf2
+          "1162_FluidR3_GM_sf2_file",
+          "1162_GeneralUserGS_sf2_file",
+          "1163_FluidR3_GM_sf2_file"
+        ],
+        gm_melodic_tom: [
+          // Melodic Tom: Percussive
+          "1170_JCLive_sf2_file",
+          "1170_Aspirin_sf2_file",
+          "1170_Chaos_sf2_file",
+          "1170_FluidR3_GM_sf2_file",
+          "1170_GeneralUserGS_sf2_file",
+          //1170_SBLive_sf2
+          //1170_SoundBlasterOld_sf2
+          "1171_FluidR3_GM_sf2_file",
+          "1171_GeneralUserGS_sf2_file",
+          "1172_FluidR3_GM_sf2_file",
+          "1173_FluidR3_GM_sf2_file"
+        ],
+        gm_synth_drum: [
+          // Synth Drum: Percussive
+          "1180_JCLive_sf2_file",
+          "1180_Aspirin_sf2_file",
+          "1180_Chaos_sf2_file",
+          "1180_FluidR3_GM_sf2_file",
+          "1180_GeneralUserGS_sf2_file",
+          //1180_SBLive_sf2
+          //1180_SoundBlasterOld_sf2
+          "1181_FluidR3_GM_sf2_file",
+          "1181_GeneralUserGS_sf2_file"
+          //1181_SoundBlasterOld_sf
+        ],
+        gm_reverse_cymbal: [
+          // Reverse Cymbal: Percussive
+          "1190_JCLive_sf2_file",
+          "1190_Aspirin_sf2_file",
+          "1190_Chaos_sf2_file",
+          "1190_FluidR3_GM_sf2_file",
+          "1190_GeneralUserGS_sf2_file",
+          //1190_SBLive_sf2
+          //1190_SoundBlasterOld_sf2
+          "1191_GeneralUserGS_sf2_file",
+          "1192_GeneralUserGS_sf2_file",
+          "1193_GeneralUserGS_sf2_file",
+          "1194_GeneralUserGS_sf2_file"
+        ],
+        gm_guitar_fret_noise: [
+          // Guitar Fret Noise: Sound effects
+          "1200_JCLive_sf2_file",
+          "1200_Aspirin_sf2_file",
+          "1200_Chaos_sf2_file",
+          "1200_FluidR3_GM_sf2_file",
+          "1200_GeneralUserGS_sf2_file",
+          //1200_SBLive_sf2
+          //1200_SoundBlasterOld_sf2
+          "1201_Aspirin_sf2_file",
+          "1201_GeneralUserGS_sf2_file",
+          "1202_GeneralUserGS_sf2_file"
+        ],
+        gm_breath_noise: [
+          // Breath Noise: Sound effects
+          "1210_FluidR3_GM_sf2_file",
+          "1210_JCLive_sf2_file",
+          "1210_Aspirin_sf2_file",
+          "1210_Chaos_sf2_file",
+          "1210_GeneralUserGS_sf2_file",
+          //1210_SBLive_sf2
+          //1210_SoundBlasterOld_sf2
+          "1211_Aspirin_sf2_file",
+          "1211_GeneralUserGS_sf2_file",
+          "1212_GeneralUserGS_sf2_file"
+        ],
+        gm_seashore: [
+          // Seashore: Sound effects
+          "1220_JCLive_sf2_file",
+          "1220_Aspirin_sf2_file",
+          "1220_Chaos_sf2_file",
+          "1220_FluidR3_GM_sf2_file",
+          "1220_GeneralUserGS_sf2_file",
+          //1220_SBLive_sf2
+          //1220_SoundBlasterOld_sf2
+          "1221_Aspirin_sf2_file",
+          "1221_GeneralUserGS_sf2_file",
+          "1221_JCLive_sf2_file",
+          "1222_Aspirin_sf2_file",
+          "1222_GeneralUserGS_sf2_file",
+          "1223_Aspirin_sf2_file",
+          "1223_GeneralUserGS_sf2_file",
+          "1224_Aspirin_sf2_file",
+          "1224_GeneralUserGS_sf2_file",
+          "1225_GeneralUserGS_sf2_file",
+          "1226_GeneralUserGS_sf2_file"
+        ],
+        gm_bird_tweet: [
+          // Bird Tweet: Sound effects
+          "1230_FluidR3_GM_sf2_file",
+          "1230_JCLive_sf2_file",
+          "1230_Aspirin_sf2_file",
+          // '1230_Chaos_sf2_file',
+          "1230_GeneralUserGS_sf2_file",
+          //1230_SBLive_sf2
+          //1230_SoundBlasterOld_sf2
+          //'1231_Aspirin_sf2_file',
+          "1231_GeneralUserGS_sf2_file",
+          // dog
+          // '1232_Aspirin_sf2_file',// ?
+          "1232_GeneralUserGS_sf2_file",
+          // horse
+          // '1233_GeneralUserGS_sf2_file', //
+          "1234_GeneralUserGS_sf2_file"
+          // scratch
+        ],
+        gm_telephone: [
+          // Telephone Ring: Sound effects
+          "1240_JCLive_sf2_file",
+          "1240_Aspirin_sf2_file",
+          "1240_Chaos_sf2_file",
+          "1240_FluidR3_GM_sf2_file",
+          // '1240_GeneralUserGS_sf2_file',
+          //1240_SBLive_sf2
+          //1240_SoundBlasterOld_sf2
+          "1241_Aspirin_sf2_file",
+          // door?
+          //'1241_GeneralUserGS_sf2_file',
+          // '1242_Aspirin_sf2_file', // ?
+          "1242_GeneralUserGS_sf2_file",
+          // door
+          "1243_Aspirin_sf2_file",
+          // scratch
+          "1243_GeneralUserGS_sf2_file",
+          // door close?
+          "1244_Aspirin_sf2_file",
+          // bells
+          "1244_GeneralUserGS_sf2_file"
+          // bells
+        ],
+        gm_helicopter: [
+          // Helicopter: Sound effects
+          "1250_JCLive_sf2_file",
+          "1250_Aspirin_sf2_file",
+          // '1250_Chaos_sf2_file', // same as above
+          "1250_FluidR3_GM_sf2_file",
+          "1250_GeneralUserGS_sf2_file",
+          //1250_SBLive_sf2
+          //1250_SoundBlasterOld_sf2
+          // '1251_Aspirin_sf2_file', // slooow
+          "1251_FluidR3_GM_sf2_file",
+          // guitar
+          "1251_GeneralUserGS_sf2_file",
+          // engine start with loop at end..
+          "1252_Aspirin_sf2_file",
+          // alien
+          "1252_FluidR3_GM_sf2_file",
+          // seashore
+          "1252_GeneralUserGS_sf2_file",
+          // carbreak
+          // '1253_Aspirin_sf2_file', // plane
+          "1253_GeneralUserGS_sf2_file",
+          // racing car
+          // '1254_Aspirin_sf2_file',
+          "1254_GeneralUserGS_sf2_file",
+          // breaking
+          // '1255_Aspirin_sf2_file',
+          "1255_GeneralUserGS_sf2_file",
+          // siren
+          // '1256_Aspirin_sf2_file',
+          "1256_GeneralUserGS_sf2_file",
+          // hmm
+          // '1257_Aspirin_sf2_file',
+          "1257_GeneralUserGS_sf2_file",
+          // noise
+          // '1258_Aspirin_sf2_file',
+          "1258_GeneralUserGS_sf2_file",
+          // metallic noise
+          "1259_GeneralUserGS_sf2_file"
+          // watery nosie
+        ],
+        gm_applause: [
+          // Applause: Sound effects
+          "1260_JCLive_sf2_file",
+          "1260_Aspirin_sf2_file",
+          "1260_Chaos_sf2_file",
+          "1260_FluidR3_GM_sf2_file",
+          "1260_GeneralUserGS_sf2_file",
+          //1260_SBLive_sf2
+          //1260_SoundBlasterOld_sf2
+          "1261_Aspirin_sf2_file",
+          "1261_GeneralUserGS_sf2_file",
+          "1262_Aspirin_sf2_file",
+          "1262_GeneralUserGS_sf2_file",
+          "1263_Aspirin_sf2_file",
+          "1263_GeneralUserGS_sf2_file",
+          "1264_Aspirin_sf2_file",
+          "1264_GeneralUserGS_sf2_file",
+          "1265_Aspirin_sf2_file",
+          "1265_GeneralUserGS_sf2_file"
+        ],
+        gm_gunshot: [
+          // Gunshot: Sound effects
+          "1270_JCLive_sf2_file",
+          "1270_Aspirin_sf2_file",
+          "1270_Chaos_sf2_file",
+          "1270_FluidR3_GM_sf2_file",
+          "1270_GeneralUserGS_sf2_file",
+          //1270_SBLive_sf2
+          //1270_SoundBlasterOld_sf2
+          "1271_Aspirin_sf2_file",
+          "1271_GeneralUserGS_sf2_file",
+          "1272_Aspirin_sf2_file",
+          "1272_GeneralUserGS_sf2_file",
+          "1273_GeneralUserGS_sf2_file",
+          "1274_GeneralUserGS_sf2_file"
+        ]
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/soundfonts/fontloader.mjs
+  function setSoundfontUrl(value2) {
+    soundfontUrl = value2;
+  }
+  async function loadFont(name3) {
+    if (loadCache3[name3]) {
+      return loadCache3[name3];
+    }
+    const load = async () => {
+      const url = `${soundfontUrl}/${name3}.js`;
+      const preset = await fetch(url).then((res) => res.text());
+      let [_, data2] = preset.split("={");
+      return new Function("return {" + data2)().zones;
+    };
+    loadCache3[name3] = load();
+    return loadCache3[name3];
+  }
+  async function getFontBufferSource(name3, value2, ac) {
+    let { note: note4 = "c3", freq: freq3 } = value2;
+    let midi3;
+    if (freq3) {
+      midi3 = freqToMidi(freq3);
+    } else if (typeof note4 === "string") {
+      midi3 = noteToMidi(note4);
+    } else if (typeof note4 === "number") {
+      midi3 = note4;
+    } else {
+      throw new Error(`unexpected "note" type "${typeof note4}"`);
+    }
+    const { buffer, zone } = await getFontPitch(name3, midi3, ac);
+    const src2 = ac.createBufferSource();
+    src2.buffer = buffer;
+    const baseDetune = zone.originalPitch - 100 * zone.coarseTune - zone.fineTune;
+    const playbackRate = 1 * Math.pow(2, (100 * midi3 - baseDetune) / 1200);
+    src2.playbackRate.value = playbackRate;
+    const loop2 = zone.loopStart > 1 && zone.loopStart < zone.loopEnd;
+    if (!loop2) {
+    } else {
+      src2.loop = true;
+      src2.loopStart = zone.loopStart / zone.sampleRate;
+      src2.loopEnd = zone.loopEnd / zone.sampleRate;
+    }
+    return src2;
+  }
+  async function getFontPitch(name3, pitch3, ac) {
+    const key = `${name3}:::${pitch3}`;
+    if (bufferCache2[key]) {
+      return bufferCache2[key];
+    }
+    const load = async () => {
+      const preset = await loadFont(name3);
+      if (!preset) {
+        throw new Error(`Could not load soundfont ${name3}`);
+      }
+      const zone = findZone(preset, pitch3);
+      if (!zone) {
+        throw new Error("no soundfont zone found for preset ", name3, "pitch", pitch3);
+      }
+      const buffer = await getBuffer(zone, ac);
+      if (!buffer) {
+        throw new Error(`no soundfont buffer found for preset ${name3}, pitch: ${pitch3}`);
+      }
+      return { buffer, zone };
+    };
+    bufferCache2[key] = load();
+    return bufferCache2[key];
+  }
+  function findZone(preset, pitch3) {
+    return preset.find((zone) => {
+      return zone.keyRangeLow <= pitch3 && zone.keyRangeHigh + 1 >= pitch3;
+    });
+  }
+  async function getBuffer(zone, audioContext2) {
+    if (zone.sample) {
+      console.warn("zone.sample untested!");
+      const decoded = atob(zone.sample);
+      zone.buffer = audioContext2.createBuffer(1, decoded.length / 2, zone.sampleRate);
+      const float32Array = zone.buffer.getChannelData(0);
+      let b1, b2, n2;
+      for (var i3 = 0; i3 < decoded.length / 2; i3++) {
+        b1 = decoded.charCodeAt(i3 * 2);
+        b2 = decoded.charCodeAt(i3 * 2 + 1);
+        if (b1 < 0) {
+          b1 = 256 + b1;
+        }
+        if (b2 < 0) {
+          b2 = 256 + b2;
+        }
+        n2 = b2 * 256 + b1;
+        if (n2 >= 65536 / 2) {
+          n2 = n2 - 65536;
+        }
+        float32Array[i3] = n2 / 65536;
+      }
+    } else {
+      if (zone.file) {
+        const datalen = zone.file.length;
+        const arraybuffer = new ArrayBuffer(datalen);
+        const view = new Uint8Array(arraybuffer);
+        const decoded = atob(zone.file);
+        let b;
+        for (let i4 = 0; i4 < decoded.length; i4++) {
+          b = decoded.charCodeAt(i4);
+          view[i4] = b;
+        }
+        return new Promise((resolve) => audioContext2.decodeAudioData(arraybuffer, resolve));
+      }
+    }
+  }
+  function registerSoundfonts() {
+    Object.entries(gm_default).forEach(([name3, fonts]) => {
+      registerSound(
+        name3,
+        async (time4, value2, onended) => {
+          const [attack2, decay2, sustain2, release2] = getADSRValues([
+            value2.attack,
+            value2.decay,
+            value2.sustain,
+            value2.release
+          ]);
+          const { duration: duration2 } = value2;
+          const n2 = getSoundIndex(value2.n, fonts.length);
+          const font = fonts[n2];
+          const ctx = getAudioContext();
+          const bufferSource = await getFontBufferSource(font, value2, ctx);
+          bufferSource.start(time4);
+          const envGain = ctx.createGain();
+          const node = bufferSource.connect(envGain);
+          const holdEnd = time4 + duration2;
+          getParamADSR(node.gain, attack2, decay2, sustain2, release2, 0, 0.3, time4, holdEnd, "linear");
+          let envEnd = holdEnd + release2 + 0.01;
+          const vibratoHandle = getVibratoOscillator(bufferSource.detune, value2, time4);
+          getPitchEnvelope(bufferSource.detune, value2, time4, holdEnd);
+          bufferSource.stop(envEnd);
+          const stop2 = (releaseTime) => {
+          };
+          onceEnded(bufferSource, () => {
+            releaseAudioNode(bufferSource);
+            vibratoHandle?.stop();
+            onended();
+          });
+          return { node, stop: stop2, nodes: { source: [bufferSource], ...vibratoHandle?.nodes } };
+        },
+        { type: "soundfont", prebake: true, fonts }
+      );
+    });
+  }
+  var defaultSoundfontUrl, soundfontUrl, loadCache3, bufferCache2;
+  var init_fontloader = __esm({
+    "build/engine-src/strudel/packages/soundfonts/fontloader.mjs"() {
+      init_core();
+      init_webaudio2();
+      init_gm();
+      defaultSoundfontUrl = "https://felixroos.github.io/webaudiofontdata/sound";
+      soundfontUrl = defaultSoundfontUrl;
+      loadCache3 = {};
+      bufferCache2 = {};
+    }
+  });
+
+  // build/engine-src/strudel/packages/soundfonts/list.mjs
+  var list_exports = {};
+  __export(list_exports, {
+    drums: () => drums,
+    instrumentNames: () => instrumentNames,
+    instruments: () => instruments
+  });
+  var instruments, drums, instrumentNames;
+  var init_list = __esm({
+    "build/engine-src/strudel/packages/soundfonts/list.mjs"() {
+      instruments = [
+        // Acoustic Grand Piano: Piano
+        "0000_JCLive_sf2_file",
+        "0000_Aspirin_sf2_file",
+        "0000_Chaos_sf2_file",
+        "0000_FluidR3_GM_sf2_file",
+        "0000_GeneralUserGS_sf2_file",
+        //'0000_SBLive_sf2',
+        //'0000_SoundBlasterOld_sf2',
+        "0001_FluidR3_GM_sf2_file",
+        "0001_GeneralUserGS_sf2_file",
+        // Bright Acoustic Piano: Piano
+        "0010_Aspirin_sf2_file",
+        "0010_Chaos_sf2_file",
+        "0010_FluidR3_GM_sf2_file",
+        "0010_GeneralUserGS_sf2_file",
+        "0010_JCLive_sf2_file",
+        //'0010_SBLive_sf2',
+        //'0010_SoundBlasterOld_sf2',
+        "0011_Aspirin_sf2_file",
+        "0011_FluidR3_GM_sf2_file",
+        "0011_GeneralUserGS_sf2_file",
+        "0012_GeneralUserGS_sf2_file",
+        // string??
+        // Electric Grand Piano: Piano
+        "0020_Aspirin_sf2_file",
+        "0020_Chaos_sf2_file",
+        "0020_FluidR3_GM_sf2_file",
+        "0020_GeneralUserGS_sf2_file",
+        "0020_JCLive_sf2_file",
+        //'0020_SBLive_sf2',
+        //'0020_SoundBlasterOld_sf2',
+        "0021_Aspirin_sf2_file",
+        "0021_GeneralUserGS_sf2_file",
+        // ?
+        "0022_Aspirin_sf2_file",
+        // dx7 epiano like
+        // Honky-tonk Piano: Piano
+        "0030_Aspirin_sf2_file",
+        "0030_Chaos_sf2_file",
+        "0030_FluidR3_GM_sf2_file",
+        "0030_GeneralUserGS_sf2_file",
+        "0030_JCLive_sf2_file",
+        //'0030_SBLive_sf2',
+        //'0030_SoundBlasterOld_sf2',
+        "0031_Aspirin_sf2_file",
+        "0031_FluidR3_GM_sf2_file",
+        "0031_GeneralUserGS_sf2_file",
+        //'0031_SoundBlasterOld_sf2', // pianos until here
+        // Electric Piano 1: Piano
+        "0040_Aspirin_sf2_file",
+        "0040_Chaos_sf2_file",
+        "0040_FluidR3_GM_sf2_file",
+        // rhodes
+        "0040_GeneralUserGS_sf2_file",
+        // staccato rhodes
+        "0040_JCLive_sf2_file",
+        // warbly rhodes
+        //'0040_SBLive_sf2', // ?
+        //'0040_SoundBlasterOld_sf2', // ?
+        "0041_FluidR3_GM_sf2_file",
+        // rhodes
+        "0041_GeneralUserGS_sf2_file",
+        // staccato rhodes
+        //'0041_SoundBlasterOld_sf2', // ?
+        "0042_GeneralUserGS_sf2_file",
+        // staccato wurly
+        "0043_GeneralUserGS_sf2_file",
+        // high bell
+        "0044_GeneralUserGS_sf2_file",
+        // reed organ
+        //'0045_GeneralUserGS_sf2_file', // ?
+        "0046_GeneralUserGS_sf2_file",
+        // reed organ
+        // Electric Piano 2: Piano
+        "0050_Aspirin_sf2_file",
+        // glass piano
+        "0050_Chaos_sf2_file",
+        // short glass piano
+        "0050_FluidR3_GM_sf2_file",
+        // long glass piano !
+        // ?
+        "0050_GeneralUserGS_sf2_file",
+        // short glass piano
+        // cont
+        "0050_JCLive_sf2_file",
+        // glass piano
+        //'0050_SBLive_sf2', // ?
+        //'0050_SoundBlasterOld_sf2', // ?
+        "0051_FluidR3_GM_sf2_file",
+        // long lass organ
+        "0051_GeneralUserGS_sf2_file",
+        //'0052_GeneralUserGS_sf2_file', // ?
+        "0053_GeneralUserGS_sf2_file",
+        // normal piano...
+        "0054_GeneralUserGS_sf2_file",
+        // piano
+        // Harpsichord: Piano
+        "0060_Aspirin_sf2_file",
+        // harpsichord
+        "0060_Chaos_sf2_file",
+        "0060_FluidR3_GM_sf2_file",
+        // harpsichord !
+        "0060_GeneralUserGS_sf2_file",
+        "0060_JCLive_sf2_file",
+        //'0060_SBLive_sf2',
+        //'0060_SoundBlasterOld_sf2',
+        "0061_Aspirin_sf2_file",
+        "0061_GeneralUserGS_sf2_file",
+        //'0061_SoundBlasterOld_sf2',
+        "0062_GeneralUserGS_sf2_file",
+        // Clavinet: Piano
+        "0070_Aspirin_sf2_file",
+        "0070_Chaos_sf2_file",
+        "0070_FluidR3_GM_sf2_file",
+        // '0070_GeneralUserGS_sf2_file', // half broken
+        "0070_JCLive_sf2_file",
+        //'0070_SBLive_sf2',
+        //'0070_SoundBlasterOld_sf2',
+        // '0071_GeneralUserGS_sf2_file', // half broken
+        // Celesta: Chromatic Percussion
+        "0080_Aspirin_sf2_file",
+        "0080_Chaos_sf2_file",
+        "0080_FluidR3_GM_sf2_file",
+        "0080_GeneralUserGS_sf2_file",
+        "0080_JCLive_sf2_file",
+        //'0080_SBLive_sf2',
+        //'0080_SoundBlasterOld_sf2',
+        "0081_FluidR3_GM_sf2_file",
+        // '0081_GeneralUserGS_sf2_file', // weird detuned
+        //'0081_SoundBlasterOld_sf2',
+        // Glockenspiel: Chromatic Percussion
+        "0090_Aspirin_sf2_file",
+        "0090_Chaos_sf2_file",
+        "0090_FluidR3_GM_sf2_file",
+        "0090_GeneralUserGS_sf2_file",
+        "0090_JCLive_sf2_file",
+        //'0090_SBLive_sf2',
+        //'0090_SoundBlasterOld_sf2',
+        //'0091_SoundBlasterOld_sf2',
+        // Music Box: Chromatic Percussion
+        "0100_Aspirin_sf2_file",
+        "0100_Chaos_sf2_file",
+        "0100_FluidR3_GM_sf2_file",
+        "0100_GeneralUserGS_sf2_file",
+        "0100_JCLive_sf2_file",
+        //'0100_SBLive_sf2',
+        //'0100_SoundBlasterOld_sf2',
+        // '0101_GeneralUserGS_sf2_file', // weird detuned
+        //'0101_SoundBlasterOld_sf2',
+        // Vibraphone: Chromatic Percussion
+        "0110_Aspirin_sf2_file",
+        "0110_Chaos_sf2_file",
+        "0110_FluidR3_GM_sf2_file",
+        "0110_GeneralUserGS_sf2_file",
+        "0110_JCLive_sf2_file",
+        //'0110_SBLive_sf2',
+        //'0110_SoundBlasterOld_sf2',
+        "0111_FluidR3_GM_sf2_file",
+        // Marimba: Chromatic Percussion
+        "0120_Aspirin_sf2_file",
+        "0120_Chaos_sf2_file",
+        "0120_FluidR3_GM_sf2_file",
+        "0120_GeneralUserGS_sf2_file",
+        "0120_JCLive_sf2_file",
+        //'0120_SBLive_sf2',
+        //'0120_SoundBlasterOld_sf2',
+        "0121_FluidR3_GM_sf2_file",
+        "0121_GeneralUserGS_sf2_file",
+        // not really a marimba
+        // Xylophone: Chromatic Percussion
+        "0130_Aspirin_sf2_file",
+        "0130_Chaos_sf2_file",
+        "0130_FluidR3_GM_sf2_file",
+        "0130_GeneralUserGS_sf2_file",
+        "0130_JCLive_sf2_file",
+        //'0130_SBLive_sf2',
+        //'0130_SoundBlasterOld_sf2',
+        "0131_FluidR3_GM_sf2_file",
+        // Tubular Bells: Chromatic Percussion
+        "0140_Aspirin_sf2_file",
+        // '0140_Chaos_sf2_file', // same as aspirin?
+        "0140_FluidR3_GM_sf2_file",
+        "0140_GeneralUserGS_sf2_file",
+        "0140_JCLive_sf2_file",
+        //'0140_SBLive_sf2',
+        //'0140_SoundBlasterOld_sf2',
+        "0141_FluidR3_GM_sf2_file",
+        //'0141_GeneralUserGS_sf2_file',
+        "0142_GeneralUserGS_sf2_file",
+        // epiano..
+        // '0143_GeneralUserGS_sf2_file', // buggy
+        // Dulcimer: Chromatic Percussion
+        "0150_Aspirin_sf2_file",
+        "0150_Chaos_sf2_file",
+        // long load?
+        "0150_FluidR3_GM_sf2_file",
+        "0150_GeneralUserGS_sf2_file",
+        // '0150_JCLive_sf2_file', // detuned???
+        //'0150_SBLive_sf2',
+        //'0150_SoundBlasterOld_sf2',
+        "0151_FluidR3_GM_sf2_file",
+        // Drawbar Organ: Organ
+        "0160_Aspirin_sf2_file",
+        "0160_Chaos_sf2_file",
+        "0160_FluidR3_GM_sf2_file",
+        "0160_GeneralUserGS_sf2_file",
+        "0160_JCLive_sf2_file",
+        //'0160_SBLive_sf2',
+        //'0160_SoundBlasterOld_sf2',
+        "0161_Aspirin_sf2_file",
+        "0161_FluidR3_GM_sf2_file",
+        //'0161_SoundBlasterOld_sf2',
+        // Percussive Organ: Organ
+        "0170_Aspirin_sf2_file",
+        "0170_Chaos_sf2_file",
+        "0170_FluidR3_GM_sf2_file",
+        // '0170_GeneralUserGS_sf2_file', // repitched
+        "0170_JCLive_sf2_file",
+        //'0170_SBLive_sf2',
+        //'0170_SoundBlasterOld_sf2',
+        "0171_FluidR3_GM_sf2_file",
+        // '0171_GeneralUserGS_sf2_file',  // repitched
+        "0172_FluidR3_GM_sf2_file",
+        // Rock Organ: Organ
+        "0180_Aspirin_sf2_file",
+        "0180_Chaos_sf2_file",
+        "0180_FluidR3_GM_sf2_file",
+        "0180_GeneralUserGS_sf2_file",
+        "0180_JCLive_sf2_file",
+        //'0180_SBLive_sf2',
+        //'0180_SoundBlasterOld_sf2',
+        //'0181_Aspirin_sf2_file', // flute
+        //'0181_GeneralUserGS_sf2_file', // marimbalike
+        //'0181_SoundBlasterOld_sf2',
+        // Church Organ: Organ
+        "0190_Aspirin_sf2_file",
+        "0190_Chaos_sf2_file",
+        "0190_FluidR3_GM_sf2_file",
+        "0190_GeneralUserGS_sf2_file",
+        "0190_JCLive_sf2_file",
+        //'0190_SBLive_sf2',
+        //'0190_SoundBlasterOld_sf2',
+        //'0191_Aspirin_sf2_file', // string??
+        //'0191_GeneralUserGS_sf2_file', // weird organ
+        //'0191_SoundBlasterOld_sf2',
+        // Reed Organ: Organ
+        "0200_Aspirin_sf2_file",
+        "0200_Chaos_sf2_file",
+        "0200_FluidR3_GM_sf2_file",
+        "0200_GeneralUserGS_sf2_file",
+        "0200_JCLive_sf2_file",
+        // stringy
+        //'0200_SBLive_sf2',
+        //'0200_SoundBlasterOld_sf2',
+        "0201_Aspirin_sf2_file",
+        // stringy
+        "0201_FluidR3_GM_sf2_file",
+        "0201_GeneralUserGS_sf2_file",
+        //'0201_SoundBlasterOld_sf2',
+        //'0210_Aspirin_sf2_file', // buggy
+        //'0210_Chaos_sf2_file', // buggy
+        // Accordion: Organ
+        "0210_FluidR3_GM_sf2_file",
+        "0210_GeneralUserGS_sf2_file",
+        "0210_JCLive_sf2_file",
+        //'0210_SBLive_sf2',
+        //'0210_SoundBlasterOld_sf2',
+        "0211_Aspirin_sf2_file",
+        // stringy
+        "0211_FluidR3_GM_sf2_file",
+        "0211_GeneralUserGS_sf2_file",
+        //'0211_SoundBlasterOld_sf2',
+        "0212_GeneralUserGS_sf2_file",
+        // Harmonica: Organ
+        "0220_Aspirin_sf2_file",
+        "0220_Chaos_sf2_file",
+        "0220_FluidR3_GM_sf2_file",
+        "0220_GeneralUserGS_sf2_file",
+        "0220_JCLive_sf2_file",
+        //'0220_SBLive_sf2',
+        //'0220_SoundBlasterOld_sf2',
+        "0221_FluidR3_GM_sf2_file",
+        // Tango Accordion: Organ
+        "0230_Aspirin_sf2_file",
+        "0230_Chaos_sf2_file",
+        "0230_FluidR3_GM_sf2_file",
+        "0230_GeneralUserGS_sf2_file",
+        "0230_JCLive_sf2_file",
+        //'0230_SBLive_sf2',
+        //'0230_SoundBlasterOld_sf2',
+        "0231_FluidR3_GM_sf2_file",
+        "0231_GeneralUserGS_sf2_file",
+        // warbly
+        "0231_JCLive_sf2_file",
+        //'0231_SoundBlasterOld_sf2',
+        "0232_FluidR3_GM_sf2_file",
+        "0233_FluidR3_GM_sf2_file",
+        // Acoustic Guitar (nylon): Guitar
+        "0240_Aspirin_sf2_file",
+        "0240_Chaos_sf2_file",
+        "0240_FluidR3_GM_sf2_file",
+        "0240_GeneralUserGS_sf2_file",
+        "0240_JCLive_sf2_file",
+        "0240_LK_Godin_Nylon_SF2_file",
+        //'0240_SBLive_sf2',
+        //'0240_SoundBlasterOld_sf2',
+        // '0241_GeneralUserGS_sf2_file', // organ like
+        "0241_JCLive_sf2_file",
+        "0242_JCLive_sf2_file",
+        "0243_JCLive_sf2_file",
+        // Acoustic Guitar (steel): Guitar
+        "0253_Acoustic_Guitar_sf2_file",
+        "0250_Aspirin_sf2_file",
+        "0250_Chaos_sf2_file",
+        "0250_FluidR3_GM_sf2_file",
+        "0250_GeneralUserGS_sf2_file",
+        // '0250_JCLive_sf2_file', // detuned
+        "0250_LK_AcousticSteel_SF2_file",
+        //'0250_SBLive_sf2',
+        //'0250_SoundBlasterOld_sf2',
+        //'0251_Acoustic_Guitar_sf2_file', // detuned?
+        // '0251_GeneralUserGS_sf2_file', // broken: missing pitches
+        // '0252_Acoustic_Guitar_sf2_file', // detuned..
+        // '0252_GeneralUserGS_sf2_file', // broken: missing pitches
+        "0253_Acoustic_Guitar_sf2_file",
+        "0253_GeneralUserGS_sf2_file",
+        "0254_Acoustic_Guitar_sf2_file",
+        // bends.. detuned
+        "0254_GeneralUserGS_sf2_file",
+        //'0255_GeneralUserGS_sf2_file', // no guitar..
+        // Electric Guitar (jazz): Guitar
+        "0260_Aspirin_sf2_file",
+        // sounds like an epiano
+        "0260_Chaos_sf2_file",
+        // weird but cool detune
+        "0260_FluidR3_GM_sf2_file",
+        "0260_GeneralUserGS_sf2_file",
+        "0260_JCLive_sf2_file",
+        //'0260_SBLive_sf2',
+        //'0260_SoundBlasterOld_sf2',
+        "0260_Stratocaster_sf2_file",
+        // -1 octave
+        "0261_GeneralUserGS_sf2_file",
+        //'0261_SoundBlasterOld_sf2',
+        "0261_Stratocaster_sf2_file",
+        // -1 octave
+        "0262_Stratocaster_sf2_file",
+        // -1 octave
+        // Electric Guitar (clean): Guitar
+        "0270_Aspirin_sf2_file",
+        "0270_Chaos_sf2_file",
+        // sounds meh
+        "0270_FluidR3_GM_sf2_file",
+        "0270_GeneralUserGS_sf2_file",
+        //'0270_Gibson_Les_Paul_sf2_file', // detuned
+        // '0270_JCLive_sf2_file', // broken: missing notes
+        "0270_SBAWE32_sf2_file",
+        //'0270_SBLive_sf2',
+        //'0270_SoundBlasterOld_sf2',
+        "0270_Stratocaster_sf2_file",
+        // -1 octave
+        "0271_GeneralUserGS_sf2_file",
+        "0271_Stratocaster_sf2_file",
+        // -1 octave
+        "0272_Stratocaster_sf2_file",
+        // -1 octave
+        // Electric Guitar (muted): Guitar
+        "0280_Aspirin_sf2_file",
+        "0280_Chaos_sf2_file",
+        // '0280_FluidR3_GM_sf2_file', // broken: wrong notes
+        "0280_GeneralUserGS_sf2_file",
+        "0280_JCLive_sf2_file",
+        //'0280_LesPaul_sf2', // missing
+        "0280_LesPaul_sf2_file",
+        // not really muted..
+        "0280_SBAWE32_sf2_file",
+        //'0280_SBLive_sf2',
+        //'0280_SoundBlasterOld_sf2',
+        "0281_Aspirin_sf2_file",
+        "0281_FluidR3_GM_sf2_file",
+        "0281_GeneralUserGS_sf2_file",
+        "0282_FluidR3_GM_sf2_file",
+        // '0282_GeneralUserGS_sf2_file', // broken: missing notes
+        // '0283_GeneralUserGS_sf2_file', // missing
+        // Overdriven Guitar: Guitar
+        "0290_Aspirin_sf2_file",
+        "0290_Chaos_sf2_file",
+        "0290_FluidR3_GM_sf2_file",
+        "0290_GeneralUserGS_sf2_file",
+        //'0290_JCLive_sf2_file', // detuned....
+        //'0290_LesPaul_sf2', // broken
+        "0290_LesPaul_sf2_file",
+        "0290_SBAWE32_sf2_file",
+        //'0290_SBLive_sf2',
+        //'0290_SoundBlasterOld_sf2',
+        // '0291_Aspirin_sf2_file', // broken
+        // '0291_LesPaul_sf2', // broken
+        "0291_LesPaul_sf2_file",
+        "0291_SBAWE32_sf2_file",
+        //'0291_SoundBlasterOld_sf2',
+        "0292_Aspirin_sf2_file",
+        // '0292_LesPaul_sf2', // broken
+        "0292_LesPaul_sf2_file",
+        // Distortion Guitar: Guitar
+        "0300_Aspirin_sf2_file",
+        "0300_Chaos_sf2_file",
+        "0300_FluidR3_GM_sf2_file",
+        "0300_GeneralUserGS_sf2_file",
+        // '0300_JCLive_sf2_file', // broken
+        // '0300_LesPaul_sf2', // broken
+        "0300_LesPaul_sf2_file",
+        //'0300_SBAWE32_sf2_file', // -2 octave
+        //'0300_SBLive_sf2',
+        //'0300_SoundBlasterOld_sf2',
+        // '0301_Aspirin_sf2_file', // missing
+        //'0301_FluidR3_GM_sf2_file', // weird broken bell
+        // '0301_GeneralUserGS_sf2_file', // broken
+        // '0301_JCLive_sf2_file', // broken
+        // '0301_LesPaul_sf2', // missing
+        // '0301_LesPaul_sf2_file', // + 1 oct?
+        "0302_Aspirin_sf2_file",
+        // '0302_GeneralUserGS_sf2_file', // not a guitar..
+        //'0302_JCLive_sf2_file', // broken...
+        // '0303_Aspirin_sf2_file', // guitar harmonic??
+        "0304_Aspirin_sf2_file",
+        // Guitar Harmonics: Guitar
+        "0310_Aspirin_sf2_file",
+        "0310_Chaos_sf2_file",
+        "0310_FluidR3_GM_sf2_file",
+        // weird..
+        //'0310_GeneralUserGS_sf2_file', // weird..
+        // '0310_JCLive_sf2_file', // weird
+        //'0310_LesPaul_sf2', // missing
+        //'0310_LesPaul_sf2_file', // wrong pitches
+        //'0310_SBAWE32_sf2_file', // wrong pitches
+        //'0310_SBLive_sf2',
+        //'0310_SoundBlasterOld_sf2',
+        //'0311_FluidR3_GM_sf2_file', // knackt
+        //'0311_GeneralUserGS_sf2_file', // wrong notes
+        // Acoustic Bass: Bass
+        "0320_Aspirin_sf2_file",
+        "0320_Chaos_sf2_file",
+        "0320_FluidR3_GM_sf2_file",
+        // '0320_GeneralUserGS_sf2_file', // missing notes
+        "0320_JCLive_sf2_file",
+        //'0320_SBLive_sf2',
+        //'0320_SoundBlasterOld_sf2',
+        // '0321_GeneralUserGS_sf2_file', // nice sound but missing notes
+        // '0322_GeneralUserGS_sf2_file', // missing notes
+        // Electric Bass (finger): Bass
+        "0330_Aspirin_sf2_file",
+        //'0330_Chaos_sf2_file', // same as last
+        "0330_FluidR3_GM_sf2_file",
+        // knackt..
+        "0330_GeneralUserGS_sf2_file",
+        // -1 oct
+        "0330_JCLive_sf2_file",
+        //'0330_SBLive_sf2',
+        //'0330_SoundBlasterOld_sf2',
+        //'0331_GeneralUserGS_sf2_file', // knackt
+        // '0332_GeneralUserGS_sf2_file', // missing
+        // Electric Bass (pick): Bass
+        "0340_Aspirin_sf2_file",
+        //'0340_Chaos_sf2_file', // same as last
+        "0340_FluidR3_GM_sf2_file",
+        "0340_GeneralUserGS_sf2_file",
+        // -1oct
+        "0340_JCLive_sf2_file",
+        //'0340_SBLive_sf2',
+        //'0340_SoundBlasterOld_sf2',
+        "0341_Aspirin_sf2_file",
+        //'0341_GeneralUserGS_sf2_file', // knackt
+        // Fretless Bass: Bass
+        "0350_Aspirin_sf2_file",
+        // '0350_Chaos_sf2_file', // same as last
+        //'0350_FluidR3_GM_sf2_file', // knackt
+        //'0350_GeneralUserGS_sf2_file', // -1 oct + knackt
+        "0350_JCLive_sf2_file",
+        // weird detuned
+        //'0350_SBLive_sf2',
+        //'0350_SoundBlasterOld_sf2',
+        //'0351_GeneralUserGS_sf2_file', // missing
+        // Slap Bass 1: Bass
+        "0360_Aspirin_sf2_file",
+        "0360_Chaos_sf2_file",
+        "0360_FluidR3_GM_sf2_file",
+        // knackt
+        //'0360_GeneralUserGS_sf2_file', // -1 oct
+        "0360_JCLive_sf2_file",
+        //'0360_SBLive_sf2',
+        //'0360_SoundBlasterOld_sf2',
+        //'0361_GeneralUserGS_sf2_file', // missing
+        // Slap Bass 2: Bass
+        "0370_Aspirin_sf2_file",
+        // '0370_Chaos_sf2_file', // same as last
+        "0370_FluidR3_GM_sf2_file",
+        "0370_GeneralUserGS_sf2_file",
+        "0370_JCLive_sf2_file",
+        //'0370_SBLive_sf2',
+        //'0370_SoundBlasterOld_sf2',
+        //'0371_GeneralUserGS_sf2_file', // missing
+        //'0372_GeneralUserGS_sf2_file', // detuned
+        //'0385_GeneralUserGS_sf2_file', // missing
+        // Synth Bass 1: Bass
+        "0380_Aspirin_sf2_file",
+        // laut!
+        "0380_Chaos_sf2_file",
+        "0380_FluidR3_GM_sf2_file",
+        // bisl detuned
+        // '0380_GeneralUserGS_sf2_file', // laut
+        "0380_JCLive_sf2_file",
+        //'0380_SBLive_sf2',
+        //'0380_SoundBlasterOld_sf2',
+        "0381_FluidR3_GM_sf2_file",
+        // bisl detuned
+        "0381_GeneralUserGS_sf2_file",
+        //'0382_FluidR3_GM_sf2_file', // kein synth bass
+        "0382_GeneralUserGS_sf2_file",
+        "0383_GeneralUserGS_sf2_file",
+        "0384_GeneralUserGS_sf2_file",
+        //'0386_GeneralUserGS_sf2_file', // knackt
+        "0387_GeneralUserGS_sf2_file",
+        // Synth Bass 2: Bass
+        "0390_Aspirin_sf2_file",
+        // '0390_Chaos_sf2_file', // same as last
+        "0390_FluidR3_GM_sf2_file",
+        "0390_GeneralUserGS_sf2_file",
+        "0390_JCLive_sf2_file",
+        //'0390_SBLive_sf2',
+        //'0390_SoundBlasterOld_sf2',
+        "0391_FluidR3_GM_sf2_file",
+        // lauuut
+        // '0391_GeneralUserGS_sf2_file', // missing
+        //'0391_SoundBlasterOld_sf2',
+        "0392_FluidR3_GM_sf2_file",
+        // lauut
+        //'0392_GeneralUserGS_sf2_file', // kein synth und -1oct
+        "0393_GeneralUserGS_sf2_file",
+        // lauuuut
+        // Violin: Strings
+        "0400_Aspirin_sf2_file",
+        "0400_Chaos_sf2_file",
+        "0400_FluidR3_GM_sf2_file",
+        "0400_GeneralUserGS_sf2_file",
+        "0400_JCLive_sf2_file",
+        //'0400_SBLive_sf2',
+        //'0400_SoundBlasterOld_sf2',
+        "0401_Aspirin_sf2_file",
+        // synth
+        "0401_FluidR3_GM_sf2_file",
+        "0401_GeneralUserGS_sf2_file",
+        "0402_GeneralUserGS_sf2_file",
+        // pizzicato
+        // Viola: Strings
+        "0410_Aspirin_sf2_file",
+        // '0410_Chaos_sf2_file', // laut und sehr unstringy
+        "0410_FluidR3_GM_sf2_file",
+        "0410_GeneralUserGS_sf2_file",
+        "0410_JCLive_sf2_file",
+        // <3
+        //'0410_SBLive_sf2',
+        //'0410_SoundBlasterOld_sf2',
+        "0411_FluidR3_GM_sf2_file",
+        // Cello: Strings
+        "0420_Aspirin_sf2_file",
+        // '0420_Chaos_sf2_file', // kein cello und laut
+        "0420_FluidR3_GM_sf2_file",
+        "0420_GeneralUserGS_sf2_file",
+        "0420_JCLive_sf2_file",
+        //'0420_SBLive_sf2',
+        //'0420_SoundBlasterOld_sf2',
+        "0421_FluidR3_GM_sf2_file",
+        "0421_GeneralUserGS_sf2_file",
+        // pizzicato
+        // Contrabass: Strings
+        "0430_Aspirin_sf2_file",
+        "0430_Chaos_sf2_file",
+        // '0430_FluidR3_GM_sf2_file', // missing notes
+        "0430_GeneralUserGS_sf2_file",
+        //'0430_JCLive_sf2_file', // -1 oct und meh
+        //'0430_SBLive_sf2',
+        //'0430_SoundBlasterOld_sf2',
+        // '0431_FluidR3_GM_sf2_file', // missing notes
+        // Tremolo Strings: Strings
+        "0440_Aspirin_sf2_file",
+        "0440_Chaos_sf2_file",
+        //'0440_FluidR3_GM_sf2_file', // huuuge
+        "0440_GeneralUserGS_sf2_file",
+        "0440_JCLive_sf2_file",
+        //'0440_SBLive_sf2',
+        //'0440_SoundBlasterOld_sf2',
+        "0441_GeneralUserGS_sf2_file",
+        "0442_GeneralUserGS_sf2_file",
+        // Pizzicato Strings: Strings
+        "0450_Aspirin_sf2_file",
+        "0450_Chaos_sf2_file",
+        // same as last
+        "0450_FluidR3_GM_sf2_file",
+        // chrono trigger flashback
+        "0450_GeneralUserGS_sf2_file",
+        // -1 oct?
+        "0450_JCLive_sf2_file",
+        // filter env
+        //'0450_SBLive_sf2',
+        //'0450_SoundBlasterOld_sf2',
+        "0451_FluidR3_GM_sf2_file",
+        // Orchestral Harp: Strings
+        "0460_Aspirin_sf2_file",
+        // '0460_Chaos_sf2_file', // knackt
+        "0460_FluidR3_GM_sf2_file",
+        "0460_GeneralUserGS_sf2_file",
+        "0460_JCLive_sf2_file",
+        //'0460_SBLive_sf2',
+        //'0460_SoundBlasterOld_sf2',
+        "0461_FluidR3_GM_sf2_file",
+        // Timpani: Strings
+        "0470_Aspirin_sf2_file",
+        "0470_Chaos_sf2_file",
+        "0470_FluidR3_GM_sf2_file",
+        "0470_GeneralUserGS_sf2_file",
+        // '0470_JCLive_sf2_file', // wrong pitches
+        //'0470_SBLive_sf2',
+        //'0470_SoundBlasterOld_sf2',
+        "0471_FluidR3_GM_sf2_file",
+        "0471_GeneralUserGS_sf2_file",
+        // String Ensemble 1: Ensemble
+        "0480_Aspirin_sf2_file",
+        "0480_Chaos_sf2_file",
+        "0480_FluidR3_GM_sf2_file",
+        // large
+        "0480_GeneralUserGS_sf2_file",
+        "0480_JCLive_sf2_file",
+        //'0480_SBLive_sf2',
+        //'0480_SoundBlasterOld_sf2',
+        // these dont work..
+        //'04810_GeneralUserGS_sf2_file', // missing notes + brass
+        //'04811_GeneralUserGS_sf2_file',  // missing notes + brass
+        //'04812_GeneralUserGS_sf2_file',
+        //'04813_GeneralUserGS_sf2_file',
+        //'04814_GeneralUserGS_sf2_file',
+        //'04815_GeneralUserGS_sf2_file',
+        //'04816_GeneralUserGS_sf2_file',
+        //'04817_GeneralUserGS_sf2_file',
+        "0481_Aspirin_sf2_file",
+        "0481_FluidR3_GM_sf2_file",
+        // brass
+        "0481_GeneralUserGS_sf2_file",
+        "0482_Aspirin_sf2_file",
+        // brass
+        "0482_GeneralUserGS_sf2_file",
+        "0483_GeneralUserGS_sf2_file",
+        // brass
+        // another block of buggyness:
+        //'0484_GeneralUserGS_sf2_file', // keys?! + knackt
+        //'0485_GeneralUserGS_sf2_file', // missing notes
+        //'0486_GeneralUserGS_sf2_file',
+        //'0487_GeneralUserGS_sf2_file',
+        //'0488_GeneralUserGS_sf2_file',
+        //'0489_GeneralUserGS_sf2_file',
+        // String Ensemble 2: Ensemble
+        "0490_Aspirin_sf2_file",
+        "0490_Chaos_sf2_file",
+        "0490_FluidR3_GM_sf2_file",
+        // large
+        "0490_GeneralUserGS_sf2_file",
+        "0490_JCLive_sf2_file",
+        //'0490_SBLive_sf2',
+        //'0490_SoundBlasterOld_sf2',
+        "0491_GeneralUserGS_sf2_file",
+        "0492_GeneralUserGS_sf2_file",
+        // Synth Strings 1: Ensemble
+        "0500_Aspirin_sf2_file",
+        // '0500_Chaos_sf2_file', // same as above
+        //'0500_FluidR3_GM_sf2_file', // detune + knack
+        "0500_GeneralUserGS_sf2_file",
+        "0500_JCLive_sf2_file",
+        //'0500_SBLive_sf2',
+        //'0500_SoundBlasterOld_sf2',
+        "0501_FluidR3_GM_sf2_file",
+        // '0501_GeneralUserGS_sf2_file', // crackles
+        // '0502_FluidR3_GM_sf2_file', // missing
+        "0502_GeneralUserGS_sf2_file",
+        "0503_FluidR3_GM_sf2_file",
+        // large
+        // '0504_FluidR3_GM_sf2_file', // missing
+        "0505_FluidR3_GM_sf2_file",
+        // Synth Strings 2: Ensemble
+        "0510_Aspirin_sf2_file",
+        "0510_Chaos_sf2_file",
+        // '0510_FluidR3_GM_sf2_file', // detune + crackle
+        "0510_GeneralUserGS_sf2_file",
+        //'0510_JCLive_sf2_file', // laarge and meh
+        //'0510_SBLive_sf2', // missing
+        //'0510_SoundBlasterOld_sf2',
+        "0511_GeneralUserGS_sf2_file",
+        // crackly
+        //'0511_SoundBlasterOld_sf2',
+        // Choir Aahs: Ensemble
+        "0520_Aspirin_sf2_file",
+        "0520_Chaos_sf2_file",
+        "0520_FluidR3_GM_sf2_file",
+        "0520_GeneralUserGS_sf2_file",
+        "0520_JCLive_sf2_file",
+        //'0520_SBLive_sf2',
+        "0520_Soul_Ahhs_sf2_file",
+        // large
+        //'0520_SoundBlasterOld_sf2',
+        "0521_FluidR3_GM_sf2_file",
+        "0521_Soul_Ahhs_sf2_file",
+        // large
+        //'0521_SoundBlasterOld_sf2',
+        "0522_Soul_Ahhs_sf2_file",
+        // large
+        // Voice Oohs: Ensemble
+        "0530_Aspirin_sf2_file",
+        "0530_Chaos_sf2_file",
+        "0530_FluidR3_GM_sf2_file",
+        "0530_GeneralUserGS_sf2_file",
+        //'0530_JCLive_sf2_file', // same as above
+        //'0530_SBLive_sf2',
+        // '0530_Soul_Ahhs_sf2_file', // not ooh
+        //'0530_SoundBlasterOld_sf2',
+        "0531_FluidR3_GM_sf2_file",
+        // '0531_GeneralUserGS_sf2_file', // ends crackle
+        "0531_JCLive_sf2_file",
+        //'0531_SoundBlasterOld_sf2',
+        // Synth Choir: Ensemble
+        "0540_Aspirin_sf2_file",
+        "0540_Chaos_sf2_file",
+        "0540_FluidR3_GM_sf2_file",
+        "0540_GeneralUserGS_sf2_file",
+        //'0540_JCLive_sf2_file', // large + crackles
+        //'0540_SBLive_sf2',
+        //'0540_SoundBlasterOld_sf2',
+        "0541_FluidR3_GM_sf2_file",
+        // Orchestra Hit: Ensemble
+        "0550_Aspirin_sf2_file",
+        "0550_Chaos_sf2_file",
+        "0550_FluidR3_GM_sf2_file",
+        "0550_GeneralUserGS_sf2_file",
+        //'0550_JCLive_sf2_file', // same as above
+        //'0550_SBLive_sf2',
+        //'0550_SoundBlasterOld_sf2',
+        //'0551_Aspirin_sf2_file', // not an orch hit..
+        "0551_FluidR3_GM_sf2_file",
+        // Trumpet: Brass
+        "0560_Aspirin_sf2_file",
+        "0560_Chaos_sf2_file",
+        "0560_FluidR3_GM_sf2_file",
+        //'0560_GeneralUserGS_sf2_file', // -1 oct
+        "0560_JCLive_sf2_file",
+        //'0560_SBLive_sf2',
+        //'0560_SoundBlasterOld_sf2',
+        // Trombone: Brass
+        "0570_Aspirin_sf2_file",
+        "0570_Chaos_sf2_file",
+        "0570_FluidR3_GM_sf2_file",
+        "0570_GeneralUserGS_sf2_file",
+        //'0570_JCLive_sf2_file', // -1oct
+        //'0570_SBLive_sf2',
+        //'0570_SoundBlasterOld_sf2',
+        "0571_GeneralUserGS_sf2_file",
+        // Tuba: Brass
+        "0580_Aspirin_sf2_file",
+        "0580_Chaos_sf2_file",
+        "0580_FluidR3_GM_sf2_file",
+        "0580_GeneralUserGS_sf2_file",
+        //'0580_JCLive_sf2_file', // -1oct
+        //'0580_SBLive_sf2',
+        //'0580_SoundBlasterOld_sf2',
+        //'0581_GeneralUserGS_sf2_file', // missing
+        // Muted Trumpet: Brass
+        "0590_Aspirin_sf2_file",
+        "0590_Chaos_sf2_file",
+        "0590_FluidR3_GM_sf2_file",
+        "0590_GeneralUserGS_sf2_file",
+        "0590_JCLive_sf2_file",
+        // winner
+        //'0590_SBLive_sf2',
+        //'0590_SoundBlasterOld_sf2',
+        // '0591_GeneralUserGS_sf2_file', // missing
+        // French Horn: Brass
+        "0600_Aspirin_sf2_file",
+        //'0600_Chaos_sf2_file', // weird jumps
+        "0600_FluidR3_GM_sf2_file",
+        // tiny crackles
+        "0600_GeneralUserGS_sf2_file",
+        // tiny crackles
+        "0600_JCLive_sf2_file",
+        // tiny crackles
+        //'0600_SBLive_sf2',
+        //'0600_SoundBlasterOld_sf2',
+        "0601_FluidR3_GM_sf2_file",
+        //'0601_GeneralUserGS_sf2_file', // tiny crackles
+        // '0602_GeneralUserGS_sf2_file', // bad gain diffs
+        // '0603_GeneralUserGS_sf2_file', // tiny crackles
+        // Brass Section: Brass
+        "0610_Aspirin_sf2_file",
+        "0610_Chaos_sf2_file",
+        "0610_FluidR3_GM_sf2_file",
+        // large
+        "0610_GeneralUserGS_sf2_file",
+        "0610_JCLive_sf2_file",
+        //'0610_SBLive_sf2',
+        //'0610_SoundBlasterOld_sf2',
+        // '0611_GeneralUserGS_sf2_file', // missing sounds
+        // '0612_GeneralUserGS_sf2_file',
+        //'0613_GeneralUserGS_sf2_file', // -1 oct
+        // '0614_GeneralUserGS_sf2_file', // missing sounds
+        // '0615_GeneralUserGS_sf2_file', // missing sounds
+        // Synth Brass 1: Brass
+        "0620_Aspirin_sf2_file",
+        //'0620_Chaos_sf2_file', // weird gain diff
+        "0620_FluidR3_GM_sf2_file",
+        //'0620_GeneralUserGS_sf2_file', // loooud
+        // '0620_JCLive_sf2_file', // weird gain diff
+        //'0620_SBLive_sf2',
+        //'0620_SoundBlasterOld_sf2',
+        "0621_Aspirin_sf2_file",
+        "0621_FluidR3_GM_sf2_file",
+        // '0621_GeneralUserGS_sf2_file', // detune + loooud
+        //'0622_FluidR3_GM_sf2_file', // loud..
+        //'0622_GeneralUserGS_sf2_file', // loud + crackles
+        // Synth Brass 2: Brass
+        "0630_Aspirin_sf2_file",
+        "0630_Chaos_sf2_file",
+        "0630_FluidR3_GM_sf2_file",
+        //'0630_GeneralUserGS_sf2_file', // detune + looud
+        "0630_JCLive_sf2_file",
+        //'0630_SBLive_sf2',
+        //'0630_SoundBlasterOld_sf2',
+        // '0631_Aspirin_sf2_file', // looud + detune + gain diffs
+        "0631_FluidR3_GM_sf2_file",
+        //'0631_GeneralUserGS_sf2_file', // crackles
+        "0632_FluidR3_GM_sf2_file",
+        "0633_FluidR3_GM_sf2_file",
+        // tiny crackles
+        // Soprano Sax: Reed
+        "0640_Aspirin_sf2_file",
+        "0640_Chaos_sf2_file",
+        "0640_FluidR3_GM_sf2_file",
+        // '0640_GeneralUserGS_sf2_file', // crackles
+        "0640_JCLive_sf2_file",
+        //'0640_SBLive_sf2',
+        //'0640_SoundBlasterOld_sf2',
+        "0641_FluidR3_GM_sf2_file",
+        // Alto Sax: Reed
+        //'0650_Aspirin_sf2_file', // this is not an alto sax
+        "0650_Chaos_sf2_file",
+        "0650_FluidR3_GM_sf2_file",
+        // sounds really stringy
+        "0650_GeneralUserGS_sf2_file",
+        "0650_JCLive_sf2_file",
+        //'0650_SBLive_sf2',
+        //'0650_SoundBlasterOld_sf2',
+        "0651_Aspirin_sf2_file",
+        "0651_FluidR3_GM_sf2_file",
+        // really stringy
+        // Tenor Sax: Reed
+        "0660_Aspirin_sf2_file",
+        "0660_Chaos_sf2_file",
+        //'0660_FluidR3_GM_sf2_file', // weird pitches
+        "0660_GeneralUserGS_sf2_file",
+        "0660_JCLive_sf2_file",
+        //'0660_SBLive_sf2',
+        //'0660_SoundBlasterOld_sf2',
+        // '0661_FluidR3_GM_sf2_file', // weird pitches
+        // '0661_GeneralUserGS_sf2_file', // missing
+        // Baritone Sax: Reed
+        "0670_Aspirin_sf2_file",
+        "0670_Chaos_sf2_file",
+        "0670_FluidR3_GM_sf2_file",
+        // huge
+        "0670_GeneralUserGS_sf2_file",
+        "0670_JCLive_sf2_file",
+        //'0670_SBLive_sf2',
+        //'0670_SoundBlasterOld_sf2',
+        "0671_FluidR3_GM_sf2_file",
+        // huge
+        // Oboe: Reed
+        //'0680_Aspirin_sf2_file', // tiny crackles
+        "0680_Chaos_sf2_file",
+        // tiny crackles
+        "0680_FluidR3_GM_sf2_file",
+        // tiny crackles
+        "0680_GeneralUserGS_sf2_file",
+        "0680_JCLive_sf2_file",
+        //'0680_SBLive_sf2',
+        //'0680_SoundBlasterOld_sf2',
+        "0681_FluidR3_GM_sf2_file",
+        // tiny crackles
+        // English Horn: Reed
+        "0690_Aspirin_sf2_file",
+        //'0690_Chaos_sf2_file', // detuned
+        "0690_FluidR3_GM_sf2_file",
+        //'0690_GeneralUserGS_sf2_file', // +1 oct
+        "0690_JCLive_sf2_file",
+        //'0690_SBLive_sf2',
+        //'0690_SoundBlasterOld_sf2',
+        "0691_FluidR3_GM_sf2_file",
+        // tiny crackles
+        // Bassoon: Reed
+        //'0700_Aspirin_sf2_file', // detune + gain diffs
+        // '0700_Chaos_sf2_file', // detune + crackles
+        "0700_FluidR3_GM_sf2_file",
+        "0700_GeneralUserGS_sf2_file",
+        // tiny crackles
+        "0700_JCLive_sf2_file",
+        //'0700_SBLive_sf2',
+        //'0700_SoundBlasterOld_sf2',
+        "0701_FluidR3_GM_sf2_file",
+        // tiny crackles
+        //'0701_GeneralUserGS_sf2_file', // missing
+        // Clarinet: Reed
+        "0710_Aspirin_sf2_file",
+        // tiny crackles
+        "0710_Chaos_sf2_file",
+        // tiny crackles
+        "0710_FluidR3_GM_sf2_file",
+        "0710_GeneralUserGS_sf2_file",
+        "0710_JCLive_sf2_file",
+        //'0710_SBLive_sf2',
+        //'0710_SoundBlasterOld_sf2',
+        "0711_FluidR3_GM_sf2_file",
+        // Piccolo: Pipe
+        "0720_Aspirin_sf2_file",
+        // +1oct
+        // '0720_Chaos_sf2_file', // not a piccolo
+        "0720_FluidR3_GM_sf2_file",
+        "0720_GeneralUserGS_sf2_file",
+        // crackles
+        "0720_JCLive_sf2_file",
+        //'0720_SBLive_sf2',
+        //'0720_SoundBlasterOld_sf2',
+        "0721_FluidR3_GM_sf2_file",
+        //'0721_SoundBlasterOld_sf2',
+        // Flute: Pipe
+        "0730_Aspirin_sf2_file",
+        //'0730_Chaos_sf2_file', // etune
+        "0730_FluidR3_GM_sf2_file",
+        "0730_GeneralUserGS_sf2_file",
+        "0730_JCLive_sf2_file",
+        //'0730_SBLive_sf2',
+        //'0730_SoundBlasterOld_sf2',
+        //'0731_Aspirin_sf2_file', // not a flute
+        "0731_FluidR3_GM_sf2_file",
+        //'0731_SoundBlasterOld_sf2',
+        // Recorder: Pipe
+        "0740_Aspirin_sf2_file",
+        "0740_Chaos_sf2_file",
+        "0740_FluidR3_GM_sf2_file",
+        "0740_GeneralUserGS_sf2_file",
+        "0740_JCLive_sf2_file",
+        //'0740_SBLive_sf2',
+        //'0740_SoundBlasterOld_sf2',
+        // '0741_GeneralUserGS_sf2_file', // missing
+        // Pan Flute: Pipe
+        "0750_Aspirin_sf2_file",
+        // staccato
+        "0750_Chaos_sf2_file",
+        "0750_FluidR3_GM_sf2_file",
+        "0750_GeneralUserGS_sf2_file",
+        // crackles
+        "0750_JCLive_sf2_file",
+        //'0750_SBLive_sf2',
+        //'0750_SoundBlasterOld_sf2',
+        "0751_Aspirin_sf2_file",
+        "0751_FluidR3_GM_sf2_file",
+        "0751_GeneralUserGS_sf2_file",
+        // crackles
+        //'0751_SoundBlasterOld_sf2',
+        // Blown bottle: Pipe
+        // '0760_Aspirin_sf2_file', // same as below w crackle
+        "0760_Chaos_sf2_file",
+        "0760_FluidR3_GM_sf2_file",
+        "0760_GeneralUserGS_sf2_file",
+        "0760_JCLive_sf2_file",
+        //'0760_SBLive_sf2',
+        //'0760_SoundBlasterOld_sf2',
+        "0761_FluidR3_GM_sf2_file",
+        // '0761_GeneralUserGS_sf2_file', // missing
+        //'0761_SoundBlasterOld_sf2',
+        // '0762_GeneralUserGS_sf2_file', // missing
+        // Shakuhachi: Pipe
+        "0770_Aspirin_sf2_file",
+        // staccato
+        //'0770_Chaos_sf2_file', // not shakuhachi
+        "0770_FluidR3_GM_sf2_file",
+        "0770_GeneralUserGS_sf2_file",
+        "0770_JCLive_sf2_file",
+        //'0770_SBLive_sf2',
+        //'0770_SoundBlasterOld_sf2',
+        "0771_FluidR3_GM_sf2_file",
+        // '0771_GeneralUserGS_sf2_file', // missing
+        // '0772_GeneralUserGS_sf2_file', // missing
+        // Whistle: Pipe
+        "0780_Aspirin_sf2_file",
+        // crackles
+        "0780_Chaos_sf2_file",
+        // crackles
+        "0780_FluidR3_GM_sf2_file",
+        //'0780_GeneralUserGS_sf2_file', // loud..
+        "0780_JCLive_sf2_file",
+        // crackles
+        //'0780_SBLive_sf2',
+        //'0780_SoundBlasterOld_sf2',
+        // '0781_GeneralUserGS_sf2_file', // detune + crackles
+        // Ocarina: Pipe
+        "0790_Aspirin_sf2_file",
+        // tiny crackles
+        //'0790_Chaos_sf2_file', // same as above
+        "0790_FluidR3_GM_sf2_file",
+        "0790_GeneralUserGS_sf2_file",
+        "0790_JCLive_sf2_file",
+        // crackles
+        //'0790_SBLive_sf2',
+        //'0790_SoundBlasterOld_sf2',
+        //'0791_GeneralUserGS_sf2_file', // missing
+        // Lead 1 (square): Synth Lead
+        "0800_Aspirin_sf2_file",
+        "0800_Chaos_sf2_file",
+        "0800_FluidR3_GM_sf2_file",
+        // '0800_GeneralUserGS_sf2_file', // detuned
+        // '0800_JCLive_sf2_file', // detuned
+        //'0800_SBLive_sf2',
+        //'0800_SoundBlasterOld_sf2',
+        //'0801_FluidR3_GM_sf2_file', // detune
+        // '0801_GeneralUserGS_sf2_file', // detune
+        // Lead 2 (sawtooth): Synth Lead
+        "0810_Aspirin_sf2_file",
+        "0810_Chaos_sf2_file",
+        "0810_FluidR3_GM_sf2_file",
+        "0810_GeneralUserGS_sf2_file",
+        "0810_JCLive_sf2_file",
+        //'0810_SBLive_sf2',
+        //'0810_SoundBlasterOld_sf2',
+        "0811_Aspirin_sf2_file",
+        "0811_GeneralUserGS_sf2_file",
+        //'0811_SoundBlasterOld_sf2',
+        // Lead 3 (calliope): Synth Lead
+        "0820_Aspirin_sf2_file",
+        "0820_Chaos_sf2_file",
+        "0820_FluidR3_GM_sf2_file",
+        "0820_GeneralUserGS_sf2_file",
+        "0820_JCLive_sf2_file",
+        // +1 oct
+        //'0820_SBLive_sf2',
+        //'0820_SoundBlasterOld_sf2',
+        "0821_FluidR3_GM_sf2_file",
+        "0821_GeneralUserGS_sf2_file",
+        //'0821_SoundBlasterOld_sf2',
+        // '0822_GeneralUserGS_sf2_file', // missing
+        //'0823_GeneralUserGS_sf2_file', // missing
+        // Lead 4 (chiff): Synth Lead
+        "0830_Aspirin_sf2_file",
+        // '0830_Chaos_sf2_file', // same as above
+        "0830_FluidR3_GM_sf2_file",
+        "0830_GeneralUserGS_sf2_file",
+        "0830_JCLive_sf2_file",
+        // flute synth
+        //'0830_SBLive_sf2',
+        //'0830_SoundBlasterOld_sf2',
+        "0831_FluidR3_GM_sf2_file",
+        "0831_GeneralUserGS_sf2_file",
+        //'0831_SoundBlasterOld_sf2',
+        // Lead 5 (charang): Synth Lead
+        "0840_Aspirin_sf2_file",
+        "0840_Chaos_sf2_file",
+        "0840_FluidR3_GM_sf2_file",
+        "0840_GeneralUserGS_sf2_file",
+        "0840_JCLive_sf2_file",
+        // detune?
+        //'0840_SBLive_sf2',
+        //'0840_SoundBlasterOld_sf2',
+        "0841_Aspirin_sf2_file",
+        "0841_Chaos_sf2_file",
+        "0841_FluidR3_GM_sf2_file",
+        "0841_GeneralUserGS_sf2_file",
+        //'0841_JCLive_sf2_file', // +1oct + detune
+        //'0841_SoundBlasterOld_sf2',
+        "0842_FluidR3_GM_sf2_file",
+        // Lead 6 (voice): Synth Lead
+        "0850_Aspirin_sf2_file",
+        // '0850_Chaos_sf2_file', // same as above
+        "0850_FluidR3_GM_sf2_file",
+        // '0850_GeneralUserGS_sf2_file', // no voice
+        "0850_JCLive_sf2_file",
+        // more a flute
+        //'0850_SBLive_sf2',
+        //'0850_SoundBlasterOld_sf2',
+        "0851_FluidR3_GM_sf2_file",
+        "0851_GeneralUserGS_sf2_file",
+        "0851_JCLive_sf2_file",
+        //'0851_SoundBlasterOld_sf2',
+        // Lead 7 (fifths): Synth Lead
+        "0860_Aspirin_sf2_file",
+        "0860_Chaos_sf2_file",
+        // '0860_FluidR3_GM_sf2_file', // loud and not fitting
+        "0860_GeneralUserGS_sf2_file",
+        "0860_JCLive_sf2_file",
+        //'0860_SBLive_sf2',
+        //'0860_SoundBlasterOld_sf2',
+        "0861_Aspirin_sf2_file",
+        // '0861_FluidR3_GM_sf2_file', // lout and not fitting
+        //'0861_SoundBlasterOld_sf2',
+        // Lead 8 (bass + lead): Synth Lead
+        "0870_Aspirin_sf2_file",
+        "0870_Chaos_sf2_file",
+        "0870_FluidR3_GM_sf2_file",
+        "0870_GeneralUserGS_sf2_file",
+        "0870_JCLive_sf2_file",
+        //'0870_SBLive_sf2',
+        //'0870_SoundBlasterOld_sf2',
+        // '0871_GeneralUserGS_sf2_file', // loud + detune
+        //'0872_GeneralUserGS_sf2_file', // loud
+        //'0873_GeneralUserGS_sf2_file', // loud
+        // Pad 1 (new age): Synth Pad
+        "0880_Aspirin_sf2_file",
+        "0880_Chaos_sf2_file",
+        "0880_FluidR3_GM_sf2_file",
+        "0880_GeneralUserGS_sf2_file",
+        "0880_JCLive_sf2_file",
+        //'0880_SBLive_sf2',
+        //'0880_SoundBlasterOld_sf2',
+        "0881_Aspirin_sf2_file",
+        "0881_FluidR3_GM_sf2_file",
+        "0881_GeneralUserGS_sf2_file",
+        //'0881_SoundBlasterOld_sf2',
+        "0882_Aspirin_sf2_file",
+        // staccato
+        // '0882_FluidR3_GM_sf2_file', // missing
+        "0882_GeneralUserGS_sf2_file",
+        //'0883_GeneralUserGS_sf2_file', // missing
+        // '0884_GeneralUserGS_sf2_file', // broken
+        "0885_GeneralUserGS_sf2_file",
+        //'0886_GeneralUserGS_sf2_file', // not a pad
+        "0887_GeneralUserGS_sf2_file",
+        //'0888_GeneralUserGS_sf2_file', // not a pad
+        //'0889_GeneralUserGS_sf2_file', // not a pad
+        // Pad 2 (warm): Synth Pad
+        "0890_Aspirin_sf2_file",
+        "0890_Chaos_sf2_file",
+        "0890_FluidR3_GM_sf2_file",
+        "0890_GeneralUserGS_sf2_file",
+        // 1mb large
+        "0890_JCLive_sf2_file",
+        //'0890_SBLive_sf2',
+        //'0890_SoundBlasterOld_sf2',
+        "0891_Aspirin_sf2_file",
+        "0891_FluidR3_GM_sf2_file",
+        // '0891_GeneralUserGS_sf2_file', // noise
+        // Pad 3 (polysynth): Synth Pad
+        //'0900_Aspirin_sf2_file', // same as belo
+        "0900_Chaos_sf2_file",
+        "0900_FluidR3_GM_sf2_file",
+        "0900_GeneralUserGS_sf2_file",
+        "0900_JCLive_sf2_file",
+        // a bit plucky for a pad
+        //'0900_SBLive_sf2',
+        //'0900_SoundBlasterOld_sf2',
+        "0901_Aspirin_sf2_file",
+        "0901_FluidR3_GM_sf2_file",
+        "0901_GeneralUserGS_sf2_file",
+        //'0901_SoundBlasterOld_sf2',
+        // Pad 4 (choir): Synth Pad
+        "0910_Aspirin_sf2_file",
+        //'0910_Chaos_sf2_file', // +1oct
+        "0910_FluidR3_GM_sf2_file",
+        "0910_GeneralUserGS_sf2_file",
+        "0910_JCLive_sf2_file",
+        //'0910_SBLive_sf2',
+        //'0910_SoundBlasterOld_sf2',
+        // '0911_Aspirin_sf2_file', // fluty, crackles
+        "0911_GeneralUserGS_sf2_file",
+        "0911_JCLive_sf2_file",
+        // the only choiry pad
+        //'0911_SoundBlasterOld_sf2',
+        // Pad 5 (bowed): Synth Pad
+        "0920_Aspirin_sf2_file",
+        //'0920_Chaos_sf2_file', // same as above
+        //'0920_FluidR3_GM_sf2_file', // detuned?
+        "0920_GeneralUserGS_sf2_file",
+        "0920_JCLive_sf2_file",
+        //'0920_SBLive_sf2',
+        //'0920_SoundBlasterOld_sf2',
+        "0921_Aspirin_sf2_file",
+        "0921_GeneralUserGS_sf2_file",
+        //'0921_SoundBlasterOld_sf2',
+        // Pad 6 (metallic): Synth Pad
+        "0930_Aspirin_sf2_file",
+        "0930_Chaos_sf2_file",
+        "0930_FluidR3_GM_sf2_file",
+        // little crackles
+        "0930_GeneralUserGS_sf2_file",
+        // '0930_JCLive_sf2_file', // buggy zones: guitar / synth
+        //'0930_SBLive_sf2',
+        //'0930_SoundBlasterOld_sf2',
+        "0931_Aspirin_sf2_file",
+        // sitar
+        "0931_FluidR3_GM_sf2_file",
+        "0931_GeneralUserGS_sf2_file",
+        // guitar
+        //'0931_SoundBlasterOld_sf2',
+        // Pad 7 (halo): Synth Pad
+        // '0940_Aspirin_sf2_file', // same as below
+        "0940_Chaos_sf2_file",
+        "0940_FluidR3_GM_sf2_file",
+        "0940_GeneralUserGS_sf2_file",
+        "0940_JCLive_sf2_file",
+        //'0940_SBLive_sf2',
+        //'0940_SoundBlasterOld_sf2',
+        "0941_Aspirin_sf2_file",
+        "0941_FluidR3_GM_sf2_file",
+        "0941_GeneralUserGS_sf2_file",
+        "0941_JCLive_sf2_file",
+        // Pad 8 (sweep): Synth Pad
+        "0950_Aspirin_sf2_file",
+        "0950_Chaos_sf2_file",
+        "0950_FluidR3_GM_sf2_file",
+        "0950_GeneralUserGS_sf2_file",
+        "0950_JCLive_sf2_file",
+        //'0950_SBLive_sf2',
+        //'0950_SoundBlasterOld_sf2',
+        "0951_FluidR3_GM_sf2_file",
+        "0951_GeneralUserGS_sf2_file",
+        // FX 1 (rain): Synth Effects
+        //'0960_Aspirin_sf2_file', //mixed samples?
+        "0960_Chaos_sf2_file",
+        // pad?
+        "0960_FluidR3_GM_sf2_file",
+        // ???
+        "0960_GeneralUserGS_sf2_file",
+        // pad
+        // '0960_JCLive_sf2_file', // mixed samples?
+        //'0960_SBLive_sf2',
+        //'0960_SoundBlasterOld_sf2',
+        "0961_Aspirin_sf2_file",
+        "0961_FluidR3_GM_sf2_file",
+        // '0961_GeneralUserGS_sf2_file', // ?!?!
+        //'0961_SoundBlasterOld_sf2',
+        "0962_GeneralUserGS_sf2_file",
+        // FX 2 (soundtrack): Synth Effects
+        "0970_Aspirin_sf2_file",
+        //'0970_Chaos_sf2_file', // wrong pitch
+        "0970_FluidR3_GM_sf2_file",
+        "0970_GeneralUserGS_sf2_file",
+        // not looping..
+        //'0970_JCLive_sf2_file', // wrong pitch
+        //'0970_SBLive_sf2',
+        //'0970_SoundBlasterOld_sf2',
+        "0971_FluidR3_GM_sf2_file",
+        "0971_GeneralUserGS_sf2_file",
+        //'0971_SoundBlasterOld_sf2',
+        // FX 3 (crystal): Synth Effects
+        "0980_Aspirin_sf2_file",
+        "0980_Chaos_sf2_file",
+        // '0980_FluidR3_GM_sf2_file', // some notes are weird
+        "0980_GeneralUserGS_sf2_file",
+        "0980_JCLive_sf2_file",
+        //'0980_SBLive_sf2',
+        //'0980_SoundBlasterOld_sf2',
+        "0981_Aspirin_sf2_file",
+        // strings
+        "0981_FluidR3_GM_sf2_file",
+        // mallet
+        "0981_GeneralUserGS_sf2_file",
+        //'0981_SoundBlasterOld_sf2',
+        "0982_GeneralUserGS_sf2_file",
+        "0983_GeneralUserGS_sf2_file",
+        // guitar
+        "0984_GeneralUserGS_sf2_file",
+        // FX 4 (atmosphere): Synth Effects
+        "0990_Aspirin_sf2_file",
+        // pad
+        "0990_Chaos_sf2_file",
+        // pad
+        "0990_FluidR3_GM_sf2_file",
+        // guitar
+        "0990_GeneralUserGS_sf2_file",
+        // guitar
+        "0990_JCLive_sf2_file",
+        // pad
+        //'0990_SBLive_sf2',
+        //'0990_SoundBlasterOld_sf2',
+        "0991_Aspirin_sf2_file",
+        // guitar
+        "0991_FluidR3_GM_sf2_file",
+        // pad
+        "0991_GeneralUserGS_sf2_file",
+        // pad
+        "0991_JCLive_sf2_file",
+        // guitar
+        //'0991_SoundBlasterOld_sf2',
+        "0992_FluidR3_GM_sf2_file",
+        // pad
+        "0992_JCLive_sf2_file",
+        // guitar
+        "0993_JCLive_sf2_file",
+        // guitar
+        "0994_JCLive_sf2_file",
+        // guitar
+        // FX 5 (brightness): Synth Effects
+        "1000_Aspirin_sf2_file",
+        "1000_Chaos_sf2_file",
+        "1000_FluidR3_GM_sf2_file",
+        "1000_GeneralUserGS_sf2_file",
+        "1000_JCLive_sf2_file",
+        //'1000_SBLive_sf2',
+        //'1000_SoundBlasterOld_sf2',
+        "1001_Aspirin_sf2_file",
+        "1001_FluidR3_GM_sf2_file",
+        "1001_GeneralUserGS_sf2_file",
+        "1001_JCLive_sf2_file",
+        //'1001_SoundBlasterOld_sf2',
+        "1002_Aspirin_sf2_file",
+        "1002_FluidR3_GM_sf2_file",
+        "1002_GeneralUserGS_sf2_file",
+        // FX 6 (goblins): Synth Effects
+        "1010_Aspirin_sf2_file",
+        "1010_Chaos_sf2_file",
+        "1010_FluidR3_GM_sf2_file",
+        "1010_GeneralUserGS_sf2_file",
+        "1010_JCLive_sf2_file",
+        //'1010_SBLive_sf2',
+        //'1010_SoundBlasterOld_sf2',
+        "1011_Aspirin_sf2_file",
+        "1011_FluidR3_GM_sf2_file",
+        "1011_JCLive_sf2_file",
+        "1012_Aspirin_sf2_file",
+        // FX 7 (echoes): Synth Effects
+        "1020_Aspirin_sf2_file",
+        "1020_Chaos_sf2_file",
+        "1020_FluidR3_GM_sf2_file",
+        "1020_GeneralUserGS_sf2_file",
+        "1020_JCLive_sf2_file",
+        //'1020_SBLive_sf2',
+        //'1020_SoundBlasterOld_sf2',
+        "1021_Aspirin_sf2_file",
+        "1021_FluidR3_GM_sf2_file",
+        "1021_GeneralUserGS_sf2_file",
+        "1021_JCLive_sf2_file",
+        //'1021_SoundBlasterOld_sf2',
+        "1022_GeneralUserGS_sf2_file",
+        // FX 8 (sci-fi): Synth Effects
+        "1030_Aspirin_sf2_file",
+        "1030_Chaos_sf2_file",
+        "1030_FluidR3_GM_sf2_file",
+        "1030_GeneralUserGS_sf2_file",
+        "1030_JCLive_sf2_file",
+        //'1030_SBLive_sf2',
+        //'1030_SoundBlasterOld_sf2',
+        "1031_Aspirin_sf2_file",
+        "1031_FluidR3_GM_sf2_file",
+        "1031_GeneralUserGS_sf2_file",
+        //'1031_SoundBlasterOld_sf2',
+        "1032_FluidR3_GM_sf2_file",
+        // 'Sitar: Ethnic
+        "1040_Aspirin_sf2_file",
+        "1040_Chaos_sf2_file",
+        "1040_FluidR3_GM_sf2_file",
+        "1040_GeneralUserGS_sf2_file",
+        "1040_JCLive_sf2_file",
+        //'1040_SBLive_sf2',
+        //'1040_SoundBlasterOld_sf2',
+        "1041_FluidR3_GM_sf2_file",
+        "1041_GeneralUserGS_sf2_file",
+        // Banjo: Ethnic
+        "1050_Aspirin_sf2_file",
+        "1050_Chaos_sf2_file",
+        "1050_FluidR3_GM_sf2_file",
+        "1050_GeneralUserGS_sf2_file",
+        "1050_JCLive_sf2_file",
+        //'1050_SBLive_sf2',
+        //'1050_SoundBlasterOld_sf2',
+        "1051_GeneralUserGS_sf2_file",
+        // Shamisen: Ethnic
+        "1060_Aspirin_sf2_file",
+        "1060_Chaos_sf2_file",
+        "1060_FluidR3_GM_sf2_file",
+        "1060_GeneralUserGS_sf2_file",
+        "1060_JCLive_sf2_file",
+        //'1060_SBLive_sf2',
+        //'1060_SoundBlasterOld_sf2',
+        "1061_FluidR3_GM_sf2_file",
+        "1061_GeneralUserGS_sf2_file",
+        //'1061_SoundBlasterOld_sf2',
+        // Koto: Ethnic
+        "1070_Aspirin_sf2_file",
+        "1070_Chaos_sf2_file",
+        "1070_FluidR3_GM_sf2_file",
+        "1070_GeneralUserGS_sf2_file",
+        "1070_JCLive_sf2_file",
+        //'1070_SBLive_sf2',
+        //'1070_SoundBlasterOld_sf2',
+        "1071_FluidR3_GM_sf2_file",
+        "1071_GeneralUserGS_sf2_file",
+        "1072_GeneralUserGS_sf2_file",
+        "1073_GeneralUserGS_sf2_file",
+        // Kalimba: Ethnic
+        "1080_Aspirin_sf2_file",
+        "1080_Chaos_sf2_file",
+        "1080_FluidR3_GM_sf2_file",
+        "1080_GeneralUserGS_sf2_file",
+        "1080_JCLive_sf2_file",
+        //'1080_SBLive_sf2',
+        //'1080_SoundBlasterOld_sf2',
+        //'1081_SoundBlasterOld_sf2',
+        // Bagpipe: Ethnic
+        "1090_Aspirin_sf2_file",
+        "1090_Chaos_sf2_file",
+        "1090_FluidR3_GM_sf2_file",
+        "1090_GeneralUserGS_sf2_file",
+        "1090_JCLive_sf2_file",
+        //'1090_SBLive_sf2',
+        //'1090_SoundBlasterOld_sf2',
+        //'1091_SoundBlasterOld_sf2',
+        // Fiddle: Ethnic
+        "1100_Aspirin_sf2_file",
+        "1100_Chaos_sf2_file",
+        "1100_FluidR3_GM_sf2_file",
+        "1100_GeneralUserGS_sf2_file",
+        "1100_JCLive_sf2_file",
+        //'1100_SBLive_sf2',
+        //'1100_SoundBlasterOld_sf2',
+        "1101_Aspirin_sf2_file",
+        "1101_FluidR3_GM_sf2_file",
+        "1101_GeneralUserGS_sf2_file",
+        "1102_GeneralUserGS_sf2_file",
+        // Shanai: Ethnic
+        "1110_Aspirin_sf2_file",
+        "1110_Chaos_sf2_file",
+        "1110_FluidR3_GM_sf2_file",
+        "1110_GeneralUserGS_sf2_file",
+        "1110_JCLive_sf2_file",
+        //'1110_SBLive_sf2',
+        //'1110_SoundBlasterOld_sf2',
+        // Tinkle Bell: Percussive
+        "1120_Aspirin_sf2_file",
+        "1120_Chaos_sf2_file",
+        "1120_FluidR3_GM_sf2_file",
+        "1120_GeneralUserGS_sf2_file",
+        "1120_JCLive_sf2_file",
+        //'1120_SBLive_sf2',
+        //'1120_SoundBlasterOld_sf2',
+        //'1121_SoundBlasterOld_sf2',
+        // Agogo: Percussive
+        "1130_Aspirin_sf2_file",
+        "1130_Chaos_sf2_file",
+        "1130_FluidR3_GM_sf2_file",
+        "1130_GeneralUserGS_sf2_file",
+        "1130_JCLive_sf2_file",
+        //'1130_SBLive_sf2',
+        //'1130_SoundBlasterOld_sf2',
+        "1131_FluidR3_GM_sf2_file",
+        //'1131_SoundBlasterOld_sf2',
+        // Steel Drums: Percussive
+        "1140_Aspirin_sf2_file",
+        "1140_Chaos_sf2_file",
+        "1140_FluidR3_GM_sf2_file",
+        "1140_GeneralUserGS_sf2_file",
+        "1140_JCLive_sf2_file",
+        //'1140_SBLive_sf2',
+        //'1140_SoundBlasterOld_sf2',
+        "1141_FluidR3_GM_sf2_file",
+        // Woodblock: Percussive
+        "1150_Aspirin_sf2_file",
+        "1150_Chaos_sf2_file",
+        "1150_FluidR3_GM_sf2_file",
+        "1150_GeneralUserGS_sf2_file",
+        "1150_JCLive_sf2_file",
+        //'1150_SBLive_sf2',
+        //'1150_SoundBlasterOld_sf2',
+        "1151_FluidR3_GM_sf2_file",
+        "1151_GeneralUserGS_sf2_file",
+        "1152_FluidR3_GM_sf2_file",
+        "1152_GeneralUserGS_sf2_file",
+        // Taiko Drum: Percussive
+        "1160_Aspirin_sf2_file",
+        "1160_Chaos_sf2_file",
+        "1160_FluidR3_GM_sf2_file",
+        "1160_GeneralUserGS_sf2_file",
+        "1160_JCLive_sf2_file",
+        //'1160_SBLive_sf2',
+        //'1160_SoundBlasterOld_sf2',
+        "1161_FluidR3_GM_sf2_file",
+        "1161_GeneralUserGS_sf2_file",
+        //'1161_SoundBlasterOld_sf2',
+        "1162_FluidR3_GM_sf2_file",
+        "1162_GeneralUserGS_sf2_file",
+        "1163_FluidR3_GM_sf2_file",
+        // Melodic Tom: Percussive
+        "1170_Aspirin_sf2_file",
+        "1170_Chaos_sf2_file",
+        "1170_FluidR3_GM_sf2_file",
+        "1170_GeneralUserGS_sf2_file",
+        "1170_JCLive_sf2_file",
+        //'1170_SBLive_sf2',
+        //'1170_SoundBlasterOld_sf2',
+        "1171_FluidR3_GM_sf2_file",
+        "1171_GeneralUserGS_sf2_file",
+        "1172_FluidR3_GM_sf2_file",
+        "1173_FluidR3_GM_sf2_file",
+        // Synth Drum: Percussive
+        "1180_Aspirin_sf2_file",
+        "1180_Chaos_sf2_file",
+        "1180_FluidR3_GM_sf2_file",
+        "1180_GeneralUserGS_sf2_file",
+        "1180_JCLive_sf2_file",
+        //'1180_SBLive_sf2',
+        //'1180_SoundBlasterOld_sf2',
+        "1181_FluidR3_GM_sf2_file",
+        "1181_GeneralUserGS_sf2_file",
+        //'1181_SoundBlasterOld_sf2',
+        // Reverse Cymbal: Percussive
+        "1190_Aspirin_sf2_file",
+        "1190_Chaos_sf2_file",
+        "1190_FluidR3_GM_sf2_file",
+        "1190_GeneralUserGS_sf2_file",
+        "1190_JCLive_sf2_file",
+        //'1190_SBLive_sf2',
+        //'1190_SoundBlasterOld_sf2',
+        "1191_GeneralUserGS_sf2_file",
+        "1192_GeneralUserGS_sf2_file",
+        "1193_GeneralUserGS_sf2_file",
+        "1194_GeneralUserGS_sf2_file",
+        // Guitar Fret Noise: Sound effects
+        "1200_Aspirin_sf2_file",
+        "1200_Chaos_sf2_file",
+        "1200_FluidR3_GM_sf2_file",
+        "1200_GeneralUserGS_sf2_file",
+        "1200_JCLive_sf2_file",
+        //'1200_SBLive_sf2',
+        //'1200_SoundBlasterOld_sf2',
+        "1201_Aspirin_sf2_file",
+        "1201_GeneralUserGS_sf2_file",
+        "1202_GeneralUserGS_sf2_file",
+        // Breath Noise: Sound effects
+        "1210_Aspirin_sf2_file",
+        "1210_Chaos_sf2_file",
+        "1210_FluidR3_GM_sf2_file",
+        "1210_GeneralUserGS_sf2_file",
+        "1210_JCLive_sf2_file",
+        //'1210_SBLive_sf2',
+        //'1210_SoundBlasterOld_sf2',
+        "1211_Aspirin_sf2_file",
+        "1211_GeneralUserGS_sf2_file",
+        "1212_GeneralUserGS_sf2_file",
+        // Seashore: Sound effects
+        "1220_Aspirin_sf2_file",
+        "1220_Chaos_sf2_file",
+        "1220_FluidR3_GM_sf2_file",
+        "1220_GeneralUserGS_sf2_file",
+        "1220_JCLive_sf2_file",
+        //'1220_SBLive_sf2',
+        //'1220_SoundBlasterOld_sf2',
+        "1221_Aspirin_sf2_file",
+        "1221_GeneralUserGS_sf2_file",
+        "1221_JCLive_sf2_file",
+        "1222_Aspirin_sf2_file",
+        "1222_GeneralUserGS_sf2_file",
+        "1223_Aspirin_sf2_file",
+        "1223_GeneralUserGS_sf2_file",
+        "1224_Aspirin_sf2_file",
+        "1224_GeneralUserGS_sf2_file",
+        "1225_GeneralUserGS_sf2_file",
+        "1226_GeneralUserGS_sf2_file",
+        // Bird Tweet: Sound effects
+        "1230_Aspirin_sf2_file",
+        "1230_Chaos_sf2_file",
+        "1230_FluidR3_GM_sf2_file",
+        "1230_GeneralUserGS_sf2_file",
+        "1230_JCLive_sf2_file",
+        //'1230_SBLive_sf2',
+        //'1230_SoundBlasterOld_sf2',
+        "1231_Aspirin_sf2_file",
+        "1231_GeneralUserGS_sf2_file",
+        "1232_Aspirin_sf2_file",
+        "1232_GeneralUserGS_sf2_file",
+        "1233_GeneralUserGS_sf2_file",
+        "1234_GeneralUserGS_sf2_file",
+        // Telephone Ring: Sound effects
+        "1240_Aspirin_sf2_file",
+        "1240_Chaos_sf2_file",
+        "1240_FluidR3_GM_sf2_file",
+        "1240_GeneralUserGS_sf2_file",
+        "1240_JCLive_sf2_file",
+        //'1240_SBLive_sf2',
+        //'1240_SoundBlasterOld_sf2',
+        "1241_Aspirin_sf2_file",
+        "1241_GeneralUserGS_sf2_file",
+        "1242_Aspirin_sf2_file",
+        "1242_GeneralUserGS_sf2_file",
+        "1243_Aspirin_sf2_file",
+        "1243_GeneralUserGS_sf2_file",
+        "1244_Aspirin_sf2_file",
+        "1244_GeneralUserGS_sf2_file",
+        // Helicopter: Sound effects
+        "1250_Aspirin_sf2_file",
+        "1250_Chaos_sf2_file",
+        "1250_FluidR3_GM_sf2_file",
+        "1250_GeneralUserGS_sf2_file",
+        "1250_JCLive_sf2_file",
+        //'1250_SBLive_sf2',
+        //'1250_SoundBlasterOld_sf2',
+        "1251_Aspirin_sf2_file",
+        "1251_FluidR3_GM_sf2_file",
+        "1251_GeneralUserGS_sf2_file",
+        "1252_Aspirin_sf2_file",
+        "1252_FluidR3_GM_sf2_file",
+        "1252_GeneralUserGS_sf2_file",
+        "1253_Aspirin_sf2_file",
+        "1253_GeneralUserGS_sf2_file",
+        "1254_Aspirin_sf2_file",
+        "1254_GeneralUserGS_sf2_file",
+        "1255_Aspirin_sf2_file",
+        "1255_GeneralUserGS_sf2_file",
+        "1256_Aspirin_sf2_file",
+        "1256_GeneralUserGS_sf2_file",
+        "1257_Aspirin_sf2_file",
+        "1257_GeneralUserGS_sf2_file",
+        "1258_Aspirin_sf2_file",
+        "1258_GeneralUserGS_sf2_file",
+        "1259_GeneralUserGS_sf2_file",
+        // Applause: Sound effects
+        "1260_Aspirin_sf2_file",
+        "1260_Chaos_sf2_file",
+        "1260_FluidR3_GM_sf2_file",
+        "1260_GeneralUserGS_sf2_file",
+        "1260_JCLive_sf2_file",
+        //'1260_SBLive_sf2',
+        //'1260_SoundBlasterOld_sf2',
+        "1261_Aspirin_sf2_file",
+        "1261_GeneralUserGS_sf2_file",
+        "1262_Aspirin_sf2_file",
+        "1262_GeneralUserGS_sf2_file",
+        "1263_Aspirin_sf2_file",
+        "1263_GeneralUserGS_sf2_file",
+        "1264_Aspirin_sf2_file",
+        "1264_GeneralUserGS_sf2_file",
+        "1265_Aspirin_sf2_file",
+        "1265_GeneralUserGS_sf2_file",
+        // Gunshot: Sound effects
+        "1270_Aspirin_sf2_file",
+        "1270_Chaos_sf2_file",
+        "1270_FluidR3_GM_sf2_file",
+        "1270_GeneralUserGS_sf2_file",
+        "1270_JCLive_sf2_file",
+        //'1270_SBLive_sf2',
+        //'1270_SoundBlasterOld_sf2',
+        "1271_Aspirin_sf2_file",
+        "1271_GeneralUserGS_sf2_file",
+        "1272_Aspirin_sf2_file",
+        "1272_GeneralUserGS_sf2_file",
+        "1273_GeneralUserGS_sf2_file",
+        "1274_GeneralUserGS_sf2_file"
+      ];
+      drums = [
+        ////'35_0_SBLive_sf2'
+        "35_0_Chaos_sf2_file",
+        "35_12_JCLive_sf2_file",
+        "35_16_JCLive_sf2_file",
+        "35_18_JCLive_sf2_file",
+        "35_4_Chaos_sf2_file",
+        //'36_0_SBLive_sf2',
+        "36_12_JCLive_sf2_file",
+        "36_16_JCLive_sf2_file",
+        "36_18_JCLive_sf2_file",
+        "36_4_Chaos_sf2_file",
+        //'37_0_SBLive_sf2',
+        "37_12_JCLive_sf2_file",
+        "37_16_JCLive_sf2_file",
+        "37_18_JCLive_sf2_file",
+        "37_4_Chaos_sf2_file",
+        //'38_0_SBLive_sf2',
+        "38_12_JCLive_sf2_file",
+        "38_16_JCLive_sf2_file",
+        "38_18_JCLive_sf2_file",
+        "38_4_Chaos_sf2_file",
+        //'39_0_SBLive_sf2',
+        "39_12_JCLive_sf2_file",
+        "39_16_JCLive_sf2_file",
+        "39_18_JCLive_sf2_file",
+        "39_4_Chaos_sf2_file",
+        //'40_0_SBLive_sf2',
+        "40_12_JCLive_sf2_file",
+        "40_16_JCLive_sf2_file",
+        "40_18_JCLive_sf2_file",
+        "40_4_Chaos_sf2_file",
+        //'41_0_SBLive_sf2',
+        "41_12_JCLive_sf2_file",
+        "41_16_JCLive_sf2_file",
+        "41_18_JCLive_sf2_file",
+        "41_4_Chaos_sf2_file",
+        //'42_0_SBLive_sf2',
+        "42_12_JCLive_sf2_file",
+        "42_16_JCLive_sf2_file",
+        "42_18_JCLive_sf2_file",
+        "42_4_Chaos_sf2_file",
+        //'43_0_SBLive_sf2',
+        "43_12_JCLive_sf2_file",
+        "43_16_JCLive_sf2_file",
+        "43_18_JCLive_sf2_file",
+        "43_4_Chaos_sf2_file",
+        //'44_0_SBLive_sf2',
+        "44_12_JCLive_sf2_file",
+        "44_16_JCLive_sf2_file",
+        "44_18_JCLive_sf2_file",
+        "44_4_Chaos_sf2_file",
+        //'45_0_SBLive_sf2',
+        "45_12_JCLive_sf2_file",
+        "45_16_JCLive_sf2_file",
+        "45_18_JCLive_sf2_file",
+        "45_4_Chaos_sf2_file",
+        //'46_0_SBLive_sf2',
+        "46_12_JCLive_sf2_file",
+        "46_16_JCLive_sf2_file",
+        "46_18_JCLive_sf2_file",
+        "46_4_Chaos_sf2_file",
+        //'47_0_SBLive_sf2',
+        "47_12_JCLive_sf2_file",
+        "47_16_JCLive_sf2_file",
+        "47_18_JCLive_sf2_file",
+        "47_4_Chaos_sf2_file",
+        //'48_0_SBLive_sf2',
+        "48_12_JCLive_sf2_file",
+        "48_16_JCLive_sf2_file",
+        "48_18_JCLive_sf2_file",
+        "48_4_Chaos_sf2_file",
+        //'49_0_SBLive_sf2',
+        "49_12_JCLive_sf2_file",
+        "49_16_JCLive_sf2_file",
+        "49_18_JCLive_sf2_file",
+        "49_4_Chaos_sf2_file",
+        //'50_0_SBLive_sf2',
+        "50_12_JCLive_sf2_file",
+        "50_16_JCLive_sf2_file",
+        "50_18_JCLive_sf2_file",
+        "50_4_Chaos_sf2_file",
+        //'51_0_SBLive_sf2',
+        "51_12_JCLive_sf2_file",
+        "51_16_JCLive_sf2_file",
+        "51_18_JCLive_sf2_file",
+        "51_4_Chaos_sf2_file",
+        //'52_0_SBLive_sf2',
+        "52_12_JCLive_sf2_file",
+        "52_16_JCLive_sf2_file",
+        "52_18_JCLive_sf2_file",
+        "52_4_Chaos_sf2_file",
+        //'53_0_SBLive_sf2',
+        "53_12_JCLive_sf2_file",
+        "53_16_JCLive_sf2_file",
+        "53_18_JCLive_sf2_file",
+        "53_4_Chaos_sf2_file",
+        //'54_0_SBLive_sf2',
+        "54_12_JCLive_sf2_file",
+        "54_16_JCLive_sf2_file",
+        "54_18_JCLive_sf2_file",
+        "54_4_Chaos_sf2_file",
+        //'55_0_SBLive_sf2',
+        "55_12_JCLive_sf2_file",
+        "55_16_JCLive_sf2_file",
+        "55_18_JCLive_sf2_file",
+        "55_4_Chaos_sf2_file",
+        //'56_0_SBLive_sf2',
+        "56_12_JCLive_sf2_file",
+        "56_16_JCLive_sf2_file",
+        "56_18_JCLive_sf2_file",
+        "56_4_Chaos_sf2_file",
+        //'57_0_SBLive_sf2',
+        "57_12_JCLive_sf2_file",
+        "57_16_JCLive_sf2_file",
+        "57_18_JCLive_sf2_file",
+        "57_4_Chaos_sf2_file",
+        //'58_0_SBLive_sf2',
+        "58_12_JCLive_sf2_file",
+        "58_16_JCLive_sf2_file",
+        "58_18_JCLive_sf2_file",
+        "58_4_Chaos_sf2_file",
+        //'59_0_SBLive_sf2',
+        "59_12_JCLive_sf2_file",
+        "59_16_JCLive_sf2_file",
+        "59_18_JCLive_sf2_file",
+        "59_4_Chaos_sf2_file",
+        //'60_0_SBLive_sf2',
+        "60_12_JCLive_sf2_file",
+        "60_16_JCLive_sf2_file",
+        "60_18_JCLive_sf2_file",
+        "60_4_Chaos_sf2_file",
+        //'61_0_SBLive_sf2',
+        "61_12_JCLive_sf2_file",
+        "61_16_JCLive_sf2_file",
+        "61_18_JCLive_sf2_file",
+        "61_4_Chaos_sf2_file",
+        //'62_0_SBLive_sf2',
+        "62_12_JCLive_sf2_file",
+        "62_16_JCLive_sf2_file",
+        "62_18_JCLive_sf2_file",
+        "62_4_Chaos_sf2_file",
+        //'63_0_SBLive_sf2',
+        "63_12_JCLive_sf2_file",
+        "63_16_JCLive_sf2_file",
+        "63_18_JCLive_sf2_file",
+        "63_4_Chaos_sf2_file",
+        //'64_0_SBLive_sf2',
+        "64_12_JCLive_sf2_file",
+        "64_16_JCLive_sf2_file",
+        "64_18_JCLive_sf2_file",
+        "64_4_Chaos_sf2_file",
+        //'65_0_SBLive_sf2',
+        "65_12_JCLive_sf2_file",
+        "65_16_JCLive_sf2_file",
+        "65_18_JCLive_sf2_file",
+        "65_4_Chaos_sf2_file",
+        //'66_0_SBLive_sf2',
+        "66_12_JCLive_sf2_file",
+        "66_16_JCLive_sf2_file",
+        "66_18_JCLive_sf2_file",
+        "66_4_Chaos_sf2_file",
+        //'67_0_SBLive_sf2',
+        "67_12_JCLive_sf2_file",
+        "67_16_JCLive_sf2_file",
+        "67_18_JCLive_sf2_file",
+        "67_4_Chaos_sf2_file",
+        //'68_0_SBLive_sf2',
+        "68_12_JCLive_sf2_file",
+        "68_16_JCLive_sf2_file",
+        "68_18_JCLive_sf2_file",
+        "68_4_Chaos_sf2_file",
+        //'69_0_SBLive_sf2',
+        "69_12_JCLive_sf2_file",
+        "69_16_JCLive_sf2_file",
+        "69_18_JCLive_sf2_file",
+        "69_4_Chaos_sf2_file",
+        //'70_0_SBLive_sf2',
+        "70_12_JCLive_sf2_file",
+        "70_16_JCLive_sf2_file",
+        "70_18_JCLive_sf2_file",
+        "70_4_Chaos_sf2_file",
+        //'71_0_SBLive_sf2',
+        "71_12_JCLive_sf2_file",
+        "71_16_JCLive_sf2_file",
+        "71_18_JCLive_sf2_file",
+        "71_4_Chaos_sf2_file",
+        //'72_0_SBLive_sf2',
+        "72_12_JCLive_sf2_file",
+        "72_16_JCLive_sf2_file",
+        "72_18_JCLive_sf2_file",
+        "72_4_Chaos_sf2_file",
+        //'73_0_SBLive_sf2',
+        "73_12_JCLive_sf2_file",
+        "73_16_JCLive_sf2_file",
+        "73_18_JCLive_sf2_file",
+        "73_4_Chaos_sf2_file",
+        //'74_0_SBLive_sf2',
+        "74_12_JCLive_sf2_file",
+        "74_16_JCLive_sf2_file",
+        "74_18_JCLive_sf2_file",
+        "74_4_Chaos_sf2_file",
+        //'75_0_SBLive_sf2',
+        "75_12_JCLive_sf2_file",
+        "75_16_JCLive_sf2_file",
+        "75_18_JCLive_sf2_file",
+        "75_4_Chaos_sf2_file",
+        //'76_0_SBLive_sf2',
+        "76_12_JCLive_sf2_file",
+        "76_16_JCLive_sf2_file",
+        "76_18_JCLive_sf2_file",
+        "76_4_Chaos_sf2_file",
+        //'77_0_SBLive_sf2',
+        "77_12_JCLive_sf2_file",
+        "77_16_JCLive_sf2_file",
+        "77_18_JCLive_sf2_file",
+        "77_4_Chaos_sf2_file",
+        //'78_0_SBLive_sf2',
+        "78_12_JCLive_sf2_file",
+        "78_16_JCLive_sf2_file",
+        "78_18_JCLive_sf2_file",
+        "78_4_Chaos_sf2_file",
+        //'79_0_SBLive_sf2',
+        "79_12_JCLive_sf2_file",
+        "79_16_JCLive_sf2_file",
+        "79_18_JCLive_sf2_file",
+        "79_4_Chaos_sf2_file",
+        //'80_0_SBLive_sf2',
+        "80_12_JCLive_sf2_file",
+        "80_16_JCLive_sf2_file",
+        "80_18_JCLive_sf2_file",
+        "80_4_Chaos_sf2_file",
+        //'81_0_SBLive_sf2',
+        "81_12_JCLive_sf2_file",
+        "81_16_JCLive_sf2_file",
+        "81_18_JCLive_sf2_file",
+        "81_4_Chaos_sf2_file"
+      ];
+      instrumentNames = [];
+      instrumentNames[0] = "Acoustic Grand Piano: Piano";
+      instrumentNames[1] = "Bright Acoustic Piano: Piano";
+      instrumentNames[2] = "Electric Grand Piano: Piano";
+      instrumentNames[3] = "Honky-tonk Piano: Piano";
+      instrumentNames[4] = "Electric Piano 1: Piano";
+      instrumentNames[5] = "Electric Piano 2: Piano";
+      instrumentNames[6] = "Harpsichord: Piano";
+      instrumentNames[7] = "Clavinet: Piano";
+      instrumentNames[8] = "Celesta: Chromatic Percussion";
+      instrumentNames[9] = "Glockenspiel: Chromatic Percussion";
+      instrumentNames[10] = "Music Box: Chromatic Percussion";
+      instrumentNames[11] = "Vibraphone: Chromatic Percussion";
+      instrumentNames[12] = "Marimba: Chromatic Percussion";
+      instrumentNames[13] = "Xylophone: Chromatic Percussion";
+      instrumentNames[14] = "Tubular Bells: Chromatic Percussion";
+      instrumentNames[15] = "Dulcimer: Chromatic Percussion";
+      instrumentNames[16] = "Drawbar Organ: Organ";
+      instrumentNames[17] = "Percussive Organ: Organ";
+      instrumentNames[18] = "Rock Organ: Organ";
+      instrumentNames[19] = "Church Organ: Organ";
+      instrumentNames[20] = "Reed Organ: Organ";
+      instrumentNames[21] = "Accordion: Organ";
+      instrumentNames[22] = "Harmonica: Organ";
+      instrumentNames[23] = "Tango Accordion: Organ";
+      instrumentNames[24] = "Acoustic Guitar (nylon): Guitar";
+      instrumentNames[25] = "Acoustic Guitar (steel): Guitar";
+      instrumentNames[26] = "Electric Guitar (jazz): Guitar";
+      instrumentNames[27] = "Electric Guitar (clean): Guitar";
+      instrumentNames[28] = "Electric Guitar (muted): Guitar";
+      instrumentNames[29] = "Overdriven Guitar: Guitar";
+      instrumentNames[30] = "Distortion Guitar: Guitar";
+      instrumentNames[31] = "Guitar Harmonics: Guitar";
+      instrumentNames[32] = "Acoustic Bass: Bass";
+      instrumentNames[33] = "Electric Bass (finger): Bass";
+      instrumentNames[34] = "Electric Bass (pick): Bass";
+      instrumentNames[35] = "Fretless Bass: Bass";
+      instrumentNames[36] = "Slap Bass 1: Bass";
+      instrumentNames[37] = "Slap Bass 2: Bass";
+      instrumentNames[38] = "Synth Bass 1: Bass";
+      instrumentNames[39] = "Synth Bass 2: Bass";
+      instrumentNames[40] = "Violin: Strings";
+      instrumentNames[41] = "Viola: Strings";
+      instrumentNames[42] = "Cello: Strings";
+      instrumentNames[43] = "Contrabass: Strings";
+      instrumentNames[44] = "Tremolo Strings: Strings";
+      instrumentNames[45] = "Pizzicato Strings: Strings";
+      instrumentNames[46] = "Orchestral Harp: Strings";
+      instrumentNames[47] = "Timpani: Strings";
+      instrumentNames[48] = "String Ensemble 1: Ensemble";
+      instrumentNames[49] = "String Ensemble 2: Ensemble";
+      instrumentNames[50] = "Synth Strings 1: Ensemble";
+      instrumentNames[51] = "Synth Strings 2: Ensemble";
+      instrumentNames[52] = "Choir Aahs: Ensemble";
+      instrumentNames[53] = "Voice Oohs: Ensemble";
+      instrumentNames[54] = "Synth Choir: Ensemble";
+      instrumentNames[55] = "Orchestra Hit: Ensemble";
+      instrumentNames[56] = "Trumpet: Brass";
+      instrumentNames[57] = "Trombone: Brass";
+      instrumentNames[58] = "Tuba: Brass";
+      instrumentNames[59] = "Muted Trumpet: Brass";
+      instrumentNames[60] = "French Horn: Brass";
+      instrumentNames[61] = "Brass Section: Brass";
+      instrumentNames[62] = "Synth Brass 1: Brass";
+      instrumentNames[63] = "Synth Brass 2: Brass";
+      instrumentNames[64] = "Soprano Sax: Reed";
+      instrumentNames[65] = "Alto Sax: Reed";
+      instrumentNames[66] = "Tenor Sax: Reed";
+      instrumentNames[67] = "Baritone Sax: Reed";
+      instrumentNames[68] = "Oboe: Reed";
+      instrumentNames[69] = "English Horn: Reed";
+      instrumentNames[70] = "Bassoon: Reed";
+      instrumentNames[71] = "Clarinet: Reed";
+      instrumentNames[72] = "Piccolo: Pipe";
+      instrumentNames[73] = "Flute: Pipe";
+      instrumentNames[74] = "Recorder: Pipe";
+      instrumentNames[75] = "Pan Flute: Pipe";
+      instrumentNames[76] = "Blown bottle: Pipe";
+      instrumentNames[77] = "Shakuhachi: Pipe";
+      instrumentNames[78] = "Whistle: Pipe";
+      instrumentNames[79] = "Ocarina: Pipe";
+      instrumentNames[80] = "Lead 1 (square): Synth Lead";
+      instrumentNames[81] = "Lead 2 (sawtooth): Synth Lead";
+      instrumentNames[82] = "Lead 3 (calliope): Synth Lead";
+      instrumentNames[83] = "Lead 4 (chiff): Synth Lead";
+      instrumentNames[84] = "Lead 5 (charang): Synth Lead";
+      instrumentNames[85] = "Lead 6 (voice): Synth Lead";
+      instrumentNames[86] = "Lead 7 (fifths): Synth Lead";
+      instrumentNames[87] = "Lead 8 (bass + lead): Synth Lead";
+      instrumentNames[88] = "Pad 1 (new age): Synth Pad";
+      instrumentNames[89] = "Pad 2 (warm): Synth Pad";
+      instrumentNames[90] = "Pad 3 (polysynth): Synth Pad";
+      instrumentNames[91] = "Pad 4 (choir): Synth Pad";
+      instrumentNames[92] = "Pad 5 (bowed): Synth Pad";
+      instrumentNames[93] = "Pad 6 (metallic): Synth Pad";
+      instrumentNames[94] = "Pad 7 (halo): Synth Pad";
+      instrumentNames[95] = "Pad 8 (sweep): Synth Pad";
+      instrumentNames[96] = "FX 1 (rain): Synth Effects";
+      instrumentNames[97] = "FX 2 (soundtrack): Synth Effects";
+      instrumentNames[98] = "FX 3 (crystal): Synth Effects";
+      instrumentNames[99] = "FX 4 (atmosphere): Synth Effects";
+      instrumentNames[100] = "FX 5 (brightness): Synth Effects";
+      instrumentNames[101] = "FX 6 (goblins): Synth Effects";
+      instrumentNames[102] = "FX 7 (echoes): Synth Effects";
+      instrumentNames[103] = "FX 8 (sci-fi): Synth Effects";
+      instrumentNames[104] = "Sitar: Ethnic";
+      instrumentNames[105] = "Banjo: Ethnic";
+      instrumentNames[106] = "Shamisen: Ethnic";
+      instrumentNames[107] = "Koto: Ethnic";
+      instrumentNames[108] = "Kalimba: Ethnic";
+      instrumentNames[109] = "Bagpipe: Ethnic";
+      instrumentNames[110] = "Fiddle: Ethnic";
+      instrumentNames[111] = "Shanai: Ethnic";
+      instrumentNames[112] = "Tinkle Bell: Percussive";
+      instrumentNames[113] = "Agogo: Percussive";
+      instrumentNames[114] = "Steel Drums: Percussive";
+      instrumentNames[115] = "Woodblock: Percussive";
+      instrumentNames[116] = "Taiko Drum: Percussive";
+      instrumentNames[117] = "Melodic Tom: Percussive";
+      instrumentNames[118] = "Synth Drum: Percussive";
+      instrumentNames[119] = "Reverse Cymbal: Percussive";
+      instrumentNames[120] = "Guitar Fret Noise: Sound effects";
+      instrumentNames[121] = "Breath Noise: Sound effects";
+      instrumentNames[122] = "Seashore: Sound effects";
+      instrumentNames[123] = "Bird Tweet: Sound effects";
+      instrumentNames[124] = "Telephone Ring: Sound effects";
+      instrumentNames[125] = "Helicopter: Sound effects";
+      instrumentNames[126] = "Applause: Sound effects";
+      instrumentNames[127] = "Gunshot: Sound effects";
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/soundfont2@0.4.0/node_modules/soundfont2/lib/SoundFont2.js
+  var require_SoundFont2 = __commonJS({
+    "build/engine-src/strudel/node_modules/.pnpm/soundfont2@0.4.0/node_modules/soundfont2/lib/SoundFont2.js"(exports, module) {
+      !(function(e, t) {
+        "object" == typeof exports && "object" == typeof module ? module.exports = t() : "function" == typeof define && define.amd ? define("SoundFont2", [], t) : "object" == typeof exports ? exports.SoundFont2 = t() : e.SoundFont2 = t();
+      })(window, function() {
+        return (function(e) {
+          var t = {};
+          function r2(n2) {
+            if (t[n2]) return t[n2].exports;
+            var o = t[n2] = { i: n2, l: false, exports: {} };
+            return e[n2].call(o.exports, o, o.exports, r2), o.l = true, o.exports;
+          }
+          return r2.m = e, r2.c = t, r2.d = function(e2, t2, n2) {
+            r2.o(e2, t2) || Object.defineProperty(e2, t2, { enumerable: true, get: n2 });
+          }, r2.r = function(e2) {
+            "undefined" != typeof Symbol && Symbol.toStringTag && Object.defineProperty(e2, Symbol.toStringTag, { value: "Module" }), Object.defineProperty(e2, "__esModule", { value: true });
+          }, r2.t = function(e2, t2) {
+            if (1 & t2 && (e2 = r2(e2)), 8 & t2) return e2;
+            if (4 & t2 && "object" == typeof e2 && e2 && e2.__esModule) return e2;
+            var n2 = /* @__PURE__ */ Object.create(null);
+            if (r2.r(n2), Object.defineProperty(n2, "default", { enumerable: true, value: e2 }), 2 & t2 && "string" != typeof e2) for (var o in e2) r2.d(n2, o, function(t3) {
+              return e2[t3];
+            }.bind(null, o));
+            return n2;
+          }, r2.n = function(e2) {
+            var t2 = e2 && e2.__esModule ? function() {
+              return e2.default;
+            } : function() {
+              return e2;
+            };
+            return r2.d(t2, "a", t2), t2;
+          }, r2.o = function(e2, t2) {
+            return Object.prototype.hasOwnProperty.call(e2, t2);
+          }, r2.p = "", r2(r2.s = "./src/index.ts");
+        })({ "./src/chunk.ts": (
+          /*!**********************!*\
+            !*** ./src/chunk.ts ***!
+            \**********************/
+          /*! exports provided: SF2Chunk */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t), r2.d(t, "SF2Chunk", function() {
+              return f;
+            });
+            var n2 = r2(
+              /*! ./riff */
+              "./src/riff/index.ts"
+            ), o = r2(
+              /*! ./constants */
+              "./src/constants.ts"
+            ), i3 = r2(
+              /*! ./chunks */
+              "./src/chunks/index.ts"
+            );
+            function s2(e2) {
+              return (s2 = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(e3) {
+                return typeof e3;
+              } : function(e3) {
+                return e3 && "function" == typeof Symbol && e3.constructor === Symbol && e3 !== Symbol.prototype ? "symbol" : typeof e3;
+              })(e2);
+            }
+            function u(e2, t2) {
+              for (var r3 = 0; r3 < t2.length; r3++) {
+                var n3 = t2[r3];
+                n3.enumerable = n3.enumerable || false, n3.configurable = true, "value" in n3 && (n3.writable = true), Object.defineProperty(e2, n3.key, n3);
+              }
+            }
+            function a(e2) {
+              return (a = Object.setPrototypeOf ? Object.getPrototypeOf : function(e3) {
+                return e3.__proto__ || Object.getPrototypeOf(e3);
+              })(e2);
+            }
+            function c2(e2, t2) {
+              return (c2 = Object.setPrototypeOf || function(e3, t3) {
+                return e3.__proto__ = t3, e3;
+              })(e2, t2);
+            }
+            function l(e2) {
+              if (void 0 === e2) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
+              return e2;
+            }
+            var f = (function(e2) {
+              function t2(e3) {
+                var r4, n3, o2, i4, u2, c3;
+                return (function(e4, t3) {
+                  if (!(e4 instanceof t3)) throw new TypeError("Cannot call a class as a function");
+                })(this, t2), n3 = this, r4 = !(o2 = a(t2).call(this, e3.id, e3.length, e3.buffer, e3.subChunks)) || "object" !== s2(o2) && "function" != typeof o2 ? l(n3) : o2, i4 = l(l(r4)), c3 = void 0, (u2 = "subChunks") in i4 ? Object.defineProperty(i4, u2, { value: c3, enumerable: true, configurable: true, writable: true }) : i4[u2] = c3, r4.subChunks = e3.subChunks.map(function(e4) {
+                  return new t2(e4);
+                }), r4;
+              }
+              var r3, f2, d;
+              return (function(e3, t3) {
+                if ("function" != typeof t3 && null !== t3) throw new TypeError("Super expression must either be null or a function");
+                e3.prototype = Object.create(t3 && t3.prototype, { constructor: { value: e3, writable: true, configurable: true } }), t3 && c2(e3, t3);
+              })(t2, n2["RIFFChunk"]), r3 = t2, (f2 = [{ key: "getMetaData", value: function() {
+                if ("LIST" !== this.id) throw new n2.ParseError("Unexpected chunk ID", "'LIST'", "'".concat(this.id, "'"));
+                var e3 = this.subChunks.reduce(function(e4, t3) {
+                  if ("ifil" === t3.id || "iver" === t3.id) {
+                    if (t3.length !== o.SF_VERSION_LENGTH) throw new n2.ParseError("Invalid size for the '".concat(t3.id, "' sub-chunk"));
+                    e4[t3.id] = "".concat(t3.getInt16(), ".").concat(t3.getInt16(2));
+                  } else e4[t3.id] = t3.getString();
+                  return e4;
+                }, {});
+                if (!e3.ifil) throw new n2.ParseError("Missing required 'ifil' sub-chunk");
+                if (!e3.INAM) throw new n2.ParseError("Missing required 'INAM' sub-chunk");
+                return { version: e3.ifil, soundEngine: e3.isng || "EMU8000", name: e3.INAM, rom: e3.irom, romVersion: e3.iver, creationDate: e3.ICRD, author: e3.IENG, product: e3.IPRD, copyright: e3.ICOP, comments: e3.ICMT, createdBy: e3.ISFT };
+              } }, { key: "getSampleData", value: function() {
+                if ("LIST" !== this.id) throw new n2.ParseError("Unexpected chunk ID", "'LIST'", "'".concat(this.id, "'"));
+                var e3 = this.subChunks[0];
+                if ("smpl" !== e3.id) throw new n2.ParseError("Invalid chunk signature", "'smpl'", "'".concat(e3.id, "'"));
+                return e3.buffer;
+              } }, { key: "getPresetData", value: function() {
+                if ("LIST" !== this.id) throw new n2.ParseError("Unexpected chunk ID", "'LIST'", "'".concat(this.id, "'"));
+                return { presetHeaders: Object(i3.getPresetHeaders)(this.subChunks[0]), presetZones: Object(i3.getZones)(this.subChunks[1], "pbag"), presetModulators: Object(i3.getModulators)(this.subChunks[2], "pmod"), presetGenerators: Object(i3.getGenerators)(this.subChunks[3], "pgen"), instrumentHeaders: Object(i3.getInstrumentHeaders)(this.subChunks[4]), instrumentZones: Object(i3.getZones)(this.subChunks[5], "ibag"), instrumentModulators: Object(i3.getModulators)(this.subChunks[6], "imod"), instrumentGenerators: Object(i3.getGenerators)(this.subChunks[7], "igen"), sampleHeaders: Object(i3.getSampleHeaders)(this.subChunks[8]) };
+              } }]) && u(r3.prototype, f2), d && u(r3, d), t2;
+            })();
+          }
+        ), "./src/chunks/generators.ts": (
+          /*!**********************************!*\
+            !*** ./src/chunks/generators.ts ***!
+            \**********************************/
+          /*! exports provided: getGenerators */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t), r2.d(t, "getGenerators", function() {
+              return c2;
+            });
+            var n2 = r2(
+              /*! ~/riff */
+              "./src/riff/index.ts"
+            ), o = r2(
+              /*! ~/types */
+              "./src/types/index.ts"
+            ), i3 = r2(
+              /*! ~/constants */
+              "./src/constants.ts"
+            ), s2 = [o.GeneratorType.StartAddrsOffset, o.GeneratorType.EndAddrsOffset, o.GeneratorType.StartLoopAddrsOffset, o.GeneratorType.EndLoopAddrsOffset, o.GeneratorType.StartAddrsCoarseOffset, o.GeneratorType.EndAddrsCoarseOffset, o.GeneratorType.StartLoopAddrsCoarseOffset, o.GeneratorType.KeyNum, o.GeneratorType.Velocity, o.GeneratorType.EndLoopAddrsCoarseOffset, o.GeneratorType.SampleModes, o.GeneratorType.ExclusiveClass, o.GeneratorType.OverridingRootKey], u = [o.GeneratorType.Unused1, o.GeneratorType.Unused2, o.GeneratorType.Unused3, o.GeneratorType.Unused4, o.GeneratorType.Reserved1, o.GeneratorType.Reserved2, o.GeneratorType.Reserved3], a = [o.GeneratorType.KeyRange, o.GeneratorType.VelRange], c2 = function(e2, t2) {
+              if (e2.id !== t2) throw new n2.ParseError("Unexpected chunk ID", "'".concat(t2, "'"), "'".concat(e2.id, "'"));
+              if (e2.length % i3.SF_GENERATOR_SIZE) throw new n2.ParseError("Invalid size for the '".concat(t2, "' sub-chunk"));
+              return e2.iterate(function(e3) {
+                var r3 = e3.getInt16();
+                return o.GeneratorType[r3] ? "pgen" === t2 && s2.includes(r3) ? null : "igen" === t2 && u.includes(r3) ? null : a.includes(r3) ? { id: r3, range: { lo: e3.getByte(), hi: e3.getByte() } } : { id: r3, value: e3.getInt16BE() } : null;
+              });
+            };
+          }
+        ), "./src/chunks/index.ts": (
+          /*!*****************************!*\
+            !*** ./src/chunks/index.ts ***!
+            \*****************************/
+          /*! exports provided: getGenerators, getModulators, getZones, getItemsInZone, getInstrumentHeaders, getPresetHeaders, getSampleHeaders */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t);
+            var n2 = r2(
+              /*! ./instruments */
+              "./src/chunks/instruments/index.ts"
+            );
+            r2.d(t, "getInstrumentHeaders", function() {
+              return n2.getInstrumentHeaders;
+            });
+            var o = r2(
+              /*! ./presets */
+              "./src/chunks/presets/index.ts"
+            );
+            r2.d(t, "getPresetHeaders", function() {
+              return o.getPresetHeaders;
+            });
+            var i3 = r2(
+              /*! ./samples */
+              "./src/chunks/samples/index.ts"
+            );
+            r2.d(t, "getSampleHeaders", function() {
+              return i3.getSampleHeaders;
+            });
+            var s2 = r2(
+              /*! ./generators */
+              "./src/chunks/generators.ts"
+            );
+            r2.d(t, "getGenerators", function() {
+              return s2.getGenerators;
+            });
+            var u = r2(
+              /*! ./modulators */
+              "./src/chunks/modulators.ts"
+            );
+            r2.d(t, "getModulators", function() {
+              return u.getModulators;
+            });
+            var a = r2(
+              /*! ./zones */
+              "./src/chunks/zones.ts"
+            );
+            r2.d(t, "getZones", function() {
+              return a.getZones;
+            }), r2.d(t, "getItemsInZone", function() {
+              return a.getItemsInZone;
+            });
+          }
+        ), "./src/chunks/instruments/headers.ts": (
+          /*!*******************************************!*\
+            !*** ./src/chunks/instruments/headers.ts ***!
+            \*******************************************/
+          /*! exports provided: getInstrumentHeaders */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t), r2.d(t, "getInstrumentHeaders", function() {
+              return i3;
+            });
+            var n2 = r2(
+              /*! ~/riff */
+              "./src/riff/index.ts"
+            ), o = r2(
+              /*! ~/constants */
+              "./src/constants.ts"
+            ), i3 = function(e2) {
+              if ("inst" !== e2.id) throw new n2.ParseError("Unexpected chunk ID", "'inst'", "'".concat(e2.id, "'"));
+              if (e2.length % o.SF_INSTRUMENT_HEADER_SIZE) throw new n2.ParseError("Invalid size for the 'inst' sub-chunk");
+              return e2.iterate(function(e3) {
+                return { name: e3.getString(), bagIndex: e3.getInt16() };
+              });
+            };
+          }
+        ), "./src/chunks/instruments/index.ts": (
+          /*!*****************************************!*\
+            !*** ./src/chunks/instruments/index.ts ***!
+            \*****************************************/
+          /*! exports provided: getInstrumentHeaders */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t);
+            var n2 = r2(
+              /*! ./headers */
+              "./src/chunks/instruments/headers.ts"
+            );
+            r2.d(t, "getInstrumentHeaders", function() {
+              return n2.getInstrumentHeaders;
+            });
+          }
+        ), "./src/chunks/modulators.ts": (
+          /*!**********************************!*\
+            !*** ./src/chunks/modulators.ts ***!
+            \**********************************/
+          /*! exports provided: getModulators */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t), r2.d(t, "getModulators", function() {
+              return s2;
+            });
+            var n2 = r2(
+              /*! ~/riff */
+              "./src/riff/index.ts"
+            ), o = r2(
+              /*! ~/constants */
+              "./src/constants.ts"
+            ), i3 = function(e2) {
+              return { type: e2 >> 10 & 63, polarity: e2 >> 9 & 1, direction: e2 >> 8 & 1, palette: e2 >> 7 & 1, index: 127 & e2 };
+            }, s2 = function(e2, t2) {
+              if (e2.id !== t2) throw new n2.ParseError("Unexpected chunk ID", "'".concat(t2, "'"), "'".concat(e2.id, "'"));
+              if (e2.length % o.SF_MODULATOR_SIZE) throw new n2.ParseError("Invalid size for the '".concat(t2, "' sub-chunk"));
+              return e2.iterate(function(e3) {
+                return { source: i3(e3.getInt16BE()), id: e3.getInt16BE(), value: e3.getInt16BE(), valueSource: i3(e3.getInt16BE()), transform: e3.getInt16BE() };
+              });
+            };
+          }
+        ), "./src/chunks/presets/headers.ts": (
+          /*!***************************************!*\
+            !*** ./src/chunks/presets/headers.ts ***!
+            \***************************************/
+          /*! exports provided: getPresetHeaders */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t), r2.d(t, "getPresetHeaders", function() {
+              return i3;
+            });
+            var n2 = r2(
+              /*! ~/riff */
+              "./src/riff/index.ts"
+            ), o = r2(
+              /*! ~/constants */
+              "./src/constants.ts"
+            ), i3 = function(e2) {
+              if ("phdr" !== e2.id) throw new n2.ParseError("Invalid chunk ID", "'phdr'", "'".concat(e2.id, "'"));
+              if (e2.length % o.SF_PRESET_HEADER_SIZE) throw new n2.ParseError("Invalid size for the 'phdr' sub-chunk");
+              return e2.iterate(function(e3) {
+                return { name: e3.getString(), preset: e3.getInt16(), bank: e3.getInt16(), bagIndex: e3.getInt16(), library: e3.getUInt32(), genre: e3.getUInt32(), morphology: e3.getUInt32() };
+              });
+            };
+          }
+        ), "./src/chunks/presets/index.ts": (
+          /*!*************************************!*\
+            !*** ./src/chunks/presets/index.ts ***!
+            \*************************************/
+          /*! exports provided: getPresetHeaders */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t);
+            var n2 = r2(
+              /*! ./headers */
+              "./src/chunks/presets/headers.ts"
+            );
+            r2.d(t, "getPresetHeaders", function() {
+              return n2.getPresetHeaders;
+            });
+          }
+        ), "./src/chunks/samples/headers.ts": (
+          /*!***************************************!*\
+            !*** ./src/chunks/samples/headers.ts ***!
+            \***************************************/
+          /*! exports provided: getSampleHeaders */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t), r2.d(t, "getSampleHeaders", function() {
+              return i3;
+            });
+            var n2 = r2(
+              /*! ~/riff */
+              "./src/riff/index.ts"
+            ), o = r2(
+              /*! ~/constants */
+              "./src/constants.ts"
+            ), i3 = function(e2) {
+              if ("shdr" !== e2.id) throw new n2.ParseError("Unexpected chunk ID", "'shdr'", "'".concat(e2.id, "'"));
+              if (e2.length % o.SF_SAMPLE_HEADER_SIZE) throw new n2.ParseError("Invalid size for the 'shdr' sub-chunk");
+              return e2.iterate(function(e3) {
+                return { name: e3.getString(), start: e3.getUInt32(), end: e3.getUInt32(), startLoop: e3.getUInt32(), endLoop: e3.getUInt32(), sampleRate: e3.getUInt32(), originalPitch: e3.getByte(), pitchCorrection: e3.getChar(), link: e3.getInt16(), type: e3.getInt16() };
+              });
+            };
+          }
+        ), "./src/chunks/samples/index.ts": (
+          /*!*************************************!*\
+            !*** ./src/chunks/samples/index.ts ***!
+            \*************************************/
+          /*! exports provided: getSampleHeaders */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t);
+            var n2 = r2(
+              /*! ./headers */
+              "./src/chunks/samples/headers.ts"
+            );
+            r2.d(t, "getSampleHeaders", function() {
+              return n2.getSampleHeaders;
+            });
+          }
+        ), "./src/chunks/zones.ts": (
+          /*!*****************************!*\
+            !*** ./src/chunks/zones.ts ***!
+            \*****************************/
+          /*! exports provided: getZones, getItemsInZone */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t), r2.d(t, "getZones", function() {
+              return s2;
+            }), r2.d(t, "getItemsInZone", function() {
+              return u;
+            });
+            var n2 = r2(
+              /*! ~/riff */
+              "./src/riff/index.ts"
+            ), o = r2(
+              /*! ~/constants */
+              "./src/constants.ts"
+            ), i3 = r2(
+              /*! ~/types */
+              "./src/types/index.ts"
+            ), s2 = function(e2, t2) {
+              if (e2.id !== t2) throw new n2.ParseError("Unexpected chunk ID", "'".concat(t2, "'"), "'".concat(e2.id, "'"));
+              if (e2.length % o.SF_BAG_SIZE) throw new n2.ParseError("Invalid size for the '".concat(t2, "' sub-chunk"));
+              return e2.iterate(function(e3) {
+                return { generatorIndex: e3.getInt16(), modulatorIndex: e3.getInt16() };
+              });
+            }, u = function(e2, t2, r3, n3, o2, s3) {
+              for (var u2 = [], l2 = 0; l2 < e2.length; l2++) {
+                for (var f = e2[l2], d = e2[l2 + 1], p = f.bagIndex, h3 = d ? d.bagIndex : t2.length, y2 = [], v2 = void 0, g = p; g < h3; g++) {
+                  var E = a(g, t2, r3), m3 = c2(g, t2, n3), b = m3[i3.GeneratorType.KeyRange] && m3[i3.GeneratorType.KeyRange].range, S2 = m3[s3];
+                  if (S2) {
+                    var T2 = o2[S2.value];
+                    T2 && y2.push({ keyRange: b, modulators: E, generators: m3, reference: T2 });
+                  } else g - p == 0 && (v2 = { keyRange: b, modulators: E, generators: m3 });
+                }
+                u2.push({ header: f, globalZone: v2, zones: y2 });
+              }
+              return u2;
+            }, a = function(e2, t2, r3) {
+              var n3 = t2[e2], o2 = t2[e2 + 1], i4 = n3.modulatorIndex, s3 = o2 ? o2.modulatorIndex : t2.length;
+              return l(i4, s3, r3);
+            }, c2 = function(e2, t2, r3) {
+              var n3 = t2[e2], o2 = t2[e2 + 1], i4 = n3.generatorIndex, s3 = o2 ? o2.generatorIndex : t2.length;
+              return l(i4, s3, r3);
+            }, l = function(e2, t2, r3) {
+              for (var n3 = {}, o2 = e2; o2 < t2; o2++) {
+                var i4 = r3[o2];
+                i4 && (n3[i4.id] = i4);
+              }
+              return n3;
+            };
+          }
+        ), "./src/constants.ts": (
+          /*!**************************!*\
+            !*** ./src/constants.ts ***!
+            \**************************/
+          /*! exports provided: SF_VERSION_LENGTH, SF_PRESET_HEADER_SIZE, SF_BAG_SIZE, SF_MODULATOR_SIZE, SF_GENERATOR_SIZE, SF_INSTRUMENT_HEADER_SIZE, SF_SAMPLE_HEADER_SIZE, DEFAULT_SAMPLE_RATE */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t), r2.d(t, "SF_VERSION_LENGTH", function() {
+              return n2;
+            }), r2.d(t, "SF_PRESET_HEADER_SIZE", function() {
+              return o;
+            }), r2.d(t, "SF_BAG_SIZE", function() {
+              return i3;
+            }), r2.d(t, "SF_MODULATOR_SIZE", function() {
+              return s2;
+            }), r2.d(t, "SF_GENERATOR_SIZE", function() {
+              return u;
+            }), r2.d(t, "SF_INSTRUMENT_HEADER_SIZE", function() {
+              return a;
+            }), r2.d(t, "SF_SAMPLE_HEADER_SIZE", function() {
+              return c2;
+            }), r2.d(t, "DEFAULT_SAMPLE_RATE", function() {
+              return l;
+            });
+            var n2 = 4, o = 38, i3 = 4, s2 = 10, u = 4, a = 22, c2 = 46, l = 22050;
+          }
+        ), "./src/index.ts": (
+          /*!**********************!*\
+            !*** ./src/index.ts ***!
+            \**********************/
+          /*! no static exports found */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t);
+            var n2 = r2(
+              /*! ./types */
+              "./src/types/index.ts"
+            );
+            for (var o in n2) "default" !== o && (function(e2) {
+              r2.d(t, e2, function() {
+                return n2[e2];
+              });
+            })(o);
+            var i3 = r2(
+              /*! ./chunk */
+              "./src/chunk.ts"
+            );
+            r2.d(t, "SF2Chunk", function() {
+              return i3.SF2Chunk;
+            });
+            var s2 = r2(
+              /*! ./constants */
+              "./src/constants.ts"
+            );
+            r2.d(t, "SF_VERSION_LENGTH", function() {
+              return s2.SF_VERSION_LENGTH;
+            }), r2.d(t, "SF_PRESET_HEADER_SIZE", function() {
+              return s2.SF_PRESET_HEADER_SIZE;
+            }), r2.d(t, "SF_BAG_SIZE", function() {
+              return s2.SF_BAG_SIZE;
+            }), r2.d(t, "SF_MODULATOR_SIZE", function() {
+              return s2.SF_MODULATOR_SIZE;
+            }), r2.d(t, "SF_GENERATOR_SIZE", function() {
+              return s2.SF_GENERATOR_SIZE;
+            }), r2.d(t, "SF_INSTRUMENT_HEADER_SIZE", function() {
+              return s2.SF_INSTRUMENT_HEADER_SIZE;
+            }), r2.d(t, "SF_SAMPLE_HEADER_SIZE", function() {
+              return s2.SF_SAMPLE_HEADER_SIZE;
+            }), r2.d(t, "DEFAULT_SAMPLE_RATE", function() {
+              return s2.DEFAULT_SAMPLE_RATE;
+            });
+            var u = r2(
+              /*! ./soundFont2 */
+              "./src/soundFont2.ts"
+            );
+            r2.d(t, "SoundFont2", function() {
+              return u.SoundFont2;
+            });
+          }
+        ), "./src/riff/chunkIterator.ts": (
+          /*!***********************************!*\
+            !*** ./src/riff/chunkIterator.ts ***!
+            \***********************************/
+          /*! exports provided: ChunkIterator */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t), r2.d(t, "ChunkIterator", function() {
+              return s2;
+            });
+            var n2 = r2(
+              /*! ~/utils */
+              "./src/utils/index.ts"
+            );
+            function o(e2, t2) {
+              for (var r3 = 0; r3 < t2.length; r3++) {
+                var n3 = t2[r3];
+                n3.enumerable = n3.enumerable || false, n3.configurable = true, "value" in n3 && (n3.writable = true), Object.defineProperty(e2, n3.key, n3);
+              }
+            }
+            function i3(e2, t2, r3) {
+              return t2 in e2 ? Object.defineProperty(e2, t2, { value: r3, enumerable: true, configurable: true, writable: true }) : e2[t2] = r3, e2;
+            }
+            var s2 = (function() {
+              function e2(t3) {
+                var r4 = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 0;
+                !(function(e3, t4) {
+                  if (!(e3 instanceof t4)) throw new TypeError("Cannot call a class as a function");
+                })(this, e2), i3(this, "target", []), i3(this, "chunk", void 0), i3(this, "position", 0), this.chunk = t3, this.position = r4;
+              }
+              var t2, r3, s3;
+              return t2 = e2, (r3 = [{ key: "iterate", value: function(e3) {
+                for (; this.position < this.chunk.length; ) {
+                  var t3 = e3(this);
+                  t3 && this.target.push(t3);
+                }
+              } }, { key: "getString", value: function() {
+                var e3 = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : 20, t3 = Object(n2.getStringFromBuffer)(this.getBuffer(this.position, e3));
+                return this.position += e3, t3;
+              } }, { key: "getInt16", value: function() {
+                return this.chunk.buffer[this.position++] | this.chunk.buffer[this.position++] << 8;
+              } }, { key: "getInt16BE", value: function() {
+                return this.getInt16() << 16 >> 16;
+              } }, { key: "getUInt32", value: function() {
+                return (this.chunk.buffer[this.position++] | this.chunk.buffer[this.position++] << 8 | this.chunk.buffer[this.position++] << 16 | this.chunk.buffer[this.position++] << 24) >>> 0;
+              } }, { key: "getByte", value: function() {
+                return this.chunk.buffer[this.position++];
+              } }, { key: "getChar", value: function() {
+                return this.chunk.buffer[this.position++] << 24 >> 24;
+              } }, { key: "skip", value: function(e3) {
+                this.position += e3;
+              } }, { key: "getBuffer", value: function(e3, t3) {
+                return this.chunk.buffer.subarray(e3, e3 + t3);
+              } }, { key: "currentPosition", get: function() {
+                return this.position;
+              } }]) && o(t2.prototype, r3), s3 && o(t2, s3), e2;
+            })();
+          }
+        ), "./src/riff/index.ts": (
+          /*!***************************!*\
+            !*** ./src/riff/index.ts ***!
+            \***************************/
+          /*! exports provided: ChunkIterator, ParseError, parseBuffer, getChunk, getChunkLength, getSubChunks, getChunkId, RIFFChunk */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t);
+            var n2 = r2(
+              /*! ./chunkIterator */
+              "./src/riff/chunkIterator.ts"
+            );
+            r2.d(t, "ChunkIterator", function() {
+              return n2.ChunkIterator;
+            });
+            var o = r2(
+              /*! ./parseError */
+              "./src/riff/parseError.ts"
+            );
+            r2.d(t, "ParseError", function() {
+              return o.ParseError;
+            });
+            var i3 = r2(
+              /*! ./parser */
+              "./src/riff/parser.ts"
+            );
+            r2.d(t, "parseBuffer", function() {
+              return i3.parseBuffer;
+            }), r2.d(t, "getChunk", function() {
+              return i3.getChunk;
+            }), r2.d(t, "getChunkLength", function() {
+              return i3.getChunkLength;
+            }), r2.d(t, "getSubChunks", function() {
+              return i3.getSubChunks;
+            }), r2.d(t, "getChunkId", function() {
+              return i3.getChunkId;
+            });
+            var s2 = r2(
+              /*! ./riffChunk */
+              "./src/riff/riffChunk.ts"
+            );
+            r2.d(t, "RIFFChunk", function() {
+              return s2.RIFFChunk;
+            });
+          }
+        ), "./src/riff/parseError.ts": (
+          /*!********************************!*\
+            !*** ./src/riff/parseError.ts ***!
+            \********************************/
+          /*! exports provided: ParseError */
+          function(e, t, r2) {
+            "use strict";
+            function n2(e2) {
+              return (n2 = "function" == typeof Symbol && "symbol" == typeof Symbol.iterator ? function(e3) {
+                return typeof e3;
+              } : function(e3) {
+                return e3 && "function" == typeof Symbol && e3.constructor === Symbol && e3 !== Symbol.prototype ? "symbol" : typeof e3;
+              })(e2);
+            }
+            function o(e2, t2) {
+              return !t2 || "object" !== n2(t2) && "function" != typeof t2 ? (function(e3) {
+                if (void 0 === e3) throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
+                return e3;
+              })(e2) : t2;
+            }
+            function i3(e2) {
+              var t2 = "function" == typeof Map ? /* @__PURE__ */ new Map() : void 0;
+              return (i3 = function(e3) {
+                if (null === e3 || (r3 = e3, -1 === Function.toString.call(r3).indexOf("[native code]"))) return e3;
+                var r3;
+                if ("function" != typeof e3) throw new TypeError("Super expression must either be null or a function");
+                if (void 0 !== t2) {
+                  if (t2.has(e3)) return t2.get(e3);
+                  t2.set(e3, n3);
+                }
+                function n3() {
+                  return s2(e3, arguments, a(this).constructor);
+                }
+                return n3.prototype = Object.create(e3.prototype, { constructor: { value: n3, enumerable: false, writable: true, configurable: true } }), u(n3, e3);
+              })(e2);
+            }
+            function s2(e2, t2, r3) {
+              return (s2 = (function() {
+                if ("undefined" == typeof Reflect || !Reflect.construct) return false;
+                if (Reflect.construct.sham) return false;
+                if ("function" == typeof Proxy) return true;
+                try {
+                  return Date.prototype.toString.call(Reflect.construct(Date, [], function() {
+                  })), true;
+                } catch (e3) {
+                  return false;
+                }
+              })() ? Reflect.construct : function(e3, t3, r4) {
+                var n3 = [null];
+                n3.push.apply(n3, t3);
+                var o2 = new (Function.bind.apply(e3, n3))();
+                return r4 && u(o2, r4.prototype), o2;
+              }).apply(null, arguments);
+            }
+            function u(e2, t2) {
+              return (u = Object.setPrototypeOf || function(e3, t3) {
+                return e3.__proto__ = t3, e3;
+              })(e2, t2);
+            }
+            function a(e2) {
+              return (a = Object.setPrototypeOf ? Object.getPrototypeOf : function(e3) {
+                return e3.__proto__ || Object.getPrototypeOf(e3);
+              })(e2);
+            }
+            r2.r(t), r2.d(t, "ParseError", function() {
+              return c2;
+            });
+            var c2 = (function(e2) {
+              function t2(e3, r3, n3) {
+                return (function(e4, t3) {
+                  if (!(e4 instanceof t3)) throw new TypeError("Cannot call a class as a function");
+                })(this, t2), o(this, a(t2).call(this, "".concat(e3).concat(r3 && n3 ? ", expected ".concat(r3, ", received ").concat(n3) : "")));
+              }
+              return (function(e3, t3) {
+                if ("function" != typeof t3 && null !== t3) throw new TypeError("Super expression must either be null or a function");
+                e3.prototype = Object.create(t3 && t3.prototype, { constructor: { value: e3, writable: true, configurable: true } }), t3 && u(e3, t3);
+              })(t2, i3(Error)), t2;
+            })();
+          }
+        ), "./src/riff/parser.ts": (
+          /*!****************************!*\
+            !*** ./src/riff/parser.ts ***!
+            \****************************/
+          /*! exports provided: parseBuffer, getChunk, getChunkLength, getSubChunks, getChunkId */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t), r2.d(t, "parseBuffer", function() {
+              return s2;
+            }), r2.d(t, "getChunk", function() {
+              return u;
+            }), r2.d(t, "getChunkLength", function() {
+              return a;
+            }), r2.d(t, "getSubChunks", function() {
+              return c2;
+            }), r2.d(t, "getChunkId", function() {
+              return l;
+            });
+            var n2 = r2(
+              /*! ./parseError */
+              "./src/riff/parseError.ts"
+            ), o = r2(
+              /*! ~/utils/buffer */
+              "./src/utils/buffer.ts"
+            ), i3 = r2(
+              /*! ./riffChunk */
+              "./src/riff/riffChunk.ts"
+            ), s2 = function(e2) {
+              var t2 = l(e2);
+              if ("RIFF" !== t2) throw new n2.ParseError("Invalid file format", "RIFF", t2);
+              var r3 = l(e2, 8);
+              if ("sfbk" !== r3) throw new n2.ParseError("Invalid signature", "sfbk", r3);
+              var o2 = e2.subarray(8), s3 = c2(o2.subarray(4));
+              return new i3.RIFFChunk(t2, o2.length, o2, s3);
+            }, u = function(e2, t2) {
+              var r3 = l(e2, t2), n3 = a(e2, t2 + 4), o2 = [];
+              return "RIFF" !== r3 && "LIST" !== r3 || (o2 = c2(e2.subarray(t2 + 12))), new i3.RIFFChunk(r3, n3, e2.subarray(t2 + 8), o2);
+            }, a = function(e2, t2) {
+              return ((e2 = e2.subarray(t2, t2 + 4))[0] | e2[1] << 8 | e2[2] << 16 | e2[3] << 24) >>> 0;
+            }, c2 = function(e2) {
+              for (var t2 = [], r3 = 0; r3 <= e2.length - 8; ) {
+                var n3 = u(e2, r3);
+                t2.push(n3), r3 = (r3 += 8 + n3.length) % 2 ? r3 + 1 : r3;
+              }
+              return t2;
+            }, l = function(e2) {
+              var t2 = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 0;
+              return Object(o.getStringFromBuffer)(e2.subarray(t2, t2 + 4));
+            };
+          }
+        ), "./src/riff/riffChunk.ts": (
+          /*!*******************************!*\
+            !*** ./src/riff/riffChunk.ts ***!
+            \*******************************/
+          /*! exports provided: RIFFChunk */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t), r2.d(t, "RIFFChunk", function() {
+              return u;
+            });
+            var n2 = r2(
+              /*! ./chunkIterator */
+              "./src/riff/chunkIterator.ts"
+            ), o = r2(
+              /*! ~/utils */
+              "./src/utils/index.ts"
+            );
+            function i3(e2, t2) {
+              for (var r3 = 0; r3 < t2.length; r3++) {
+                var n3 = t2[r3];
+                n3.enumerable = n3.enumerable || false, n3.configurable = true, "value" in n3 && (n3.writable = true), Object.defineProperty(e2, n3.key, n3);
+              }
+            }
+            function s2(e2, t2, r3) {
+              return t2 in e2 ? Object.defineProperty(e2, t2, { value: r3, enumerable: true, configurable: true, writable: true }) : e2[t2] = r3, e2;
+            }
+            var u = (function() {
+              function e2(t3, r4, n3, o2) {
+                !(function(e3, t4) {
+                  if (!(e3 instanceof t4)) throw new TypeError("Cannot call a class as a function");
+                })(this, e2), s2(this, "id", void 0), s2(this, "length", void 0), s2(this, "buffer", void 0), s2(this, "subChunks", void 0), this.id = t3, this.length = r4, this.buffer = n3, this.subChunks = o2;
+              }
+              var t2, r3, u2;
+              return t2 = e2, (r3 = [{ key: "getString", value: function() {
+                var e3 = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : 0, t3 = arguments.length > 1 ? arguments[1] : void 0;
+                return Object(o.getStringFromBuffer)(this.getBuffer(e3, t3 || this.length - e3));
+              } }, { key: "getInt16", value: function() {
+                var e3 = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : 0;
+                return this.buffer[e3++] | this.buffer[e3] << 8;
+              } }, { key: "getUInt32", value: function() {
+                var e3 = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : 0;
+                return (this.buffer[e3++] | this.buffer[e3++] << 8 | this.buffer[e3++] << 16 | this.buffer[e3] << 24) >>> 0;
+              } }, { key: "getByte", value: function() {
+                var e3 = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : 0;
+                return this.buffer[e3];
+              } }, { key: "getChar", value: function() {
+                var e3 = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : 0;
+                return this.buffer[e3] << 24 >> 24;
+              } }, { key: "iterator", value: function() {
+                var e3 = arguments.length > 0 && void 0 !== arguments[0] ? arguments[0] : 0;
+                return new n2.ChunkIterator(this, e3);
+              } }, { key: "iterate", value: function(e3) {
+                var t3 = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 0, r4 = new n2.ChunkIterator(this, t3);
+                return r4.iterate(e3), r4.target;
+              } }, { key: "getBuffer", value: function(e3, t3) {
+                return this.buffer.subarray(e3, e3 + t3);
+              } }]) && i3(t2.prototype, r3), u2 && i3(t2, u2), e2;
+            })();
+          }
+        ), "./src/soundFont2.ts": (
+          /*!***************************!*\
+            !*** ./src/soundFont2.ts ***!
+            \***************************/
+          /*! exports provided: SoundFont2 */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t), r2.d(t, "SoundFont2", function() {
+              return d;
+            });
+            var n2 = r2(
+              /*! ./types */
+              "./src/types/index.ts"
+            ), o = r2(
+              /*! ./chunk */
+              "./src/chunk.ts"
+            ), i3 = r2(
+              /*! ./riff */
+              "./src/riff/index.ts"
+            ), s2 = r2(
+              /*! ./chunks */
+              "./src/chunks/index.ts"
+            ), u = r2(
+              /*! ./utils */
+              "./src/utils/index.ts"
+            );
+            function a(e2) {
+              for (var t2 = 1; t2 < arguments.length; t2++) {
+                var r3 = null != arguments[t2] ? arguments[t2] : {}, n3 = Object.keys(r3);
+                "function" == typeof Object.getOwnPropertySymbols && (n3 = n3.concat(Object.getOwnPropertySymbols(r3).filter(function(e3) {
+                  return Object.getOwnPropertyDescriptor(r3, e3).enumerable;
+                }))), n3.forEach(function(t3) {
+                  f(e2, t3, r3[t3]);
+                });
+              }
+              return e2;
+            }
+            function c2(e2, t2) {
+              for (var r3 = 0; r3 < t2.length; r3++) {
+                var n3 = t2[r3];
+                n3.enumerable = n3.enumerable || false, n3.configurable = true, "value" in n3 && (n3.writable = true), Object.defineProperty(e2, n3.key, n3);
+              }
+            }
+            function l(e2, t2, r3) {
+              return t2 && c2(e2.prototype, t2), r3 && c2(e2, r3), e2;
+            }
+            function f(e2, t2, r3) {
+              return t2 in e2 ? Object.defineProperty(e2, t2, { value: r3, enumerable: true, configurable: true, writable: true }) : e2[t2] = r3, e2;
+            }
+            var d = (function() {
+              function e2(t2) {
+                if ((function(e3, t3) {
+                  if (!(e3 instanceof t3)) throw new TypeError("Cannot call a class as a function");
+                })(this, e2), f(this, "chunk", void 0), f(this, "metaData", void 0), f(this, "sampleData", void 0), f(this, "samples", void 0), f(this, "presetData", void 0), f(this, "instruments", void 0), f(this, "presets", void 0), f(this, "banks", void 0), !(t2 instanceof o.SF2Chunk)) {
+                  var r3 = Object(i3.parseBuffer)(t2);
+                  t2 = new o.SF2Chunk(r3);
+                }
+                if (3 !== t2.subChunks.length) throw new i3.ParseError("Invalid sfbk structure", "3 chunks", "".concat(t2.subChunks.length, " chunks"));
+                this.chunk = t2, this.metaData = t2.subChunks[0].getMetaData(), this.sampleData = t2.subChunks[1].getSampleData(), this.presetData = t2.subChunks[2].getPresetData(), this.samples = this.getSamples(), this.instruments = this.getInstruments(), this.presets = this.getPresets(), this.banks = this.getBanks();
+              }
+              return l(e2, null, [{ key: "from", value: function(t2) {
+                return new e2(t2);
+              } }]), l(e2, [{ key: "getKeyData", value: function(e3) {
+                var t2 = this, r3 = arguments.length > 1 && void 0 !== arguments[1] ? arguments[1] : 0, n3 = arguments.length > 2 && void 0 !== arguments[2] ? arguments[2] : 0;
+                return Object(u.memoize)(function(e4, r4, n4) {
+                  var o2 = t2.banks[r4];
+                  if (o2) {
+                    var i4 = o2.presets[n4];
+                    if (i4) {
+                      var s3 = i4.zones.find(function(r5) {
+                        return t2.isKeyInRange(r5, e4);
+                      });
+                      if (s3) {
+                        var u2 = s3.instrument, c3 = u2.zones.find(function(r5) {
+                          return t2.isKeyInRange(r5, e4);
+                        });
+                        if (c3) {
+                          var l2 = c3.sample, f2 = a({}, s3.generators, c3.generators), d2 = a({}, s3.modulators, c3.modulators);
+                          return { keyNumber: e4, preset: i4, instrument: u2, sample: l2, generators: f2, modulators: d2 };
+                        }
+                      }
+                    }
+                  }
+                  return null;
+                })(e3, r3, n3);
+              } }, { key: "isKeyInRange", value: function(e3, t2) {
+                return void 0 === e3.keyRange || e3.keyRange.lo <= t2 && e3.keyRange.hi >= t2;
+              } }, { key: "getBanks", value: function() {
+                return this.presets.reduce(function(e3, t2) {
+                  var r3 = t2.header.bank;
+                  return e3[r3] || (e3[r3] = { presets: [] }), e3[r3].presets[t2.header.preset] = t2, e3;
+                }, []);
+              } }, { key: "getPresets", value: function() {
+                var e3 = this.presetData, t2 = e3.presetHeaders, r3 = e3.presetZones, o2 = e3.presetGenerators, i4 = e3.presetModulators;
+                return Object(s2.getItemsInZone)(t2, r3, i4, o2, this.instruments, n2.GeneratorType.Instrument).filter(function(e4) {
+                  return "EOP" !== e4.header.name;
+                }).map(function(e4) {
+                  return { header: e4.header, globalZone: e4.globalZone, zones: e4.zones.map(function(e5) {
+                    return { keyRange: e5.keyRange, generators: e5.generators, modulators: e5.modulators, instrument: e5.reference };
+                  }) };
+                });
+              } }, { key: "getInstruments", value: function() {
+                var e3 = this.presetData, t2 = e3.instrumentHeaders, r3 = e3.instrumentZones, o2 = e3.instrumentModulators, i4 = e3.instrumentGenerators;
+                return Object(s2.getItemsInZone)(t2, r3, o2, i4, this.samples, n2.GeneratorType.SampleId).filter(function(e4) {
+                  return "EOI" !== e4.header.name;
+                }).map(function(e4) {
+                  return { header: e4.header, globalZone: e4.globalZone, zones: e4.zones.map(function(e5) {
+                    return { keyRange: e5.keyRange, generators: e5.generators, modulators: e5.modulators, sample: e5.reference };
+                  }) };
+                });
+              } }, { key: "getSamples", value: function() {
+                var e3 = this;
+                return this.presetData.sampleHeaders.filter(function(e4) {
+                  return "EOS" !== e4.name;
+                }).map(function(t2) {
+                  if ("EOS" !== t2.name && t2.sampleRate <= 0) throw new Error("Illegal sample rate of ".concat(t2.sampleRate, " hz in sample '").concat(t2.name, "'"));
+                  return t2.originalPitch >= 128 && t2.originalPitch <= 254 && (t2.originalPitch = 60), t2.startLoop -= t2.start, t2.endLoop -= t2.start, { header: t2, data: new Int16Array(new Uint8Array(e3.sampleData.subarray(2 * t2.start, 2 * t2.end)).buffer) };
+                });
+              } }]), e2;
+            })();
+          }
+        ), "./src/types/bank.ts": (
+          /*!***************************!*\
+            !*** ./src/types/bank.ts ***!
+            \***************************/
+          /*! no static exports found */
+          function(e, t) {
+          }
+        ), "./src/types/generator.ts": (
+          /*!********************************!*\
+            !*** ./src/types/generator.ts ***!
+            \********************************/
+          /*! exports provided: GeneratorType, DEFAULT_GENERATOR_VALUES */
+          function(e, t, r2) {
+            "use strict";
+            var n2, o;
+            function i3(e2, t2, r3) {
+              return t2 in e2 ? Object.defineProperty(e2, t2, { value: r3, enumerable: true, configurable: true, writable: true }) : e2[t2] = r3, e2;
+            }
+            r2.r(t), r2.d(t, "GeneratorType", function() {
+              return o;
+            }), r2.d(t, "DEFAULT_GENERATOR_VALUES", function() {
+              return s2;
+            }), (function(e2) {
+              e2[e2.StartAddrsOffset = 0] = "StartAddrsOffset", e2[e2.EndAddrsOffset = 1] = "EndAddrsOffset", e2[e2.StartLoopAddrsOffset = 2] = "StartLoopAddrsOffset", e2[e2.EndLoopAddrsOffset = 3] = "EndLoopAddrsOffset", e2[e2.StartAddrsCoarseOffset = 4] = "StartAddrsCoarseOffset", e2[e2.ModLFOToPitch = 5] = "ModLFOToPitch", e2[e2.VibLFOToPitch = 6] = "VibLFOToPitch", e2[e2.ModEnvToPitch = 7] = "ModEnvToPitch", e2[e2.InitialFilterFc = 8] = "InitialFilterFc", e2[e2.InitialFilterQ = 9] = "InitialFilterQ", e2[e2.ModLFOToFilterFc = 10] = "ModLFOToFilterFc", e2[e2.ModEnvToFilterFc = 11] = "ModEnvToFilterFc", e2[e2.EndAddrsCoarseOffset = 12] = "EndAddrsCoarseOffset", e2[e2.ModLFOToVolume = 13] = "ModLFOToVolume", e2[e2.Unused1 = 14] = "Unused1", e2[e2.ChorusEffectsSend = 15] = "ChorusEffectsSend", e2[e2.ReverbEffectsSend = 16] = "ReverbEffectsSend", e2[e2.Pan = 17] = "Pan", e2[e2.Unused2 = 18] = "Unused2", e2[e2.Unused3 = 19] = "Unused3", e2[e2.Unused4 = 20] = "Unused4", e2[e2.DelayModLFO = 21] = "DelayModLFO", e2[e2.FreqModLFO = 22] = "FreqModLFO", e2[e2.DelayVibLFO = 23] = "DelayVibLFO", e2[e2.FreqVibLFO = 24] = "FreqVibLFO", e2[e2.DelayModEnv = 25] = "DelayModEnv", e2[e2.AttackModEnv = 26] = "AttackModEnv", e2[e2.HoldModEnv = 27] = "HoldModEnv", e2[e2.DecayModEnv = 28] = "DecayModEnv", e2[e2.SustainModEnv = 29] = "SustainModEnv", e2[e2.ReleaseModEnv = 30] = "ReleaseModEnv", e2[e2.KeyNumToModEnvHold = 31] = "KeyNumToModEnvHold", e2[e2.KeyNumToModEnvDecay = 32] = "KeyNumToModEnvDecay", e2[e2.DelayVolEnv = 33] = "DelayVolEnv", e2[e2.AttackVolEnv = 34] = "AttackVolEnv", e2[e2.HoldVolEnv = 35] = "HoldVolEnv", e2[e2.DecayVolEnv = 36] = "DecayVolEnv", e2[e2.SustainVolEnv = 37] = "SustainVolEnv", e2[e2.ReleaseVolEnv = 38] = "ReleaseVolEnv", e2[e2.KeyNumToVolEnvHold = 39] = "KeyNumToVolEnvHold", e2[e2.KeyNumToVolEnvDecay = 40] = "KeyNumToVolEnvDecay", e2[e2.Instrument = 41] = "Instrument", e2[e2.Reserved1 = 42] = "Reserved1", e2[e2.KeyRange = 43] = "KeyRange", e2[e2.VelRange = 44] = "VelRange", e2[e2.StartLoopAddrsCoarseOffset = 45] = "StartLoopAddrsCoarseOffset", e2[e2.KeyNum = 46] = "KeyNum", e2[e2.Velocity = 47] = "Velocity", e2[e2.InitialAttenuation = 48] = "InitialAttenuation", e2[e2.Reserved2 = 49] = "Reserved2", e2[e2.EndLoopAddrsCoarseOffset = 50] = "EndLoopAddrsCoarseOffset", e2[e2.CoarseTune = 51] = "CoarseTune", e2[e2.FineTune = 52] = "FineTune", e2[e2.SampleId = 53] = "SampleId", e2[e2.SampleModes = 54] = "SampleModes", e2[e2.Reserved3 = 55] = "Reserved3", e2[e2.ScaleTuning = 56] = "ScaleTuning", e2[e2.ExclusiveClass = 57] = "ExclusiveClass", e2[e2.OverridingRootKey = 58] = "OverridingRootKey", e2[e2.Unused5 = 59] = "Unused5", e2[e2.EndOper = 60] = "EndOper";
+            })(o || (o = {}));
+            var s2 = (i3(n2 = {}, o.StartAddrsOffset, 0), i3(n2, o.EndAddrsOffset, 0), i3(n2, o.StartLoopAddrsOffset, 0), i3(n2, o.EndLoopAddrsOffset, 0), i3(n2, o.StartAddrsCoarseOffset, 0), i3(n2, o.ModLFOToPitch, 0), i3(n2, o.VibLFOToPitch, 0), i3(n2, o.ModEnvToPitch, 0), i3(n2, o.InitialFilterFc, 13500), i3(n2, o.InitialFilterQ, 0), i3(n2, o.ModLFOToFilterFc, 0), i3(n2, o.ModEnvToFilterFc, 0), i3(n2, o.EndAddrsCoarseOffset, 0), i3(n2, o.ModLFOToVolume, 0), i3(n2, o.ChorusEffectsSend, 0), i3(n2, o.ReverbEffectsSend, 0), i3(n2, o.Pan, 0), i3(n2, o.DelayModLFO, -12e3), i3(n2, o.FreqModLFO, 0), i3(n2, o.DelayVibLFO, -12e3), i3(n2, o.FreqVibLFO, 0), i3(n2, o.DelayModEnv, -12e3), i3(n2, o.AttackModEnv, -12e3), i3(n2, o.HoldModEnv, -12e3), i3(n2, o.DecayModEnv, -12e3), i3(n2, o.SustainModEnv, 0), i3(n2, o.ReleaseModEnv, -12e3), i3(n2, o.KeyNumToModEnvHold, 0), i3(n2, o.KeyNumToModEnvDecay, 0), i3(n2, o.DelayVolEnv, -12e3), i3(n2, o.AttackVolEnv, -12e3), i3(n2, o.HoldVolEnv, -12e3), i3(n2, o.DecayVolEnv, -12e3), i3(n2, o.SustainVolEnv, 0), i3(n2, o.ReleaseVolEnv, -12e3), i3(n2, o.KeyNumToVolEnvHold, 0), i3(n2, o.KeyNumToVolEnvDecay, 0), i3(n2, o.StartLoopAddrsCoarseOffset, 0), i3(n2, o.KeyNum, -1), i3(n2, o.Velocity, -1), i3(n2, o.InitialAttenuation, 0), i3(n2, o.EndLoopAddrsCoarseOffset, 0), i3(n2, o.CoarseTune, 0), i3(n2, o.FineTune, 0), i3(n2, o.SampleModes, 0), i3(n2, o.ScaleTuning, 100), i3(n2, o.ExclusiveClass, 0), i3(n2, o.OverridingRootKey, -1), n2);
+          }
+        ), "./src/types/index.ts": (
+          /*!****************************!*\
+            !*** ./src/types/index.ts ***!
+            \****************************/
+          /*! no static exports found */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t);
+            var n2 = r2(
+              /*! ./bank */
+              "./src/types/bank.ts"
+            );
+            for (var o in n2) "default" !== o && (function(e2) {
+              r2.d(t, e2, function() {
+                return n2[e2];
+              });
+            })(o);
+            var i3 = r2(
+              /*! ./generator */
+              "./src/types/generator.ts"
+            );
+            r2.d(t, "GeneratorType", function() {
+              return i3.GeneratorType;
+            }), r2.d(t, "DEFAULT_GENERATOR_VALUES", function() {
+              return i3.DEFAULT_GENERATOR_VALUES;
+            });
+            var s2 = r2(
+              /*! ./instrument */
+              "./src/types/instrument.ts"
+            );
+            for (var o in s2) ["GeneratorType", "DEFAULT_GENERATOR_VALUES", "default"].indexOf(o) < 0 && (function(e2) {
+              r2.d(t, e2, function() {
+                return s2[e2];
+              });
+            })(o);
+            var u = r2(
+              /*! ./key */
+              "./src/types/key.ts"
+            );
+            for (var o in u) ["GeneratorType", "DEFAULT_GENERATOR_VALUES", "default"].indexOf(o) < 0 && (function(e2) {
+              r2.d(t, e2, function() {
+                return u[e2];
+              });
+            })(o);
+            var a = r2(
+              /*! ./metaData */
+              "./src/types/metaData.ts"
+            );
+            for (var o in a) ["GeneratorType", "DEFAULT_GENERATOR_VALUES", "default"].indexOf(o) < 0 && (function(e2) {
+              r2.d(t, e2, function() {
+                return a[e2];
+              });
+            })(o);
+            var c2 = r2(
+              /*! ./modulator */
+              "./src/types/modulator.ts"
+            );
+            r2.d(t, "ControllerType", function() {
+              return c2.ControllerType;
+            }), r2.d(t, "ControllerPolarity", function() {
+              return c2.ControllerPolarity;
+            }), r2.d(t, "ControllerDirection", function() {
+              return c2.ControllerDirection;
+            }), r2.d(t, "ControllerPalette", function() {
+              return c2.ControllerPalette;
+            }), r2.d(t, "Controller", function() {
+              return c2.Controller;
+            }), r2.d(t, "TransformType", function() {
+              return c2.TransformType;
+            }), r2.d(t, "DEFAULT_INSTRUMENT_MODULATORS", function() {
+              return c2.DEFAULT_INSTRUMENT_MODULATORS;
+            });
+            var l = r2(
+              /*! ./preset */
+              "./src/types/preset.ts"
+            );
+            for (var o in l) ["GeneratorType", "DEFAULT_GENERATOR_VALUES", "ControllerType", "ControllerPolarity", "ControllerDirection", "ControllerPalette", "Controller", "TransformType", "DEFAULT_INSTRUMENT_MODULATORS", "default"].indexOf(o) < 0 && (function(e2) {
+              r2.d(t, e2, function() {
+                return l[e2];
+              });
+            })(o);
+            var f = r2(
+              /*! ./presetData */
+              "./src/types/presetData.ts"
+            );
+            for (var o in f) ["GeneratorType", "DEFAULT_GENERATOR_VALUES", "ControllerType", "ControllerPolarity", "ControllerDirection", "ControllerPalette", "Controller", "TransformType", "DEFAULT_INSTRUMENT_MODULATORS", "default"].indexOf(o) < 0 && (function(e2) {
+              r2.d(t, e2, function() {
+                return f[e2];
+              });
+            })(o);
+            var d = r2(
+              /*! ./sample */
+              "./src/types/sample.ts"
+            );
+            r2.d(t, "SampleType", function() {
+              return d.SampleType;
+            });
+            var p = r2(
+              /*! ./zone */
+              "./src/types/zone.ts"
+            );
+            for (var o in p) ["GeneratorType", "DEFAULT_GENERATOR_VALUES", "ControllerType", "ControllerPolarity", "ControllerDirection", "ControllerPalette", "Controller", "TransformType", "DEFAULT_INSTRUMENT_MODULATORS", "SampleType", "default"].indexOf(o) < 0 && (function(e2) {
+              r2.d(t, e2, function() {
+                return p[e2];
+              });
+            })(o);
+          }
+        ), "./src/types/instrument.ts": (
+          /*!*********************************!*\
+            !*** ./src/types/instrument.ts ***!
+            \*********************************/
+          /*! no static exports found */
+          function(e, t) {
+          }
+        ), "./src/types/key.ts": (
+          /*!**************************!*\
+            !*** ./src/types/key.ts ***!
+            \**************************/
+          /*! no static exports found */
+          function(e, t) {
+          }
+        ), "./src/types/metaData.ts": (
+          /*!*******************************!*\
+            !*** ./src/types/metaData.ts ***!
+            \*******************************/
+          /*! no static exports found */
+          function(e, t) {
+          }
+        ), "./src/types/modulator.ts": (
+          /*!********************************!*\
+            !*** ./src/types/modulator.ts ***!
+            \********************************/
+          /*! exports provided: ControllerType, ControllerPolarity, ControllerDirection, ControllerPalette, Controller, TransformType, DEFAULT_INSTRUMENT_MODULATORS */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t), r2.d(t, "ControllerType", function() {
+              return n2;
+            }), r2.d(t, "ControllerPolarity", function() {
+              return o;
+            }), r2.d(t, "ControllerDirection", function() {
+              return i3;
+            }), r2.d(t, "ControllerPalette", function() {
+              return s2;
+            }), r2.d(t, "Controller", function() {
+              return u;
+            }), r2.d(t, "TransformType", function() {
+              return a;
+            }), r2.d(t, "DEFAULT_INSTRUMENT_MODULATORS", function() {
+              return l;
+            });
+            var n2, o, i3, s2, u, a, c2 = r2(
+              /*! ./generator */
+              "./src/types/generator.ts"
+            );
+            !(function(e2) {
+              e2[e2.Linear = 0] = "Linear", e2[e2.Concave = 1] = "Concave", e2[e2.Convex = 2] = "Convex", e2[e2.Switch = 3] = "Switch";
+            })(n2 || (n2 = {})), (function(e2) {
+              e2[e2.Unipolar = 0] = "Unipolar", e2[e2.Bipolar = 1] = "Bipolar";
+            })(o || (o = {})), (function(e2) {
+              e2[e2.Increasing = 0] = "Increasing", e2[e2.Decreasing = 1] = "Decreasing";
+            })(i3 || (i3 = {})), (function(e2) {
+              e2[e2.GeneralController = 0] = "GeneralController", e2[e2.MidiController = 1] = "MidiController";
+            })(s2 || (s2 = {})), (function(e2) {
+              e2[e2.NoController = 0] = "NoController", e2[e2.NoteOnVelocity = 2] = "NoteOnVelocity", e2[e2.NoteOnKeyNumber = 3] = "NoteOnKeyNumber", e2[e2.PolyPressure = 10] = "PolyPressure", e2[e2.ChannelPressure = 13] = "ChannelPressure", e2[e2.PitchWheel = 14] = "PitchWheel", e2[e2.PitchWheelSensitivity = 16] = "PitchWheelSensitivity", e2[e2.Link = 127] = "Link";
+            })(u || (u = {})), (function(e2) {
+              e2[e2.Linear = 0] = "Linear", e2[e2.Absolute = 2] = "Absolute";
+            })(a || (a = {}));
+            var l = [{ id: c2.GeneratorType.InitialAttenuation, source: { type: n2.Concave, polarity: o.Unipolar, direction: i3.Decreasing, palette: s2.GeneralController, index: u.NoteOnVelocity }, value: 960, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.InitialFilterFc, source: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Decreasing, palette: s2.GeneralController, index: u.NoteOnVelocity }, value: -2400, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.VibLFOToPitch, source: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.ChannelPressure }, value: 50, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.VibLFOToPitch, source: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.MidiController, index: 1 }, value: 50, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.InitialAttenuation, source: { type: n2.Concave, polarity: o.Unipolar, direction: i3.Decreasing, palette: s2.MidiController, index: 7 }, value: 960, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.InitialAttenuation, source: { type: n2.Linear, polarity: o.Bipolar, direction: i3.Increasing, palette: s2.MidiController, index: 10 }, value: 1e3, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.InitialAttenuation, source: { type: n2.Concave, polarity: o.Unipolar, direction: i3.Decreasing, palette: s2.MidiController, index: 11 }, value: 960, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.ReverbEffectsSend, source: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.MidiController, index: 91 }, value: 200, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.ChorusEffectsSend, source: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.MidiController, index: 93 }, value: 200, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.CoarseTune, source: { type: n2.Linear, polarity: o.Bipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.PitchWheel }, value: 12700, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.PitchWheelSensitivity }, transform: a.Linear }];
+          }
+        ), "./src/types/preset.ts": (
+          /*!*****************************!*\
+            !*** ./src/types/preset.ts ***!
+            \*****************************/
+          /*! no static exports found */
+          function(e, t) {
+          }
+        ), "./src/types/presetData.ts": (
+          /*!*********************************!*\
+            !*** ./src/types/presetData.ts ***!
+            \*********************************/
+          /*! no static exports found */
+          function(e, t) {
+          }
+        ), "./src/types/sample.ts": (
+          /*!*****************************!*\
+            !*** ./src/types/sample.ts ***!
+            \*****************************/
+          /*! exports provided: SampleType */
+          function(e, t, r2) {
+            "use strict";
+            var n2;
+            r2.r(t), r2.d(t, "SampleType", function() {
+              return n2;
+            }), (function(e2) {
+              e2[e2.EOS = 0] = "EOS", e2[e2.Mono = 1] = "Mono", e2[e2.Right = 2] = "Right", e2[e2.Left = 4] = "Left", e2[e2.Linked = 8] = "Linked", e2[e2.RomMono = 32769] = "RomMono", e2[e2.RomRight = 32770] = "RomRight", e2[e2.RomLeft = 32772] = "RomLeft", e2[e2.RomLinked = 32776] = "RomLinked";
+            })(n2 || (n2 = {}));
+          }
+        ), "./src/types/zone.ts": (
+          /*!***************************!*\
+            !*** ./src/types/zone.ts ***!
+            \***************************/
+          /*! no static exports found */
+          function(e, t) {
+          }
+        ), "./src/utils/buffer.ts": (
+          /*!*****************************!*\
+            !*** ./src/utils/buffer.ts ***!
+            \*****************************/
+          /*! exports provided: getStringFromBuffer */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t), r2.d(t, "getStringFromBuffer", function() {
+              return n2;
+            });
+            var n2 = function(e2) {
+              return new TextDecoder("utf8").decode(e2).split(/\0/)[0].trim();
+            };
+          }
+        ), "./src/utils/index.ts": (
+          /*!****************************!*\
+            !*** ./src/utils/index.ts ***!
+            \****************************/
+          /*! exports provided: getStringFromBuffer, memoize */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t);
+            var n2 = r2(
+              /*! ./buffer */
+              "./src/utils/buffer.ts"
+            );
+            r2.d(t, "getStringFromBuffer", function() {
+              return n2.getStringFromBuffer;
+            });
+            var o = r2(
+              /*! ./memoize */
+              "./src/utils/memoize.ts"
+            );
+            r2.d(t, "memoize", function() {
+              return o.memoize;
+            });
+          }
+        ), "./src/utils/memoize.ts": (
+          /*!******************************!*\
+            !*** ./src/utils/memoize.ts ***!
+            \******************************/
+          /*! exports provided: memoize */
+          function(e, t, r2) {
+            "use strict";
+            r2.r(t), r2.d(t, "memoize", function() {
+              return n2;
+            });
+            var n2 = function(e2) {
+              var t2 = {};
+              return function() {
+                for (var r3 = arguments.length, n3 = new Array(r3), o = 0; o < r3; o++) n3[o] = arguments[o];
+                var i3 = JSON.stringify(n3);
+                if (i3 in t2) return t2[i3];
+                var s2 = e2.apply(void 0, n3);
+                return t2[i3] = s2, s2;
+              };
+            };
+          }
+        ) });
+      });
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/sfumato@0.1.2/node_modules/sfumato/dist/sfumato.js
+  async function ae(e) {
+    const t = await fetch(e).then((o) => o.arrayBuffer()), n2 = new Uint8Array(t);
+    return new import_soundfont2.SoundFont2(n2);
+  }
+  function X(e, t, n2) {
+    let { time: o = e.currentTime } = n2;
+    const {
+      midi: r2,
+      start: s2,
+      velocity: a = 0.3,
+      startLoop: c2,
+      endLoop: i3,
+      sampleRate: l,
+      originalPitch: d,
+      pitchCorrection: u,
+      type: f,
+      sampleModes: v2 = 0,
+      overridingRootKey: p,
+      fineTune: M2 = 0,
+      startloopAddrsOffset: h3 = 0,
+      startloopAddrsCoarseOffset: g = 0,
+      endloopAddrsOffset: y2 = 0,
+      endloopAddrsCoarseOffset: E = 0,
+      delayVolEnv: b = -12e3,
+      attackVolEnv: A = -12e3,
+      holdVolEnv: O = -12e3,
+      decayVolEnv: N = -12e3,
+      sustainVolEnv: F = 0,
+      releaseVolEnv: L3 = -12e3,
+      pan: P2 = 0,
+      ...Z
+    } = n2, B = 100 * (p !== void 0 && p !== -1 ? p : d) + u - M2, I = r2 * 100 - B, K = 1 * Math.pow(2, I / 1200);
+    t.playbackRate.value = K;
+    const j = c2 + h3 + g * 32768, S2 = i3 + y2 + E * 32768;
+    S2 > j && v2 === 1 ? (t.loopStart = j / l, t.loopEnd = S2 / l, t.loop = true) : v2 === 3 && console.warn("unimplemented sampleMode 3 (play till end on note off)"), Object.keys(Z).filter(
+      (V) => !["name", "instrument", "keyRange", "sampleID", "end"].includes(V)
+    ).length;
+    const k = e.createGain(), H = [
+      o,
+      0,
+      a,
+      m2(b),
+      m2(A),
+      m2(O),
+      m2(N),
+      F >= 960 ? 0 : 1 - Q(F),
+      m2(L3)
+    ], U = k.gain.dahdsr(...H), R = e.createStereoPanner();
+    return R.pan.value = P2 / 1e3, k.connect(R), t.connect(k), R.connect(e.destination), t.start(o), (V = e.currentTime) => {
+      t.stop(V + m2(L3)), U(V);
+    };
+  }
+  function Y(e, t, n2 = {}) {
+    const { header: o, data: r2 } = t, s2 = new Float32Array(r2.length);
+    for (let l = 0; l < r2.length; l++)
+      s2[l] = r2[l] / 32768;
+    const a = e.createBuffer(1, s2.length, o.sampleRate);
+    a.getChannelData(0).set(s2);
+    const i3 = e.createBufferSource();
+    return i3.buffer = a, n2 = { ...o, ...n2 }, X(e, i3, n2);
+  }
+  var import_soundfont2, m2, Q, G, T, re, D, J, W, C, x2, ce;
+  var init_sfumato = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/sfumato@0.1.2/node_modules/sfumato/dist/sfumato.js"() {
+      import_soundfont2 = __toESM(require_SoundFont2(), 1);
+      m2 = (e) => Math.pow(2, e / 1200);
+      Q = (e) => e / 1e3;
+      G = (e, t) => {
+        const n2 = Math.pow(10, t);
+        return Math.round(e * n2) / n2;
+      };
+      typeof AudioParam < "u" && (AudioParam.prototype.dahdsr = function(e, t, n2, o, r2, s2, a, c2, i3) {
+        r2 = Math.max(G(r2, 4), 1e-3), a = Math.max(G(a, 4), 1e-3), i3 = G(i3, 4), t = Math.max(t, 1e-3);
+        let l = e;
+        return this.setValueAtTime(t, l), this.setValueAtTime(t, l += o), this.exponentialRampToValueAtTime(n2, l += r2), this.setValueAtTime(n2, l += s2), this.exponentialRampToValueAtTime(Math.max(c2 * n2, 1e-3), l += a), (d, u) => {
+          this.cancelAndHoldAtTime(d);
+          const f = Math.max(u != null ? u : t, 1e-3);
+          this.exponentialRampToValueAtTime(f, d + i3);
+        };
+      });
+      T = {
+        0: "startAddrOffset",
+        1: "endAddrOffset",
+        2: "startloopAddrsOffset",
+        3: "endloopAddrsOffset",
+        4: "startAddrsCoarseOffset",
+        5: "modLfoToPitch",
+        6: "vibLfoToPitch",
+        7: "modEnvToPitch",
+        8: "initialFilterFc",
+        9: "initialFilterQ",
+        10: "modLfoToFilterFc",
+        11: "modEnvToFilterFc",
+        12: "endAddrsCoarseOffset",
+        13: "modLfoToVolume",
+        14: "unused1",
+        15: "chorusEffectsSend",
+        16: "reverbEffectsSend",
+        17: "pan",
+        18: "unused2",
+        19: "unused3",
+        20: "unused4",
+        21: "delayModLFO",
+        22: "freqModLFO",
+        23: "delayVibLFO",
+        24: "freqVibLFO",
+        25: "delayModEnv",
+        26: "attackModEnv",
+        27: "holdModEnv",
+        28: "decayModEnv",
+        29: "sustainModEnv",
+        30: "releaseModEnv",
+        31: "keyNumToModEnvHold",
+        32: "keyNumToModEnvDecay",
+        33: "delayVolEnv",
+        34: "attackVolEnv",
+        35: "holdVolEnv",
+        36: "decayVolEnv",
+        37: "sustainVolEnv",
+        38: "releaseVolEnv",
+        39: "keyNumToVolEnvHold",
+        40: "keyNumToVolEnvDecay",
+        41: "instrument",
+        42: "reserved1",
+        43: "keyRange",
+        44: "velRange",
+        45: "startloopAddrsCoarseOffset",
+        46: "keyNum",
+        47: "velocity",
+        48: "initialAttenuation",
+        49: "reserved2",
+        50: "endloopAddrsCoarseOffset",
+        51: "coarseTune",
+        52: "fineTune",
+        53: "sampleID",
+        54: "sampleModes",
+        55: "reserved3",
+        56: "scaleTuning",
+        57: "exclusiveClass",
+        58: "overridingRootKey",
+        59: "unused5",
+        60: "endOper"
+      };
+      re = Object.fromEntries(
+        Object.entries(import_soundfont2.DEFAULT_GENERATOR_VALUES).map(([e, t]) => [T[e], t])
+      );
+      D = (e, t, n2, o, r2) => {
+        var h3, g, y2, E, b, A, O;
+        const s2 = import_soundfont2.DEFAULT_GENERATOR_VALUES[e];
+        if (typeof s2 != "number")
+          throw new Error(`no default value found for generator with index ${e}`);
+        const a = t.generators[e], c2 = (g = (h3 = n2.globalZone) == null ? void 0 : h3.generators) == null ? void 0 : g[e], i3 = (y2 = o == null ? void 0 : o.generators) == null ? void 0 : y2[e], l = (b = (E = r2.globalZone) == null ? void 0 : E.generators) == null ? void 0 : b[e], d = a && "value" in a ? a.value : void 0, u = c2 && "value" in c2 ? c2.value : void 0, f = i3 && "value" in i3 ? i3.value : void 0, v2 = l && "value" in l ? l.value : void 0, p = (A = d != null ? d : u) != null ? A : s2, M2 = (O = f != null ? f : v2) != null ? O : 0;
+        return p + M2;
+      };
+      J = (e) => import_soundfont2.DEFAULT_GENERATOR_VALUES[e] !== void 0;
+      W = (e, t, n2) => {
+        var o, r2, s2, a;
+        return Object.fromEntries(
+          Array.from(
+            new Set(
+              [
+                Object.keys((r2 = (o = n2.globalZone) == null ? void 0 : o.generators) != null ? r2 : {}),
+                Object.keys(t.generators),
+                Object.keys((a = (s2 = t.instrument.globalZone) == null ? void 0 : s2.generators) != null ? a : {}),
+                Object.keys(e.generators)
+              ].flat()
+            )
+          ).filter(J).map((c2) => [T[c2], D(parseInt(c2), e, t.instrument, t, n2)])
+        );
+      };
+      C = (e, t) => !e.keyRange || e.keyRange.lo <= t && t <= e.keyRange.hi;
+      x2 = (e, t) => e.zones.filter((o) => C(o, t) && o.instrument).map((o) => o.instrument.zones.filter((r2) => C(r2, t)).map((r2) => {
+        const s2 = W(r2, o, e);
+        return {
+          ...r2,
+          mergedGenerators: s2
+        };
+      })).flat();
+      ce = (e, t, n2, o = e.currentTime) => {
+        const s2 = x2(t, n2).map(
+          (a) => Y(e, a.sample, {
+            ...a.mergedGenerators,
+            midi: n2,
+            time: o
+          })
+        );
+        return (a = e.currentTime) => {
+          s2.forEach((c2) => c2(a));
+        };
+      };
+    }
+  });
+
+  // build/engine-src/strudel/packages/soundfonts/sfumato.mjs
+  function loadSoundfont(url) {
+    if (soundfontCache.get(url)) {
+      return soundfontCache.get(url);
+    }
+    const sf = ae(url);
+    soundfontCache.set(url, sf);
+    return sf;
+  }
+  var soundfontCache;
+  var init_sfumato2 = __esm({
+    "build/engine-src/strudel/packages/soundfonts/sfumato.mjs"() {
+      init_core();
+      init_webaudio2();
+      init_sfumato();
+      Pattern.prototype.soundfont = function(sf, n2 = 0) {
+        return this.onSchedule((h3, targetTime) => {
+          const ctx = getAudioContext();
+          const note4 = getPlayableNoteValue(h3);
+          const preset = sf.presets[n2 % sf.presets.length];
+          const deadline = targetTime;
+          const args = [ctx, preset, noteToMidi(note4), deadline];
+          const stop2 = ce(...args);
+          stop2(deadline + h3.duration);
+        });
+      };
+      soundfontCache = /* @__PURE__ */ new Map();
+    }
+  });
+
+  // build/engine-src/strudel/packages/soundfonts/index.mjs
+  var soundfonts_exports = {};
+  __export(soundfonts_exports, {
+    getFontBufferSource: () => getFontBufferSource,
+    loadSoundfont: () => loadSoundfont,
+    registerSoundfonts: () => registerSoundfonts,
+    setSoundfontUrl: () => setSoundfontUrl,
+    soundfontList: () => list_exports,
+    startPresetNote: () => ce
+  });
+  var init_soundfonts = __esm({
+    "build/engine-src/strudel/packages/soundfonts/index.mjs"() {
+      init_fontloader();
+      init_list();
+      init_sfumato();
+      init_sfumato2();
+    }
+  });
+
   // js/polyfills.mjs
   for (const level of ["warn", "error", "info", "debug"]) console[level] ??= console.log;
 
-  // build/engine-src/strudel/packages/core/index.mjs
-  var core_exports = {};
-  __export(core_exports, {
-    ClockCollator: () => ClockCollator,
-    Cyclist: () => Cyclist,
-    FXr: () => FXr,
-    FXrel: () => FXrel,
-    FXrelease: () => FXrelease,
-    Fraction: () => fraction_default,
-    Hap: () => Hap,
-    Pattern: () => Pattern,
-    State: () => State,
-    TimeSpan: () => TimeSpan,
-    __chooseWith: () => __chooseWith,
-    _brandBy: () => _brandBy,
-    _fitslice: () => _fitslice,
-    _irand: () => _irand,
-    _keyDown: () => _keyDown,
-    _match: () => _match,
-    _mod: () => _mod,
-    _morph: () => _morph,
-    _polymeterListSteps: () => _polymeterListSteps,
-    _retime: () => _retime,
-    _slices: () => _slices,
-    accelerate: () => accelerate,
-    activeLabel: () => activeLabel,
-    ad: () => ad,
-    add: () => add,
-    adsr: () => adsr,
-    almostAlways: () => almostAlways,
-    almostNever: () => almostNever,
-    always: () => always,
-    amp: () => amp,
-    analyze: () => analyze,
-    anchor: () => anchor,
-    and: () => and,
-    apply: () => apply,
-    applyN: () => applyN,
-    ar: () => ar,
-    arp: () => arp,
-    arpWith: () => arpWith,
-    arrange: () => arrange,
-    as: () => as,
-    asym: () => asym,
-    att: () => att,
-    attack: () => attack,
-    averageArray: () => averageArray,
-    backgroundImage: () => backgroundImage,
-    band: () => band,
-    bandf: () => bandf,
-    bandq: () => bandq,
-    bank: () => bank,
-    base: () => base,
-    base64ToUnicode: () => base64ToUnicode,
-    bbexpr: () => bbexpr,
-    bbst: () => bbst,
-    beat: () => beat,
-    begin: () => begin,
-    berlin: () => berlin,
-    bgain: () => bgain,
-    binary: () => binary,
-    binaryL: () => binaryL,
-    binaryN: () => binaryN,
-    binaryNL: () => binaryNL,
-    bind: () => bind,
-    binshift: () => binshift,
-    bite: () => bite,
-    bjork: () => bjork,
-    bjorklund: () => bjorklund,
-    blshift: () => blshift,
-    bmod: () => bmod,
-    bor: () => bor,
-    bp: () => bp,
-    bpa: () => bpa,
-    bpattack: () => bpattack,
-    bpd: () => bpd,
-    bpdc: () => bpdc,
-    bpdecay: () => bpdecay,
-    bpdepth: () => bpdepth,
-    bpdepthfreq: () => bpdepthfreq,
-    bpdepthfrequency: () => bpdepthfrequency,
-    bpe: () => bpe,
-    bpenv: () => bpenv,
-    bpf: () => bpf,
-    bpq: () => bpq,
-    bpr: () => bpr,
-    bprate: () => bprate,
-    bprelease: () => bprelease,
-    bps: () => bps,
-    bpshape: () => bpshape,
-    bpskew: () => bpskew,
-    bpsustain: () => bpsustain,
-    bpsync: () => bpsync,
-    brak: () => brak,
-    brand: () => brand,
-    brandBy: () => brandBy,
-    brshift: () => brshift,
-    bus: () => bus,
-    busgain: () => busgain,
-    bxor: () => bxor,
-    bypass: () => bypass,
-    byteBeatExpression: () => byteBeatExpression,
-    byteBeatStartTime: () => byteBeatStartTime,
-    calculateSteps: () => calculateSteps,
-    cat: () => cat,
-    ccn: () => ccn,
-    ccv: () => ccv,
-    ceil: () => ceil,
-    ch: () => ch,
-    channel: () => channel,
-    channels: () => channels,
-    chebyshev: () => chebyshev,
-    choose: () => choose,
-    chooseCycles: () => chooseCycles,
-    chooseIn: () => chooseIn,
-    chooseInWith: () => chooseInWith,
-    chooseWith: () => chooseWith,
-    chop: () => chop,
-    chord: () => chord,
-    chorus: () => chorus,
-    chunk: () => chunk,
-    chunkBack: () => chunkBack,
-    chunkBackInto: () => chunkBackInto,
-    chunkInto: () => chunkInto,
-    chunkback: () => chunkback,
-    chunkbackinto: () => chunkbackinto,
-    chunkinto: () => chunkinto,
-    clamp: () => clamp,
-    cleanupUi: () => cleanupUi,
-    clip: () => clip,
-    close: () => close,
-    coarse: () => coarse,
-    code2hash: () => code2hash,
-    color: () => color,
-    colour: () => colour,
-    comb: () => comb,
-    compose: () => compose,
-    compress: () => compress,
-    compressSpan: () => compressSpan,
-    compressor: () => compressor,
-    compressorAttack: () => compressorAttack,
-    compressorKnee: () => compressorKnee,
-    compressorRatio: () => compressorRatio,
-    compressorRelease: () => compressorRelease,
-    compressspan: () => compressspan,
-    constant: () => constant,
-    contract: () => contract,
-    control: () => control,
-    controls: () => controls_exports,
-    cosine: () => cosine,
-    cosine2: () => cosine2,
-    cpm: () => cpm,
-    cps: () => cps,
-    createClock: () => zyklus_default,
-    createParam: () => createParam,
-    createParams: () => createParams,
-    crush: () => crush,
-    ctf: () => ctf,
-    ctlNum: () => ctlNum,
-    ctranspose: () => ctranspose,
-    cubic: () => cubic,
-    curry: () => curry,
-    curve: () => curve,
-    cut: () => cut,
-    cutoff: () => cutoff,
-    cycleStruct: () => cycleStruct,
-    cycleToSeconds: () => cycleToSeconds,
-    cyclesPer: () => cyclesPer,
-    cyclestruct: () => cyclestruct,
-    dec: () => dec,
-    decay: () => decay,
-    degrade: () => degrade,
-    degradeBy: () => degradeBy,
-    degradeByWith: () => degradeByWith,
-    degree: () => degree,
-    delay: () => delay,
-    delayfb: () => delayfb,
-    delayfeedback: () => delayfeedback,
-    delaysync: () => delaysync,
-    delayt: () => delayt,
-    delaytime: () => delaytime,
-    deltaSlide: () => deltaSlide,
-    density: () => density,
-    det: () => det,
-    detune: () => detune,
-    dfb: () => dfb,
-    dict: () => dict,
-    dictionary: () => dictionary,
-    diode: () => diode,
-    dist: () => dist,
-    distort: () => distort,
-    distorttype: () => distorttype,
-    distortvol: () => distortvol,
-    div: () => div,
-    djf: () => djf,
-    drawLine: () => drawLine_default,
-    drive: () => drive,
-    drop: () => drop,
-    dry: () => dry,
-    ds: () => ds,
-    dt: () => dt,
-    duck: () => duck,
-    duckattack: () => duckattack,
-    duckdepth: () => duckdepth,
-    duckonset: () => duckonset,
-    dur: () => dur,
-    duration: () => duration,
-    early: () => early,
-    echo: () => echo,
-    echoWith: () => echoWith,
-    echowith: () => echowith,
-    eish: () => eish,
-    end: () => end,
-    enhance: () => enhance,
-    env: () => env,
-    eq: () => eq,
-    eqt: () => eqt,
-    errorLogger: () => errorLogger,
-    euclid: () => euclid,
-    euclidLegato: () => euclidLegato,
-    euclidLegatoRot: () => euclidLegatoRot,
-    euclidRot: () => euclidRot,
-    euclidish: () => euclidish,
-    euclidrot: () => euclidrot,
-    evalScope: () => evalScope,
-    evaluate: () => evaluate,
-    every: () => every,
-    expand: () => expand,
-    expression: () => expression,
-    extend: () => extend,
-    fadeInTime: () => fadeInTime,
-    fadeOutTime: () => fadeOutTime,
-    fadeTime: () => fadeTime,
-    fanchor: () => fanchor,
-    fast: () => fast,
-    fastChunk: () => fastChunk,
-    fastGap: () => fastGap,
-    fastcat: () => fastcat,
-    fastchunk: () => fastchunk,
-    fastgap: () => fastgap,
-    fft: () => fft,
-    filter: () => filter,
-    filterWhen: () => filterWhen,
-    firstOf: () => firstOf,
-    fit: () => fit,
-    flatten: () => flatten,
-    floor: () => floor,
-    flux: () => flux,
-    fluxBy: () => fluxBy,
-    fluxby: () => fluxby,
-    fm: () => fm,
-    fm1: () => fm1,
-    fm2: () => fm2,
-    fm3: () => fm3,
-    fm4: () => fm4,
-    fm5: () => fm5,
-    fm6: () => fm6,
-    fm7: () => fm7,
-    fm8: () => fm8,
-    fmatt: () => fmatt,
-    fmatt1: () => fmatt1,
-    fmatt2: () => fmatt2,
-    fmatt3: () => fmatt3,
-    fmatt4: () => fmatt4,
-    fmatt5: () => fmatt5,
-    fmatt6: () => fmatt6,
-    fmatt7: () => fmatt7,
-    fmatt8: () => fmatt8,
-    fmattack: () => fmattack,
-    fmattack1: () => fmattack1,
-    fmattack2: () => fmattack2,
-    fmattack3: () => fmattack3,
-    fmattack4: () => fmattack4,
-    fmattack5: () => fmattack5,
-    fmattack6: () => fmattack6,
-    fmattack7: () => fmattack7,
-    fmattack8: () => fmattack8,
-    fmdec: () => fmdec,
-    fmdec1: () => fmdec1,
-    fmdec2: () => fmdec2,
-    fmdec3: () => fmdec3,
-    fmdec4: () => fmdec4,
-    fmdec5: () => fmdec5,
-    fmdec6: () => fmdec6,
-    fmdec7: () => fmdec7,
-    fmdec8: () => fmdec8,
-    fmdecay: () => fmdecay,
-    fmdecay1: () => fmdecay1,
-    fmdecay2: () => fmdecay2,
-    fmdecay3: () => fmdecay3,
-    fmdecay4: () => fmdecay4,
-    fmdecay5: () => fmdecay5,
-    fmdecay6: () => fmdecay6,
-    fmdecay7: () => fmdecay7,
-    fmdecay8: () => fmdecay8,
-    fme: () => fme,
-    fmenv: () => fmenv,
-    fmenv1: () => fmenv1,
-    fmenv2: () => fmenv2,
-    fmenv3: () => fmenv3,
-    fmenv4: () => fmenv4,
-    fmenv5: () => fmenv5,
-    fmenv6: () => fmenv6,
-    fmenv7: () => fmenv7,
-    fmenv8: () => fmenv8,
-    fmh: () => fmh,
-    fmh1: () => fmh1,
-    fmh2: () => fmh2,
-    fmh3: () => fmh3,
-    fmh4: () => fmh4,
-    fmh5: () => fmh5,
-    fmh6: () => fmh6,
-    fmh7: () => fmh7,
-    fmh8: () => fmh8,
-    fmi: () => fmi,
-    fmi1: () => fmi1,
-    fmi2: () => fmi2,
-    fmi3: () => fmi3,
-    fmi4: () => fmi4,
-    fmi5: () => fmi5,
-    fmi6: () => fmi6,
-    fmi7: () => fmi7,
-    fmi8: () => fmi8,
-    fmrel: () => fmrel,
-    fmrel1: () => fmrel1,
-    fmrel2: () => fmrel2,
-    fmrel3: () => fmrel3,
-    fmrel4: () => fmrel4,
-    fmrel5: () => fmrel5,
-    fmrel6: () => fmrel6,
-    fmrel7: () => fmrel7,
-    fmrel8: () => fmrel8,
-    fmrelease: () => fmrelease,
-    fmrelease1: () => fmrelease1,
-    fmrelease2: () => fmrelease2,
-    fmrelease3: () => fmrelease3,
-    fmrelease4: () => fmrelease4,
-    fmrelease5: () => fmrelease5,
-    fmrelease6: () => fmrelease6,
-    fmrelease7: () => fmrelease7,
-    fmrelease8: () => fmrelease8,
-    fmsus: () => fmsus,
-    fmsus1: () => fmsus1,
-    fmsus2: () => fmsus2,
-    fmsus3: () => fmsus3,
-    fmsus4: () => fmsus4,
-    fmsus5: () => fmsus5,
-    fmsus6: () => fmsus6,
-    fmsus7: () => fmsus7,
-    fmsus8: () => fmsus8,
-    fmsustain: () => fmsustain,
-    fmsustain1: () => fmsustain1,
-    fmsustain2: () => fmsustain2,
-    fmsustain3: () => fmsustain3,
-    fmsustain4: () => fmsustain4,
-    fmsustain5: () => fmsustain5,
-    fmsustain6: () => fmsustain6,
-    fmsustain7: () => fmsustain7,
-    fmsustain8: () => fmsustain8,
-    fmwave: () => fmwave,
-    fmwave1: () => fmwave1,
-    fmwave2: () => fmwave2,
-    fmwave3: () => fmwave3,
-    fmwave4: () => fmwave4,
-    fmwave5: () => fmwave5,
-    fmwave6: () => fmwave6,
-    fmwave7: () => fmwave7,
-    fmwave8: () => fmwave8,
-    focus: () => focus,
-    focusSpan: () => focusSpan,
-    focusspan: () => focusspan,
-    fold: () => fold,
-    fractionalArgs: () => fractionalArgs,
-    frameRate: () => frameRate,
-    frames: () => frames,
-    freeze: () => freeze,
-    freq: () => freq,
-    freqToMidi: () => freqToMidi,
-    fromBipolar: () => fromBipolar,
-    fshift: () => fshift,
-    fshiftnote: () => fshiftnote,
-    fshiftphase: () => fshiftphase,
-    ftype: () => ftype,
-    func: () => func,
-    fxr: () => fxr,
-    gain: () => gain,
-    gap: () => gap,
-    gat: () => gat,
-    gate: () => gate,
-    getAccidentalsOffset: () => getAccidentalsOffset,
-    getClockTime: () => getClockTime,
-    getControlName: () => getControlName,
-    getCps: () => getCps,
-    getCurrentKeyboardState: () => getCurrentKeyboardState,
-    getEventOffsetMs: () => getEventOffsetMs,
-    getFreq: () => getFreq,
-    getFrequency: () => getFrequency,
-    getIsStarted: () => getIsStarted,
-    getPattern: () => getPattern,
-    getPerformanceTimeSeconds: () => getPerformanceTimeSeconds,
-    getPlayableNoteValue: () => getPlayableNoteValue,
-    getRandsAtTime: () => getRandsAtTime,
-    getSchedule: () => getSchedule,
-    getScheduleFunc: () => getScheduleFunc,
-    getSoundIndex: () => getSoundIndex,
-    getTime: () => getTime,
-    grow: () => grow,
-    growlist: () => growlist,
-    gt: () => gt,
-    gte: () => gte,
-    hard: () => hard,
-    harmonic: () => harmonic,
-    hash2code: () => hash2code,
-    hbrick: () => hbrick,
-    hcutoff: () => hcutoff,
-    hold: () => hold,
-    hours: () => hours,
-    hp: () => hp,
-    hpa: () => hpa,
-    hpattack: () => hpattack,
-    hpd: () => hpd,
-    hpdc: () => hpdc,
-    hpdecay: () => hpdecay,
-    hpdepth: () => hpdepth,
-    hpdepthfreq: () => hpdepthfreq,
-    hpdepthfrequency: () => hpdepthfrequency,
-    hpe: () => hpe,
-    hpenv: () => hpenv,
-    hpf: () => hpf,
-    hpq: () => hpq,
-    hpr: () => hpr,
-    hprate: () => hprate,
-    hprelease: () => hprelease,
-    hps: () => hps,
-    hpshape: () => hpshape,
-    hpskew: () => hpskew,
-    hpsustain: () => hpsustain,
-    hpsync: () => hpsync,
-    hresonance: () => hresonance,
-    hsl: () => hsl,
-    hsla: () => hsla,
-    hurry: () => hurry,
-    i: () => i,
-    id: () => id,
-    imag: () => imag,
-    inhabit: () => inhabit,
-    inhabitmod: () => inhabitmod,
-    innerBind: () => innerBind,
-    inside: () => inside,
-    inv: () => inv,
-    invert: () => invert,
-    ir: () => ir,
-    irand: () => irand,
-    irbegin: () => irbegin,
-    iresponse: () => iresponse,
-    irspeed: () => irspeed,
-    isControlName: () => isControlName,
-    isNote: () => isNote,
-    isNoteWithOctave: () => isNoteWithOctave,
-    isPattern: () => isPattern,
-    isaw: () => isaw,
-    isaw2: () => isaw2,
-    isobite: () => isobite,
-    isquare: () => isquare,
-    isquare2: () => isquare2,
-    iter: () => iter,
-    iterBack: () => iterBack,
-    iterback: () => iterback,
-    itri: () => itri,
-    itri2: () => itri2,
-    jux: () => jux,
-    juxBy: () => juxBy,
-    juxFlip: () => juxFlip,
-    juxFlipBy: () => juxFlipBy,
-    juxby: () => juxby,
-    juxflipby: () => juxflipby,
-    kcutoff: () => kcutoff,
-    keep: () => keep,
-    keepif: () => keepif,
-    keyAlias: () => keyAlias,
-    keyDown: () => keyDown,
-    krush: () => krush,
-    label: () => label,
-    lastOf: () => lastOf,
-    late: () => late,
-    lbrick: () => lbrick,
-    legato: () => legato,
-    leslie: () => leslie,
-    lfo: () => lfo,
-    linger: () => linger,
-    listRange: () => listRange,
-    lock: () => lock,
-    log2: () => log2,
-    logKey: () => logKey,
-    logger: () => logger,
-    loop: () => loop,
-    loopAt: () => loopAt,
-    loopAtCps: () => loopAtCps,
-    loopBegin: () => loopBegin,
-    loopEnd: () => loopEnd,
-    loopat: () => loopat,
-    loopatcps: () => loopatcps,
-    loopb: () => loopb,
-    loope: () => loope,
-    lp: () => lp,
-    lpa: () => lpa,
-    lpattack: () => lpattack,
-    lpd: () => lpd,
-    lpdc: () => lpdc,
-    lpdecay: () => lpdecay,
-    lpdepth: () => lpdepth,
-    lpdepthfreq: () => lpdepthfreq,
-    lpdepthfrequency: () => lpdepthfrequency,
-    lpe: () => lpe,
-    lpenv: () => lpenv,
-    lpf: () => lpf,
-    lpq: () => lpq,
-    lpr: () => lpr,
-    lprate: () => lprate,
-    lprelease: () => lprelease,
-    lps: () => lps,
-    lpshape: () => lpshape,
-    lpskew: () => lpskew,
-    lpsustain: () => lpsustain,
-    lpsync: () => lpsync,
-    lrate: () => lrate,
-    lsize: () => lsize,
-    lt: () => lt,
-    lte: () => lte,
-    mapArgs: () => mapArgs,
-    mask: () => mask,
-    midi2note: () => midi2note,
-    midiToFreq: () => midiToFreq,
-    midibend: () => midibend,
-    midichan: () => midichan,
-    midicmd: () => midicmd,
-    midimap: () => midimap,
-    midiport: () => midiport,
-    miditouch: () => miditouch,
-    minutes: () => minutes,
-    mod: () => mod,
-    mode: () => mode,
-    morph: () => morph,
-    mouseX: () => mouseX,
-    mouseY: () => mouseY,
-    mousex: () => mousex,
-    mousey: () => mousey,
-    mtranspose: () => mtranspose,
-    mul: () => mul2,
-    n: () => n,
-    nanFallback: () => nanFallback,
-    ne: () => ne,
-    net: () => net,
-    never: () => never,
-    noise: () => noise,
-    note: () => note,
-    noteToMidi: () => noteToMidi,
-    nothing: () => nothing,
-    nrpnn: () => nrpnn,
-    nrpv: () => nrpv,
-    nudge: () => nudge,
-    numeralArgs: () => numeralArgs,
-    objectMap: () => objectMap,
-    oct: () => oct,
-    octave: () => octave,
-    octaveR: () => octaveR,
-    octaves: () => octaves,
-    octer: () => octer,
-    octersub: () => octersub,
-    octersubsub: () => octersubsub,
-    off: () => off,
-    offset: () => offset,
-    often: () => often,
-    open: () => open,
-    or: () => or,
-    orbit: () => orbit,
-    oschost: () => oschost,
-    oscport: () => oscport,
-    outerBind: () => outerBind,
-    outside: () => outside,
-    overgain: () => overgain,
-    overshape: () => overshape,
-    pace: () => pace,
-    pairs: () => pairs,
-    palindrome: () => palindrome,
-    pan: () => pan,
-    panchor: () => panchor,
-    panorient: () => panorient,
-    panspan: () => panspan,
-    pansplay: () => pansplay,
-    panwidth: () => panwidth,
-    parray: () => parray,
-    parseFractional: () => parseFractional,
-    parseNumeral: () => parseNumeral,
-    partials: () => partials,
-    patt: () => patt,
-    pattack: () => pattack,
-    pcurve: () => pcurve,
-    pdec: () => pdec,
-    pdecay: () => pdecay,
-    penv: () => penv,
-    per: () => per,
-    perCycle: () => perCycle,
-    perlin: () => perlin,
-    perx: () => perx,
-    ph: () => ph,
-    phasdp: () => phasdp,
-    phaser: () => phaser,
-    phasercenter: () => phasercenter,
-    phaserdepth: () => phaserdepth,
-    phaserrate: () => phaserrate,
-    phasersweep: () => phasersweep,
-    phases: () => phases,
-    phc: () => phc,
-    phd: () => phd,
-    phs: () => phs,
-    pick: () => pick,
-    pickF: () => pickF,
-    pickOut: () => pickOut,
-    pickReset: () => pickReset,
-    pickRestart: () => pickRestart,
-    pickSqueeze: () => pickSqueeze,
-    pickmod: () => pickmod,
-    pickmodF: () => pickmodF,
-    pickmodOut: () => pickmodOut,
-    pickmodReset: () => pickmodReset,
-    pickmodRestart: () => pickmodRestart,
-    pickmodSqueeze: () => pickmodSqueeze,
-    pipe: () => pipe,
-    pitchJump: () => pitchJump,
-    pitchJumpTime: () => pitchJumpTime,
-    ply: () => ply,
-    plyForEach: () => plyForEach,
-    plyWith: () => plyWith,
-    pm: () => pm,
-    polyBind: () => polyBind,
-    polyTouch: () => polyTouch,
-    polymeter: () => polymeter,
-    polyrhythm: () => polyrhythm,
-    postgain: () => postgain,
-    pow: () => pow,
-    pr: () => pr,
-    prel: () => prel,
-    prelease: () => prelease,
-    press: () => press,
-    pressBy: () => pressBy,
-    progNum: () => progNum,
-    psus: () => psus,
-    psustain: () => psustain,
-    pure: () => pure,
-    pw: () => pw,
-    pwrate: () => pwrate,
-    pwsweep: () => pwsweep,
-    rand: () => rand,
-    rand2: () => rand2,
-    randL: () => randL,
-    randcat: () => randcat,
-    randrun: () => randrun,
-    range: () => range,
-    range2: () => range2,
-    rangex: () => rangex,
-    rarely: () => rarely,
-    ratio: () => ratio,
-    rdim: () => rdim,
-    real: () => real,
-    ref: () => ref,
-    register: () => register,
-    registerControl: () => registerControl,
-    registerMultiControl: () => registerMultiControl,
-    reify: () => reify,
-    rel: () => rel,
-    release: () => release,
-    removeUndefineds: () => removeUndefineds,
-    repeatCycles: () => repeatCycles,
-    repl: () => repl,
-    replicate: () => replicate,
-    reset_state: () => reset_state,
-    reset_timelines: () => reset_timelines,
-    resonance: () => resonance,
-    rev: () => rev,
-    revv: () => revv,
-    rfade: () => rfade,
-    rib: () => rib,
-    ribbon: () => ribbon,
-    ring: () => ring,
-    ringdf: () => ringdf,
-    ringf: () => ringf,
-    rlp: () => rlp,
-    room: () => room,
-    roomdim: () => roomdim,
-    roomfade: () => roomfade,
-    roomlp: () => roomlp,
-    roomsize: () => roomsize,
-    rotate: () => rotate,
-    round: () => round,
-    rsize: () => rsize,
-    run: () => run,
-    s: () => s,
-    s_add: () => s_add,
-    s_alt: () => s_alt,
-    s_cat: () => s_cat,
-    s_contract: () => s_contract,
-    s_expand: () => s_expand,
-    s_extend: () => s_extend,
-    s_polymeter: () => s_polymeter,
-    s_sub: () => s_sub,
-    s_taper: () => s_taper,
-    s_taperlist: () => s_taperlist,
-    s_tour: () => s_tour,
-    s_zip: () => s_zip,
-    saw: () => saw,
-    saw2: () => saw2,
-    scram: () => scram,
-    scramble: () => scramble,
-    scrub: () => scrub,
-    seconds: () => seconds,
-    seed: () => seed,
-    seg: () => seg,
-    segment: () => segment,
-    semitone: () => semitone,
-    seq: () => seq,
-    seqPLoop: () => seqPLoop,
-    sequence: () => sequence,
-    sequenceP: () => sequenceP,
-    set: () => set,
-    setClockTime: () => setClockTime,
-    setCpsFunc: () => setCpsFunc,
-    setDefaultJoin: () => setDefaultJoin,
-    setIsStarted: () => setIsStarted,
-    setPattern: () => setPattern,
-    setScheduleFunc: () => setScheduleFunc,
-    setStringParser: () => setStringParser,
-    setTime: () => setTime,
-    shape: () => shape,
-    shrink: () => shrink,
-    shrinklist: () => shrinklist,
-    shuffle: () => shuffle,
-    signal: () => signal,
-    silence: () => silence,
-    sine: () => sine,
-    sine2: () => sine2,
-    sinefold: () => sinefold,
-    size: () => size,
-    slice: () => slice,
-    slide: () => slide,
-    slow: () => slow,
-    slowChunk: () => slowChunk,
-    slowcat: () => slowcat,
-    slowcatPrime: () => slowcatPrime,
-    slowchunk: () => slowchunk,
-    smear: () => smear,
-    soft: () => soft,
-    sol2note: () => sol2note,
-    someCycles: () => someCycles,
-    someCyclesBy: () => someCyclesBy,
-    sometimes: () => sometimes,
-    sometimesBy: () => sometimesBy,
-    songPtr: () => songPtr,
-    sound: () => sound,
-    source: () => source,
-    sparsity: () => sparsity,
-    speak: () => speak,
-    speed: () => speed,
-    splice: () => splice,
-    splitAt: () => splitAt,
-    spread: () => spread,
-    square: () => square,
-    square2: () => square2,
-    squeeze: () => squeeze,
-    squeezeBind: () => squeezeBind,
-    squiz: () => squiz,
-    src: () => src,
-    stack: () => stack,
-    stackBy: () => stackBy,
-    stackCenter: () => stackCenter,
-    stackCentre: () => stackCentre,
-    stackLeft: () => stackLeft,
-    stackRepeat: () => stackRepeat,
-    stackRight: () => stackRight,
-    steady: () => steady,
-    stepBind: () => stepBind,
-    stepalt: () => stepalt,
-    stepcat: () => stepcat,
-    steps: () => steps,
-    stepsPerOctave: () => stepsPerOctave,
-    stretch: () => stretch,
-    striate: () => striate,
-    stringifyValues: () => stringifyValues,
-    struct: () => struct,
-    strudelScope: () => strudelScope,
-    stut: () => stut,
-    stutWith: () => stutWith,
-    stutwith: () => stutwith,
-    sub: () => sub,
-    superimpose: () => superimpose,
-    sus: () => sus,
-    sustain: () => sustain,
-    sustainpedal: () => sustainpedal,
-    swing: () => swing,
-    swingBy: () => swingBy,
-    sysex: () => sysex,
-    sysexdata: () => sysexdata,
-    sysexid: () => sysexid,
-    sz: () => sz,
-    take: () => take,
-    time: () => time2,
-    timeCat: () => timeCat,
-    timecat: () => timecat,
-    timeline: () => timeline,
-    toBipolar: () => toBipolar,
-    tokenizeNote: () => tokenizeNote,
-    tour: () => tour,
-    transient: () => transient,
-    trem: () => trem,
-    tremolo: () => tremolo,
-    tremolodepth: () => tremolodepth,
-    tremolophase: () => tremolophase,
-    tremoloshape: () => tremoloshape,
-    tremoloskew: () => tremoloskew,
-    tremolosync: () => tremolosync,
-    tri: () => tri,
-    tri2: () => tri2,
-    triode: () => triode,
-    tsdelay: () => tsdelay,
-    uid: () => uid,
-    undegrade: () => undegrade,
-    undegradeBy: () => undegradeBy,
-    unicodeToBase64: () => unicodeToBase64,
-    uniq: () => uniq,
-    uniqsort: () => uniqsort,
-    uniqsortr: () => uniqsortr,
-    unison: () => unison,
-    unit: () => unit,
-    useRNG: () => useRNG,
-    v: () => v,
-    val: () => val,
-    valueToMidi: () => valueToMidi,
-    vel: () => vel,
-    velocity: () => velocity,
-    vib: () => vib,
-    vibmod: () => vibmod,
-    vibrato: () => vibrato,
-    vmod: () => vmod,
-    voice: () => voice,
-    vowel: () => vowel,
-    warp: () => warp,
-    warpatt: () => warpatt,
-    warpattack: () => warpattack,
-    warpdc: () => warpdc,
-    warpdec: () => warpdec,
-    warpdecay: () => warpdecay,
-    warpdepth: () => warpdepth,
-    warpenv: () => warpenv,
-    warpmode: () => warpmode,
-    warprate: () => warprate,
-    warprel: () => warprel,
-    warprelease: () => warprelease,
-    warpshape: () => warpshape,
-    warpskew: () => warpskew,
-    warpsus: () => warpsus,
-    warpsustain: () => warpsustain,
-    warpsync: () => warpsync,
-    waveloss: () => waveloss,
-    wavetablePhaseRand: () => wavetablePhaseRand,
-    wavetablePosition: () => wavetablePosition,
-    wavetableWarp: () => wavetableWarp,
-    wavetableWarpMode: () => wavetableWarpMode,
-    wchoose: () => wchoose,
-    wchooseCycles: () => wchooseCycles,
-    when: () => when,
-    whenKey: () => whenKey,
-    withSeed: () => withSeed,
-    withValue: () => withValue,
-    within: () => within,
-    worklet: () => worklet,
-    wrandcat: () => wrandcat,
-    wt: () => wt,
-    wtatt: () => wtatt,
-    wtattack: () => wtattack,
-    wtdc: () => wtdc,
-    wtdec: () => wtdec,
-    wtdecay: () => wtdecay,
-    wtdepth: () => wtdepth,
-    wtenv: () => wtenv,
-    wtphaserand: () => wtphaserand,
-    wtrate: () => wtrate,
-    wtrel: () => wtrel,
-    wtrelease: () => wtrelease,
-    wtshape: () => wtshape,
-    wtskew: () => wtskew,
-    wtsus: () => wtsus,
-    wtsustain: () => wtsustain,
-    wtsync: () => wtsync,
-    xfade: () => xfade,
-    xsdelay: () => xsdelay,
-    zcrush: () => zcrush,
-    zdelay: () => zdelay,
-    zip: () => zip,
-    zipWith: () => zipWith,
-    zmod: () => zmod,
-    znoise: () => znoise,
-    zoom: () => zoom,
-    zoomArc: () => zoomArc,
-    zoomarc: () => zoomarc,
-    zrand: () => zrand,
-    zzfx: () => zzfx
-  });
-
-  // build/engine-src/strudel/packages/core/controls.mjs
-  var controls_exports = {};
-  __export(controls_exports, {
-    FXr: () => FXr,
-    FXrel: () => FXrel,
-    FXrelease: () => FXrelease,
-    accelerate: () => accelerate,
-    activeLabel: () => activeLabel,
-    ad: () => ad,
-    adsr: () => adsr,
-    amp: () => amp,
-    analyze: () => analyze,
-    anchor: () => anchor,
-    ar: () => ar,
-    as: () => as,
-    att: () => att,
-    attack: () => attack,
-    bandf: () => bandf,
-    bandq: () => bandq,
-    bank: () => bank,
-    bbexpr: () => bbexpr,
-    bbst: () => bbst,
-    begin: () => begin,
-    bgain: () => bgain,
-    binshift: () => binshift,
-    bmod: () => bmod,
-    bp: () => bp,
-    bpa: () => bpa,
-    bpattack: () => bpattack,
-    bpd: () => bpd,
-    bpdc: () => bpdc,
-    bpdecay: () => bpdecay,
-    bpdepth: () => bpdepth,
-    bpdepthfreq: () => bpdepthfreq,
-    bpdepthfrequency: () => bpdepthfrequency,
-    bpe: () => bpe,
-    bpenv: () => bpenv,
-    bpf: () => bpf,
-    bpq: () => bpq,
-    bpr: () => bpr,
-    bprate: () => bprate,
-    bprelease: () => bprelease,
-    bps: () => bps,
-    bpshape: () => bpshape,
-    bpskew: () => bpskew,
-    bpsustain: () => bpsustain,
-    bpsync: () => bpsync,
-    bus: () => bus,
-    busgain: () => busgain,
-    byteBeatExpression: () => byteBeatExpression,
-    byteBeatStartTime: () => byteBeatStartTime,
-    ccn: () => ccn,
-    ccv: () => ccv,
-    ch: () => ch,
-    channel: () => channel,
-    channels: () => channels,
-    chord: () => chord,
-    chorus: () => chorus,
-    clip: () => clip,
-    coarse: () => coarse,
-    color: () => color,
-    colour: () => colour,
-    comb: () => comb,
-    compressor: () => compressor,
-    compressorAttack: () => compressorAttack,
-    compressorKnee: () => compressorKnee,
-    compressorRatio: () => compressorRatio,
-    compressorRelease: () => compressorRelease,
-    control: () => control,
-    cps: () => cps,
-    createParam: () => createParam,
-    createParams: () => createParams,
-    crush: () => crush,
-    ctf: () => ctf,
-    ctlNum: () => ctlNum,
-    ctranspose: () => ctranspose,
-    curve: () => curve,
-    cut: () => cut,
-    cutoff: () => cutoff,
-    dec: () => dec,
-    decay: () => decay,
-    degree: () => degree,
-    delay: () => delay,
-    delayfb: () => delayfb,
-    delayfeedback: () => delayfeedback,
-    delaysync: () => delaysync,
-    delayt: () => delayt,
-    delaytime: () => delaytime,
-    deltaSlide: () => deltaSlide,
-    density: () => density,
-    det: () => det,
-    detune: () => detune,
-    dfb: () => dfb,
-    dict: () => dict,
-    dictionary: () => dictionary,
-    dist: () => dist,
-    distort: () => distort,
-    distorttype: () => distorttype,
-    distortvol: () => distortvol,
-    djf: () => djf,
-    drive: () => drive,
-    dry: () => dry,
-    ds: () => ds,
-    dt: () => dt,
-    duck: () => duck,
-    duckattack: () => duckattack,
-    duckdepth: () => duckdepth,
-    duckonset: () => duckonset,
-    dur: () => dur,
-    duration: () => duration,
-    end: () => end,
-    enhance: () => enhance,
-    env: () => env,
-    expression: () => expression,
-    fadeInTime: () => fadeInTime,
-    fadeOutTime: () => fadeOutTime,
-    fadeTime: () => fadeTime,
-    fanchor: () => fanchor,
-    fft: () => fft,
-    fm: () => fm,
-    fm1: () => fm1,
-    fm2: () => fm2,
-    fm3: () => fm3,
-    fm4: () => fm4,
-    fm5: () => fm5,
-    fm6: () => fm6,
-    fm7: () => fm7,
-    fm8: () => fm8,
-    fmatt: () => fmatt,
-    fmatt1: () => fmatt1,
-    fmatt2: () => fmatt2,
-    fmatt3: () => fmatt3,
-    fmatt4: () => fmatt4,
-    fmatt5: () => fmatt5,
-    fmatt6: () => fmatt6,
-    fmatt7: () => fmatt7,
-    fmatt8: () => fmatt8,
-    fmattack: () => fmattack,
-    fmattack1: () => fmattack1,
-    fmattack2: () => fmattack2,
-    fmattack3: () => fmattack3,
-    fmattack4: () => fmattack4,
-    fmattack5: () => fmattack5,
-    fmattack6: () => fmattack6,
-    fmattack7: () => fmattack7,
-    fmattack8: () => fmattack8,
-    fmdec: () => fmdec,
-    fmdec1: () => fmdec1,
-    fmdec2: () => fmdec2,
-    fmdec3: () => fmdec3,
-    fmdec4: () => fmdec4,
-    fmdec5: () => fmdec5,
-    fmdec6: () => fmdec6,
-    fmdec7: () => fmdec7,
-    fmdec8: () => fmdec8,
-    fmdecay: () => fmdecay,
-    fmdecay1: () => fmdecay1,
-    fmdecay2: () => fmdecay2,
-    fmdecay3: () => fmdecay3,
-    fmdecay4: () => fmdecay4,
-    fmdecay5: () => fmdecay5,
-    fmdecay6: () => fmdecay6,
-    fmdecay7: () => fmdecay7,
-    fmdecay8: () => fmdecay8,
-    fme: () => fme,
-    fmenv: () => fmenv,
-    fmenv1: () => fmenv1,
-    fmenv2: () => fmenv2,
-    fmenv3: () => fmenv3,
-    fmenv4: () => fmenv4,
-    fmenv5: () => fmenv5,
-    fmenv6: () => fmenv6,
-    fmenv7: () => fmenv7,
-    fmenv8: () => fmenv8,
-    fmh: () => fmh,
-    fmh1: () => fmh1,
-    fmh2: () => fmh2,
-    fmh3: () => fmh3,
-    fmh4: () => fmh4,
-    fmh5: () => fmh5,
-    fmh6: () => fmh6,
-    fmh7: () => fmh7,
-    fmh8: () => fmh8,
-    fmi: () => fmi,
-    fmi1: () => fmi1,
-    fmi2: () => fmi2,
-    fmi3: () => fmi3,
-    fmi4: () => fmi4,
-    fmi5: () => fmi5,
-    fmi6: () => fmi6,
-    fmi7: () => fmi7,
-    fmi8: () => fmi8,
-    fmrel: () => fmrel,
-    fmrel1: () => fmrel1,
-    fmrel2: () => fmrel2,
-    fmrel3: () => fmrel3,
-    fmrel4: () => fmrel4,
-    fmrel5: () => fmrel5,
-    fmrel6: () => fmrel6,
-    fmrel7: () => fmrel7,
-    fmrel8: () => fmrel8,
-    fmrelease: () => fmrelease,
-    fmrelease1: () => fmrelease1,
-    fmrelease2: () => fmrelease2,
-    fmrelease3: () => fmrelease3,
-    fmrelease4: () => fmrelease4,
-    fmrelease5: () => fmrelease5,
-    fmrelease6: () => fmrelease6,
-    fmrelease7: () => fmrelease7,
-    fmrelease8: () => fmrelease8,
-    fmsus: () => fmsus,
-    fmsus1: () => fmsus1,
-    fmsus2: () => fmsus2,
-    fmsus3: () => fmsus3,
-    fmsus4: () => fmsus4,
-    fmsus5: () => fmsus5,
-    fmsus6: () => fmsus6,
-    fmsus7: () => fmsus7,
-    fmsus8: () => fmsus8,
-    fmsustain: () => fmsustain,
-    fmsustain1: () => fmsustain1,
-    fmsustain2: () => fmsustain2,
-    fmsustain3: () => fmsustain3,
-    fmsustain4: () => fmsustain4,
-    fmsustain5: () => fmsustain5,
-    fmsustain6: () => fmsustain6,
-    fmsustain7: () => fmsustain7,
-    fmsustain8: () => fmsustain8,
-    fmwave: () => fmwave,
-    fmwave1: () => fmwave1,
-    fmwave2: () => fmwave2,
-    fmwave3: () => fmwave3,
-    fmwave4: () => fmwave4,
-    fmwave5: () => fmwave5,
-    fmwave6: () => fmwave6,
-    fmwave7: () => fmwave7,
-    fmwave8: () => fmwave8,
-    frameRate: () => frameRate,
-    frames: () => frames,
-    freeze: () => freeze,
-    freq: () => freq,
-    fshift: () => fshift,
-    fshiftnote: () => fshiftnote,
-    fshiftphase: () => fshiftphase,
-    ftype: () => ftype,
-    fxr: () => fxr,
-    gain: () => gain,
-    gat: () => gat,
-    gate: () => gate,
-    getControlName: () => getControlName,
-    harmonic: () => harmonic,
-    hbrick: () => hbrick,
-    hcutoff: () => hcutoff,
-    hold: () => hold,
-    hours: () => hours,
-    hp: () => hp,
-    hpa: () => hpa,
-    hpattack: () => hpattack,
-    hpd: () => hpd,
-    hpdc: () => hpdc,
-    hpdecay: () => hpdecay,
-    hpdepth: () => hpdepth,
-    hpdepthfreq: () => hpdepthfreq,
-    hpdepthfrequency: () => hpdepthfrequency,
-    hpe: () => hpe,
-    hpenv: () => hpenv,
-    hpf: () => hpf,
-    hpq: () => hpq,
-    hpr: () => hpr,
-    hprate: () => hprate,
-    hprelease: () => hprelease,
-    hps: () => hps,
-    hpshape: () => hpshape,
-    hpskew: () => hpskew,
-    hpsustain: () => hpsustain,
-    hpsync: () => hpsync,
-    hresonance: () => hresonance,
-    i: () => i,
-    imag: () => imag,
-    ir: () => ir,
-    irbegin: () => irbegin,
-    iresponse: () => iresponse,
-    irspeed: () => irspeed,
-    isControlName: () => isControlName,
-    kcutoff: () => kcutoff,
-    krush: () => krush,
-    label: () => label,
-    lbrick: () => lbrick,
-    legato: () => legato,
-    leslie: () => leslie,
-    lfo: () => lfo,
-    lock: () => lock,
-    loop: () => loop,
-    loopBegin: () => loopBegin,
-    loopEnd: () => loopEnd,
-    loopb: () => loopb,
-    loope: () => loope,
-    lp: () => lp,
-    lpa: () => lpa,
-    lpattack: () => lpattack,
-    lpd: () => lpd,
-    lpdc: () => lpdc,
-    lpdecay: () => lpdecay,
-    lpdepth: () => lpdepth,
-    lpdepthfreq: () => lpdepthfreq,
-    lpdepthfrequency: () => lpdepthfrequency,
-    lpe: () => lpe,
-    lpenv: () => lpenv,
-    lpf: () => lpf,
-    lpq: () => lpq,
-    lpr: () => lpr,
-    lprate: () => lprate,
-    lprelease: () => lprelease,
-    lps: () => lps,
-    lpshape: () => lpshape,
-    lpskew: () => lpskew,
-    lpsustain: () => lpsustain,
-    lpsync: () => lpsync,
-    lrate: () => lrate,
-    lsize: () => lsize,
-    midibend: () => midibend,
-    midichan: () => midichan,
-    midicmd: () => midicmd,
-    midimap: () => midimap,
-    midiport: () => midiport,
-    miditouch: () => miditouch,
-    minutes: () => minutes,
-    mode: () => mode,
-    mtranspose: () => mtranspose,
-    n: () => n,
-    noise: () => noise,
-    note: () => note,
-    nrpnn: () => nrpnn,
-    nrpv: () => nrpv,
-    nudge: () => nudge,
-    oct: () => oct,
-    octave: () => octave,
-    octaveR: () => octaveR,
-    octaves: () => octaves,
-    octer: () => octer,
-    octersub: () => octersub,
-    octersubsub: () => octersubsub,
-    offset: () => offset,
-    orbit: () => orbit,
-    oschost: () => oschost,
-    oscport: () => oscport,
-    overgain: () => overgain,
-    overshape: () => overshape,
-    pan: () => pan,
-    panchor: () => panchor,
-    panorient: () => panorient,
-    panspan: () => panspan,
-    pansplay: () => pansplay,
-    panwidth: () => panwidth,
-    patt: () => patt,
-    pattack: () => pattack,
-    pcurve: () => pcurve,
-    pdec: () => pdec,
-    pdecay: () => pdecay,
-    penv: () => penv,
-    ph: () => ph,
-    phasdp: () => phasdp,
-    phaser: () => phaser,
-    phasercenter: () => phasercenter,
-    phaserdepth: () => phaserdepth,
-    phaserrate: () => phaserrate,
-    phasersweep: () => phasersweep,
-    phc: () => phc,
-    phd: () => phd,
-    phs: () => phs,
-    pitchJump: () => pitchJump,
-    pitchJumpTime: () => pitchJumpTime,
-    polyTouch: () => polyTouch,
-    postgain: () => postgain,
-    prel: () => prel,
-    prelease: () => prelease,
-    progNum: () => progNum,
-    psus: () => psus,
-    psustain: () => psustain,
-    pw: () => pw,
-    pwrate: () => pwrate,
-    pwsweep: () => pwsweep,
-    rdim: () => rdim,
-    real: () => real,
-    registerControl: () => registerControl,
-    registerMultiControl: () => registerMultiControl,
-    rel: () => rel,
-    release: () => release,
-    resonance: () => resonance,
-    rfade: () => rfade,
-    ring: () => ring,
-    ringdf: () => ringdf,
-    ringf: () => ringf,
-    rlp: () => rlp,
-    room: () => room,
-    roomdim: () => roomdim,
-    roomfade: () => roomfade,
-    roomlp: () => roomlp,
-    roomsize: () => roomsize,
-    rsize: () => rsize,
-    s: () => s,
-    scram: () => scram,
-    scrub: () => scrub,
-    seconds: () => seconds,
-    semitone: () => semitone,
-    shape: () => shape,
-    size: () => size,
-    slide: () => slide,
-    smear: () => smear,
-    songPtr: () => songPtr,
-    sound: () => sound,
-    source: () => source,
-    speed: () => speed,
-    spread: () => spread,
-    squiz: () => squiz,
-    src: () => src,
-    stepsPerOctave: () => stepsPerOctave,
-    stretch: () => stretch,
-    sus: () => sus,
-    sustain: () => sustain,
-    sustainpedal: () => sustainpedal,
-    sysex: () => sysex,
-    sysexdata: () => sysexdata,
-    sysexid: () => sysexid,
-    sz: () => sz,
-    transient: () => transient,
-    trem: () => trem,
-    tremolo: () => tremolo,
-    tremolodepth: () => tremolodepth,
-    tremolophase: () => tremolophase,
-    tremoloshape: () => tremoloshape,
-    tremoloskew: () => tremoloskew,
-    tremolosync: () => tremolosync,
-    triode: () => triode,
-    tsdelay: () => tsdelay,
-    uid: () => uid,
-    unison: () => unison,
-    unit: () => unit,
-    v: () => v,
-    val: () => val,
-    vel: () => vel,
-    velocity: () => velocity,
-    vib: () => vib,
-    vibmod: () => vibmod,
-    vibrato: () => vibrato,
-    vmod: () => vmod,
-    voice: () => voice,
-    vowel: () => vowel,
-    warp: () => warp,
-    warpatt: () => warpatt,
-    warpattack: () => warpattack,
-    warpdc: () => warpdc,
-    warpdec: () => warpdec,
-    warpdecay: () => warpdecay,
-    warpdepth: () => warpdepth,
-    warpenv: () => warpenv,
-    warpmode: () => warpmode,
-    warprate: () => warprate,
-    warprel: () => warprel,
-    warprelease: () => warprelease,
-    warpshape: () => warpshape,
-    warpskew: () => warpskew,
-    warpsus: () => warpsus,
-    warpsustain: () => warpsustain,
-    warpsync: () => warpsync,
-    waveloss: () => waveloss,
-    wavetablePhaseRand: () => wavetablePhaseRand,
-    wavetablePosition: () => wavetablePosition,
-    wavetableWarp: () => wavetableWarp,
-    wavetableWarpMode: () => wavetableWarpMode,
-    wt: () => wt,
-    wtatt: () => wtatt,
-    wtattack: () => wtattack,
-    wtdc: () => wtdc,
-    wtdec: () => wtdec,
-    wtdecay: () => wtdecay,
-    wtdepth: () => wtdepth,
-    wtenv: () => wtenv,
-    wtphaserand: () => wtphaserand,
-    wtrate: () => wtrate,
-    wtrel: () => wtrel,
-    wtrelease: () => wtrelease,
-    wtshape: () => wtshape,
-    wtskew: () => wtskew,
-    wtsus: () => wtsus,
-    wtsustain: () => wtsustain,
-    wtsync: () => wtsync,
-    xsdelay: () => xsdelay,
-    zcrush: () => zcrush,
-    zdelay: () => zdelay,
-    zmod: () => zmod,
-    znoise: () => znoise,
-    zrand: () => zrand,
-    zzfx: () => zzfx
-  });
-
-  // build/engine-src/strudel/packages/core/logger.mjs
-  var logKey = "strudel.log";
-  var debounce = 1e3;
-  var lastMessage;
-  var lastTime;
-  function errorLogger(e, origin = "cyclist") {
-    if (false) {
-      console.error(e);
-    }
-    logger(`[${origin}] error: ${e.message}`);
-  }
-  function logger(message, type, data2 = {}) {
-    let t = performance.now();
-    if (lastMessage === message && t - lastTime < debounce) {
-      return;
-    }
-    lastMessage = message;
-    lastTime = t;
-    console.log(`%c${message}`, "background-color: black;color:white;border-radius:15px");
-    if (typeof document !== "undefined" && typeof CustomEvent !== "undefined") {
-      document.dispatchEvent(
-        new CustomEvent(logKey, {
-          detail: {
-            message,
-            type,
-            data: data2
-          }
-        })
-      );
-    }
-  }
-  logger.key = logKey;
-
-  // build/engine-src/strudel/node_modules/.pnpm/fraction.js@5.2.1/node_modules/fraction.js/dist/fraction.mjs
-  if (typeof BigInt === "undefined") BigInt = function(n2) {
-    if (isNaN(n2)) throw new Error("");
-    return n2;
-  };
-  var C_ZERO = BigInt(0);
-  var C_ONE = BigInt(1);
-  var C_TWO = BigInt(2);
-  var C_FIVE = BigInt(5);
-  var C_TEN = BigInt(10);
-  var MAX_CYCLE_LEN = 2e3;
-  var P = {
-    "s": C_ONE,
-    "n": C_ZERO,
-    "d": C_ONE
-  };
-  function assign(n2, s2) {
-    try {
-      n2 = BigInt(n2);
-    } catch (e) {
-      throw InvalidParameter();
-    }
-    return n2 * s2;
-  }
-  function trunc(x) {
-    return typeof x === "bigint" ? x : Math.floor(x);
-  }
-  function newFraction(n2, d) {
-    if (d === C_ZERO) {
-      throw DivisionByZero();
-    }
-    const f = Object.create(Fraction.prototype);
-    f["s"] = n2 < C_ZERO ? -C_ONE : C_ONE;
-    n2 = n2 < C_ZERO ? -n2 : n2;
-    const a = gcd(n2, d);
-    f["n"] = n2 / a;
-    f["d"] = d / a;
-    return f;
-  }
-  function factorize(num3) {
-    const factors = {};
-    let n2 = num3;
-    let i3 = C_TWO;
-    let s2 = C_FIVE - C_ONE;
-    while (s2 <= n2) {
-      while (n2 % i3 === C_ZERO) {
-        n2 /= i3;
-        factors[i3] = (factors[i3] || C_ZERO) + C_ONE;
-      }
-      s2 += C_ONE + C_TWO * i3++;
-    }
-    if (n2 !== num3) {
-      if (n2 > 1)
-        factors[n2] = (factors[n2] || C_ZERO) + C_ONE;
-    } else {
-      factors[num3] = (factors[num3] || C_ZERO) + C_ONE;
-    }
-    return factors;
-  }
-  var parse = function(p1, p2) {
-    let n2 = C_ZERO, d = C_ONE, s2 = C_ONE;
-    if (p1 === void 0 || p1 === null) {
-    } else if (p2 !== void 0) {
-      if (typeof p1 === "bigint") {
-        n2 = p1;
-      } else if (isNaN(p1)) {
-        throw InvalidParameter();
-      } else if (p1 % 1 !== 0) {
-        throw NonIntegerParameter();
-      } else {
-        n2 = BigInt(p1);
-      }
-      if (typeof p2 === "bigint") {
-        d = p2;
-      } else if (isNaN(p2)) {
-        throw InvalidParameter();
-      } else if (p2 % 1 !== 0) {
-        throw NonIntegerParameter();
-      } else {
-        d = BigInt(p2);
-      }
-      s2 = n2 * d;
-    } else if (typeof p1 === "object") {
-      if ("d" in p1 && "n" in p1) {
-        n2 = BigInt(p1["n"]);
-        d = BigInt(p1["d"]);
-        if ("s" in p1)
-          n2 *= BigInt(p1["s"]);
-      } else if (0 in p1) {
-        n2 = BigInt(p1[0]);
-        if (1 in p1)
-          d = BigInt(p1[1]);
-      } else if (typeof p1 === "bigint") {
-        n2 = p1;
-      } else {
-        throw InvalidParameter();
-      }
-      s2 = n2 * d;
-    } else if (typeof p1 === "number") {
-      if (isNaN(p1)) {
-        throw InvalidParameter();
-      }
-      if (p1 < 0) {
-        s2 = -C_ONE;
-        p1 = -p1;
-      }
-      if (p1 % 1 === 0) {
-        n2 = BigInt(p1);
-      } else if (p1 > 0) {
-        let z = 1;
-        let A = 0, B = 1;
-        let C = 1, D = 1;
-        let N = 1e7;
-        if (p1 >= 1) {
-          z = 10 ** Math.floor(1 + Math.log10(p1));
-          p1 /= z;
-        }
-        while (B <= N && D <= N) {
-          let M2 = (A + C) / (B + D);
-          if (p1 === M2) {
-            if (B + D <= N) {
-              n2 = A + C;
-              d = B + D;
-            } else if (D > B) {
-              n2 = C;
-              d = D;
-            } else {
-              n2 = A;
-              d = B;
-            }
-            break;
-          } else {
-            if (p1 > M2) {
-              A += C;
-              B += D;
-            } else {
-              C += A;
-              D += B;
-            }
-            if (B > N) {
-              n2 = C;
-              d = D;
-            } else {
-              n2 = A;
-              d = B;
-            }
-          }
-        }
-        n2 = BigInt(n2) * BigInt(z);
-        d = BigInt(d);
-      }
-    } else if (typeof p1 === "string") {
-      let ndx = 0;
-      let v2 = C_ZERO, w = C_ZERO, x = C_ZERO, y = C_ONE, z = C_ONE;
-      let match = p1.replace(/_/g, "").match(/\d+|./g);
-      if (match === null)
-        throw InvalidParameter();
-      if (match[ndx] === "-") {
-        s2 = -C_ONE;
-        ndx++;
-      } else if (match[ndx] === "+") {
-        ndx++;
-      }
-      if (match.length === ndx + 1) {
-        w = assign(match[ndx++], s2);
-      } else if (match[ndx + 1] === "." || match[ndx] === ".") {
-        if (match[ndx] !== ".") {
-          v2 = assign(match[ndx++], s2);
-        }
-        ndx++;
-        if (ndx + 1 === match.length || match[ndx + 1] === "(" && match[ndx + 3] === ")" || match[ndx + 1] === "'" && match[ndx + 3] === "'") {
-          w = assign(match[ndx], s2);
-          y = C_TEN ** BigInt(match[ndx].length);
-          ndx++;
-        }
-        if (match[ndx] === "(" && match[ndx + 2] === ")" || match[ndx] === "'" && match[ndx + 2] === "'") {
-          x = assign(match[ndx + 1], s2);
-          z = C_TEN ** BigInt(match[ndx + 1].length) - C_ONE;
-          ndx += 3;
-        }
-      } else if (match[ndx + 1] === "/" || match[ndx + 1] === ":") {
-        w = assign(match[ndx], s2);
-        y = assign(match[ndx + 2], C_ONE);
-        ndx += 3;
-      } else if (match[ndx + 3] === "/" && match[ndx + 1] === " ") {
-        v2 = assign(match[ndx], s2);
-        w = assign(match[ndx + 2], s2);
-        y = assign(match[ndx + 4], C_ONE);
-        ndx += 5;
-      }
-      if (match.length <= ndx) {
-        d = y * z;
-        s2 = /* void */
-        n2 = x + d * v2 + z * w;
-      } else {
-        throw InvalidParameter();
-      }
-    } else if (typeof p1 === "bigint") {
-      n2 = p1;
-      s2 = p1;
-      d = C_ONE;
-    } else {
-      throw InvalidParameter();
-    }
-    if (d === C_ZERO) {
-      throw DivisionByZero();
-    }
-    P["s"] = s2 < C_ZERO ? -C_ONE : C_ONE;
-    P["n"] = n2 < C_ZERO ? -n2 : n2;
-    P["d"] = d < C_ZERO ? -d : d;
-  };
-  function modpow(b, e, m2) {
-    let r = C_ONE;
-    for (; e > C_ZERO; b = b * b % m2, e >>= C_ONE) {
-      if (e & C_ONE) {
-        r = r * b % m2;
-      }
-    }
-    return r;
-  }
-  function cycleLen(n2, d) {
-    for (; d % C_TWO === C_ZERO; d /= C_TWO) {
-    }
-    for (; d % C_FIVE === C_ZERO; d /= C_FIVE) {
-    }
-    if (d === C_ONE)
-      return C_ZERO;
-    let rem = C_TEN % d;
-    let t = 1;
-    for (; rem !== C_ONE; t++) {
-      rem = rem * C_TEN % d;
-      if (t > MAX_CYCLE_LEN)
-        return C_ZERO;
-    }
-    return BigInt(t);
-  }
-  function cycleStart(n2, d, len) {
-    let rem1 = C_ONE;
-    let rem2 = modpow(C_TEN, len, d);
-    for (let t = 0; t < 300; t++) {
-      if (rem1 === rem2)
-        return BigInt(t);
-      rem1 = rem1 * C_TEN % d;
-      rem2 = rem2 * C_TEN % d;
-    }
-    return 0;
-  }
-  function gcd(a, b) {
-    if (!a)
-      return b;
-    if (!b)
-      return a;
-    while (1) {
-      a %= b;
-      if (!a)
-        return b;
-      b %= a;
-      if (!b)
-        return a;
-    }
-  }
-  function Fraction(a, b) {
-    parse(a, b);
-    if (this instanceof Fraction) {
-      a = gcd(P["d"], P["n"]);
-      this["s"] = P["s"];
-      this["n"] = P["n"] / a;
-      this["d"] = P["d"] / a;
-    } else {
-      return newFraction(P["s"] * P["n"], P["d"]);
-    }
-  }
-  var DivisionByZero = function() {
-    return new Error("Division by Zero");
-  };
-  var InvalidParameter = function() {
-    return new Error("Invalid argument");
-  };
-  var NonIntegerParameter = function() {
-    return new Error("Parameters must be integer");
-  };
-  Fraction.prototype = {
-    "s": C_ONE,
-    "n": C_ZERO,
-    "d": C_ONE,
-    /**
-     * Calculates the absolute value
-     *
-     * Ex: new Fraction(-4).abs() => 4
-     **/
-    "abs": function() {
-      return newFraction(this["n"], this["d"]);
-    },
-    /**
-     * Inverts the sign of the current fraction
-     *
-     * Ex: new Fraction(-4).neg() => 4
-     **/
-    "neg": function() {
-      return newFraction(-this["s"] * this["n"], this["d"]);
-    },
-    /**
-     * Adds two rational numbers
-     *
-     * Ex: new Fraction({n: 2, d: 3}).add("14.9") => 467 / 30
-     **/
-    "add": function(a, b) {
-      parse(a, b);
-      return newFraction(
-        this["s"] * this["n"] * P["d"] + P["s"] * this["d"] * P["n"],
-        this["d"] * P["d"]
-      );
-    },
-    /**
-     * Subtracts two rational numbers
-     *
-     * Ex: new Fraction({n: 2, d: 3}).add("14.9") => -427 / 30
-     **/
-    "sub": function(a, b) {
-      parse(a, b);
-      return newFraction(
-        this["s"] * this["n"] * P["d"] - P["s"] * this["d"] * P["n"],
-        this["d"] * P["d"]
-      );
-    },
-    /**
-     * Multiplies two rational numbers
-     *
-     * Ex: new Fraction("-17.(345)").mul(3) => 5776 / 111
-     **/
-    "mul": function(a, b) {
-      parse(a, b);
-      return newFraction(
-        this["s"] * P["s"] * this["n"] * P["n"],
-        this["d"] * P["d"]
-      );
-    },
-    /**
-     * Divides two rational numbers
-     *
-     * Ex: new Fraction("-17.(345)").inverse().div(3)
-     **/
-    "div": function(a, b) {
-      parse(a, b);
-      return newFraction(
-        this["s"] * P["s"] * this["n"] * P["d"],
-        this["d"] * P["n"]
-      );
-    },
-    /**
-     * Clones the actual object
-     *
-     * Ex: new Fraction("-17.(345)").clone()
-     **/
-    "clone": function() {
-      return newFraction(this["s"] * this["n"], this["d"]);
-    },
-    /**
-     * Calculates the modulo of two rational numbers - a more precise fmod
-     *
-     * Ex: new Fraction('4.(3)').mod([7, 8]) => (13/3) % (7/8) = (5/6)
-     * Ex: new Fraction(20, 10).mod().equals(0) ? "is Integer"
-     **/
-    "mod": function(a, b) {
-      if (a === void 0) {
-        return newFraction(this["s"] * this["n"] % this["d"], C_ONE);
-      }
-      parse(a, b);
-      if (C_ZERO === P["n"] * this["d"]) {
-        throw DivisionByZero();
-      }
-      return newFraction(
-        this["s"] * (P["d"] * this["n"]) % (P["n"] * this["d"]),
-        P["d"] * this["d"]
-      );
-    },
-    /**
-     * Calculates the fractional gcd of two rational numbers
-     *
-     * Ex: new Fraction(5,8).gcd(3,7) => 1/56
-     */
-    "gcd": function(a, b) {
-      parse(a, b);
-      return newFraction(gcd(P["n"], this["n"]) * gcd(P["d"], this["d"]), P["d"] * this["d"]);
-    },
-    /**
-     * Calculates the fractional lcm of two rational numbers
-     *
-     * Ex: new Fraction(5,8).lcm(3,7) => 15
-     */
-    "lcm": function(a, b) {
-      parse(a, b);
-      if (P["n"] === C_ZERO && this["n"] === C_ZERO) {
-        return newFraction(C_ZERO, C_ONE);
-      }
-      return newFraction(P["n"] * this["n"], gcd(P["n"], this["n"]) * gcd(P["d"], this["d"]));
-    },
-    /**
-     * Gets the inverse of the fraction, means numerator and denominator are exchanged
-     *
-     * Ex: new Fraction([-3, 4]).inverse() => -4 / 3
-     **/
-    "inverse": function() {
-      return newFraction(this["s"] * this["d"], this["n"]);
-    },
-    /**
-     * Calculates the fraction to some integer exponent
-     *
-     * Ex: new Fraction(-1,2).pow(-3) => -8
-     */
-    "pow": function(a, b) {
-      parse(a, b);
-      if (P["d"] === C_ONE) {
-        if (P["s"] < C_ZERO) {
-          return newFraction((this["s"] * this["d"]) ** P["n"], this["n"] ** P["n"]);
-        } else {
-          return newFraction((this["s"] * this["n"]) ** P["n"], this["d"] ** P["n"]);
-        }
-      }
-      if (this["s"] < C_ZERO) return null;
-      let N = factorize(this["n"]);
-      let D = factorize(this["d"]);
-      let n2 = C_ONE;
-      let d = C_ONE;
-      for (let k in N) {
-        if (k === "1") continue;
-        if (k === "0") {
-          n2 = C_ZERO;
-          break;
-        }
-        N[k] *= P["n"];
-        if (N[k] % P["d"] === C_ZERO) {
-          N[k] /= P["d"];
-        } else return null;
-        n2 *= BigInt(k) ** N[k];
-      }
-      for (let k in D) {
-        if (k === "1") continue;
-        D[k] *= P["n"];
-        if (D[k] % P["d"] === C_ZERO) {
-          D[k] /= P["d"];
-        } else return null;
-        d *= BigInt(k) ** D[k];
-      }
-      if (P["s"] < C_ZERO) {
-        return newFraction(d, n2);
-      }
-      return newFraction(n2, d);
-    },
-    /**
-     * Calculates the logarithm of a fraction to a given rational base
-     *
-     * Ex: new Fraction(27, 8).log(9, 4) => 3/2
-     */
-    "log": function(a, b) {
-      parse(a, b);
-      if (this["s"] <= C_ZERO || P["s"] <= C_ZERO) return null;
-      const allPrimes = {};
-      const baseFactors = factorize(P["n"]);
-      const T1 = factorize(P["d"]);
-      const numberFactors = factorize(this["n"]);
-      const T2 = factorize(this["d"]);
-      for (const prime in T1) {
-        baseFactors[prime] = (baseFactors[prime] || C_ZERO) - T1[prime];
-      }
-      for (const prime in T2) {
-        numberFactors[prime] = (numberFactors[prime] || C_ZERO) - T2[prime];
-      }
-      for (const prime in baseFactors) {
-        if (prime === "1") continue;
-        allPrimes[prime] = true;
-      }
-      for (const prime in numberFactors) {
-        if (prime === "1") continue;
-        allPrimes[prime] = true;
-      }
-      let retN = null;
-      let retD = null;
-      for (const prime in allPrimes) {
-        const baseExponent = baseFactors[prime] || C_ZERO;
-        const numberExponent = numberFactors[prime] || C_ZERO;
-        if (baseExponent === C_ZERO) {
-          if (numberExponent !== C_ZERO) {
-            return null;
-          }
-          continue;
-        }
-        let curN = numberExponent;
-        let curD = baseExponent;
-        const gcdValue = gcd(curN, curD);
-        curN /= gcdValue;
-        curD /= gcdValue;
-        if (retN === null && retD === null) {
-          retN = curN;
-          retD = curD;
-        } else if (curN * retD !== retN * curD) {
-          return null;
-        }
-      }
-      return retN !== null && retD !== null ? newFraction(retN, retD) : null;
-    },
-    /**
-     * Check if two rational numbers are the same
-     *
-     * Ex: new Fraction(19.6).equals([98, 5]);
-     **/
-    "equals": function(a, b) {
-      parse(a, b);
-      return this["s"] * this["n"] * P["d"] === P["s"] * P["n"] * this["d"];
-    },
-    /**
-     * Check if this rational number is less than another
-     *
-     * Ex: new Fraction(19.6).lt([98, 5]);
-     **/
-    "lt": function(a, b) {
-      parse(a, b);
-      return this["s"] * this["n"] * P["d"] < P["s"] * P["n"] * this["d"];
-    },
-    /**
-     * Check if this rational number is less than or equal another
-     *
-     * Ex: new Fraction(19.6).lt([98, 5]);
-     **/
-    "lte": function(a, b) {
-      parse(a, b);
-      return this["s"] * this["n"] * P["d"] <= P["s"] * P["n"] * this["d"];
-    },
-    /**
-     * Check if this rational number is greater than another
-     *
-     * Ex: new Fraction(19.6).lt([98, 5]);
-     **/
-    "gt": function(a, b) {
-      parse(a, b);
-      return this["s"] * this["n"] * P["d"] > P["s"] * P["n"] * this["d"];
-    },
-    /**
-     * Check if this rational number is greater than or equal another
-     *
-     * Ex: new Fraction(19.6).lt([98, 5]);
-     **/
-    "gte": function(a, b) {
-      parse(a, b);
-      return this["s"] * this["n"] * P["d"] >= P["s"] * P["n"] * this["d"];
-    },
-    /**
-     * Compare two rational numbers
-     * < 0 iff this < that
-     * > 0 iff this > that
-     * = 0 iff this = that
-     *
-     * Ex: new Fraction(19.6).compare([98, 5]);
-     **/
-    "compare": function(a, b) {
-      parse(a, b);
-      let t = this["s"] * this["n"] * P["d"] - P["s"] * P["n"] * this["d"];
-      return (C_ZERO < t) - (t < C_ZERO);
-    },
-    /**
-     * Calculates the ceil of a rational number
-     *
-     * Ex: new Fraction('4.(3)').ceil() => (5 / 1)
-     **/
-    "ceil": function(places) {
-      places = C_TEN ** BigInt(places || 0);
-      return newFraction(
-        trunc(this["s"] * places * this["n"] / this["d"]) + (places * this["n"] % this["d"] > C_ZERO && this["s"] >= C_ZERO ? C_ONE : C_ZERO),
-        places
-      );
-    },
-    /**
-     * Calculates the floor of a rational number
-     *
-     * Ex: new Fraction('4.(3)').floor() => (4 / 1)
-     **/
-    "floor": function(places) {
-      places = C_TEN ** BigInt(places || 0);
-      return newFraction(
-        trunc(this["s"] * places * this["n"] / this["d"]) - (places * this["n"] % this["d"] > C_ZERO && this["s"] < C_ZERO ? C_ONE : C_ZERO),
-        places
-      );
-    },
-    /**
-     * Rounds a rational numbers
-     *
-     * Ex: new Fraction('4.(3)').round() => (4 / 1)
-     **/
-    "round": function(places) {
-      places = C_TEN ** BigInt(places || 0);
-      return newFraction(
-        trunc(this["s"] * places * this["n"] / this["d"]) + this["s"] * ((this["s"] >= C_ZERO ? C_ONE : C_ZERO) + C_TWO * (places * this["n"] % this["d"]) > this["d"] ? C_ONE : C_ZERO),
-        places
-      );
-    },
-    /**
-      * Rounds a rational number to a multiple of another rational number
-      *
-      * Ex: new Fraction('0.9').roundTo("1/8") => 7 / 8
-      **/
-    "roundTo": function(a, b) {
-      parse(a, b);
-      const n2 = this["n"] * P["d"];
-      const d = this["d"] * P["n"];
-      const r = n2 % d;
-      let k = trunc(n2 / d);
-      if (r + r >= d) {
-        k++;
-      }
-      return newFraction(this["s"] * k * P["n"], P["d"]);
-    },
-    /**
-     * Check if two rational numbers are divisible
-     *
-     * Ex: new Fraction(19.6).divisible(1.5);
-     */
-    "divisible": function(a, b) {
-      parse(a, b);
-      return !(!(P["n"] * this["d"]) || this["n"] * P["d"] % (P["n"] * this["d"]));
-    },
-    /**
-     * Returns a decimal representation of the fraction
-     *
-     * Ex: new Fraction("100.'91823'").valueOf() => 100.91823918239183
-     **/
-    "valueOf": function() {
-      return Number(this["s"] * this["n"]) / Number(this["d"]);
-    },
-    /**
-     * Creates a string representation of a fraction with all digits
-     *
-     * Ex: new Fraction("100.'91823'").toString() => "100.(91823)"
-     **/
-    "toString": function(dec2) {
-      let N = this["n"];
-      let D = this["d"];
-      dec2 = dec2 || 15;
-      let cycLen = cycleLen(N, D);
-      let cycOff = cycleStart(N, D, cycLen);
-      let str = this["s"] < C_ZERO ? "-" : "";
-      str += trunc(N / D);
-      N %= D;
-      N *= C_TEN;
-      if (N)
-        str += ".";
-      if (cycLen) {
-        for (let i3 = cycOff; i3--; ) {
-          str += trunc(N / D);
-          N %= D;
-          N *= C_TEN;
-        }
-        str += "(";
-        for (let i3 = cycLen; i3--; ) {
-          str += trunc(N / D);
-          N %= D;
-          N *= C_TEN;
-        }
-        str += ")";
-      } else {
-        for (let i3 = dec2; N && i3--; ) {
-          str += trunc(N / D);
-          N %= D;
-          N *= C_TEN;
-        }
-      }
-      return str;
-    },
-    /**
-     * Returns a string-fraction representation of a Fraction object
-     *
-     * Ex: new Fraction("1.'3'").toFraction() => "4 1/3"
-     **/
-    "toFraction": function(showMixed) {
-      let n2 = this["n"];
-      let d = this["d"];
-      let str = this["s"] < C_ZERO ? "-" : "";
-      if (d === C_ONE) {
-        str += n2;
-      } else {
-        let whole = trunc(n2 / d);
-        if (showMixed && whole > C_ZERO) {
-          str += whole;
-          str += " ";
-          n2 %= d;
-        }
-        str += n2;
-        str += "/";
-        str += d;
-      }
-      return str;
-    },
-    /**
-     * Returns a latex representation of a Fraction object
-     *
-     * Ex: new Fraction("1.'3'").toLatex() => "\frac{4}{3}"
-     **/
-    "toLatex": function(showMixed) {
-      let n2 = this["n"];
-      let d = this["d"];
-      let str = this["s"] < C_ZERO ? "-" : "";
-      if (d === C_ONE) {
-        str += n2;
-      } else {
-        let whole = trunc(n2 / d);
-        if (showMixed && whole > C_ZERO) {
-          str += whole;
-          n2 %= d;
-        }
-        str += "\\frac{";
-        str += n2;
-        str += "}{";
-        str += d;
-        str += "}";
-      }
-      return str;
-    },
-    /**
-     * Returns an array of continued fraction elements
-     *
-     * Ex: new Fraction("7/8").toContinued() => [0,1,7]
-     */
-    "toContinued": function() {
-      let a = this["n"];
-      let b = this["d"];
-      let res = [];
-      do {
-        res.push(trunc(a / b));
-        let t = a % b;
-        a = b;
-        b = t;
-      } while (a !== C_ONE);
-      return res;
-    },
-    "simplify": function(eps) {
-      const ieps = BigInt(1 / (eps || 1e-3) | 0);
-      const thisABS = this["abs"]();
-      const cont = thisABS["toContinued"]();
-      for (let i3 = 1; i3 < cont.length; i3++) {
-        let s2 = newFraction(cont[i3 - 1], C_ONE);
-        for (let k = i3 - 2; k >= 0; k--) {
-          s2 = s2["inverse"]()["add"](cont[k]);
-        }
-        let t = s2["sub"](thisABS);
-        if (t["n"] * ieps < t["d"]) {
-          return s2["mul"](this["s"]);
-        }
-      }
-      return this;
-    }
-  };
-
-  // build/engine-src/strudel/packages/core/util.mjs
-  var isNoteWithOctave = (name3) => /^[a-gA-G][#bsf]*[0-9]*$/.test(name3);
-  var isNote = (name3) => /^[a-gA-G][#bsf]*-?[0-9]*$/.test(name3);
-  var tokenizeNote = (note4) => {
-    if (typeof note4 !== "string") {
-      return [];
-    }
-    const [pc, acc = "", oct2] = note4.match(/^([a-gA-G])([#bsf]*)(-?[0-9]*)$/)?.slice(1) || [];
-    if (!pc) {
-      return [];
-    }
-    return [pc, acc, oct2 ? Number(oct2) : void 0];
-  };
-  var chromas = { c: 0, d: 2, e: 4, f: 5, g: 7, a: 9, b: 11 };
-  var accs = { "#": 1, b: -1, s: 1, f: -1 };
-  var getAccidentalsOffset = (accidentals2) => {
-    return accidentals2?.split("").reduce((o, char) => o + accs[char], 0) || 0;
-  };
-  var noteToMidi = (note4, defaultOctave = 3) => {
-    const [pc, acc, oct2 = defaultOctave] = tokenizeNote(note4);
-    if (!pc) {
-      throw new Error('not a note: "' + note4 + '"');
-    }
-    const chroma5 = chromas[pc.toLowerCase()];
-    const offset3 = getAccidentalsOffset(acc);
-    return (Number(oct2) + 1) * 12 + chroma5 + offset3;
-  };
-  var midiToFreq = (n2) => {
-    return Math.pow(2, (n2 - 69) / 12) * 440;
-  };
-  var freqToMidi = (freq3) => {
-    return 12 * Math.log(freq3 / 440) / Math.LN2 + 69;
-  };
-  var valueToMidi = (value2, fallbackValue) => {
-    if (typeof value2 !== "object") {
-      throw new Error("valueToMidi: expected object value");
-    }
-    let { freq: freq3, note: note4 } = value2;
-    if (typeof freq3 === "number") {
-      return freqToMidi(freq3);
-    }
-    if (typeof note4 === "string") {
-      return noteToMidi(note4);
-    }
-    if (typeof note4 === "number") {
-      return note4;
-    }
-    if (!fallbackValue) {
-      throw new Error("valueToMidi: expected freq or note to be set");
-    }
-    return fallbackValue;
-  };
-  var getEventOffsetMs = (targetTimeSeconds, currentTimeSeconds) => {
-    return (targetTimeSeconds - currentTimeSeconds) * 1e3;
-  };
-  var pcs = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
-  var midi2note = (n2) => {
-    const oct2 = Math.floor(n2 / 12) - 1;
-    const pc = pcs[n2 % 12];
-    return pc + oct2;
-  };
-  var _mod = (n2, m2) => (n2 % m2 + m2) % m2;
-  var averageArray = (arr) => arr.reduce((a, b) => a + b) / arr.length;
-  function nanFallback(value2, fallback = 0) {
-    if (isNaN(Number(value2))) {
-      logger(`"${value2}" is not a number, falling back to ${fallback}`, "warning");
-      return fallback;
-    }
-    return value2;
-  }
-  var getSoundIndex = (n2, numSounds) => {
-    return _mod(Math.round(nanFallback(n2 ?? 0, 0)), numSounds);
-  };
-  var getPlayableNoteValue = (hap) => {
-    let { value: value2, context } = hap;
-    let note4 = value2;
-    if (typeof note4 === "object" && !Array.isArray(note4)) {
-      note4 = note4.note || note4.n || note4.value;
-      if (note4 === void 0) {
-        throw new Error(`cannot find a playable note for ${JSON.stringify(value2)}`);
-      }
-    }
-    if (typeof note4 === "number" && context.type !== "frequency") {
-      note4 = midiToFreq(hap.value);
-    } else if (typeof note4 === "number" && context.type === "frequency") {
-      note4 = hap.value;
-    } else if (typeof note4 !== "string" || !isNote(note4)) {
-      throw new Error("not a note: " + JSON.stringify(note4));
-    }
-    return note4;
-  };
-  var getFrequency = (hap) => {
-    let { value: value2, context } = typeof hap == "object" ? hap : (
-      // default: interpret value as midi note.
-      { value: hap, context: { type: "note" } }
-    );
-    if (typeof value2 === "object") {
-      if (value2.freq) {
-        return value2.freq;
-      }
-      return getFreq(value2.note ?? value2.n ?? value2.value);
-    }
-    if (typeof value2 === "number" && context.type !== "frequency") {
-      value2 = midiToFreq(value2);
-    } else if (typeof value2 === "string" && isNote(value2)) {
-      value2 = midiToFreq(noteToMidi(value2));
-    } else if (typeof value2 !== "number") {
-      throw new Error("not a note or frequency: " + value2);
-    }
-    return value2;
-  };
-  var getFreq = (hap) => getFrequency(hap);
-  var rotate = (arr, n2) => arr.slice(n2).concat(arr.slice(0, n2));
-  var pipe = (...funcs) => {
-    return funcs.reduce(
-      (f, g) => (...args) => f(g(...args)),
-      (x) => x
-    );
-  };
-  var compose = (...funcs) => pipe(...funcs.reverse());
-  var removeUndefineds = (xs) => xs.filter((x) => x != void 0);
-  var flatten = (arr) => [].concat(...arr);
-  var id = (a) => a;
-  var constant = (a, b) => a;
-  var listRange = (min, max) => Array.from({ length: max - min + 1 }, (_, i3) => i3 + min);
-  function curry(func2, overload, arity = func2.length) {
-    const fn = function curried(...args) {
-      if (args.length >= arity) {
-        return func2.apply(this, args);
-      } else {
-        const partial = function(...args2) {
-          return curried.apply(this, args.concat(args2));
-        };
-        if (overload) {
-          overload(partial, args);
-        }
-        return partial;
-      }
-    };
-    if (overload) {
-      overload(fn, []);
-    }
-    return fn;
-  }
-  function parseNumeral(numOrString) {
-    const asNumber = Number(numOrString);
-    if (!isNaN(asNumber)) {
-      return asNumber;
-    }
-    if (isNote(numOrString)) {
-      return noteToMidi(numOrString);
-    }
-    throw new Error(`cannot parse as numeral: "${numOrString}"`);
-  }
-  function mapArgs(fn, mapFn) {
-    return (...args) => fn(...args.map(mapFn));
-  }
-  function numeralArgs(fn) {
-    return mapArgs(fn, parseNumeral);
-  }
-  function parseFractional(numOrString) {
-    const asNumber = Number(numOrString);
-    if (!isNaN(asNumber)) {
-      return asNumber;
-    }
-    const specialValue = {
-      pi: Math.PI,
-      w: 1,
-      h: 0.5,
-      q: 0.25,
-      e: 0.125,
-      s: 0.0625,
-      t: 1 / 3,
-      f: 0.2,
-      x: 1 / 6
-    }[numOrString];
-    if (typeof specialValue !== "undefined") {
-      return specialValue;
-    }
-    throw new Error(`cannot parse as fractional: "${numOrString}"`);
-  }
-  var fractionalArgs = (fn) => mapArgs(fn, parseFractional);
-  var splitAt = function(index5, value2) {
-    return [value2.slice(0, index5), value2.slice(index5)];
-  };
-  var zipWith = (f, xs, ys) => xs.map((n2, i3) => f(n2, ys[i3]));
-  var pairs = function(xs) {
-    const result = [];
-    for (let i3 = 0; i3 < xs.length - 1; ++i3) {
-      result.push([xs[i3], xs[i3 + 1]]);
-    }
-    return result;
-  };
-  var clamp = (num3, min, max) => Math.min(Math.max(num3, min), max);
-  var solfeggio = ["Do", "Reb", "Re", "Mib", "Mi", "Fa", "Solb", "Sol", "Lab", "La", "Sib", "Si"];
-  var indian = [
-    "Sa",
-    "Re",
-    "Ga",
-    "Ma",
-    "Pa",
-    "Dha",
-    "Ni"
-  ];
-  var german = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Hb", "H"];
-  var byzantine = [
-    "Ni",
-    "Pab",
-    "Pa",
-    "Voub",
-    "Vou",
-    "Ga",
-    "Dib",
-    "Di",
-    "Keb",
-    "Ke",
-    "Zob",
-    "Zo"
-  ];
-  var japanese = [
-    "I",
-    "Ro",
-    "Ha",
-    "Ni",
-    "Ho",
-    "He",
-    "To"
-  ];
-  var english = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
-  var sol2note = (n2, notation = "letters") => {
-    const pc = notation === "solfeggio" ? solfeggio : notation === "indian" ? indian : notation === "german" ? german : notation === "byzantine" ? byzantine : notation === "japanese" ? japanese : english;
-    const note4 = pc[n2 % 12];
-    const oct2 = Math.floor(n2 / 12) - 1;
-    return note4 + oct2;
-  };
-  function uniq(a) {
-    var seen = {};
-    return a.filter(function(item) {
-      return seen.hasOwn(item) ? false : seen[item] = true;
-    });
-  }
-  function uniqsort(a) {
-    return a.sort().filter(function(item, pos, ary) {
-      return !pos || item != ary[pos - 1];
-    });
-  }
-  function uniqsortr(a) {
-    return a.sort((x, y) => x.compare(y)).filter(function(item, pos, ary) {
-      return !pos || item.ne(ary[pos - 1]);
-    });
-  }
-  function unicodeToBase64(text) {
-    const utf8Bytes = new TextEncoder().encode(text);
-    let binaryString = "";
-    const chunkSize = 32768;
-    for (let i3 = 0; i3 < utf8Bytes.length; i3 += chunkSize) {
-      const chunk2 = utf8Bytes.subarray(i3, i3 + chunkSize);
-      binaryString += String.fromCharCode.apply(null, chunk2);
-    }
-    return btoa(binaryString);
-  }
-  function base64ToUnicode(base64String) {
-    const utf8Bytes = new Uint8Array(
-      atob(base64String).split("").map((char) => char.charCodeAt(0))
-    );
-    const decodedText = new TextDecoder().decode(utf8Bytes);
-    return decodedText;
-  }
-  function code2hash(code) {
-    return encodeURIComponent(unicodeToBase64(code));
-  }
-  function hash2code(hash) {
-    return base64ToUnicode(decodeURIComponent(hash));
-  }
-  function objectMap(obj, fn) {
-    if (Array.isArray(obj)) {
-      return obj.map(fn);
-    }
-    return Object.fromEntries(Object.entries(obj).map(([k, v2], i3) => [k, fn(v2, k, i3)]));
-  }
-  function cycleToSeconds(cycle, cps2) {
-    return cycle / cps2;
-  }
-  var ClockCollator = class {
-    constructor({
-      getTargetClockTime = getUnixTimeSeconds,
-      weight = 16,
-      offsetDelta = 5e-3,
-      checkAfterTime = 2,
-      resetAfterTime = 8
-    }) {
-      this.offsetTime;
-      this.timeAtPrevOffsetSample;
-      this.prevOffsetTimes = [];
-      this.getTargetClockTime = getTargetClockTime;
-      this.weight = weight;
-      this.offsetDelta = offsetDelta;
-      this.checkAfterTime = checkAfterTime;
-      this.resetAfterTime = resetAfterTime;
-      this.reset = () => {
-        this.prevOffsetTimes = [];
-        this.offsetTime = null;
-        this.timeAtPrevOffsetSample = null;
-      };
-    }
-    calculateOffset(currentTime) {
-      const targetClockTime = this.getTargetClockTime();
-      const diffBetweenTimeSamples = targetClockTime - this.timeAtPrevOffsetSample;
-      const newOffsetTime = targetClockTime - currentTime;
-      if (diffBetweenTimeSamples > this.resetAfterTime) {
-        this.reset();
-      }
-      if (this.offsetTime == null) {
-        this.offsetTime = newOffsetTime;
-      }
-      this.prevOffsetTimes.push(newOffsetTime);
-      if (this.prevOffsetTimes.length > this.weight) {
-        this.prevOffsetTimes.shift();
-      }
-      if (this.timeAtPrevOffsetSample == null || diffBetweenTimeSamples > this.checkAfterTime) {
-        this.timeAtPrevOffsetSample = targetClockTime;
-        const rollingOffsetTime = averageArray(this.prevOffsetTimes);
-        if (Math.abs(rollingOffsetTime - this.offsetTime) > this.offsetDelta) {
-          this.offsetTime = rollingOffsetTime;
-        }
-      }
-      return this.offsetTime;
-    }
-    calculateTimestamp(currentTime, targetTime) {
-      return this.calculateOffset(currentTime) + targetTime;
-    }
-  };
-  function getPerformanceTimeSeconds() {
-    return performance.now() * 1e-3;
-  }
-  function getUnixTimeSeconds() {
-    return Date.now() * 1e-3;
-  }
-  var keyAlias = /* @__PURE__ */ new Map([
-    ["control", "Control"],
-    ["ctrl", "Control"],
-    ["alt", "Alt"],
-    ["shift", "Shift"],
-    ["down", "ArrowDown"],
-    ["up", "ArrowUp"],
-    ["left", "ArrowLeft"],
-    ["right", "ArrowRight"]
-  ]);
-  var keyState;
-  function getCurrentKeyboardState() {
-    if (keyState == null) {
-      if (typeof window === "undefined") {
-        return;
-      }
-      keyState = {};
-      window.addEventListener("keydown", (event) => {
-        keyState[event.key] = true;
-      });
-      window.addEventListener("keyup", (event) => {
-        keyState[event.key] = false;
-      });
-    }
-    return { ...keyState };
-  }
-  function stringifyValues(value2, compact3 = false) {
-    return typeof value2 === "object" ? compact3 ? JSON.stringify(value2).slice(1, -1).replaceAll('"', "").replaceAll(",", " ") : JSON.stringify(value2) : value2;
-  }
-
-  // build/engine-src/strudel/packages/core/fraction.mjs
-  Fraction.prototype.sam = function() {
-    return this.floor();
-  };
-  Fraction.prototype.nextSam = function() {
-    return this.sam().add(1);
-  };
-  Fraction.prototype.wholeCycle = function() {
-    return new TimeSpan(this.sam(), this.nextSam());
-  };
-  Fraction.prototype.cyclePos = function() {
-    return this.sub(this.sam());
-  };
-  Fraction.prototype.lt = function(other) {
-    return this.compare(other) < 0;
-  };
-  Fraction.prototype.gt = function(other) {
-    return this.compare(other) > 0;
-  };
-  Fraction.prototype.lte = function(other) {
-    return this.compare(other) <= 0;
-  };
-  Fraction.prototype.gte = function(other) {
-    return this.compare(other) >= 0;
-  };
-  Fraction.prototype.eq = function(other) {
-    return this.compare(other) == 0;
-  };
-  Fraction.prototype.ne = function(other) {
-    return this.compare(other) != 0;
-  };
-  Fraction.prototype.max = function(other) {
-    return this.gt(other) ? this : other;
-  };
-  Fraction.prototype.maximum = function(...others) {
-    others = others.map((x) => new Fraction(x));
-    return others.reduce((max, other) => other.max(max), this);
-  };
-  Fraction.prototype.min = function(other) {
-    return this.lt(other) ? this : other;
-  };
-  Fraction.prototype.mulmaybe = function(other) {
-    return other !== void 0 ? this.mul(other) : void 0;
-  };
-  Fraction.prototype.divmaybe = function(other) {
-    return other !== void 0 ? this.div(other) : void 0;
-  };
-  Fraction.prototype.addmaybe = function(other) {
-    return other !== void 0 ? this.add(other) : void 0;
-  };
-  Fraction.prototype.submaybe = function(other) {
-    return other !== void 0 ? this.sub(other) : void 0;
-  };
-  Fraction.prototype.show = function() {
-    return this.s * this.n + "/" + this.d;
-  };
-  Fraction.prototype.or = function(other) {
-    return this.eq(0) ? other : this;
-  };
-  var fraction = (n2) => {
-    if (typeof n2 === "number") {
-    }
-    return Fraction(n2);
-  };
-  var gcd2 = (...fractions) => {
-    fractions = removeUndefineds(fractions);
-    if (fractions.length === 0) {
-      return void 0;
-    }
-    return fractions.reduce((gcd3, fraction3) => gcd3.gcd(fraction3), fraction(1));
-  };
-  var lcm = (...fractions) => {
-    fractions = removeUndefineds(fractions);
-    if (fractions.length === 0) {
-      return void 0;
-    }
-    const x = fractions.pop();
-    return fractions.reduce(
-      (lcm2, fraction3) => lcm2 === void 0 || fraction3 === void 0 ? void 0 : lcm2.lcm(fraction3),
-      x
-    );
-  };
-  var isFraction = (x) => x instanceof Fraction;
-  fraction._original = Fraction;
-  var fraction_default = fraction;
-
-  // build/engine-src/strudel/packages/core/timespan.mjs
-  var TimeSpan = class _TimeSpan {
-    constructor(begin2, end2) {
-      this.begin = fraction_default(begin2);
-      this.end = fraction_default(end2);
-    }
-    get spanCycles() {
-      const spans = [];
-      var begin2 = this.begin;
-      const end2 = this.end;
-      const end_sam = end2.sam();
-      if (begin2.equals(end2)) {
-        return [new _TimeSpan(begin2, end2)];
-      }
-      while (end2.gt(begin2)) {
-        if (begin2.sam().equals(end_sam)) {
-          spans.push(new _TimeSpan(begin2, this.end));
-          break;
-        }
-        const next_begin = begin2.nextSam();
-        spans.push(new _TimeSpan(begin2, next_begin));
-        begin2 = next_begin;
-      }
-      return spans;
-    }
-    get duration() {
-      return this.end.sub(this.begin);
-    }
-    cycleArc() {
-      const b = this.begin.cyclePos();
-      const e = b.add(this.duration);
-      return new _TimeSpan(b, e);
-    }
-    withTime(func_time) {
-      return new _TimeSpan(func_time(this.begin), func_time(this.end));
-    }
-    withEnd(func_time) {
-      return new _TimeSpan(this.begin, func_time(this.end));
-    }
-    withCycle(func_time) {
-      const sam = this.begin.sam();
-      const b = sam.add(func_time(this.begin.sub(sam)));
-      const e = sam.add(func_time(this.end.sub(sam)));
-      return new _TimeSpan(b, e);
-    }
-    intersection(other) {
-      const intersect_begin = this.begin.max(other.begin);
-      const intersect_end = this.end.min(other.end);
-      if (intersect_begin.gt(intersect_end)) {
-        return void 0;
-      }
-      if (intersect_begin.equals(intersect_end)) {
-        if (intersect_begin.equals(this.end) && this.begin.lt(this.end)) {
-          return void 0;
-        }
-        if (intersect_begin.equals(other.end) && other.begin.lt(other.end)) {
-          return void 0;
-        }
-      }
-      return new _TimeSpan(intersect_begin, intersect_end);
-    }
-    intersection_e(other) {
-      const result = this.intersection(other);
-      if (result == void 0) {
-        throw "TimeSpans do not intersect";
-      }
-      return result;
-    }
-    midpoint() {
-      return this.begin.add(this.duration.div(fraction_default(2)));
-    }
-    equals(other) {
-      return this.begin.equals(other.begin) && this.end.equals(other.end);
-    }
-    show() {
-      return this.begin.show() + " \u2192 " + this.end.show();
-    }
-  };
-  var timespan_default = TimeSpan;
-
-  // build/engine-src/strudel/packages/core/hap.mjs
-  var Hap = class _Hap {
-    /*
-          Event class, representing a value active during the timespan
-          'part'. This might be a fragment of an event, in which case the
-          timespan will be smaller than the 'whole' timespan, otherwise the
-          two timespans will be the same. The 'part' must never extend outside of the
-          'whole'. If the event represents a continuously changing value
-          then the whole will be returned as None, in which case the given
-          value will have been sampled from the point halfway between the
-          start and end of the 'part' timespan.
-          The context is to store a list of source code locations causing the event.
-    
-          The word 'Event' is more or less a reserved word in javascript, hence this
-          class is named called 'Hap'.
-          */
-    constructor(whole, part, value2, context = {}, stateful = false) {
-      this.whole = whole;
-      this.part = part;
-      this.value = value2;
-      this.context = context;
-      this.stateful = stateful;
-      if (stateful) {
-        console.assert(typeof this.value === "function", "Stateful values must be functions");
-      }
-    }
-    get duration() {
-      let duration2;
-      if (typeof this.value?.duration === "number") {
-        duration2 = fraction_default(this.value.duration);
-      } else {
-        duration2 = this.whole.end.sub(this.whole.begin);
-      }
-      if (typeof this.value?.clip === "number") {
-        return duration2.mul(this.value.clip);
-      }
-      return duration2;
-    }
-    get endClipped() {
-      return this.whole.begin.add(this.duration);
-    }
-    isActive(currentTime) {
-      return this.whole.begin <= currentTime && this.endClipped >= currentTime;
-    }
-    isInPast(currentTime) {
-      return currentTime > this.endClipped;
-    }
-    isInNearPast(margin, currentTime) {
-      return currentTime - margin <= this.endClipped;
-    }
-    isInFuture(currentTime) {
-      return currentTime < this.whole.begin;
-    }
-    isInNearFuture(margin, currentTime) {
-      return currentTime < this.whole.begin && currentTime > this.whole.begin - margin;
-    }
-    isWithinTime(min, max) {
-      return this.whole.begin <= max && this.endClipped >= min;
-    }
-    wholeOrPart() {
-      return this.whole ? this.whole : this.part;
-    }
-    withSpan(func2) {
-      const whole = this.whole ? func2(this.whole) : void 0;
-      return new _Hap(whole, func2(this.part), this.value, this.context);
-    }
-    withValue(func2) {
-      return new _Hap(this.whole, this.part, func2(this.value), this.context);
-    }
-    hasOnset() {
-      return this.whole != void 0 && this.whole.begin.equals(this.part.begin);
-    }
-    hasTag(tag) {
-      return this.context.tags?.includes(tag);
-    }
-    resolveState(state) {
-      if (this.stateful && this.hasOnset()) {
-        console.log("stateful");
-        const func2 = this.value;
-        const [newState, newValue] = func2(state);
-        return [newState, new _Hap(this.whole, this.part, newValue, this.context, false)];
-      }
-      return [state, this];
-    }
-    spanEquals(other) {
-      return this.whole == void 0 && other.whole == void 0 || this.whole.equals(other.whole);
-    }
-    equals(other) {
-      return this.spanEquals(other) && this.part.equals(other.part) && // TODO would == be better ??
-      this.value === other.value;
-    }
-    show(compact3 = false) {
-      const value2 = typeof this.value === "object" ? compact3 ? JSON.stringify(this.value).slice(1, -1).replaceAll('"', "").replaceAll(",", " ") : JSON.stringify(this.value) : this.value;
-      var spans = "";
-      if (this.whole == void 0) {
-        spans = "~" + this.part.show;
-      } else {
-        var is_whole = this.whole.begin.equals(this.part.begin) && this.whole.end.equals(this.part.end);
-        if (!this.whole.begin.equals(this.part.begin)) {
-          spans = this.whole.begin.show() + " \u21DC ";
-        }
-        if (!is_whole) {
-          spans += "(";
-        }
-        spans += this.part.show();
-        if (!is_whole) {
-          spans += ")";
-        }
-        if (!this.whole.end.equals(this.part.end)) {
-          spans += " \u21DD " + this.whole.end.show();
-        }
-      }
-      return "[ " + spans + " | " + value2 + " ]";
-    }
-    showWhole(compact3 = false) {
-      return `${this.whole == void 0 ? "~" : this.whole.show()}: ${stringifyValues(this.value, compact3)}`;
-    }
-    combineContext(b) {
-      const a = this;
-      return { ...a.context, ...b.context, locations: (a.context.locations || []).concat(b.context.locations || []) };
-    }
-    setContext(context) {
-      return new _Hap(this.whole, this.part, this.value, context);
-    }
-    ensureObjectValue() {
-      if (typeof this.value !== "object") {
-        throw new Error(
-          `expected hap.value to be an object, but got "${this.value}". Hint: append .note() or .s() to the end`,
-          "error"
-        );
-      }
-    }
-  };
-  var hap_default = Hap;
-
-  // build/engine-src/strudel/packages/core/state.mjs
-  var State = class _State {
-    constructor(span, controls = {}) {
-      this.span = span;
-      this.controls = controls;
-    }
-    // Returns new State with different span
-    setSpan(span) {
-      return new _State(span, this.controls);
-    }
-    withSpan(func2) {
-      return this.setSpan(func2(this.span));
-    }
-    // Returns new State with added controls.
-    setControls(controls) {
-      return new _State(this.span, { ...this.controls, ...controls });
-    }
-  };
-  var state_default = State;
-
-  // build/engine-src/strudel/packages/core/value.mjs
-  function unionWithObj(a, b, func2) {
-    if (b?.value !== void 0 && Object.keys(b).length === 1) {
-      logger(`[warn]: Can't do arithmetic on control pattern.`);
-      return a;
-    }
-    const common = Object.keys(a).filter((k) => Object.keys(b).includes(k));
-    return Object.assign({}, a, b, Object.fromEntries(common.map((k) => [k, func2(a[k], b[k])])));
-  }
-  var mul = curry((a, b) => a * b);
-  var map = curry((f, anyFunctor) => anyFunctor.map(f));
-
-  // build/engine-src/strudel/packages/core/drawLine.mjs
-  function drawLine(pat, chars = 60) {
-    let cycle = 0;
-    let pos = fraction_default(0);
-    let lines = [""];
-    let emptyLine = "";
-    while (lines[0].length < chars) {
-      const haps = pat.queryArc(cycle, cycle + 1);
-      const durations = haps.filter((hap) => hap.hasOnset()).map((hap) => hap.duration);
-      const charFraction = gcd2(...durations);
-      const totalSlots = charFraction.inverse();
-      lines = lines.map((line) => line + "|");
-      emptyLine += "|";
-      for (let i3 = 0; i3 < totalSlots; i3++) {
-        const [begin2, end2] = [pos, pos.add(charFraction)];
-        const matches = haps.filter((hap) => hap.whole.begin.lte(begin2) && hap.whole.end.gte(end2));
-        const missingLines = matches.length - lines.length;
-        if (missingLines > 0) {
-          lines = lines.concat(Array(missingLines).fill(emptyLine));
-        }
-        lines = lines.map((line, i4) => {
-          const hap = matches[i4];
-          if (hap) {
-            const isOnset = hap.whole.begin.eq(begin2);
-            const char = isOnset ? "" + hap.value : "-";
-            return line + char;
-          }
-          return line + ".";
-        });
-        emptyLine += ".";
-        pos = pos.add(charFraction);
-      }
-      cycle++;
-    }
-    return lines.join("\n");
-  }
-  var drawLine_default = drawLine;
-
-  // build/engine-src/strudel/packages/core/evaluate.mjs
-  var strudelScope = {};
-  var evalScope = async (...args) => {
-    const results = await Promise.allSettled(args);
-    const modules = results.filter((result) => result.status === "fulfilled").map((r) => r.value);
-    results.forEach((result, i3) => {
-      if (result.status === "rejected") {
-        console.warn(`evalScope: module with index ${i3} could not be loaded:`, result.reason);
-      }
-    });
-    modules.forEach((module) => {
-      Object.entries(module).forEach(([name3, value2]) => {
-        globalThis[name3] = value2;
-        strudelScope[name3] = value2;
-      });
-    });
-    return modules;
-  };
-  function safeEval(str, options = {}) {
-    const { wrapExpression = true, wrapAsync = true } = options;
-    if (wrapExpression) {
-      str = `{${str}}`;
-    }
-    if (wrapAsync) {
-      str = `(async ()=>${str})()`;
-    }
-    const body = `"use strict";return (${str})`;
-    return Function(body)();
-  }
-  var evaluate = async (code, transpiler2, transpilerOptions) => {
-    let meta = {};
-    if (transpiler2) {
-      const transpiled = transpiler2(code, transpilerOptions);
-      code = transpiled.output;
-      meta = transpiled;
-    }
-    const options = { wrapExpression: !!transpiler2 };
-    let evaluated = await safeEval(code, options);
-    return { mode: "javascript", pattern: evaluated, meta };
-  };
-
-  // build/engine-src/strudel/packages/core/schedulerState.mjs
-  var time;
-  var cpsFunc;
-  var pattern;
-  var scheduleFunc;
-  var isStarted;
-  function getTime() {
-    if (!time) {
-      throw new Error("no time set! use setTime to define a time source");
-    }
-    return time();
-  }
-  function setTime(func2) {
-    time = func2;
-  }
-  var clockTime;
-  function getClockTime() {
-    if (!clockTime) {
-      throw new Error("no clockTime set! use setClockTime to define a time source");
-    }
-    return clockTime();
-  }
-  function setClockTime(func2) {
-    clockTime = func2;
-  }
-  function setCpsFunc(func2) {
-    cpsFunc = func2;
-  }
-  function getCps() {
-    return cpsFunc?.();
-  }
-  function setPattern(pat) {
-    pattern = pat;
-  }
-  function getPattern() {
-    return pattern;
-  }
-  function setScheduleFunc(func2) {
-    scheduleFunc = func2;
-  }
-  function getScheduleFunc() {
-    return scheduleFunc;
-  }
-  function setIsStarted(val2) {
-    isStarted = !!val2;
-  }
-  function getIsStarted() {
-    return isStarted;
-  }
-
-  // build/engine-src/strudel/packages/core/pattern.mjs
-  var stringParser;
-  var __steps = true;
-  var calculateSteps = function(x) {
-    __steps = x ? true : false;
-  };
-  var setStringParser = (parser) => stringParser = parser;
-  var Pattern = class _Pattern {
-    /**
-     * Create a pattern. As an end user, you will most likely not create a Pattern directly.
-     *
-     * @param {function} query - The function that maps a `State` to an array of `Hap`.
-     * @noAutocomplete
-     */
-    constructor(query, steps4 = void 0) {
-      this.query = query;
-      this._Pattern = true;
-      this._steps = steps4;
-    }
-    get _steps() {
-      return this.__steps;
-    }
-    set _steps(steps4) {
-      this.__steps = steps4 === void 0 ? void 0 : fraction_default(steps4);
-    }
-    setSteps(steps4) {
-      this._steps = steps4;
-      return this;
-    }
-    withSteps(f) {
-      if (!__steps) {
-        return this;
-      }
-      return new _Pattern(this.query, this._steps === void 0 ? void 0 : f(this._steps));
-    }
-    get hasSteps() {
-      return this._steps !== void 0;
-    }
-    //////////////////////////////////////////////////////////////////////
-    // Haskell-style functor, applicative and monadic operations
-    /**
-     * Returns a new pattern, with the function applied to the value of
-     * each hap. It has the alias `fmap`.
-     * @tags functional
-     * @synonyms fmap
-     * @param {Function} func to to apply to the value
-     * @returns Pattern
-     * @example
-     * "0 1 2".withValue(v => v + 10).log()
-     */
-    withValue(func2) {
-      const result = new _Pattern((state) => this.query(state).map((hap) => hap.withValue(func2)));
-      result._steps = this._steps;
-      return result;
-    }
-    // runs func on query state
-    withState(func2) {
-      return new _Pattern((state) => this.query(func2(state)));
-    }
-    /**
-     * see `withValue`
-     * @noAutocomplete
-     */
-    fmap(func2) {
-      return this.withValue(func2);
-    }
-    /**
-     * Assumes 'this' is a pattern of functions, and given a function to
-     * resolve wholes, applies a given pattern of values to that
-     * pattern of functions.
-     * @tags functional
-     * @param {Function} whole_func
-     * @param {Function} func
-     * @noAutocomplete
-     * @returns Pattern
-     */
-    appWhole(whole_func, pat_val) {
-      const pat_func = this;
-      const query = function(state) {
-        const hap_funcs = pat_func.query(state);
-        const hap_vals = pat_val.query(state);
-        const apply2 = function(hap_func, hap_val) {
-          const s2 = hap_func.part.intersection(hap_val.part);
-          if (s2 == void 0) {
-            return void 0;
-          }
-          return new hap_default(
-            whole_func(hap_func.whole, hap_val.whole),
-            s2,
-            hap_func.value(hap_val.value),
-            hap_val.combineContext(hap_func)
-          );
-        };
-        return flatten(
-          hap_funcs.map((hap_func) => removeUndefineds(hap_vals.map((hap_val) => apply2(hap_func, hap_val))))
-        );
-      };
-      return new _Pattern(query);
-    }
-    /**
-     * When this method is called on a pattern of functions, it matches its haps
-     * with those in the given pattern of values.  A new pattern is returned, with
-     * each matching value applied to the corresponding function.
-     *
-     * In this `_appBoth` variant, where timespans of the function and value haps
-     * are not the same but do intersect, the resulting hap has a timespan of the
-     * intersection. This applies to both the part and the whole timespan.
-     * @tags functional
-     * @param {Pattern} pat_val
-     * @noAutocomplete
-     * @returns Pattern
-     */
-    appBoth(pat_val) {
-      const pat_func = this;
-      const whole_func = function(span_a, span_b) {
-        if (span_a == void 0 || span_b == void 0) {
-          return void 0;
-        }
-        return span_a.intersection_e(span_b);
-      };
-      const result = pat_func.appWhole(whole_func, pat_val);
-      if (__steps) {
-        result._steps = lcm(pat_val._steps, pat_func._steps);
-      }
-      return result;
-    }
-    /**
-     * As with `appBoth`, but the `whole` timespan is not the intersection,
-     * but the timespan from the function of patterns that this method is called
-     * on. In practice, this means that the pattern structure, including onsets,
-     * are preserved from the pattern of functions (often referred to as the left
-     * hand or inner pattern).
-     * @tags functional
-     * @param {Pattern} pat_val
-     * @noAutocomplete
-     * @returns Pattern
-     */
-    appLeft(pat_val) {
-      const pat_func = this;
-      const query = function(state) {
-        const haps = [];
-        for (const hap_func of pat_func.query(state)) {
-          const hap_vals = pat_val.query(state.setSpan(hap_func.wholeOrPart()));
-          for (const hap_val of hap_vals) {
-            const new_whole = hap_func.whole;
-            const new_part = hap_func.part.intersection(hap_val.part);
-            if (new_part) {
-              const new_value = hap_func.value(hap_val.value);
-              const new_context = hap_val.combineContext(hap_func);
-              const hap = new hap_default(new_whole, new_part, new_value, new_context);
-              haps.push(hap);
-            }
-          }
-        }
-        return haps;
-      };
-      const result = new _Pattern(query);
-      result._steps = this._steps;
-      return result;
-    }
-    /**
-     * As with `appLeft`, but `whole` timespans are instead taken from the
-     * pattern of values, i.e. structure is preserved from the right hand/outer
-     * pattern.
-     * @tags functional
-     * @param {Pattern} pat_val
-     * @noAutocomplete
-     * @returns Pattern
-     */
-    appRight(pat_val) {
-      const pat_func = this;
-      const query = function(state) {
-        const haps = [];
-        for (const hap_val of pat_val.query(state)) {
-          const hap_funcs = pat_func.query(state.setSpan(hap_val.wholeOrPart()));
-          for (const hap_func of hap_funcs) {
-            const new_whole = hap_val.whole;
-            const new_part = hap_func.part.intersection(hap_val.part);
-            if (new_part) {
-              const new_value = hap_func.value(hap_val.value);
-              const new_context = hap_val.combineContext(hap_func);
-              const hap = new hap_default(new_whole, new_part, new_value, new_context);
-              haps.push(hap);
-            }
-          }
-        }
-        return haps;
-      };
-      const result = new _Pattern(query);
-      result._steps = pat_val._steps;
-      return result;
-    }
-    bindWhole(choose_whole, func2) {
-      const pat_val = this;
-      const query = function(state) {
-        const withWhole = function(a, b) {
-          return new hap_default(
-            choose_whole(a.whole, b.whole),
-            b.part,
-            b.value,
-            Object.assign({}, a.context, b.context, {
-              locations: (a.context.locations || []).concat(b.context.locations || [])
-            })
-          );
-        };
-        const match = function(a) {
-          return func2(a.value).query(state.setSpan(a.part)).map((b) => withWhole(a, b));
-        };
-        return flatten(pat_val.query(state).map((a) => match(a)));
-      };
-      return new _Pattern(query);
-    }
-    bind(func2) {
-      const whole_func = function(a, b) {
-        if (a == void 0 || b == void 0) {
-          return void 0;
-        }
-        return a.intersection_e(b);
-      };
-      return this.bindWhole(whole_func, func2);
-    }
-    join() {
-      return this.bind(id);
-    }
-    outerBind(func2) {
-      return this.bindWhole((a) => a, func2).setSteps(this._steps);
-    }
-    outerJoin() {
-      return this.outerBind(id);
-    }
-    innerBind(func2) {
-      return this.bindWhole((_, b) => b, func2);
-    }
-    innerJoin() {
-      return this.innerBind(id);
-    }
-    // Flatterns patterns of patterns, by retriggering/resetting inner patterns at onsets of outer pattern haps
-    resetJoin(restart = false) {
-      const pat_of_pats = this;
-      return new _Pattern((state) => {
-        return pat_of_pats.discreteOnly().query(state).map((outer_hap) => {
-          return outer_hap.value.late(restart ? outer_hap.whole.begin : outer_hap.whole.begin.cyclePos()).query(state).map(
-            (inner_hap) => new hap_default(
-              // Supports continuous haps in the inner pattern
-              inner_hap.whole ? inner_hap.whole.intersection(outer_hap.whole) : void 0,
-              inner_hap.part.intersection(outer_hap.part),
-              inner_hap.value
-            ).setContext(outer_hap.combineContext(inner_hap))
-          ).filter((hap) => hap.part);
-        }).flat();
-      });
-    }
-    restartJoin() {
-      return this.resetJoin(true);
-    }
-    // Like the other joins above, joins a pattern of patterns of values, into a flatter
-    // pattern of values. In this case it takes whole cycles of the inner pattern to fit each event
-    // in the outer pattern.
-    squeezeJoin() {
-      const pat_of_pats = this;
-      function query(state) {
-        const haps = pat_of_pats.discreteOnly().query(state);
-        function flatHap(outerHap) {
-          const inner_pat = outerHap.value._focusSpan(outerHap.wholeOrPart());
-          const innerHaps = inner_pat.query(state.setSpan(outerHap.part));
-          function munge(outer, inner) {
-            let whole = void 0;
-            if (inner.whole && outer.whole) {
-              whole = inner.whole.intersection(outer.whole);
-              if (!whole) {
-                return void 0;
-              }
-            }
-            const part = inner.part.intersection(outer.part);
-            if (!part) {
-              return void 0;
-            }
-            const context = inner.combineContext(outer);
-            return new hap_default(whole, part, inner.value, context);
-          }
-          return innerHaps.map((innerHap) => munge(outerHap, innerHap));
-        }
-        const result = flatten(haps.map(flatHap));
-        return result.filter((x) => x);
-      }
-      return new _Pattern(query);
-    }
-    squeezeBind(func2) {
-      return this.fmap(func2).squeezeJoin();
-    }
-    polyJoin = function() {
-      const pp2 = this;
-      return pp2.fmap((p) => p.extend(pp2._steps.div(p._steps))).outerJoin();
-    };
-    polyBind(func2) {
-      return this.fmap(func2).polyJoin();
-    }
-    //////////////////////////////////////////////////////////////////////
-    // Utility methods mainly for internal use
-    /**
-     * Query haps inside the given time span.
-     *
-     * @tags internals
-     * @param {Fraction | number} begin from time
-     * @param {Fraction | number} end to time
-     * @returns Hap[]
-     * @example
-     * const pattern = sequence('a', ['b', 'c'])
-     * const haps = pattern.queryArc(0, 1)
-     * console.log(haps)
-     * silence
-     * @noAutocomplete
-     */
-    queryArc(begin2, end2, controls = {}) {
-      try {
-        return this.query(new state_default(new timespan_default(begin2, end2), controls));
-      } catch (err) {
-        errorLogger(err, "query");
-        return [];
-      }
-    }
-    /**
-     * Returns a new pattern, with queries split at cycle boundaries. This makes
-     * some calculations easier to express, as all haps are then constrained to
-     * happen within a cycle.
-     * @tags internals
-     * @returns Pattern
-     * @noAutocomplete
-     */
-    splitQueries() {
-      const pat = this;
-      const q = (state) => {
-        return flatten(state.span.spanCycles.map((subspan) => pat.query(state.setSpan(subspan))));
-      };
-      return new _Pattern(q);
-    }
-    /**
-     * Returns a new pattern, where the given function is applied to the query
-     * timespan before passing it to the original pattern.
-     * @tags internals
-     * @param {Function} func the function to apply
-     * @returns Pattern
-     * @noAutocomplete
-     */
-    withQuerySpan(func2) {
-      return new _Pattern((state) => this.query(state.withSpan(func2)));
-    }
-    withQuerySpanMaybe(func2) {
-      const pat = this;
-      return new _Pattern((state) => {
-        const newState = state.withSpan(func2);
-        if (!newState.span) {
-          return [];
-        }
-        return pat.query(newState);
-      });
-    }
-    /**
-     * As with `withQuerySpan`, but the function is applied to both the
-     * begin and end time of the query timespan.
-     * @tags internals
-     * @param {Function} func the function to apply
-     * @returns Pattern
-     * @noAutocomplete
-     */
-    withQueryTime(func2) {
-      return new _Pattern((state) => this.query(state.withSpan((span) => span.withTime(func2))));
-    }
-    /**
-     * Similar to `withQuerySpan`, but the function is applied to the timespans
-     * of all haps returned by pattern queries (both `part` timespans, and where
-     * present, `whole` timespans).
-     * @tags internals
-     * @param {Function} func
-     * @returns Pattern
-     * @noAutocomplete
-     */
-    withHapSpan(func2) {
-      return new _Pattern((state) => this.query(state).map((hap) => hap.withSpan(func2)));
-    }
-    /**
-     * As with `withHapSpan`, but the function is applied to both the
-     * begin and end time of the hap timespans.
-     * @tags internals
-     * @param {Function} func the function to apply
-     * @returns Pattern
-     * @noAutocomplete
-     */
-    withHapTime(func2) {
-      return this.withHapSpan((span) => span.withTime(func2));
-    }
-    /**
-     * Returns a new pattern with the given function applied to the list of haps returned by every query.
-     *
-     * As an end user, you will most likely not need to use this; look at `withContext`, `withHapSpan`, etc. instead.
-     * @tags internals
-     * @param {Function} func
-     * @returns Pattern
-     * @noAutocomplete
-     * @example
-     * note("[a b, c d] a b c d").s("gm_piano").withHaps(x=>{
-     *   if (x.length > 1) {
-     *     x = x.map(hap => hap.withValue(val => {
-     *       return {
-     *         n: 1,
-     *         // select gm_piano:1 sample
-     *         ...val
-     *       }
-     *     }));
-     *   }
-     *   return x
-     * })
-     */
-    withHaps(func2) {
-      const result = new _Pattern((state) => func2(this.query(state), state));
-      result._steps = this._steps;
-      return result;
-    }
-    /**
-     * As with `withHaps`, but applies the function to every hap, rather than every list of haps.
-     *
-     * As an end user, you will most likely not need to use this; look at `withContext`, `withHapSpan`, etc. instead.
-     * @tags internals
-     * @param {Function} func
-     * @returns Pattern
-     * @noAutocomplete
-     * @example
-     * note("c a f e").withHap(x=>{
-     *   if (x.value.note == 'c') {
-     *     x.value.s = 'gm_piano'
-     *   }
-     *   else {
-     *     x.value.s = 'gm_piano'
-     *     x.value.n = 2
-     *   }
-     *   return x
-     * })
-     */
-    withHap(func2) {
-      return this.withHaps((haps) => haps.map(func2));
-    }
-    /**
-     * Returns a new pattern with the context field set to every hap set to the given value.
-     * @tags internals
-     * @param {*} context
-     * @returns Pattern
-     * @noAutocomplete
-     */
-    setContext(context) {
-      return this.withHap((hap) => hap.setContext(context));
-    }
-    /**
-     * Returns a new pattern with the given function applied to the context field of every hap.
-     * @tags internals
-     * @param {Function} func
-     * @returns Pattern
-     * @noAutocomplete
-     */
-    withContext(func2) {
-      const result = this.withHap((hap) => hap.setContext(func2(hap.context)));
-      if (this.__pure !== void 0) {
-        result.__pure = this.__pure;
-        result.__pure_loc = this.__pure_loc;
-      }
-      return result;
-    }
-    /**
-     * Returns a new pattern with the context field of every hap set to an empty object.
-     * @tags internals
-     * @returns Pattern
-     * @noAutocomplete
-     */
-    stripContext() {
-      return this.withHap((hap) => hap.setContext({}));
-    }
-    /**
-     * Returns a new pattern with the given location information added to the
-     * context of every hap.
-     * @tags internals
-     * @param {Number} start start offset
-     * @param {Number} end end offset
-     * @returns Pattern
-     * @noAutocomplete
-     */
-    withLoc(start, end2) {
-      const location = {
-        start,
-        end: end2
-      };
-      const result = this.withContext((context) => {
-        const locations = (context.locations || []).concat([location]);
-        return { ...context, locations };
-      });
-      if (this.__pure) {
-        result.__pure = this.__pure;
-        result.__pure_loc = location;
-      }
-      return result;
-    }
-    /**
-     * Returns a new Pattern, which only returns haps that meet the given test.
-     * @tags internals
-     * @param {Function} hap_test - a function which returns false for haps to be removed from the pattern
-     * @returns Pattern
-     * @example
-     * s("bd*8").velocity(rand).filterHaps((h) => (h.whole.begin % 1) < h.value.velocity)
-     */
-    filterHaps(hap_test) {
-      return new _Pattern((state) => this.query(state).filter(hap_test));
-    }
-    /**
-     * As with `filterHaps`, but the function is applied to values
-     * inside haps.
-     * @tags internals
-     * @param {Function} value_test
-     * @returns Pattern
-     * @example
-     * const drums = s("bd sd bd sd")
-     * kick: drums.filterValues((v) => v.s === 'bd').duck(2)
-     * snare: drums.filterValues((v) => v.s === 'sd')
-     * bass: s("saw!4").note("G#1").lpf(80).lpenv(4).orbit(2)
-     */
-    filterValues(value_test) {
-      return new _Pattern((state) => this.query(state).filter((hap) => value_test(hap.value))).setSteps(this._steps);
-    }
-    /**
-     * Returns a new pattern, with haps containing undefined values removed from
-     * query results.
-     * @tags internals
-     * @returns Pattern
-     * @noAutocomplete
-     */
-    removeUndefineds() {
-      return this.filterValues((val2) => val2 != void 0);
-    }
-    /**
-     * Returns a new pattern, with all haps without onsets filtered out. A hap
-     * with an onset is one with a `whole` timespan that begins at the same time
-     * as its `part` timespan.
-     * @tags internals
-     * @returns Pattern
-     * @noAutocomplete
-     */
-    onsetsOnly() {
-      return this.filterHaps((hap) => hap.hasOnset());
-    }
-    /**
-     * Returns a new pattern, with 'continuous' haps (those without 'whole'
-     * timespans) removed from query results.
-     * @tags internals
-     * @returns Pattern
-     * @noAutocomplete
-     */
-    discreteOnly() {
-      return this.filterHaps((hap) => hap.whole);
-    }
-    /**
-     * Combines adjacent haps with the same value and whole.  Only
-     * intended for use in tests.
-     * @tags internals
-     * @noAutocomplete
-     */
-    defragmentHaps() {
-      const pat = this.discreteOnly();
-      return pat.withHaps((haps) => {
-        const result = [];
-        for (var i3 = 0; i3 < haps.length; ++i3) {
-          var searching = true;
-          var a = haps[i3];
-          while (searching) {
-            const a_value = JSON.stringify(haps[i3].value);
-            var found = false;
-            for (var j = i3 + 1; j < haps.length; j++) {
-              const b = haps[j];
-              if (a.whole.equals(b.whole)) {
-                if (a.part.begin.eq(b.part.end)) {
-                  if (a_value === JSON.stringify(b.value)) {
-                    a = new hap_default(a.whole, new timespan_default(b.part.begin, a.part.end), a.value);
-                    haps.splice(j, 1);
-                    found = true;
-                    break;
-                  }
-                } else if (b.part.begin.eq(a.part.end)) {
-                  if (a_value == JSON.stringify(b.value)) {
-                    a = new hap_default(a.whole, new timespan_default(a.part.begin, b.part.end), a.value);
-                    haps.splice(j, 1);
-                    found = true;
-                    break;
-                  }
-                }
-              }
-            }
-            searching = found;
-          }
-          result.push(a);
-        }
-        return result;
-      });
-    }
-    /**
-     * Queries the pattern for the first cycle, returning Haps. Mainly of use when
-     * debugging a pattern.
-     * @tags internals
-     * @param {Boolean} with_context - set to true, otherwise the context field
-     * will be stripped from the resulting haps.
-     * @returns [Hap]
-     * @noAutocomplete
-     */
-    firstCycle(with_context = false) {
-      var self = this;
-      if (!with_context) {
-        self = self.stripContext();
-      }
-      return self.query(new state_default(new timespan_default(fraction_default(0), fraction_default(1))));
-    }
-    /**
-     * Accessor for a list of values returned by querying the first cycle.
-     * @tags internals
-     * @noAutocomplete
-     */
-    get firstCycleValues() {
-      return this.firstCycle().map((hap) => hap.value);
-    }
-    /**
-     * More human-readable version of the `firstCycleValues` accessor.
-     * @tags internals
-     * @noAutocomplete
-     */
-    get showFirstCycle() {
-      return this.firstCycle().map(
-        (hap) => `${hap.value}: ${hap.whole.begin.toFraction()} - ${hap.whole.end.toFraction()}`
-      );
-    }
-    /**
-     * Returns a new pattern, which returns haps sorted in temporal order. Mainly
-     * of use when comparing two patterns for equality, in tests.
-     * @tags internals
-     * @returns Pattern
-     * @noAutocomplete
-     */
-    sortHapsByPart() {
-      return this.withHaps(
-        (haps) => haps.sort(
-          (a, b) => a.part.begin.sub(b.part.begin).or(a.part.end.sub(b.part.end)).or(a.whole.begin.sub(b.whole.begin).or(a.whole.end.sub(b.whole.end)))
-        )
-      );
-    }
-    /**
-     * Returns a new pattern with all values parsed as numerals.
-     * @tags internals
-     */
-    asNumber() {
-      return this.fmap(parseNumeral);
-    }
-    //////////////////////////////////////////////////////////////////////
-    // Operators - see 'make composers' later..
-    _opIn(other, func2) {
-      return this.fmap(func2).appLeft(reify(other));
-    }
-    _opOut(other, func2) {
-      return this.fmap(func2).appRight(reify(other));
-    }
-    _opMix(other, func2) {
-      return this.fmap(func2).appBoth(reify(other));
-    }
-    _opSqueeze(other, func2) {
-      const otherPat = reify(other);
-      return this.fmap((a) => otherPat.fmap((b) => func2(a)(b))).squeezeJoin();
-    }
-    _opSqueezeOut(other, func2) {
-      const thisPat = this;
-      const otherPat = reify(other);
-      return otherPat.fmap((a) => thisPat.fmap((b) => func2(b)(a))).squeezeJoin();
-    }
-    _opReset(other, func2) {
-      const otherPat = reify(other);
-      return otherPat.fmap((b) => this.fmap((a) => func2(a)(b))).resetJoin();
-    }
-    _opRestart(other, func2) {
-      const otherPat = reify(other);
-      return otherPat.fmap((b) => this.fmap((a) => func2(a)(b))).restartJoin();
-    }
-    _opPoly(other, func2) {
-      const otherPat = reify(other);
-      return this.fmap((b) => otherPat.fmap((a) => func2(a)(b))).polyJoin();
-    }
-    //////////////////////////////////////////////////////////////////////
-    // End-user methods.
-    // Those beginning with an underscore (_) are 'patternified',
-    // i.e. versions are created without the underscore, that are
-    // magically transformed to accept patterns for all their arguments.
-    //////////////////////////////////////////////////////////////////////
-    // Methods without corresponding toplevel functions
-    /**
-     * Layers the result of the given function(s). Like `superimpose`, but without the original pattern:
-     * @name layer
-     * @tags combiners
-     * @memberof Pattern
-     * @returns Pattern
-     * @example
-     * "<0 2 4 6 ~ 4 ~ 2 0!3 ~!5>*8"
-     *   .layer(x=>x.add("0,2"))
-     *   .scale('C minor').note()
-     */
-    layer(...funcs) {
-      return stack(...funcs.map((func2) => func2(this)));
-    }
-    /**
-     * Superimposes the result of the given function(s) on top of the original pattern:
-     * @name superimpose
-     * @tags combiners
-     * @memberof Pattern
-     * @returns Pattern
-     * @example
-     * "<0 2 4 6 ~ 4 ~ 2 0!3 ~!5>*8"
-     *   .superimpose(x=>x.add(2))
-     *   .scale('C minor').note()
-     */
-    superimpose(...funcs) {
-      return this.stack(...funcs.map((func2) => func2(this)));
-    }
-    //////////////////////////////////////////////////////////////////////
-    // Multi-pattern functions
-    stack(...pats) {
-      return stack(this, ...pats);
-    }
-    stackLeft(...pats) {
-      return stackLeft(this, ...pats);
-    }
-    stackRight(...pats) {
-      return stackRight(this, ...pats);
-    }
-    stackCenter(...pats) {
-      return stackCenter(this, ...pats);
-    }
-    stackCentre(...pats) {
-      return stackCentre(this, ...pats);
-    }
-    stackRepeat(...pats) {
-      return stackRepeat(this, ...pats);
-    }
-    sequence(...pats) {
-      return sequence(this, ...pats);
-    }
-    seq(...pats) {
-      return sequence(this, ...pats);
-    }
-    cat(...pats) {
-      return cat(this, ...pats);
-    }
-    fastcat(...pats) {
-      return fastcat(this, ...pats);
-    }
-    slowcat(...pats) {
-      return slowcat(this, ...pats);
-    }
-    //////////////////////////////////////////////////////////////////////
-    // Context methods - ones that deal with metadata
-    /**
-     * Attaches a function that is called for each hap onset.
-     * @name onSchedule
-     * @memberof Pattern
-     * @example
-     * s("bd sd").onSchedule((hap, time, cps) => {
-     *   console.log('hap scheduled', time, cps);
-     * })
-     */
-    onSchedule(onSchedule, dominant = true) {
-      return this.withHap(
-        (hap) => hap.setContext({
-          ...hap.context,
-          onSchedule: (scheduleHap, t, cps2) => {
-            hap.context.onSchedule?.(scheduleHap, t, cps2);
-            onSchedule(scheduleHap, t, cps2);
-          },
-          // if dominantSchedule is set to true, the default output (webaudio) will be disabled
-          // when using multiple triggers, you cannot flip this flag to false again!
-          // example: x.csound('CooLSynth').log() as well as x.log().csound('CooLSynth') should work the same
-          dominantSchedule: hap.context.dominantSchedule || dominant
-        })
-      );
-    }
-    // legacy:
-    onTrigger(onTrigger, dominant = true) {
-      console.warn("onTrigger is deprecated.. use onSchedule(hap, time, cps) instead");
-      return this.onSchedule((hap, t, cps2) => {
-        const currentTime = getClockTime();
-        return onTrigger(hap, currentTime, cps2, t);
-      }, dominant);
-    }
-    /**
-     * Writes the content of the current event to the console (visible in the side menu).
-     * @tags visualization
-     * @name log
-     * @memberof Pattern
-     * @example
-     * s("bd sd").log()
-     */
-    log(func2 = (hap) => `[hap] ${hap.showWhole(true)}`, getData = (hap) => ({ hap })) {
-      return this.onSchedule((...args) => {
-        logger(func2(...args), void 0, getData(...args));
-      }, false);
-    }
-    /**
-     * A simplified version of `log` which writes all "values" (various configurable parameters)
-     * within the event to the console (visible in the side menu).
-     * @tags visualization
-     * @name logValues
-     * @memberof Pattern
-     * @example
-     * s("bd sd").gain("0.25 0.5 1").n("2 1 0").logValues()
-     */
-    logValues(func2 = (value2) => `[hap] ${stringifyValues(value2, true)}`) {
-      return this.log((hap) => func2(hap.value));
-    }
-    //////////////////////////////////////////////////////////////////////
-    // Visualisation
-    drawLine() {
-      console.log(drawLine_default(this));
-      return this;
-    }
-    //////////////////////////////////////////////////////////////////////
-    // methods relating to breaking patterns into subcycles
-    // Breaks a pattern into a pattern of patterns, according to the structure of the given binary pattern.
-    unjoin(pieces, func2 = id) {
-      return pieces.withHap(
-        (hap) => hap.withValue((v2) => v2 ? func2(this.ribbon(hap.whole.begin, hap.whole.duration)) : this)
-      );
-    }
-    /**
-     * Breaks a pattern into pieces according to the structure of a given pattern.
-     * True values in the given pattern cause the corresponding subcycle of the
-     * source pattern to be looped, and for an (optional) given function to be
-     * applied. False values result in the corresponding part of the source pattern
-     * to be played unchanged.
-     * @tags temporal
-     * @name into
-     * @memberof Pattern
-     * @example
-     * sound("bd sd ht lt").into("1 0", hurry(2))
-     */
-    into(pieces, func2) {
-      return this.unjoin(pieces, func2).innerJoin();
-    }
-  };
-  function groupHapsBy(eq2, haps) {
-    let groups = [];
-    haps.forEach((hap) => {
-      const match = groups.findIndex(([other]) => eq2(hap, other));
-      if (match === -1) {
-        groups.push([hap]);
-      } else {
-        groups[match].push(hap);
-      }
-    });
-    return groups;
-  }
-  var congruent = (a, b) => a.spanEquals(b);
-  Pattern.prototype.collect = function() {
-    return this.withHaps(
-      (haps) => groupHapsBy(congruent, haps).map((_haps) => new hap_default(_haps[0].whole, _haps[0].part, _haps, {}))
-    );
-  };
-  var arpWith = register("arpWith", (func2, pat) => {
-    return pat.collect().fmap((v2) => reify(func2(v2))).innerJoin().withHap((h2) => new hap_default(h2.whole, h2.part, h2.value.value, h2.combineContext(h2.value)));
-  });
-  var arp = register(
-    "arp",
-    (indices, pat) => pat.arpWith((haps) => reify(indices).fmap((i3) => haps[_mod(i3, haps.length)])),
-    false
-  );
-  function _nonArrayObject(x) {
-    return !Array.isArray(x) && typeof x === "object" && !isFraction(x);
-  }
-  function _composeOp(a, b, func2) {
-    if (_nonArrayObject(a) || _nonArrayObject(b)) {
-      if (!_nonArrayObject(a)) {
-        a = { value: a };
-      }
-      if (!_nonArrayObject(b)) {
-        b = { value: b };
-      }
-      return unionWithObj(a, b, func2);
-    }
-    return func2(a, b);
-  }
-  var COMPOSERS = {
-    /**
-     * When called on a pattern `a`, with a input pattern `b` (`a.set(b)`),
-     * combines `a` and `b` such that anything defined in `b`
-     * and anything defined in `a` that is *not* defined in `b`
-     * will be in the resulting pattern.
-     *
-     * The structure is maintained from `a`,
-     * because the default pattern alignment is `in`,
-     * see the section on `Pattern Alignment`
-     * in the technical manual in the docs
-     *
-     * This is the inverse of `keep`
-     *
-     * See examples below
-     * @name set
-     * @param {Pattern} pat
-     * @returns {Pattern}
-     * @memberof Pattern
-     * @tags internals, combiners
-     * @example
-     * // because input pattern has `s` set,
-     * // it overrides the "sine" declared earlier
-     * note("c a f e").s("sine").set(s("triangle"))
-     */
-    set: [(a, b) => b],
-    /**
-     * When called on a pattern `a`, with a input pattern `b` (`a.keep(b)`),
-     * combines `a` and `b` such that anything defined in `a`,
-     * and anything defined in `b` that is *not* defined in `a`
-     * will be in the resulting pattern
-     *
-     * The structure is maintained from `a`,
-     * because the default pattern alignment is `in`,
-     * see the section on `Pattern Alignment`
-     * in the technical manual in the docs
-     *
-     * This is the inverse of `set`
-     *
-     * See examples below
-     * @name keep
-     * @param {Pattern} pat
-     * @memberof Pattern
-     * @returns {Pattern}
-     * @tags internals, combiners
-     * @example
-     * // notes, already defined, will stay "c a f e",
-     * // while "s", not defined, will be set to "piano"
-     * note("c a f e").keep(note("e f a c").s("piano"))
-     */
-    keep: [(a) => a],
-    keepif: [(a, b) => b ? a : void 0],
-    // numerical functions
-    /**
-     *
-     * Assumes a pattern of numbers. Adds the given number to each item in the pattern.
-     * @name add
-     * @memberof Pattern
-     * @tags math
-     * @example
-     * // Here, the triad 0, 2, 4 is shifted by different amounts
-     * n("0 2 4".add("<0 3 4 0>")).scale("C:major")
-     * // Without add, the equivalent would be:
-     * // n("<[0 2 4] [3 5 7] [4 6 8] [0 2 4]>").scale("C:major")
-     * @example
-     * // You can also use add with notes:
-     * note("c3 e3 g3".add("<0 5 7 0>"))
-     * // Behind the scenes, the notes are converted to midi numbers:
-     * // note("48 52 55".add("<0 5 7 0>"))
-     */
-    add: [numeralArgs((a, b) => a + b)],
-    // support string concatenation
-    /**
-     *
-     * Like add, but the given numbers are subtracted.
-     * @name sub
-     * @memberof Pattern
-     * @tags math
-     * @example
-     * n("0 2 4".sub("<0 1 2 3>")).scale("C4:minor")
-     * // See add for more information.
-     */
-    sub: [numeralArgs((a, b) => a - b)],
-    /**
-     *
-     * Multiplies each number by the given factor.
-     * @name mul
-     * @memberof Pattern
-     * @tags math
-     * @example
-     * "<1 1.5 [1.66, <2 2.33>]>*4".mul(150).freq()
-     */
-    mul: [numeralArgs((a, b) => a * b)],
-    /**
-     *
-     * Divides each number by the given factor.
-     * @name div
-     * @memberof Pattern
-     * @tags math
-     */
-    div: [numeralArgs((a, b) => a / b)],
-    /**
-     *
-     * Divides each number by the given factor and returns the remainder
-     * @name mod
-     * @memberof Pattern
-     * @tags math
-     */
-    mod: [numeralArgs(_mod)],
-    /**
-     *
-     * Raises each number to the power of the given factor
-     * @name pow
-     * @memberof Pattern
-     * @tags math
-     */
-    pow: [numeralArgs(Math.pow)],
-    /**
-     *
-     * Performs a bitwise `and` on each number and the given factor
-     * @name band
-     * @memberof Pattern
-     * @tags math
-     */
-    band: [numeralArgs((a, b) => a & b)],
-    /**
-     *
-     * Performs a bitwise `or` on each number and the given factor
-     * @name bor
-     * @memberof Pattern
-     * @tags math
-     */
-    bor: [numeralArgs((a, b) => a | b)],
-    /**
-     *
-     * Performs a bitwise `xor` on each number and the given factor
-     * @name bxor
-     * @memberof Pattern
-     * @tags math
-     */
-    bxor: [numeralArgs((a, b) => a ^ b)],
-    /**
-     *
-     * Performs a bitwise `left shift` on each number by the given factor
-     * @name blshift
-     * @memberof Pattern
-     * @tags math
-     */
-    blshift: [numeralArgs((a, b) => a << b)],
-    /**
-     *
-     * Performs a bitwise `right shift` on each number by the given factor
-     * @name brshift
-     * @memberof Pattern
-     * @tags math
-     */
-    brshift: [numeralArgs((a, b) => a >> b)],
-    // TODO - force numerical comparison if both look like numbers?
-    /**
-     * performs a < b
-     * @name lt
-     * @memberof Pattern
-     * @tags math
-     * @param {any} a
-     * @param {any} b
-     * @returns Pattern with boolean value(s)
-     */
-    lt: [(a, b) => a < b],
-    /**
-     * performs a > b
-     * @name gt
-     * @memberof Pattern
-     * @tags math
-     * @param {any} a
-     * @param {any} b
-     * @returns Pattern with boolean value(s)
-     */
-    gt: [(a, b) => a > b],
-    /**
-     * performs a <= b
-     * @name lte
-     * @memberof Pattern
-     * @tags math
-     * @param {any} a
-     * @param {any} b
-     * @returns Pattern with boolean value(s)
-     */
-    lte: [(a, b) => a <= b],
-    /**
-     * performs a >= b
-     * @name gte
-     * @memberof Pattern
-     * @tags math
-     * @param {any} a
-     * @param {any} b
-     * @returns Pattern with boolean value(s)
-     */
-    gte: [(a, b) => a >= b],
-    /**
-     * performs a == b
-     * @name eq
-     * @memberof Pattern
-     * @tags math
-     * @param {any} a
-     * @param {any} b
-     * @returns Pattern with boolean value(s)
-     */
-    eq: [(a, b) => a == b],
-    /**
-     * performs a === b (strictly equal)
-     * @name eqt
-     * @memberof Pattern
-     * @tags math
-     * @param {any} a
-     * @param {any} b
-     * @returns Pattern with boolean value(s)
-     */
-    eqt: [(a, b) => a === b],
-    /**
-     * performs a != b
-     * @name ne
-     * @memberof Pattern
-     * @tags math
-     * @param {any} a
-     * @param {any} b
-     * @returns Pattern with boolean value(s)
-     */
-    ne: [(a, b) => a != b],
-    /**
-     * performs a !== b (strictly not equal)
-     * @name net
-     * @memberof Pattern
-     * @tags math
-     * @param {any} a
-     * @param {any} b
-     * @returns Pattern with boolean value(s)
-     */
-    net: [(a, b) => a !== b],
-    /**
-     * performs a && b
-     * @name and
-     * @memberof Pattern
-     * @tags math
-     * @param {any} a
-     * @param {any} b
-     * @returns Pattern with boolean value(s)
-     */
-    and: [(a, b) => a && b],
-    /**
-     * performs a || b
-     * @name or
-     * @memberof Pattern
-     * @tags math
-     * @param {any} a
-     * @param {any} b
-     * @returns Pattern with boolean value(s)
-     */
-    or: [(a, b) => a || b],
-    //  bitwise ops
-    func: [(a, b) => b(a)]
-  };
-  var _setupAlignments = () => {
-    for (const [what, [op, preprocess]] of Object.entries(COMPOSERS)) {
-      Pattern.prototype["_" + what] = function(value2) {
-        return this.fmap((x) => op(x, value2));
-      };
-      Object.defineProperty(Pattern.prototype, what, {
-        // Set to configurable so we can update if the default alignment changes
-        configurable: true,
-        // a getter that returns a function, so 'pat' can be
-        // accessed by closures that are methods of that function..
-        get: function() {
-          const pat = this;
-          const wrapper = (...other) => pat[what][DEFAULT_ALIGNMENT](...other);
-          for (const how of ALIGNMENTS) {
-            wrapper[how.toLowerCase()] = function(...other) {
-              var howpat = pat;
-              other = sequence(other);
-              if (preprocess) {
-                howpat = preprocess(howpat);
-                other = preprocess(other);
-              }
-              var result;
-              if (what === "keepif") {
-                result = howpat["_op" + how](other, (a) => (b) => op(a, b));
-                result = result.removeUndefineds();
-              } else {
-                result = howpat["_op" + how](other, (a) => (b) => _composeOp(a, b, op));
-              }
-              return result;
-            };
-          }
-          wrapper.squeezein = wrapper.squeeze;
-          return wrapper;
-        }
-      });
-    }
-  };
-  var DEFAULT_ALIGNMENT = "in";
-  var ALIGNMENTS = ["In", "Out", "Mix", "Squeeze", "SqueezeOut", "Reset", "Restart", "Poly"];
-  var ALIGNMENT_KEYS = ALIGNMENTS.map((how) => how.toLowerCase());
-  (function() {
-    _setupAlignments();
-    for (const how of ALIGNMENTS) {
-      Pattern.prototype[how.toLowerCase()] = function(...args) {
-        return this.set[how.toLowerCase()](args);
-      };
-    }
-    Pattern.prototype.struct = function(...args) {
-      return this.keepif.out(...args);
-    };
-    Pattern.prototype.structAll = function(...args) {
-      return this.keep.out(...args);
-    };
-    Pattern.prototype.mask = function(...args) {
-      return this.keepif.in(...args);
-    };
-    Pattern.prototype.maskAll = function(...args) {
-      return this.keep.in(...args);
-    };
-    Pattern.prototype.reset = function(...args) {
-      return this.keepif.reset(...args);
-    };
-    Pattern.prototype.resetAll = function(...args) {
-      return this.keep.reset(...args);
-    };
-    Pattern.prototype.restart = function(...args) {
-      return this.keepif.restart(...args);
-    };
-    Pattern.prototype.restartAll = function(...args) {
-      return this.keep.restart(...args);
-    };
-  })();
-  var setDefaultJoin = (alignment) => {
-    alignment = alignment?.toLowerCase();
-    if (DEFAULT_ALIGNMENT !== alignment && ALIGNMENT_KEYS.includes(alignment)) {
-      DEFAULT_ALIGNMENT = alignment;
-      _setupAlignments();
-    }
-  };
-  var polyrhythm = stack;
-  var pr = stack;
-  var pm = polymeter;
-  var gap = (steps4) => new Pattern(() => [], steps4);
-  var silence = gap(1);
-  var nothing = gap(0);
-  function pure(value2) {
-    function query(state) {
-      return state.span.spanCycles.map((subspan) => new hap_default(fraction_default(subspan.begin).wholeCycle(), subspan, value2));
-    }
-    const result = new Pattern(query, 1);
-    result.__pure = value2;
-    return result;
-  }
-  function isPattern(thing) {
-    const is = thing instanceof Pattern || thing?._Pattern;
-    return is;
-  }
-  function reify(thing) {
-    if (isPattern(thing)) {
-      return thing;
-    }
-    if (stringParser && typeof thing === "string") {
-      return stringParser(thing);
-    }
-    return pure(thing);
-  }
-  function sequenceP(pats) {
-    let result = pure([]);
-    for (const pat of pats) {
-      result = result.bind((list2) => pat.fmap((v2) => list2.concat([v2])));
-    }
-    return result;
-  }
-  function stack(...pats) {
-    pats = pats.map((pat) => Array.isArray(pat) ? sequence(...pat) : reify(pat));
-    const query = (state) => flatten(
-      pats.map((pat) => {
-        try {
-          return pat.query(state);
-        } catch (e) {
-          errorLogger(e);
-          return [];
-        }
-      })
-    );
-    const result = new Pattern(query);
-    if (__steps) {
-      result._steps = lcm(...pats.map((pat) => pat._steps));
-    }
-    return result;
-  }
-  function _stackWith(func2, pats) {
-    pats = pats.map((pat) => Array.isArray(pat) ? sequence(...pat) : reify(pat));
-    if (pats.length === 0) {
-      return silence;
-    }
-    if (pats.length === 1) {
-      return pats[0];
-    }
-    const [left2, ...right2] = pats.map((pat) => pat._steps);
-    const steps4 = __steps ? left2.maximum(...right2) : void 0;
-    return stack(...func2(steps4, pats));
-  }
-  function stackLeft(...pats) {
-    return _stackWith(
-      (steps4, pats2) => pats2.map((pat) => pat._steps.eq(steps4) ? pat : stepcat(pat, gap(steps4.sub(pat._steps)))),
-      pats
-    );
-  }
-  function stackRight(...pats) {
-    return _stackWith(
-      (steps4, pats2) => pats2.map((pat) => pat._steps.eq(steps4) ? pat : stepcat(gap(steps4.sub(pat._steps)), pat)),
-      pats
-    );
-  }
-  function stackCenter(...pats) {
-    return _stackWith(
-      (steps4, pats2) => pats2.map((pat) => {
-        if (pat._steps.eq(steps4)) {
-          return pat;
-        }
-        const g = gap(steps4.sub(pat._steps).div(2));
-        return stepcat(g, pat, g);
-      }),
-      pats
-    );
-  }
-  function stackCentre(...pats) {
-    return stackCenter(...pats);
-  }
-  function stackRepeat(...pats) {
-    return stackBy(reify("repeat"), ...pats);
-  }
-  function stackBy(by, ...pats) {
-    const [left2, ...right2] = pats.map((pat) => pat._steps);
-    const steps4 = left2.maximum(...right2);
-    const lookup = {
-      centre: stackCentre,
-      left: stackLeft,
-      right: stackRight,
-      expand: stack,
-      repeat: (...args) => polymeter(...args).steps(steps4)
-    };
-    return by.inhabit(lookup).fmap((func2) => func2(...pats)).innerJoin().setSteps(steps4);
-  }
-  function slowcat(...pats) {
-    pats = pats.map((pat) => Array.isArray(pat) ? fastcat(...pat) : reify(pat));
-    if (!pats.length) {
-      return silence;
-    } else if (pats.length == 1) {
-      return pats[0];
-    }
-    const query = function(state) {
-      const span = state.span;
-      const pat_n = _mod(span.begin.sam(), pats.length);
-      const pat = pats[pat_n];
-      const offset3 = span.begin.floor().sub(span.begin.div(pats.length).floor());
-      return pat.withHapTime((t) => t.add(offset3)).query(state.setSpan(span.withTime((t) => t.sub(offset3))));
-    };
-    const steps4 = __steps ? lcm(...pats.map((x) => x._steps)) : void 0;
-    return new Pattern(query).splitQueries().setSteps(steps4);
-  }
-  function slowcatPrime(...pats) {
-    if (!pats.length) {
-      return silence;
-    }
-    pats = pats.map(reify);
-    const query = function(state) {
-      const pat_n = _mod(Math.floor(state.span.begin), pats.length);
-      const pat = pats[pat_n];
-      return pat.query(state);
-    };
-    return new Pattern(query).splitQueries();
-  }
-  function cat(...pats) {
-    return slowcat(...pats);
-  }
-  function arrange(...sections) {
-    const total = sections.reduce((sum, [cycles]) => sum + cycles, 0);
-    sections = sections.map(([cycles, section]) => [cycles, section.fast(cycles)]);
-    return stepcat(...sections).slow(total);
-  }
-  function seqPLoop(...parts) {
-    let total = fraction_default(0);
-    const pats = [];
-    for (let part of parts) {
-      if (part.length == 2) {
-        part.unshift(total);
-      }
-      total = part[1];
-    }
-    return stack(
-      ...parts.map(
-        ([start, stop, pat]) => pure(reify(pat)).compress(fraction_default(start).div(total), fraction_default(stop).div(total))
-      )
-    ).slow(total).innerJoin();
-  }
-  function fastcat(...pats) {
-    let result = slowcat(...pats);
-    if (pats.length > 1) {
-      result = result._fast(pats.length);
-      result._steps = pats.length;
-    }
-    if (pats.length == 1 && pats[0].__steps_source) {
-      pats._steps = pats[0]._steps;
-    }
-    return result;
-  }
-  function sequence(...pats) {
-    return fastcat(...pats);
-  }
-  function seq(...pats) {
-    return fastcat(...pats);
-  }
-  function _sequenceCount(x) {
-    if (Array.isArray(x)) {
-      if (x.length == 0) {
-        return [silence, 0];
-      }
-      if (x.length == 1) {
-        return _sequenceCount(x[0]);
-      }
-      return [fastcat(...x.map((a) => _sequenceCount(a)[0])), x.length];
-    }
-    return [reify(x), 1];
-  }
-  var mask = curry((a, b) => reify(b).mask(a));
-  var struct = curry((a, b) => reify(b).struct(a));
-  var superimpose = curry((a, b) => reify(b).superimpose(...a));
-  var withValue = curry((a, b) => reify(b).withValue(a));
-  var bind = curry((a, b) => reify(b).bind(a));
-  var innerBind = curry((a, b) => reify(b).innerBind(a));
-  var outerBind = curry((a, b) => reify(b).outerBind(a));
-  var squeezeBind = curry((a, b) => reify(b).squeezeBind(a));
-  var stepBind = curry((a, b) => reify(b).stepBind(a));
-  var polyBind = curry((a, b) => reify(b).polyBind(a));
-  var set = curry((a, b) => reify(b).set(a));
-  var keep = curry((a, b) => reify(b).keep(a));
-  var keepif = curry((a, b) => reify(b).keepif(a));
-  var add = curry((a, b) => reify(b).add(a));
-  var sub = curry((a, b) => reify(b).sub(a));
-  var mul2 = curry((a, b) => reify(b).mul(a));
-  var div = curry((a, b) => reify(b).div(a));
-  var mod = curry((a, b) => reify(b).mod(a));
-  var pow = curry((a, b) => reify(b).pow(a));
-  var band = curry((a, b) => reify(b).band(a));
-  var bor = curry((a, b) => reify(b).bor(a));
-  var bxor = curry((a, b) => reify(b).bxor(a));
-  var blshift = curry((a, b) => reify(b).blshift(a));
-  var brshift = curry((a, b) => reify(b).brshift(a));
-  var lt = curry((a, b) => reify(b).lt(a));
-  var gt = curry((a, b) => reify(b).gt(a));
-  var lte = curry((a, b) => reify(b).lte(a));
-  var gte = curry((a, b) => reify(b).gte(a));
-  var eq = curry((a, b) => reify(b).eq(a));
-  var eqt = curry((a, b) => reify(b).eqt(a));
-  var ne = curry((a, b) => reify(b).ne(a));
-  var net = curry((a, b) => reify(b).net(a));
-  var and = curry((a, b) => reify(b).and(a));
-  var or = curry((a, b) => reify(b).or(a));
-  var func = curry((a, b) => reify(b).func(a));
-  function register(name3, func2, patternify = true, preserveSteps = false, join = (x) => x.innerJoin()) {
-    if (isPattern(name3)) {
-      throw new Error(
-        `Name argument for register is a pattern, try using single quotes ('name') instead of double quotes ("name")`
-      );
-    }
-    if (Array.isArray(name3)) {
-      const result = {};
-      for (const name_item of name3) {
-        result[name_item] = register(name_item, func2, patternify, preserveSteps, join);
-      }
-      return result;
-    }
-    const arity = func2.length;
-    var pfunc;
-    if (patternify) {
-      pfunc = function(...args) {
-        args = args.map(reify);
-        const pat = args[args.length - 1];
-        let result;
-        if (arity === 1) {
-          result = func2(pat);
-        } else {
-          const firstArgs = args.slice(0, -1);
-          if (firstArgs.every((arg) => arg.__pure != void 0)) {
-            const pureArgs = firstArgs.map((arg) => arg.__pure);
-            const pureLocs = firstArgs.filter((arg) => arg.__pure_loc).map((arg) => arg.__pure_loc);
-            result = func2(...pureArgs, pat);
-            result = result.withContext((context) => {
-              const locations = (context.locations || []).concat(pureLocs);
-              return { ...context, locations };
-            });
-          } else {
-            const [left2, ...right2] = firstArgs;
-            let mapFn = (...args2) => {
-              return func2(...args2, pat);
-            };
-            mapFn = curry(mapFn, null, arity - 1);
-            result = join(right2.reduce((acc, p) => acc.appLeft(p), left2.fmap(mapFn)));
-          }
-        }
-        if (preserveSteps) {
-          result._steps = pat._steps;
-        }
-        return result;
-      };
-    } else {
-      pfunc = function(...args) {
-        args = args.map(reify);
-        const result = func2(...args);
-        if (preserveSteps) {
-          result._steps = args[args.length - 1]._steps;
-        }
-        return result;
-      };
-    }
-    Pattern.prototype[name3] = function(...args) {
-      if (arity === 2 && args.length !== 1) {
-        args = [sequence(...args)];
-      } else if (arity !== args.length + 1) {
-        throw new Error(`.${name3}() expects ${arity - 1} inputs but got ${args.length}.`);
-      }
-      args = args.map(reify);
-      return pfunc(...args, this);
-    };
-    if (arity > 1) {
-      Pattern.prototype["_" + name3] = function(...args) {
-        const result = func2(...args, this);
-        if (preserveSteps) {
-          result.setSteps(this._steps);
-        }
-        return result;
-      };
-    }
-    const curried = curry(pfunc, null, arity);
-    strudelScope[name3] = curried;
-    return curried;
-  }
-  function stepRegister(name3, func2, patternify = true, preserveSteps = false, join = (x) => x.stepJoin()) {
-    return register(name3, func2, patternify, preserveSteps, join);
-  }
-  var round = register("round", function(pat) {
-    return pat.asNumber().fmap((v2) => Math.round(v2));
-  });
-  var floor = register("floor", function(pat) {
-    return pat.asNumber().fmap((v2) => Math.floor(v2));
-  });
-  var log2 = register("log2", (pat) => pat.asNumber().fmap((v2) => Math.log2(v2)));
-  var ceil = register("ceil", function(pat) {
-    return pat.asNumber().fmap((v2) => Math.ceil(v2));
-  });
-  var toBipolar = register("toBipolar", function(pat) {
-    return pat.fmap((x) => x * 2 - 1);
-  });
-  var fromBipolar = register("fromBipolar", function(pat) {
-    return pat.fmap((x) => (x + 1) / 2);
-  });
-  var range = register("range", function(min, max, pat) {
-    return pat.mul(max - min).add(min);
-  });
-  var rangex = register("rangex", function(min, max, pat) {
-    return pat._range(Math.log(min), Math.log(max)).fmap(Math.exp);
-  });
-  var range2 = register("range2", function(min, max, pat) {
-    return pat.fromBipolar()._range(min, max);
-  });
-  var ratio = register(
-    "ratio",
-    (pat) => pat.fmap((v2) => {
-      if (!Array.isArray(v2)) {
-        return v2;
-      }
-      return v2.slice(1).reduce((acc, n2) => acc / n2, v2[0]);
-    })
-  );
-  var compress = register("compress", function(b, e, pat) {
-    b = fraction_default(b);
-    e = fraction_default(e);
-    if (b.gt(e) || b.gt(1) || e.gt(1) || b.lt(0) || e.lt(0)) {
-      return silence;
-    }
-    return pat._fastGap(fraction_default(1).div(e.sub(b)))._late(b);
-  });
-  var { compressSpan, compressspan } = register(["compressSpan", "compressspan"], function(span, pat) {
-    return pat._compress(span.begin, span.end);
-  });
-  var { fastGap, fastgap } = register(["fastGap", "fastgap"], function(factor, pat) {
-    const qf = function(span) {
-      const cycle = span.begin.sam();
-      const bpos = span.begin.sub(cycle).mul(factor).min(1);
-      const epos = span.end.sub(cycle).mul(factor).min(1);
-      if (bpos >= 1) {
-        return void 0;
-      }
-      return new timespan_default(cycle.add(bpos), cycle.add(epos));
-    };
-    const ef = function(hap) {
-      const begin2 = hap.part.begin;
-      const end2 = hap.part.end;
-      const cycle = begin2.sam();
-      const beginPos = begin2.sub(cycle).div(factor).min(1);
-      const endPos = end2.sub(cycle).div(factor).min(1);
-      const newPart = new timespan_default(cycle.add(beginPos), cycle.add(endPos));
-      const newWhole = !hap.whole ? void 0 : new timespan_default(
-        newPart.begin.sub(begin2.sub(hap.whole.begin).div(factor)),
-        newPart.end.add(hap.whole.end.sub(end2).div(factor))
-      );
-      return new hap_default(newWhole, newPart, hap.value, hap.context);
-    };
-    return pat.withQuerySpanMaybe(qf).withHap(ef).splitQueries();
-  });
-  var focus = register("focus", function(b, e, pat) {
-    b = fraction_default(b);
-    e = fraction_default(e);
-    return pat._early(b.sam())._fast(fraction_default(1).div(e.sub(b)))._late(b);
-  });
-  var { focusSpan, focusspan } = register(["focusSpan", "focusspan"], function(span, pat) {
-    return pat._focus(span.begin, span.end);
-  });
-  var ply = register("ply", function(factor, pat) {
-    const result = pat.fmap((x) => pure(x)._fast(factor)).squeezeJoin();
-    if (__steps) {
-      result._steps = fraction_default(factor).mulmaybe(pat._steps);
-    }
-    return result;
-  });
-  var fast = register(
-    "fast",
-    function(factor, pat) {
-      if (factor === 0) {
-        return silence;
-      }
-      factor = fraction_default(factor);
-      const fastQuery = pat.withQueryTime((t) => t.mul(factor));
-      return fastQuery.withHapTime((t) => t.div(factor)).setSteps(pat._steps);
-    },
-    true,
-    true
-  );
-  var hurry = register("hurry", function(r, pat) {
-    return pat._fast(r).mul(pure({ speed: r }));
-  });
-  var { slow, sparsity } = register(["slow", "sparsity"], function(factor, pat) {
-    if (factor === 0) {
-      return silence;
-    }
-    return pat._fast(fraction_default(1).div(factor));
-  });
-  var inside = register("inside", function(factor, f, pat) {
-    return f(pat._slow(factor))._fast(factor);
-  });
-  var outside = register("outside", function(factor, f, pat) {
-    return f(pat._fast(factor))._slow(factor);
-  });
-  var lastOf = register("lastOf", function(n2, func2, pat) {
-    const pats = Array(n2 - 1).fill(pat);
-    pats.push(func2(pat));
-    return slowcatPrime(...pats);
-  });
-  var { firstOf, every } = register(["firstOf", "every"], function(n2, func2, pat) {
-    const pats = Array(n2 - 1).fill(pat);
-    pats.unshift(func2(pat));
-    return slowcatPrime(...pats);
-  });
-  var apply = register("apply", function(func2, pat) {
-    return func2(pat);
-  });
-  var cpm = register("cpm", function(cpm2, pat) {
-    return pat._fast(cpm2 / 60 / 1);
-  });
-  var early = register(
-    "early",
-    function(offset3, pat) {
-      offset3 = fraction_default(offset3);
-      return pat.withQueryTime((t) => t.add(offset3)).withHapTime((t) => t.sub(offset3));
-    },
-    true,
-    true
-  );
-  var late = register(
-    "late",
-    function(offset3, pat) {
-      offset3 = fraction_default(offset3);
-      return pat._early(fraction_default(0).sub(offset3));
-    },
-    true,
-    true
-  );
-  var zoom = register("zoom", function(s2, e, pat) {
-    e = fraction_default(e);
-    s2 = fraction_default(s2);
-    if (s2.gte(e)) {
-      return nothing;
-    }
-    const d = e.sub(s2);
-    const steps4 = __steps ? pat._steps?.mulmaybe(d) : void 0;
-    return pat.withQuerySpan((span) => span.withCycle((t) => t.mul(d).add(s2))).withHapSpan((span) => span.withCycle((t) => t.sub(s2).div(d))).splitQueries().setSteps(steps4);
-  });
-  var { zoomArc, zoomarc } = register(["zoomArc", "zoomarc"], function(a, pat) {
-    return pat.zoom(a.begin, a.end);
-  });
-  var bite = register(
-    "bite",
-    (npat, ipat, pat) => {
-      return ipat.fmap((i3) => (n2) => {
-        const a = fraction_default(i3).div(n2).mod(1);
-        const b = a.add(fraction_default(1).div(n2));
-        return pat.zoom(a, b);
-      }).appLeft(npat).squeezeJoin();
-    },
-    false
-  );
-  var { isobite, cyclestruct, cycleStruct } = register(
-    ["isobite", "cyclestruct", "cycleStruct"],
-    (structure, pat) => {
-      const structPat = new Pattern((state) => {
-        const haps_cycle = structure.withQuerySpan((span) => span.begin.wholeCycle()).query(state).filter((hap) => hap.value != 0).sort((a, b) => a.whole.begin - b.whole.begin).map((hap, i3) => hap.withValue((_) => i3));
-        const haps = [];
-        for (const hap of haps_cycle) {
-          const new_part = state.span.intersection(hap.part);
-          if (new_part) {
-            haps.push(new hap_default(hap.whole, new_part, hap.value, hap.context));
-          }
-        }
-        return haps;
-      }).splitQueries();
-      const stepsPattern = new Pattern((state) => {
-        const nrHaps = structure.withQuerySpan((span) => span.begin.wholeCycle()).query(state).filter((hap) => hap.value != 0).length;
-        return [new hap_default(state.span.begin.wholeCycle(), state.span, nrHaps, {})];
-      }).splitQueries();
-      return pat.fast(stepsPattern).bite(stepsPattern, structPat);
-    },
-    false
-  );
-  var linger = register(
-    "linger",
-    function(t, pat) {
-      if (t == 0) {
-        return silence;
-      } else if (t < 0) {
-        return pat._zoom(t.add(1), 1)._slow(t);
-      }
-      return pat._zoom(0, t)._slow(t);
-    },
-    true,
-    true
-  );
-  var { segment, seg } = register(["segment", "seg"], function(rate, pat) {
-    return pat.struct(pure(true)._fast(rate)).setSteps(rate);
-  });
-  var swingBy = register("swingBy", (swing2, n2, pat) => pat.inside(n2, late(seq(0, swing2 / 2))));
-  var swing = register("swing", (n2, pat) => pat.swingBy(1 / 3, n2));
-  var { invert, inv } = register(
-    ["invert", "inv"],
-    function(pat) {
-      return pat.fmap((x) => !x);
-    },
-    true,
-    true
-  );
-  var when = register("when", function(on, func2, pat) {
-    return on ? func2(pat) : pat;
-  });
-  var off = register("off", function(time_pat, func2, pat) {
-    return stack(pat, func2(pat.late(time_pat)));
-  });
-  var brak = register("brak", function(pat) {
-    return pat.when(slowcat(false, true), (x) => fastcat(x, silence)._late(0.25));
-  });
-  var rev = register(
-    "rev",
-    function(pat) {
-      const query = function(state) {
-        const span = state.span;
-        const cycle = span.begin.sam();
-        const next_cycle = span.begin.nextSam();
-        const reflect = function(to_reflect) {
-          const reflected = to_reflect.withTime((time4) => cycle.add(next_cycle.sub(time4)));
-          const tmp = reflected.begin;
-          reflected.begin = reflected.end;
-          reflected.end = tmp;
-          return reflected;
-        };
-        const haps = pat.query(state.setSpan(reflect(span)));
-        return haps.map((hap) => hap.withSpan(reflect));
-      };
-      return new Pattern(query).splitQueries();
-    },
-    false,
-    true
-  );
-  var revv = register("revv", function(pat) {
-    const negateSpan = (span) => new timespan_default(fraction_default(0).sub(span.end), fraction_default(0).sub(span.begin));
-    return pat.withQuerySpan(negateSpan).withHapSpan(negateSpan);
-  });
-  var pressBy = register("pressBy", function(r, pat) {
-    return pat.fmap((x) => pure(x).compress(r, 1)).squeezeJoin();
-  });
-  var press = register("press", function(pat) {
-    return pat._pressBy(0.5);
-  });
-  Pattern.prototype.hush = function() {
-    return silence;
-  };
-  var palindrome = register(
-    "palindrome",
-    function(pat) {
-      return pat.lastOf(2, rev);
-    },
-    true,
-    true
-  );
-  var { juxBy, juxby } = register(["juxBy", "juxby"], function(by, func2, pat) {
-    by /= 2;
-    const elem_or = function(dict2, key, dflt) {
-      if (key in dict2) {
-        return dict2[key];
-      }
-      return dflt;
-    };
-    const left2 = pat.withValue((val2) => Object.assign({}, val2, { pan: elem_or(val2, "pan", 0.5) - by }));
-    const right2 = func2(pat.withValue((val2) => Object.assign({}, val2, { pan: elem_or(val2, "pan", 0.5) + by })));
-    return stack(left2, right2).setSteps(__steps ? lcm(left2._steps, right2._steps) : void 0);
-  });
-  var { juxFlipBy, juxflipby, fluxBy, fluxby } = register(
-    ["juxFlipBy", "juxflipby", "fluxBy", "fluxby"],
-    function(by, func2, pat) {
-      return pat.juxBy(slowcat(by, -by), func2);
-    }
-  );
-  var jux = register("jux", function(func2, pat) {
-    return pat._juxBy(1, func2, pat);
-  });
-  var { juxFlip, flux } = register(["juxFlip", "juxflip", "flux"], function(func2, pat) {
-    return pat._juxFlipBy(1, func2, pat);
-  });
-  var { echoWith, echowith, stutWith, stutwith } = register(
-    ["echoWith", "echowith", "stutWith", "stutwith"],
-    function(times, time4, func2, pat) {
-      return stack(...listRange(0, times - 1).map((i3) => func2(pat.late(fraction_default(time4).mul(i3)), i3)));
-    }
-  );
-  var echo = register("echo", function(times, time4, feedback, pat) {
-    return pat._echoWith(times, time4, (pat2, i3) => pat2.gain(Math.pow(feedback, i3)));
-  });
-  var stut = register("stut", function(times, feedback, time4, pat) {
-    return pat._echoWith(times, time4, (pat2, i3) => pat2.gain(Math.pow(feedback, i3)));
-  });
-  var applyN = register("applyN", function(n2, func2, p) {
-    let result = p;
-    for (let i3 = 0; i3 < n2; i3++) {
-      result = func2(result);
-    }
-    return result;
-  });
-  var plyWith = register(["plyWith", "plywith"], function(factor, func2, pat) {
-    const result = pat.fmap((x) => cat(...listRange(0, factor - 1).map((i3) => applyN(i3, func2, x)))._fast(factor)).squeezeJoin();
-    if (__steps) {
-      result._steps = fraction_default(factor).mulmaybe(pat._steps);
-    }
-    return result;
-  });
-  var plyForEach = register(["plyForEach", "plyforeach"], function(factor, func2, pat) {
-    const result = pat.fmap((x) => cat(cat(pure(x), ...listRange(1, factor - 1).map((i3) => func2(pure(x), i3))))._fast(factor)).squeezeJoin();
-    if (__steps) {
-      result._steps = fraction_default(factor).mulmaybe(pat._steps);
-    }
-    return result;
-  });
-  var _iter = function(times, pat, back = false) {
-    times = fraction_default(times);
-    return slowcat(
-      ...listRange(0, times.sub(1)).map(
-        (i3) => back ? pat.late(fraction_default(i3).div(times)) : pat.early(fraction_default(i3).div(times))
-      )
-    );
-  };
-  var iter = register(
-    "iter",
-    function(times, pat) {
-      return _iter(times, pat, false);
-    },
-    true,
-    true
-  );
-  var { iterBack, iterback } = register(
-    ["iterBack", "iterback"],
-    function(times, pat) {
-      return _iter(times, pat, true);
-    },
-    true,
-    true
-  );
-  var { repeatCycles } = register(
-    "repeatCycles",
-    function(n2, pat) {
-      return new Pattern(function(state) {
-        const cycle = state.span.begin.sam();
-        const source_cycle = cycle.div(n2).sam();
-        const delta = cycle.sub(source_cycle);
-        state = state.withSpan((span) => span.withTime((spant) => spant.sub(delta)));
-        return pat.query(state).map((hap) => hap.withSpan((span) => span.withTime((spant) => spant.add(delta))));
-      }).splitQueries();
-    },
-    true,
-    true
-  );
-  var _chunk = function(n2, func2, pat, back = false, fast2 = false) {
-    const binary2 = Array(n2 - 1).fill(false);
-    binary2.unshift(true);
-    const binary_pat = _iter(n2, sequence(...binary2), !back);
-    if (!fast2) {
-      pat = pat.repeatCycles(n2);
-    }
-    return pat.when(binary_pat, func2);
-  };
-  var { chunk, slowchunk, slowChunk } = register(
-    ["chunk", "slowchunk", "slowChunk"],
-    function(n2, func2, pat) {
-      return _chunk(n2, func2, pat, false, false);
-    },
-    true,
-    true
-  );
-  var { chunkBack, chunkback } = register(
-    ["chunkBack", "chunkback"],
-    function(n2, func2, pat) {
-      return _chunk(n2, func2, pat, true);
-    },
-    true,
-    true
-  );
-  var { fastchunk, fastChunk } = register(
-    ["fastchunk", "fastChunk"],
-    function(n2, func2, pat) {
-      return _chunk(n2, func2, pat, false, true);
-    },
-    true,
-    true
-  );
-  var { chunkinto, chunkInto } = register(["chunkinto", "chunkInto"], function(n2, func2, pat) {
-    return pat.into(fastcat(true, ...Array(n2 - 1).fill(false))._iterback(n2), func2);
-  });
-  var { chunkbackinto, chunkBackInto } = register(["chunkbackinto", "chunkBackInto"], function(n2, func2, pat) {
-    return pat.into(
-      fastcat(true, ...Array(n2 - 1).fill(false))._iter(n2)._early(1),
-      func2
-    );
-  });
-  var bypass = register(
-    "bypass",
-    function(on, pat) {
-      on = Boolean(parseInt(on));
-      return on ? silence : pat;
-    },
-    true,
-    true
-  );
-  var { ribbon, rib } = register(
-    ["ribbon", "rib"],
-    (offset3, cycles, pat) => pat.early(offset3).restart(pure(1).slow(cycles))
-  );
-  var hsla = register("hsla", (h2, s2, l, a, pat) => {
-    return pat.color(`hsla(${h2}turn,${s2 * 100}%,${l * 100}%,${a})`);
-  });
-  var hsl = register("hsl", (h2, s2, l, pat) => {
-    return pat.color(`hsl(${h2}turn,${s2 * 100}%,${l * 100}%)`);
-  });
-  Pattern.prototype.tag = function(tag) {
-    return this.withContext((ctx) => ({ ...ctx, tags: (ctx.tags || []).concat([tag]) }));
-  };
-  var filter = register("filter", (test, pat) => pat.withHaps((haps) => haps.filter(test)));
-  var filterWhen = register("filterWhen", (test, pat) => pat.filter((h2) => test(h2.whole.begin)));
-  var within = register(
-    "within",
-    (a, b, fn, pat) => stack(
-      fn(pat.filterWhen((t) => t.cyclePos() >= a && t.cyclePos() <= b)),
-      pat.filterWhen((t) => t.cyclePos() < a || t.cyclePos() > b)
-    )
-  );
-  Pattern.prototype.stepJoin = function() {
-    const pp2 = this;
-    const first_t = stepcat(..._retime(_slices(pp2.queryArc(0, 1))))._steps;
-    const q = function(state) {
-      const shifted = pp2.early(state.span.begin.sam());
-      const haps = shifted.query(state.setSpan(new timespan_default(fraction_default(0), fraction_default(1))));
-      const pat = stepcat(..._retime(_slices(haps)));
-      return pat.query(state);
-    };
-    return new Pattern(q, first_t);
-  };
-  Pattern.prototype.stepBind = function(func2) {
-    return this.fmap(func2).stepJoin();
-  };
-  function _retime(timedHaps) {
-    const occupied_perc = timedHaps.filter((t, pat) => pat.hasSteps).reduce((a, b) => a.add(b), fraction_default(0));
-    const occupied_steps = removeUndefineds(timedHaps.map((t, pat) => pat._steps)).reduce(
-      (a, b) => a.add(b),
-      fraction_default(0)
-    );
-    const total_steps = occupied_perc.eq(0) ? void 0 : occupied_steps.div(occupied_perc);
-    function adjust(dur2, pat) {
-      if (pat._steps === void 0) {
-        return [dur2.mulmaybe(total_steps), pat];
-      }
-      return [pat._steps, pat];
-    }
-    return timedHaps.map((x) => adjust(...x));
-  }
-  function _slices(haps) {
-    const breakpoints = flatten(haps.map((hap) => [hap.part.begin, hap.part.end]));
-    const unique = uniqsortr([fraction_default(0), fraction_default(1), ...breakpoints]);
-    const slicespans = pairs(unique);
-    return slicespans.map((s2) => [
-      s2[1].sub(s2[0]),
-      stack(..._fitslice(new timespan_default(...s2), haps).map((x) => x.value.withHap((h2) => h2.setContext(h2.combineContext(x)))))
-    ]);
-  }
-  function _fitslice(span, haps) {
-    return removeUndefineds(haps.map((hap) => _match(span, hap)));
-  }
-  function _match(span, hap_p) {
-    const subspan = span.intersection(hap_p.part);
-    if (subspan == void 0) {
-      return void 0;
-    }
-    return new hap_default(hap_p.whole, subspan, hap_p.value, hap_p.context);
-  }
-  var pace = register("pace", function(targetSteps, pat) {
-    if (pat._steps === void 0) {
-      return pat;
-    }
-    if (pat._steps.eq(fraction_default(0))) {
-      return nothing;
-    }
-    return pat._fast(fraction_default(targetSteps).div(pat._steps)).setSteps(targetSteps);
-  });
-  function _polymeterListSteps(steps4, ...args) {
-    const seqs = args.map((a) => _sequenceCount(a));
-    if (seqs.length == 0) {
-      return silence;
-    }
-    if (steps4 == 0) {
-      steps4 = seqs[0][1];
-    }
-    const pats = [];
-    for (const seq2 of seqs) {
-      if (seq2[1] == 0) {
-        continue;
-      }
-      if (steps4 == seq2[1]) {
-        pats.push(seq2[0]);
-      } else {
-        pats.push(seq2[0]._fast(fraction_default(steps4).div(fraction_default(seq2[1]))));
-      }
-    }
-    return stack(...pats);
-  }
-  function polymeter(...args) {
-    if (Array.isArray(args[0])) {
-      return _polymeterListSteps(0, ...args);
-    }
-    args = args.filter((arg) => arg.hasSteps);
-    if (args.length == 0) {
-      return silence;
-    }
-    const steps4 = lcm(...args.map((x) => x._steps));
-    if (steps4.eq(fraction_default(0))) {
-      return nothing;
-    }
-    const result = stack(...args.map((x) => x.pace(steps4)));
-    result._steps = steps4;
-    return result;
-  }
-  function stepcat(...timepats) {
-    if (timepats.length === 0) {
-      return nothing;
-    }
-    const findsteps = (x) => Array.isArray(x) ? x : [x._steps ?? 1, x];
-    timepats = timepats.map(findsteps);
-    if (timepats.find((x) => x[0] === void 0)) {
-      const times = timepats.map((a) => a[0]).filter((x) => x !== void 0);
-      if (times.length === 0) {
-        return fastcat(...timepats.map((x) => x[1]));
-      }
-      if (times.length === timepats.length) {
-        return nothing;
-      }
-      const avg = times.reduce((a, b) => a.add(b), fraction_default(0)).div(times.length);
-      for (let timepat of timepats) {
-        if (timepat[0] === void 0) {
-          timepat[0] = avg;
-        }
-      }
-    }
-    if (timepats.length == 1) {
-      const result2 = reify(timepats[0][1]);
-      return result2.withSteps((_) => timepats[0][0]);
-    }
-    const total = timepats.map((a) => a[0]).reduce((a, b) => a.add(b), fraction_default(0));
-    let begin2 = fraction_default(0);
-    const pats = [];
-    for (const [time4, pat] of timepats) {
-      if (fraction_default(time4).eq(0)) {
-        continue;
-      }
-      const end2 = begin2.add(time4);
-      pats.push(reify(pat)._compress(begin2.div(total), end2.div(total)));
-      begin2 = end2;
-    }
-    const result = stack(...pats);
-    result._steps = total;
-    return result;
-  }
-  function stepalt(...groups) {
-    groups = groups.map((a) => Array.isArray(a) ? a.map(reify) : [reify(a)]);
-    const cycles = lcm(...groups.map((x) => fraction_default(x.length)));
-    let result = [];
-    for (let cycle = 0; cycle < cycles; ++cycle) {
-      result.push(...groups.map((x) => x.length == 0 ? silence : x[cycle % x.length]));
-    }
-    result = result.filter((x) => x.hasSteps && x._steps > 0);
-    const steps4 = result.reduce((a, b) => a.add(b._steps), fraction_default(0));
-    result = stepcat(...result);
-    result._steps = steps4;
-    return result;
-  }
-  var take = stepRegister("take", function(i3, pat) {
-    if (!pat.hasSteps) {
-      return nothing;
-    }
-    if (pat._steps.lte(0)) {
-      return nothing;
-    }
-    i3 = fraction_default(i3);
-    if (i3.eq(0)) {
-      return nothing;
-    }
-    const flip = i3 < 0;
-    if (flip) {
-      i3 = i3.abs();
-    }
-    const frac = i3.div(pat._steps);
-    if (frac.lte(0)) {
-      return nothing;
-    }
-    if (frac.gte(1)) {
-      return pat;
-    }
-    if (flip) {
-      return pat.zoom(fraction_default(1).sub(frac), 1);
-    }
-    return pat.zoom(0, frac);
-  });
-  var drop = stepRegister("drop", function(i3, pat) {
-    if (!pat.hasSteps) {
-      return nothing;
-    }
-    i3 = fraction_default(i3);
-    if (i3.lt(0)) {
-      return pat.take(pat._steps.add(i3));
-    }
-    return pat.take(fraction_default(0).sub(pat._steps.sub(i3)));
-  });
-  var extend = stepRegister("extend", function(factor, pat) {
-    return pat.fast(factor).expand(factor);
-  });
-  var replicate = stepRegister("replicate", function(factor, pat) {
-    return pat.repeatCycles(factor).fast(factor).expand(factor);
-  });
-  var expand = stepRegister("expand", function(factor, pat) {
-    return pat.withSteps((t) => t.mul(fraction_default(factor)));
-  });
-  var contract = stepRegister("contract", function(factor, pat) {
-    return pat.withSteps((t) => t.div(fraction_default(factor)));
-  });
-  Pattern.prototype.shrinklist = function(amount) {
-    const pat = this;
-    if (!pat.hasSteps) {
-      return [pat];
-    }
-    let [amountv, times] = Array.isArray(amount) ? amount : [amount, pat._steps];
-    amountv = fraction_default(amountv);
-    if (times === 0 || amountv === 0) {
-      return [pat];
-    }
-    const fromstart = amountv > 0;
-    const ranges = [];
-    if (fromstart) {
-      const seg2 = fraction_default(1).div(pat._steps).mul(amountv);
-      for (let i3 = 0; i3 < times; ++i3) {
-        const s2 = seg2.mul(i3);
-        if (s2.gt(1)) {
-          break;
-        }
-        ranges.push([s2, 1]);
-      }
-    } else {
-      amountv = fraction_default(0).sub(amountv);
-      const seg2 = fraction_default(1).div(pat._steps).mul(amountv);
-      for (let i3 = 0; i3 < times; ++i3) {
-        const e = fraction_default(1).sub(seg2.mul(i3));
-        if (e.lt(0)) {
-          break;
-        }
-        ranges.push([fraction_default(0), e]);
-      }
-    }
-    return ranges.map((x) => pat.zoom(...x));
-  };
-  var shrinklist = (amount, pat) => pat.shrinklist(amount);
-  Pattern.prototype.growlist = function(amount) {
-    return this.shrinklist(amount).reverse();
-  };
-  var growlist = (amount, pat) => pat.growlist(amount);
-  var shrink = register(
-    "shrink",
-    function(amount, pat) {
-      if (!pat.hasSteps) {
-        return nothing;
-      }
-      const list2 = pat.shrinklist(amount);
-      const result = stepcat(...list2);
-      result._steps = list2.reduce((a, b) => a.add(b._steps), fraction_default(0));
-      return result;
-    },
-    true,
-    false,
-    (x) => x.stepJoin()
-  );
-  var grow = register(
-    "grow",
-    function(amount, pat) {
-      if (!pat.hasSteps) {
-        return nothing;
-      }
-      const list2 = pat.shrinklist(fraction_default(0).sub(amount));
-      list2.reverse();
-      const result = stepcat(...list2);
-      result._steps = list2.reduce((a, b) => a.add(b._steps), fraction_default(0));
-      return result;
-    },
-    true,
-    false,
-    (x) => x.stepJoin()
-  );
-  var tour = function(pat, ...many) {
-    return pat.tour(...many);
-  };
-  Pattern.prototype.tour = function(...many) {
-    return stepcat(
-      ...[].concat(
-        ...many.map((x, i3) => [...many.slice(0, many.length - i3), this, ...many.slice(many.length - i3)]),
-        this,
-        ...many
-      )
-    );
-  };
-  var zip = function(...pats) {
-    pats = pats.filter((pat) => pat.hasSteps);
-    const zipped = slowcat(...pats.map((pat) => pat._slow(pat._steps)));
-    const steps4 = lcm(...pats.map((x) => x._steps));
-    return zipped._fast(steps4).setSteps(steps4);
-  };
-  var timecat = stepcat;
-  var timeCat = stepcat;
-  var s_cat = stepcat;
-  var s_alt = stepalt;
-  var s_polymeter = polymeter;
-  Pattern.prototype.s_polymeter = Pattern.prototype.polymeter;
-  var s_taper = shrink;
-  Pattern.prototype.s_taper = Pattern.prototype.shrink;
-  var s_taperlist = shrinklist;
-  Pattern.prototype.s_taperlist = Pattern.prototype.shrinklist;
-  var s_add = take;
-  Pattern.prototype.s_add = Pattern.prototype.take;
-  var s_sub = drop;
-  Pattern.prototype.s_sub = Pattern.prototype.drop;
-  var s_expand = expand;
-  Pattern.prototype.s_expand = Pattern.prototype.expand;
-  var s_extend = extend;
-  Pattern.prototype.s_extend = Pattern.prototype.extend;
-  var s_contract = contract;
-  Pattern.prototype.s_contract = Pattern.prototype.contract;
-  var s_tour = tour;
-  Pattern.prototype.s_tour = Pattern.prototype.tour;
-  var s_zip = zip;
-  Pattern.prototype.s_zip = Pattern.prototype.zip;
-  var steps = pace;
-  Pattern.prototype.steps = Pattern.prototype.pace;
-  var chop = register("chop", function(n2, pat) {
-    const slices = Array.from({ length: n2 }, (x, i3) => i3);
-    const slice_objects = slices.map((i3) => ({ begin: i3 / n2, end: (i3 + 1) / n2 }));
-    const merge = function(a, b) {
-      if ("begin" in a && "end" in a && a.begin !== void 0 && a.end !== void 0) {
-        const d = a.end - a.begin;
-        b = { begin: a.begin + b.begin * d, end: a.begin + b.end * d };
-      }
-      return Object.assign({}, a, b);
-    };
-    const func2 = function(o) {
-      return sequence(slice_objects.map((slice_o) => merge(o, slice_o)));
-    };
-    return pat.squeezeBind(func2).setSteps(__steps ? fraction_default(n2).mulmaybe(pat._steps) : void 0);
-  });
-  var striate = register("striate", function(n2, pat) {
-    const slices = Array.from({ length: n2 }, (x, i3) => i3);
-    const slice_objects = slices.map((i3) => ({ begin: i3 / n2, end: (i3 + 1) / n2 }));
-    const slicePat = slowcat(...slice_objects);
-    return pat.set(slicePat)._fast(n2).setSteps(__steps ? fraction_default(n2).mulmaybe(pat._steps) : void 0);
-  });
-  var _loopAt = function(factor, pat, cps2 = 0.5) {
-    return pat.speed(1 / factor * cps2).unit("c").slow(factor);
-  };
-  var { loopAt, loopat } = register(["loopAt", "loopat"], function(factor, pat) {
-    const steps4 = pat._steps ? pat._steps.div(factor) : void 0;
-    return new Pattern((state) => _loopAt(factor, pat, state.controls._cps).query(state), steps4);
-  });
-  var slice = register(
-    "slice",
-    function(npat, ipat, opat) {
-      return npat.innerBind(
-        (n2) => ipat.outerBind(
-          (i3) => opat.outerBind((o) => {
-            o = o instanceof Object ? o : { s: o };
-            const begin2 = Array.isArray(n2) ? n2[i3] : i3 / n2;
-            const end2 = Array.isArray(n2) ? n2[i3 + 1] : (i3 + 1) / n2;
-            return pure({ begin: begin2, end: end2, _slices: n2, ...o });
-          })
-        )
-      ).setSteps(ipat._steps);
-    },
-    false
-    // turns off auto-patternification
-  );
-  Pattern.prototype.onTriggerTime = function(func2) {
-    return this.onSchedule((hap, targetTime) => {
-      const diff = targetTime - getClockTime();
-      setTimeout(() => {
-        func2(hap);
-      }, diff * 1e3);
-    }, false);
-  };
-  var splice = register(
-    "splice",
-    function(npat, ipat, opat) {
-      const sliced = slice(npat, ipat, opat);
-      return new Pattern((state) => {
-        const cps2 = state.controls._cps || 1;
-        const haps = sliced.query(state);
-        return haps.map(
-          (hap) => hap.withValue((v2) => ({
-            ...{
-              speed: cps2 / v2._slices / hap.whole.duration * (v2.speed || 1),
-              unit: "c"
-            },
-            ...v2
-          }))
-        );
-      }).setSteps(ipat._steps);
-    },
-    false
-    // turns off auto-patternification
-  );
-  var fit = register(
-    "fit",
-    (pat) => pat.withHaps(
-      (haps, state) => haps.map(
-        (hap) => hap.withValue((v2) => {
-          const slicedur = ("end" in v2 ? v2.end : 1) - ("begin" in v2 ? v2.begin : 0);
-          return {
-            ...v2,
-            speed: (state.controls._cps || 1) / hap.whole.duration * slicedur,
-            unit: "c"
-          };
-        })
-      )
-    )
-  );
-  var { loopAtCps, loopatcps } = register(["loopAtCps", "loopatcps"], function(factor, cps2, pat) {
-    return _loopAt(factor, pat, cps2);
-  });
-  var ref = (accessor) => pure(1).withValue(() => reify(accessor())).innerJoin();
-  var fadeGain = (p) => p < 0.5 ? 1 : 1 - (p - 0.5) / 0.5;
-  var xfade = (a, pos, b) => {
-    pos = reify(pos);
-    a = reify(a);
-    b = reify(b);
-    let gaina = pos.fmap((v2) => ({ gain: fadeGain(v2) }));
-    let gainb = pos.fmap((v2) => ({ gain: fadeGain(1 - v2) }));
-    return stack(a.mul(gaina), b.mul(gainb));
-  };
-  Pattern.prototype.xfade = function(pos, b) {
-    return xfade(this, pos, b);
-  };
-  var __beat = (join) => (t, div2, pat) => {
-    t = fraction_default(t).mod(div2);
-    div2 = fraction_default(div2);
-    const b = t.div(div2);
-    const e = t.add(1).div(div2);
-    return join(pat.fmap((x) => pure(x)._compress(b, e)));
-  };
-  var { beat } = register(
-    ["beat"],
-    __beat((x) => x.innerJoin())
-  );
-  var _morph = (from, to, by) => {
-    by = fraction_default(by);
-    const dur2 = fraction_default(1).div(from.length);
-    const positions = (list2) => {
-      const result = [];
-      for (const [pos, value2] of list2.entries()) {
-        if (value2) {
-          result.push([fraction_default(pos).div(list2.length), value2]);
-        }
-      }
-      return result;
-    };
-    const arcs = zipWith(
-      ([posa, valuea], [posb, valueb]) => {
-        const b = by.mul(posb - posa).add(posa);
-        const e = b.add(dur2);
-        return new timespan_default(b, e);
-      },
-      positions(from),
-      positions(to)
-    );
-    function query(state) {
-      const cycle = state.span.begin.sam();
-      const cycleArc = state.span.cycleArc();
-      const result = [];
-      for (const whole of arcs) {
-        const part = whole.intersection(cycleArc);
-        if (part !== void 0) {
-          result.push(
-            new hap_default(
-              whole.withTime((x) => x.add(cycle)),
-              part.withTime((x) => x.add(cycle)),
-              true
-            )
-          );
-        }
-      }
-      return result;
-    }
-    return new Pattern(query).splitQueries();
-  };
-  var morph = (frompat, topat, bypat) => {
-    frompat = reify(frompat);
-    topat = reify(topat);
-    bypat = reify(bypat);
-    return frompat.innerBind((from) => topat.innerBind((to) => bypat.innerBind((by) => _morph(from, to, by))));
-  };
-  var _distortWithAlg = function(name3) {
-    const func2 = function(args, pat) {
-      const argsPat = reify(args).fmap((v2) => Array.isArray(v2) ? [...v2, name3] : [v2, 1, name3]);
-      if (!pat) {
-        return pure({}).distort(argsPat);
-      }
-      return pat.distort(argsPat);
-    };
-    Pattern.prototype[name3] = function(args) {
-      return func2(args, this);
-    };
-    return func2;
-  };
-  var soft = _distortWithAlg("soft");
-  var hard = _distortWithAlg("hard");
-  var cubic = _distortWithAlg("cubic");
-  var diode = _distortWithAlg("diode");
-  var asym = _distortWithAlg("asym");
-  var fold = _distortWithAlg("fold");
-  var sinefold = _distortWithAlg("sinefold");
-  var chebyshev = _distortWithAlg("chebyshev");
-  var parray = (pats) => {
-    const pack = (...xs) => xs;
-    let acc = pure(curry(pack, null, pats.length));
-    for (const p of pats) acc = acc.appBoth(reify(p));
-    return acc;
-  };
-  var _ensureListPattern = (list2) => {
-    if (Array.isArray(list2)) {
-      return parray(list2);
-    }
-    return reify(list2);
-  };
-  Pattern.prototype.partials = function(list2) {
-    return this.withValue((v2) => (l) => ({ ...v2, partials: l })).appLeft(_ensureListPattern(list2));
-  };
-  var partials = (list2) => {
-    return _ensureListPattern(list2).as("partials");
-  };
-  Pattern.prototype.phases = function(list2) {
-    return this.withValue((v2) => (l) => ({ ...v2, phases: l })).appLeft(_ensureListPattern(list2));
-  };
-  var phases = (list2) => {
-    return _ensureListPattern(list2).as("phases");
-  };
-  Pattern.prototype.FX = function(...effects) {
-    effects = effects.map(reify);
-    return this.withValue((v2) => (vEff) => {
-      const currFX = v2.FX ?? [];
-      return { ...v2, FX: currFX.concat(vEff) };
-    }).appLeft(parray(effects));
-  };
-  var _asArrayPattern = (pats) => {
-    const pack = (...xs) => xs;
-    let acc = pure(curry(pack, null, pats.length));
-    for (const p of pats) acc = acc.appLeft(p);
-    return acc;
-  };
-  Pattern.prototype.worklet = function(src2, ...inputs) {
-    inputs = inputs.map(reify);
-    return this.outerBind((v2) => {
-      return _asArrayPattern(inputs).withValue((vInput) => {
-        const currInputs = v2.workletInputs ?? [];
-        return { ...v2, workletSrc: src2, workletInputs: currInputs.concat(vInput) };
-      });
-    });
-  };
-  var worklet = (...args) => pure({}).worklet(...args);
-  var base = (n2, b = 10, d = 0) => {
-    if (Array.isArray(n2)) {
-      n2 = sequence(n2);
-    }
-    n2 = reify(n2);
-    b = reify(b);
-    d = reify(d);
-    return d.withValue((e) => {
-      return b.withValue((c) => {
-        return n2.withValue((v2) => {
-          let digits = [];
-          let value2 = v2;
-          while (value2 > 0) {
-            digits.unshift(value2 % c);
-            value2 = Math.floor(value2 / c);
-          }
-          if (e) {
-            const l = digits.length;
-            if (l > e) {
-              digits = digits.slice(-1 * e);
-            }
-          }
-          return sequence(digits);
-        }).squeezeJoin();
-      }).squeezeJoin();
-    }).squeezeJoin();
-  };
-
-  // build/engine-src/strudel/packages/core/controls.mjs
-  function createParam(names10) {
-    let isMulti = Array.isArray(names10);
-    names10 = !isMulti ? [names10] : names10;
-    const name3 = names10[0];
-    const withVal = (xs) => {
-      let bag;
-      if (typeof xs === "object" && xs.value !== void 0) {
-        bag = { ...xs };
-        xs = xs.value;
-        delete bag.value;
-      }
-      if (isMulti && Array.isArray(xs)) {
-        const result = bag || {};
-        xs.forEach((x, i3) => {
-          if (i3 < names10.length) {
-            result[names10[i3]] = x;
-          }
-        });
-        return result;
-      } else if (bag) {
-        bag[name3] = xs;
-        return bag;
-      } else {
-        return { [name3]: xs };
-      }
-    };
-    const func2 = function(value2, pat) {
-      if (!pat) {
-        return reify(value2).withValue(withVal);
-      }
-      if (typeof value2 === "undefined") {
-        return pat.fmap(withVal);
-      }
-      return pat.set(reify(value2).withValue(withVal));
-    };
-    Pattern.prototype[name3] = function(value2) {
-      return func2(value2, this);
-    };
-    return func2;
-  }
-  var controlAlias = /* @__PURE__ */ new Map();
-  function isControlName(name3) {
-    return controlAlias.has(name3);
-  }
-  function registerControl(names10, ...aliases) {
-    const name3 = Array.isArray(names10) ? names10[0] : names10;
-    let bag = {};
-    bag[name3] = createParam(names10);
-    controlAlias.set(name3, name3);
-    aliases.forEach((alias) => {
-      bag[alias] = bag[name3];
-      controlAlias.set(alias, name3);
-      Pattern.prototype[alias] = Pattern.prototype[name3];
-    });
-    return bag;
-  }
-  function registerMultiControl(names10, maxControls, ...aliases) {
-    names10 = Array.isArray(names10) ? names10 : [names10];
-    let bag = {};
-    for (let i3 = 1; i3 <= maxControls; i3++) {
-      let theseAliases = [...aliases];
-      let theseNames = [...names10];
-      if (i3 === 1) {
-        const aliases1 = theseAliases.map((a) => `${a}1`);
-        const names1 = theseNames.map((n2) => `${n2}1`);
-        theseAliases = theseAliases.concat(aliases1).concat(names1);
-      } else {
-        theseAliases = theseAliases.map((a) => `${a}${i3}`);
-        theseNames = theseNames.map((n2) => `${n2}${i3}`);
-      }
-      const subBag = registerControl(theseNames, ...theseAliases);
-      bag = { ...bag, ...subBag };
-    }
-    return bag;
-  }
-  var { s, sound } = registerControl(["s", "n", "gain"], "sound");
-  var { wt, wavetablePosition } = registerControl("wt", "wavetablePosition");
-  var { wtenv } = registerControl("wtenv");
-  var { wtattack, wtatt } = registerControl("wtattack", "wtatt");
-  var { wtdecay, wtdec } = registerControl("wtdecay", "wtdec");
-  var { wtsustain, wtsus } = registerControl("wtsustain", "wtsus");
-  var { wtrelease, wtrel } = registerControl("wtrelease", "wtrel");
-  var { wtrate } = registerControl("wtrate");
-  var { wtsync } = registerControl("wtsync");
-  var { wtdepth } = registerControl("wtdepth");
-  var { wtshape } = registerControl("wtshape");
-  var { wtdc } = registerControl("wtdc");
-  var { wtskew } = registerControl("wtskew");
-  var { warp, wavetableWarp } = registerControl("warp", "wavetableWarp");
-  var { warpattack, warpatt } = registerControl("warpattack", "warpatt");
-  var { warpdecay, warpdec } = registerControl("warpdecay", "warpdec");
-  var { warpsustain, warpsus } = registerControl("warpsustain", "warpsus");
-  var { warprelease, warprel } = registerControl("warprelease", "warprel");
-  var { warprate } = registerControl("warprate");
-  var { warpdepth } = registerControl("warpdepth");
-  var { warpshape } = registerControl("warpshape");
-  var { warpdc } = registerControl("warpdc");
-  var { warpskew } = registerControl("warpskew");
-  var { warpmode, wavetableWarpMode } = registerControl("warpmode", "wavetableWarpMode");
-  var { wtphaserand, wavetablePhaseRand } = registerControl("wtphaserand", "wavetablePhaseRand");
-  var { warpenv } = registerControl("warpenv");
-  var { warpsync } = registerControl("warpsync");
-  var { source, src } = registerControl("source", "src");
-  var { n } = registerControl("n");
-  var { i } = registerControl("i");
-  var { note } = registerControl(["note", "n"]);
-  var { accelerate } = registerControl("accelerate");
-  var { velocity, vel } = registerControl("velocity", "vel");
-  var { gain } = registerControl("gain");
-  var { postgain } = registerControl("postgain");
-  var { amp } = registerControl("amp");
-  var { fmh, fmh1, fmh2, fmh3, fmh4, fmh5, fmh6, fmh7, fmh8 } = registerMultiControl(["fmh", "fmi"], 8, "fmh");
-  var { fmi, fmi1, fmi2, fmi3, fmi4, fmi5, fmi6, fmi7, fmi8, fm, fm1, fm2, fm3, fm4, fm5, fm6, fm7, fm8 } = registerMultiControl(["fmi", "fmh"], 8, "fm");
-  var { fmenv, fmenv1, fmenv2, fmenv3, fmenv4, fmenv5, fmenv6, fmenv7, fmenv8, fme } = registerMultiControl(
-    "fmenv",
-    8,
-    "fme"
-  );
-  var {
-    fmattack,
-    fmattack1,
-    fmattack2,
-    fmattack3,
-    fmattack4,
-    fmattack5,
-    fmattack6,
-    fmattack7,
-    fmattack8,
-    fmatt,
-    fmatt1,
-    fmatt2,
-    fmatt3,
-    fmatt4,
-    fmatt5,
-    fmatt6,
-    fmatt7,
-    fmatt8
-  } = registerMultiControl("fmattack", 8, "fmatt");
-  var { fmwave, fmwave1, fmwave2, fmwave3, fmwave4, fmwave5, fmwave6, fmwave7, fmwave8 } = registerMultiControl(
-    "fmwave",
-    8
-  );
-  var {
-    fmdecay,
-    fmdecay1,
-    fmdecay2,
-    fmdecay3,
-    fmdecay4,
-    fmdecay5,
-    fmdecay6,
-    fmdecay7,
-    fmdecay8,
-    fmdec,
-    fmdec1,
-    fmdec2,
-    fmdec3,
-    fmdec4,
-    fmdec5,
-    fmdec6,
-    fmdec7,
-    fmdec8
-  } = registerMultiControl("fmdecay", 8, "fmdec");
-  var {
-    fmsustain,
-    fmsustain1,
-    fmsustain2,
-    fmsustain3,
-    fmsustain4,
-    fmsustain5,
-    fmsustain6,
-    fmsustain7,
-    fmsustain8,
-    fmsus,
-    fmsus1,
-    fmsus2,
-    fmsus3,
-    fmsus4,
-    fmsus5,
-    fmsus6,
-    fmsus7,
-    fmsus8
-  } = registerMultiControl("fmsustain", 8, "fmsus");
-  var {
-    fmrelease,
-    fmrelease1,
-    fmrelease2,
-    fmrelease3,
-    fmrelease4,
-    fmrelease5,
-    fmrelease6,
-    fmrelease7,
-    fmrelease8,
-    fmrel,
-    fmrel1,
-    fmrel2,
-    fmrel3,
-    fmrel4,
-    fmrel5,
-    fmrel6,
-    fmrel7,
-    fmrel8
-  } = registerMultiControl("fmrelease", 8, "fmrel");
-  for (let i3 = 0; i3 <= 8; i3++) {
-    for (let j = 0; j <= 8; j++) {
-      registerControl(`fmi${i3}${j}`, `fm${i3}${j}`);
-    }
-  }
-  var { bank } = registerControl("bank");
-  var { chorus } = registerControl("chorus");
-  var { analyze } = registerControl("analyze");
-  var { fft } = registerControl("fft");
-  var { attack, att } = registerControl("attack", "att");
-  var { decay, dec } = registerControl("decay", "dec");
-  var { sustain, sus } = registerControl("sustain", "sus");
-  var { release, rel } = registerControl("release", "rel");
-  var { hold } = registerControl("hold");
-  var { bandf, bpf, bp } = registerControl(["bandf", "bandq", "bpenv"], "bpf", "bp");
-  var { bandq, bpq } = registerControl("bandq", "bpq");
-  var { begin } = registerControl("begin");
-  var { end } = registerControl("end");
-  var { loop } = registerControl("loop");
-  var { loopBegin, loopb } = registerControl("loopBegin", "loopb");
-  var { loopEnd, loope } = registerControl("loopEnd", "loope");
-  var { crush } = registerControl("crush");
-  var { coarse } = registerControl("coarse");
-  var { tremolo, trem } = registerControl(["tremolo", "tremolodepth", "tremoloskew", "tremolophase"], "trem");
-  var { tremolosync } = registerControl(
-    ["tremolosync", "tremolodepth", "tremoloskew", "tremolophase"],
-    "tremsync"
-  );
-  var { tremolodepth } = registerControl("tremolodepth", "tremdepth");
-  var { tremoloskew } = registerControl("tremoloskew", "tremskew");
-  var { tremolophase } = registerControl("tremolophase", "tremphase");
-  var { tremoloshape } = registerControl("tremoloshape", "tremshape");
-  var { drive } = registerControl("drive");
-  var { duck } = registerControl("duckorbit", "duck");
-  var { duckdepth } = registerControl("duckdepth");
-  var { duckonset } = registerControl("duckonset", "duckons");
-  var { duckattack } = registerControl("duckattack", "duckatt", "datt");
-  var { byteBeatExpression, bbexpr } = registerControl("byteBeatExpression", "bbexpr", "bb");
-  var { byteBeatStartTime, bbst } = registerControl("byteBeatStartTime", "bbst");
-  var { channels, ch } = registerControl("channels", "ch");
-  var { pw } = registerControl(["pw", "pwrate", "pwsweep"]);
-  var { pwrate } = registerControl("pwrate", "pwr");
-  var { pwsweep } = registerControl("pwsweep", "pws");
-  var { phaserrate, ph, phaser } = registerControl(
-    ["phaserrate", "phaserdepth", "phasercenter", "phasersweep"],
-    "ph",
-    "phaser"
-  );
-  var { phasersweep, phs } = registerControl("phasersweep", "phs");
-  var { phasercenter, phc } = registerControl("phasercenter", "phc");
-  var { phaserdepth, phd, phasdp } = registerControl("phaserdepth", "phd", "phasdp");
-  var { channel } = registerControl("channel");
-  var { cut } = registerControl("cut");
-  var { cutoff, ctf, lpf, lp } = registerControl(["cutoff", "resonance", "lpenv"], "ctf", "lpf", "lp");
-  var { lpenv, lpe } = registerControl("lpenv", "lpe");
-  var { hpenv, hpe } = registerControl("hpenv", "hpe");
-  var { bpenv, bpe } = registerControl("bpenv", "bpe");
-  var { lpattack, lpa } = registerControl("lpattack", "lpa");
-  var { hpattack, hpa } = registerControl("hpattack", "hpa");
-  var { bpattack, bpa } = registerControl("bpattack", "bpa");
-  var { lpdecay, lpd } = registerControl("lpdecay", "lpd");
-  var { hpdecay, hpd } = registerControl("hpdecay", "hpd");
-  var { bpdecay, bpd } = registerControl("bpdecay", "bpd");
-  var { lpsustain, lps } = registerControl("lpsustain", "lps");
-  var { hpsustain, hps } = registerControl("hpsustain", "hps");
-  var { bpsustain, bps } = registerControl("bpsustain", "bps");
-  var { lprelease, lpr } = registerControl("lprelease", "lpr");
-  var { hprelease, hpr } = registerControl("hprelease", "hpr");
-  var { bprelease, bpr } = registerControl("bprelease", "bpr");
-  var { ftype } = registerControl("ftype");
-  var { fanchor } = registerControl("fanchor");
-  var { lprate } = registerControl("lprate");
-  var { lpsync } = registerControl("lpsync");
-  var { lpdepth } = registerControl("lpdepth");
-  var { lpdepthfrequency, lpdepthfreq } = registerControl("lpdepthfrequency", "lpdepthfreq");
-  var { lpshape } = registerControl("lpshape");
-  var { lpdc } = registerControl("lpdc");
-  var { lpskew } = registerControl("lpskew");
-  var { bprate } = registerControl("bprate");
-  var { bpsync } = registerControl("bpsync");
-  var { bpdepth } = registerControl("bpdepth");
-  var { bpdepthfrequency, bpdepthfreq } = registerControl("bpdepthfrequency", "bpdepthfreq");
-  var { bpshape } = registerControl("bpshape");
-  var { bpdc } = registerControl("bpdc");
-  var { bpskew } = registerControl("bpskew");
-  var { hprate } = registerControl("hprate");
-  var { hpsync } = registerControl("hpsync");
-  var { hpdepth } = registerControl("hpdepth");
-  var { hpdepthfrequency, hpdepthfreq } = registerControl("hpdepthfrequency", "hpdepthfreq");
-  var { hpshape } = registerControl("hpshape");
-  var { hpdc } = registerControl("hpdc");
-  var { hpskew } = registerControl("hpskew");
-  var { vib, vibrato, v } = registerControl(["vib", "vibmod"], "vibrato", "v");
-  var { noise } = registerControl("noise");
-  var { vibmod, vmod } = registerControl(["vibmod", "vib"], "vmod");
-  var { hcutoff, hpf, hp } = registerControl(["hcutoff", "hresonance", "hpenv"], "hpf", "hp");
-  var { hresonance, hpq } = registerControl("hresonance", "hpq");
-  var { resonance, lpq } = registerControl("resonance", "lpq");
-  var { djf } = registerControl("djf");
-  var { delay } = registerControl(["delay", "delaytime", "delayfeedback"]);
-  var { delayfeedback, delayfb, dfb } = registerControl("delayfeedback", "delayfb", "dfb");
-  var { delaytime, delayt, dt } = registerControl("delaytime", "delayt", "dt");
-  var { delaysync } = registerControl("delaysync", "delays", "ds");
-  var { lock } = registerControl("lock");
-  var { detune, det } = registerControl("detune", "det");
-  var { unison } = registerControl("unison");
-  var { spread } = registerControl("spread");
-  var { dry } = registerControl("dry");
-  var { fadeTime, fadeOutTime } = registerControl("fadeTime", "fadeOutTime");
-  var { fadeInTime } = registerControl("fadeInTime");
-  var { freq } = registerControl("freq");
-  var { pattack, patt } = registerControl("pattack", "patt");
-  var { pdecay, pdec } = registerControl("pdecay", "pdec");
-  var { psustain, psus } = registerControl("psustain", "psus");
-  var { prelease, prel } = registerControl("prelease", "prel");
-  var { penv } = registerControl("penv");
-  var { pcurve } = registerControl("pcurve");
-  var { panchor } = registerControl("panchor");
-  var { gate, gat } = registerControl("gate", "gat");
-  var { leslie } = registerControl("leslie");
-  var { lrate } = registerControl("lrate");
-  var { lsize } = registerControl("lsize");
-  var { activeLabel } = registerControl("activeLabel");
-  var { label } = registerControl(["label", "activeLabel"]);
-  var { degree } = registerControl("degree");
-  var { mtranspose } = registerControl("mtranspose");
-  var { ctranspose } = registerControl("ctranspose");
-  var { harmonic } = registerControl("harmonic");
-  var { stepsPerOctave } = registerControl("stepsPerOctave");
-  var { octaveR } = registerControl("octaveR");
-  var { nudge } = registerControl("nudge");
-  var { octave, oct } = registerControl("octave", "oct");
-  var { orbit } = registerControl("orbit", "o");
-  var { bus } = registerControl("bus");
-  var { busgain, bgain } = registerControl("busgain", "bgain");
-  var { overgain } = registerControl("overgain");
-  var { overshape } = registerControl("overshape");
-  var { pan } = registerControl("pan");
-  var { panspan } = registerControl("panspan");
-  var { pansplay } = registerControl("pansplay");
-  var { panwidth } = registerControl("panwidth");
-  var { panorient } = registerControl("panorient");
-  var { slide } = registerControl("slide");
-  var { semitone } = registerControl("semitone");
-  var { voice } = registerControl("voice");
-  var { chord } = registerControl("chord");
-  var { dictionary, dict } = registerControl("dictionary", "dict");
-  var { anchor } = registerControl("anchor");
-  var { offset } = registerControl("offset");
-  var { octaves } = registerControl("octaves");
-  var { mode } = registerControl(["mode", "anchor"]);
-  var { room } = registerControl(["room", "size"]);
-  var { roomlp, rlp } = registerControl("roomlp", "rlp");
-  var { roomdim, rdim } = registerControl("roomdim", "rdim");
-  var { roomfade, rfade } = registerControl("roomfade", "rfade");
-  var { ir, iresponse } = registerControl(["ir", "i"], "iresponse");
-  var { irspeed } = registerControl("irspeed");
-  var { irbegin } = registerControl("irbegin");
-  var { roomsize, size, sz, rsize } = registerControl("roomsize", "size", "sz", "rsize");
-  var { shape } = registerControl(["shape", "shapevol"]);
-  var { distort, dist } = registerControl(["distort", "distortvol", "distorttype"], "dist");
-  var { distortvol } = registerControl("distortvol", "distvol");
-  var { distorttype } = registerControl("distorttype", "disttype");
-  var { compressor } = registerControl([
-    "compressor",
-    "compressorRatio",
-    "compressorKnee",
-    "compressorAttack",
-    "compressorRelease"
-  ]);
-  var { compressorKnee } = registerControl("compressorKnee");
-  var { compressorRatio } = registerControl("compressorRatio");
-  var { compressorAttack } = registerControl("compressorAttack");
-  var { compressorRelease } = registerControl("compressorRelease");
-  var { speed } = registerControl("speed");
-  var { stretch } = registerControl("stretch");
-  var { unit } = registerControl("unit");
-  var { squiz } = registerControl("squiz");
-  var { vowel } = registerControl("vowel");
-  var { waveloss } = registerControl("waveloss");
-  var { density } = registerControl("density");
-  var { expression } = registerControl("expression");
-  var { sustainpedal } = registerControl("sustainpedal");
-  var { fshift } = registerControl("fshift");
-  var { fshiftnote } = registerControl("fshiftnote");
-  var { fshiftphase } = registerControl("fshiftphase");
-  var { triode } = registerControl("triode");
-  var { krush } = registerControl("krush");
-  var { kcutoff } = registerControl("kcutoff");
-  var { octer } = registerControl("octer");
-  var { octersub } = registerControl("octersub");
-  var { octersubsub } = registerControl("octersubsub");
-  var { ring } = registerControl("ring");
-  var { ringf } = registerControl("ringf");
-  var { ringdf } = registerControl("ringdf");
-  var { freeze } = registerControl("freeze");
-  var { xsdelay } = registerControl("xsdelay");
-  var { tsdelay } = registerControl("tsdelay");
-  var { real } = registerControl("real");
-  var { imag } = registerControl("imag");
-  var { enhance } = registerControl("enhance");
-  var { comb } = registerControl("comb");
-  var { smear } = registerControl("smear");
-  var { scram } = registerControl("scram");
-  var { binshift } = registerControl("binshift");
-  var { hbrick } = registerControl("hbrick");
-  var { lbrick } = registerControl("lbrick");
-  var { frameRate } = registerControl("frameRate");
-  var { frames } = registerControl("frames");
-  var { hours } = registerControl("hours");
-  var { minutes } = registerControl("minutes");
-  var { seconds } = registerControl("seconds");
-  var { songPtr } = registerControl("songPtr");
-  var { uid } = registerControl("uid");
-  var { val } = registerControl("val");
-  var { cps } = registerControl("cps");
-  var { clip, legato } = registerControl("clip", "legato");
-  var { duration, dur } = registerControl("duration", "dur");
-  var { zrand } = registerControl("zrand");
-  var { curve } = registerControl("curve");
-  var { deltaSlide } = registerControl("deltaSlide");
-  var { pitchJump } = registerControl("pitchJump");
-  var { pitchJumpTime } = registerControl("pitchJumpTime");
-  var { znoise } = registerControl("znoise");
-  var { zmod } = registerControl("zmod");
-  var { zcrush } = registerControl("zcrush");
-  var { zdelay } = registerControl("zdelay");
-  var { zzfx } = registerControl("zzfx");
-  var { color, colour } = registerControl(["color", "colour"]);
-  var createParams = (...names10) => names10.reduce((acc, name3) => Object.assign(acc, { [name3]: createParam(name3) }), {});
-  var adsr = register("adsr", (adsr2, pat) => {
-    adsr2 = !Array.isArray(adsr2) ? [adsr2] : adsr2;
-    const [attack2, decay2, sustain2, release2] = adsr2;
-    return pat.set({ attack: attack2, decay: decay2, sustain: sustain2, release: release2 });
-  });
-  var ad = register("ad", (t, pat) => {
-    t = !Array.isArray(t) ? [t] : t;
-    const [attack2, decay2 = attack2] = t;
-    return pat.attack(attack2).decay(decay2);
-  });
-  var ds = register("ds", (t, pat) => {
-    t = !Array.isArray(t) ? [t] : t;
-    const [decay2, sustain2 = 0] = t;
-    return pat.set({ decay: decay2, sustain: sustain2 });
-  });
-  var ar = register("ar", (t, pat) => {
-    t = !Array.isArray(t) ? [t] : t;
-    const [attack2, release2 = attack2] = t;
-    return pat.set({ attack: attack2, release: release2 });
-  });
-  var { midichan } = registerControl("midichan");
-  var { midimap } = registerControl("midimap");
-  var { midiport } = registerControl("midiport");
-  var { midicmd } = registerControl("midicmd");
-  var control = register("control", (args, pat) => {
-    if (!Array.isArray(args)) {
-      throw new Error("control expects an array of [ccn, ccv]");
-    }
-    const [_ccn, _ccv] = args;
-    return pat.ccn(_ccn).ccv(_ccv);
-  });
-  var { ccn } = registerControl("ccn");
-  var { ccv } = registerControl("ccv");
-  var { ctlNum } = registerControl("ctlNum");
-  var { nrpnn } = registerControl("nrpnn");
-  var { nrpv } = registerControl("nrpv");
-  var { progNum } = registerControl("progNum");
-  var sysex = register("sysex", (args, pat) => {
-    if (!Array.isArray(args)) {
-      throw new Error("sysex expects an array of [id, data]");
-    }
-    const [id2, data2] = args;
-    return pat.sysexid(id2).sysexdata(data2);
-  });
-  var { sysexid } = registerControl("sysexid");
-  var { sysexdata } = registerControl("sysexdata");
-  var { midibend } = registerControl("midibend");
-  var { miditouch } = registerControl("miditouch");
-  var { polyTouch } = registerControl("polyTouch");
-  var { oschost } = registerControl("oschost");
-  var { oscport } = registerControl("oscport");
-  var getControlName = (alias) => {
-    if (controlAlias.has(alias)) {
-      return controlAlias.get(alias);
-    }
-    return alias;
-  };
-  var as = register("as", (mapping, pat) => {
-    mapping = Array.isArray(mapping) ? mapping : [mapping];
-    return pat.fmap((v2) => {
-      v2 = Array.isArray(v2) ? v2 : [v2];
-      const entries4 = [];
-      for (let i3 = 0; i3 < mapping.length; ++i3) {
-        if (v2[i3] !== void 0) {
-          entries4.push([getControlName(mapping[i3]), v2[i3]]);
-        }
-      }
-      return Object.fromEntries(entries4);
-    });
-  });
-  var scrub = register(
-    "scrub",
-    (beginPat, pat) => {
-      return beginPat.outerBind((v2) => {
-        if (!Array.isArray(v2)) {
-          v2 = [v2];
-        }
-        const [beginVal, speedMultiplier = 1] = v2;
-        return pat.begin(beginVal).mul(speed(speedMultiplier)).clip(1);
-      });
-    },
-    false
-  );
-  var subControlAliases = /* @__PURE__ */ new Map();
-  var registerSubControl = (control2, subControl, ...aliases) => {
-    const aliasMap = subControlAliases.get(control2) ?? /* @__PURE__ */ new Map();
-    const allKeys = /* @__PURE__ */ new Set([subControl, ...aliases]);
-    for (const alias of allKeys) {
-      aliasMap.set(String(alias).toLowerCase(), subControl);
-    }
-    subControlAliases.set(control2, aliasMap);
-  };
-  var registerSubControls = (control2, subControlAliases2 = []) => {
-    for (const [subControl, ...aliases] of subControlAliases2) {
-      registerSubControl(control2, subControl, ...aliases);
-    }
-  };
-  var getMainSubcontrolName = (control2, subKey) => {
-    const aliasMap = subControlAliases.get(control2);
-    if (!aliasMap) return subKey;
-    return aliasMap.get(String(subKey).toLowerCase()) ?? subKey;
-  };
-  registerSubControls("lfo", [
-    ["control", "c"],
-    ["subControl", "sc"],
-    ["rate", "r"],
-    ["depth", "dep", "dr"],
-    ["depthabs", "da"],
-    ["dcoffset", "dc"],
-    ["shape", "sh"],
-    ["skew", "sk"],
-    ["curve", "cu"],
-    ["sync", "s"],
-    ["retrig", "rt"],
-    ["fxi"]
-  ]);
-  registerSubControls("env", [
-    ["control", "c"],
-    ["subControl", "sc"],
-    ["attack", "att", "a"],
-    ["decay", "dec", "d"],
-    ["sustain", "sus", "s"],
-    ["release", "rel", "r"],
-    ["depth", "dep", "dr"],
-    ["depthabs", "da"],
-    ["acurve", "ac"],
-    ["dcurve", "dc"],
-    ["rcurve", "rc"],
-    ["fxi"]
-  ]);
-  registerSubControls("bmod", [
-    ["bus", "b"],
-    ["control", "c"],
-    ["subControl", "sc"],
-    ["depth", "dep", "dr"],
-    ["depthabs", "da"],
-    ["dc"],
-    ["fxi"]
-  ]);
-  Pattern.prototype.modulate = function(type, config, idPat) {
-    config = { control: void 0, ...config };
-    const modulatorKeys = ["lfo", "env", "bmod"];
-    if (!modulatorKeys.includes(type)) {
-      logger(`[core] Modulation type ${type} not found. Please use one of 'lfo', 'env', 'bmod'`);
-      return this;
-    }
-    let output = this;
-    let defaultValue = void 0;
-    output = output.fmap((v2) => (id2) => ({ v: v2, id: id2 })).appLeft(reify(idPat));
-    for (const [rawKey, value2] of Object.entries(config)) {
-      const key = getMainSubcontrolName(type, rawKey);
-      const valuePat = reify(value2);
-      output = output.fmap(({ v: v2, id: id2 }) => (c) => {
-        if (defaultValue === void 0) {
-          let control2 = getControlName(Object.keys(v2).at(-1));
-          if (modulatorKeys.includes(control2)) {
-            control2 = `${control2}_${[...v2[control2].__ids].at(-1)}`;
-          }
-          defaultValue = control2;
-        }
-        v2[type] ??= { __ids: /* @__PURE__ */ new Set() };
-        const t = v2[type];
-        id2 ??= t.__ids.size;
-        t[id2] ??= { control: defaultValue };
-        t.__ids.add(id2);
-        if (c === void 0) return { v: v2, id: id2 };
-        if (key === "control" || key === "subControl") {
-          t[id2][key] = getControlName(c);
-        } else {
-          t[id2][key] = c;
-        }
-        return { v: v2, id: id2 };
-      }).appLeft(valuePat);
-    }
-    return output.fmap(({ v: v2 }) => v2);
-  };
-  Pattern.prototype.lfo = function(config, id2) {
-    return this.modulate("lfo", config, id2);
-  };
-  var lfo = (config) => pure({}).lfo(config);
-  Pattern.prototype.env = function(config, id2) {
-    return this.modulate("env", config, id2);
-  };
-  var env = (config) => pure({}).env(config);
-  Pattern.prototype.bmod = function(config, id2) {
-    return this.modulate("bmod", config, id2);
-  };
-  var bmod = (config) => pure({}).bmod(config);
-  var { transient } = registerControl(["transient", "transsustain"]);
-  var { FXrelease, FXrel, FXr, fxr } = registerControl("FXrelease", "FXrel", "FXr", "fxr");
-
-  // build/engine-src/strudel/packages/core/euclid.mjs
-  var left = function(n2, x) {
-    const [ons, offs] = n2;
-    const [xs, ys] = x;
-    const [_xs, __xs] = splitAt(offs, xs);
-    return [
-      [offs, ons - offs],
-      [zipWith((a, b) => a.concat(b), _xs, ys), __xs]
-    ];
-  };
-  var right = function(n2, x) {
-    const [ons, offs] = n2;
-    const [xs, ys] = x;
-    const [_ys, __ys] = splitAt(ons, ys);
-    const result = [
-      [ons, offs - ons],
-      [zipWith((a, b) => a.concat(b), xs, _ys), __ys]
-    ];
-    return result;
-  };
-  var _bjorklund = function(n2, x) {
-    const [ons, offs] = n2;
-    return Math.min(ons, offs) <= 1 ? [n2, x] : _bjorklund(...ons > offs ? left(n2, x) : right(n2, x));
-  };
-  var bjorklund = function(ons, steps4) {
-    const inverted = ons < 0;
-    const absOns = Math.abs(ons);
-    const offs = steps4 - absOns;
-    const ones = Array(absOns).fill([1]);
-    const zeros = Array(offs).fill([0]);
-    const result = _bjorklund([absOns, offs], [ones, zeros]);
-    const pattern2 = flatten(result[1][0]).concat(flatten(result[1][1]));
-    return inverted ? pattern2.map((x) => 1 - x) : pattern2;
-  };
-  var _euclidRot = function(pulses, steps4, rotation) {
-    const b = bjorklund(pulses, steps4);
-    if (rotation) {
-      return rotate(b, -rotation);
-    }
-    return b;
-  };
-  var _euclidLegato = function(pulses, steps4, rotation, pat) {
-    var bin_pat = _euclidRot(pulses, steps4, 0);
-    const firstOnset = bin_pat.indexOf(1);
-    bin_pat = rotate(bin_pat, firstOnset);
-    steps4 = Math.abs(steps4);
-    const gapless = bin_pat.join("").split("1").slice(1).map((s2) => [s2.length + 1, true]);
-    return pat.struct(timeCat(...gapless).late(fraction_default(rotation + firstOnset).div(steps4)));
-  };
-  var _euclid = function(pulses, steps4, rotation, pat) {
-    if (steps4 === 0 || pulses === 0) {
-      return silence;
-    }
-    const cycles = Math.ceil(Math.abs(pulses) / Math.abs(steps4));
-    const totalSteps = cycles * steps4;
-    if (totalSteps < 0) {
-      return _euclidLegato(pulses, -totalSteps, rotation, pat.fast(cycles)).slow(cycles);
-    }
-    return pat.fast(cycles).struct(_euclidRot(pulses, totalSteps, rotation)).slow(cycles);
-  };
-  var euclid = register("euclid", function(pulses, steps4, pat) {
-    return _euclid(pulses, steps4, 0, pat);
-  });
-  var bjork = register("bjork", function(euc, pat) {
-    if (!Array.isArray(euc)) {
-      euc = [euc];
-    }
-    const [pulses, steps4 = pulses, rot = 0] = euc;
-    return _euclid(pulses, steps4, rot, pat);
-  });
-  var { euclidrot, euclidRot } = register(["euclidrot", "euclidRot"], function(pulses, steps4, rotation, pat) {
-    return _euclid(pulses, steps4, rotation, pat);
-  });
-  var euclidLegato = register(["euclidLegato"], function(pulses, steps4, pat) {
-    return _euclid(pulses, -steps4, 0, pat);
-  });
-  var euclidLegatoRot = register(["euclidLegatoRot"], function(pulses, steps4, rotation, pat) {
-    return _euclid(pulses, -steps4, rotation, pat);
-  });
-  var { euclidish, eish } = register(["euclidish", "eish"], function(pulses, steps4, perc, pat) {
-    const morphed = _morph(bjorklund(pulses, steps4), new Array(pulses).fill(1), perc);
-    return pat.struct(morphed).setSteps(steps4);
-  });
-
-  // build/engine-src/strudel/packages/core/zyklus.mjs
-  function createClock(getTime2, callback, duration2 = 0.05, interval3 = 0.1, overlap = 0.1, setInterval = globalThis.setInterval, clearInterval = globalThis.clearInterval, round2 = true) {
-    let tick = 0;
-    let phase = 0;
-    let precision = 10 ** 4;
-    let minLatency = 0.01;
-    const setDuration = (setter) => duration2 = setter(duration2);
-    overlap = overlap || interval3 / 2;
-    const onTick = () => {
-      const t = getTime2();
-      const lookahead2 = t + interval3 + overlap;
-      if (phase === 0) {
-        phase = t + minLatency;
-      }
-      while (phase < lookahead2) {
-        phase = round2 ? Math.round(phase * precision) / precision : phase;
-        callback(phase, duration2, tick, t);
-        phase += duration2;
-        tick++;
-      }
-    };
-    let intervalID;
-    const start = () => {
-      clear();
-      onTick();
-      intervalID = setInterval(onTick, interval3 * 1e3);
-    };
-    const clear = () => {
-      intervalID !== void 0 && clearInterval(intervalID);
-      intervalID = void 0;
-    };
-    const pause = () => clear();
-    const stop = () => {
-      tick = 0;
-      phase = 0;
-      clear();
-    };
-    const getPhase = () => phase;
-    return { setDuration, start, stop, pause, duration: duration2, interval: interval3, getPhase, minLatency };
-  }
-  var zyklus_default = createClock;
-
-  // build/engine-src/strudel/packages/core/cyclist.mjs
-  var Cyclist = class {
-    constructor({
-      interval: interval3,
-      onSchedule,
-      onTrigger,
-      onToggle,
-      onError,
-      getTime: getTime2,
-      latency = 0.1,
-      setInterval,
-      clearInterval,
-      beforeStart
-    }) {
-      if (onTrigger) {
-        throw new Error(
-          "onTrigger has been dropped. use onSchedule(hap, time, cps) instead, see https://codeberg.org/uzu/strudel/pulls/2138"
-        );
-      }
-      this.started = false;
-      this.beforeStart = beforeStart;
-      this.cps = 0.5;
-      this.checkpoint = {
-        // new checkpoints are created when there's a change in cps
-        cycles: 0,
-        // number of cycles when cps was changed
-        seconds: 0
-        // clock phase when cps was changed
-      };
-      this.num_ticks_since_checkpoint = 0;
-      this.lastTick = 0;
-      this.lastBegin = 0;
-      this.lastEnd = 0;
-      this.getTime = getTime2;
-      this.onToggle = onToggle;
-      this.latency = latency;
-      this.clock = zyklus_default(
-        getTime2,
-        // called slightly before each cycle
-        (phase, duration2, _, t) => {
-          if (this.num_ticks_since_checkpoint === 0) {
-            this.checkpoint = {
-              cycles: this.lastEnd,
-              seconds: phase
-            };
-          }
-          this.num_ticks_since_checkpoint++;
-          try {
-            var begin2 = this.lastEnd;
-            this.lastBegin = begin2;
-            var end2 = this.checkpoint.cycles + this.num_ticks_since_checkpoint * duration2 * this.cps;
-            this.lastEnd = end2;
-            this.lastTick = phase;
-            if (phase < t) {
-              console.log(`skip query: too late`);
-              return;
-            }
-            const tickEndTime = phase + duration2;
-            var cpsChanged = false;
-            do {
-              cpsChanged = false;
-              const haps = this.pattern.queryArc(begin2, end2, { _cps: this.cps, cyclist: "cyclist" }).filter((hap) => hap.hasOnset()).sort((a, b) => {
-                const aBegin = a.whole.begin;
-                const bBegin = b.whole.begin;
-                if (aBegin.eq(bBegin)) {
-                  if (a.value.cps !== void 0) {
-                    return b.value.cps !== void 0 ? 0 : -1;
-                  }
-                  if (b.value.cps !== void 0) {
-                    return 1;
-                  }
-                  return 0;
-                }
-                return aBegin.sub(bBegin);
-              });
-              haps.forEach((hap) => {
-                const targetTime = (hap.whole.begin - this.checkpoint.cycles) / this.cps + this.checkpoint.seconds;
-                if (tickEndTime < targetTime) {
-                  return;
-                }
-                onSchedule?.(hap, targetTime + this.latency, hap.value.cps ?? this.cps);
-                if (hap.value.cps !== void 0 && this.cps != hap.value.cps) {
-                  cpsChanged = true;
-                  this.cps = hap.value.cps;
-                  this.num_ticks_since_checkpoint = 0;
-                  this.checkpoint = {
-                    cycles: hap.whole.begin,
-                    seconds: targetTime
-                  };
-                }
-              });
-              if (cpsChanged) {
-                begin2 = end2;
-                const remainingSecondsSinceCheckpoint = tickEndTime - this.checkpoint.seconds;
-                const remainingCycles = remainingSecondsSinceCheckpoint * this.cps;
-                end2 = this.checkpoint.cycles + remainingCycles;
-                this.lastEnd = end2;
-                if (end2 < begin2) {
-                  break;
-                }
-              }
-            } while (cpsChanged);
-          } catch (e) {
-            errorLogger(e);
-            onError?.(e);
-          }
-        },
-        interval3,
-        // duration of each cycle
-        0.1,
-        0.1,
-        setInterval,
-        clearInterval
-      );
-    }
-    now() {
-      if (!this.started) {
-        return 0;
-      }
-      const secondsSinceLastTick = this.getTime() - this.lastTick - this.clock.duration;
-      return this.lastBegin + secondsSinceLastTick * this.cps;
-    }
-    setStarted(v2) {
-      this.started = v2;
-      this.onToggle?.(v2);
-    }
-    async start() {
-      await this.beforeStart?.();
-      this.checkpoint = {
-        cycles: 0,
-        seconds: 0
-      };
-      this.num_ticks_since_checkpoint = 0;
-      if (!this.pattern) {
-        throw new Error("Scheduler: no pattern set! call .setPattern first.");
-      }
-      logger("[cyclist] start");
-      this.clock.start();
-      this.setStarted(true);
-    }
-    pause() {
-      logger("[cyclist] pause");
-      this.clock.pause();
-      this.setStarted(false);
-    }
-    stop() {
-      logger("[cyclist] stop");
-      this.clock.stop();
-      this.lastEnd = 0;
-      this.setStarted(false);
-    }
-    async setPattern(pat, autostart = false) {
-      this.pattern = pat;
-      if (autostart && !this.started) {
-        await this.start();
-      }
-    }
-    setCps(cps2 = 0.5) {
-      if (this.cps === cps2) {
-        return;
-      }
-      this.cps = cps2;
-      this.num_ticks_since_checkpoint = 0;
-    }
-    log(begin2, end2, haps) {
-      const onsets = haps.filter((h2) => h2.hasOnset());
-      console.log(`${begin2.toFixed(4)} - ${end2.toFixed(4)} ${Array(onsets.length).fill("I").join("")}`);
-    }
-  };
-
-  // build/engine-src/strudel/packages/core/impure.mjs
-  var timelines = {};
-  var reset_state = function() {
-    reset_timelines();
-  };
-  var reset_timelines = function() {
-    timelines = {};
-  };
-  var timeline = register(
-    "timeline",
-    function(tpat, pat) {
-      tpat = reify(tpat);
-      const f = function(state) {
-        const scheduler2 = !!state.controls.cyclist;
-        const timehaps = tpat.query(state);
-        const result = [];
-        for (const timehap of timehaps) {
-          const tlid = timehap.value;
-          let offset3;
-          if (tlid === 0) {
-            offset3 = 0;
-          } else if (tlid in timelines) {
-            offset3 = timelines[tlid];
-          } else {
-            const timearc = timehap.wholeOrPart();
-            if (!scheduler2 || state.span.begin.lt(timearc.midpoint())) {
-              offset3 = timearc.begin;
-            } else {
-              offset3 = timearc.end;
-            }
-          }
-          if (scheduler2) {
-            timelines[tlid] = offset3;
-            if (tlid !== 0) {
-              delete timelines[-tlid];
-            }
-          }
-          const pathaps = pat.late(offset3).query(state.setSpan(timehap.part)).map((h2) => h2.setContext(h2.combineContext(timehap)));
-          result.push(...pathaps);
-        }
-        return result;
-      };
-      return new Pattern(f, pat._steps);
-    },
-    false
-  );
-
-  // build/engine-src/strudel/packages/core/pick.mjs
-  var _pick = function(lookup, pat, modulo = true) {
-    const array = Array.isArray(lookup);
-    const len = Object.keys(lookup).length;
-    lookup = objectMap(lookup, reify);
-    if (len === 0) {
-      return silence;
-    }
-    return pat.fmap((i3) => {
-      let key = i3;
-      if (array) {
-        key = modulo ? Math.round(key) % len : clamp(Math.round(key), 0, lookup.length - 1);
-      }
-      return lookup[key];
-    });
-  };
-  var pick = function(lookup, pat) {
-    if (Array.isArray(pat)) {
-      [pat, lookup] = [lookup, pat];
-    }
-    return __pick(lookup, pat);
-  };
-  var __pick = register("pick", function(lookup, pat) {
-    return _pick(lookup, pat, false).innerJoin();
-  });
-  var pickmod = register("pickmod", function(lookup, pat) {
-    return _pick(lookup, pat, true).innerJoin();
-  });
-  var pickF = register("pickF", function(pickPattern, lookup, pat) {
-    return pat.apply(pick(lookup, pickPattern));
-  });
-  var pickmodF = register("pickmodF", function(pickPattern, lookup, pat) {
-    return pat.apply(pickmod(lookup, pickPattern));
-  });
-  var pickOut = register("pickOut", function(lookup, pat) {
-    return _pick(lookup, pat, false).outerJoin();
-  });
-  var pickmodOut = register("pickmodOut", function(lookup, pat) {
-    return _pick(lookup, pat, true).outerJoin();
-  });
-  var pickRestart = register("pickRestart", function(lookup, pat) {
-    return _pick(lookup, pat, false).restartJoin();
-  });
-  var pickmodRestart = register("pickmodRestart", function(lookup, pat) {
-    return _pick(lookup, pat, true).restartJoin();
-  });
-  var pickReset = register("pickReset", function(lookup, pat) {
-    return _pick(lookup, pat, false).resetJoin();
-  });
-  var pickmodReset = register("pickmodReset", function(lookup, pat) {
-    return _pick(lookup, pat, true).resetJoin();
-  });
-  var { inhabit, pickSqueeze } = register(["inhabit", "pickSqueeze"], function(lookup, pat) {
-    return _pick(lookup, pat, false).squeezeJoin();
-  });
-  var { inhabitmod, pickmodSqueeze } = register(["inhabitmod", "pickmodSqueeze"], function(lookup, pat) {
-    return _pick(lookup, pat, true).squeezeJoin();
-  });
-  var squeeze = (pat, xs) => {
-    xs = xs.map(reify);
-    if (xs.length == 0) {
-      return silence;
-    }
-    return pat.fmap((i3) => {
-      const key = _mod(Math.round(i3), xs.length);
-      return xs[key];
-    }).squeezeJoin();
-  };
-
-  // build/engine-src/strudel/packages/core/neocyclist.mjs
-  var NeoCyclist = class {
-    constructor({ onSchedule, onToggle, getTime: getTime2, onTrigger }) {
-      if (onTrigger) {
-        throw new Error(
-          "onTrigger has been dropped. use onSchedule(hap, time, cps) instead, see https://codeberg.org/uzu/strudel/pulls/2138"
-        );
-      }
-      this.started = false;
-      this.cps = 0.5;
-      this.getTime = getTime2;
-      this.time_at_last_tick_message = 0;
-      this.collator = new ClockCollator({ getTargetClockTime: getTime2 });
-      this.onToggle = onToggle;
-      this.latency = 0.1;
-      this.cycle = 0;
-      this.id = Math.round(Date.now() * Math.random());
-      this.worker = new SharedWorker(new URL("./clockworker.js", "file:///engine.js"));
-      this.worker.port.start();
-      this.channel = new BroadcastChannel("strudeltick");
-      const tickCallback = (payload) => {
-        const { cps: cps2, begin: begin2, end: end2, cycle, time: time4 } = payload;
-        this.cps = cps2;
-        this.cycle = cycle;
-        const currentTime = this.collator.calculateOffset(time4) + time4;
-        processHaps(begin2, end2, currentTime);
-        this.time_at_last_tick_message = currentTime;
-      };
-      const processHaps = (begin2, end2, currentTime) => {
-        if (this.started === false) {
-          return;
-        }
-        const haps = this.pattern.queryArc(begin2, end2, { _cps: this.cps, cyclist: "neocyclist" });
-        haps.forEach((hap) => {
-          if (hap.hasOnset()) {
-            const timeUntilTrigger = cycleToSeconds(hap.whole.begin - this.cycle, this.cps);
-            const targetTime = timeUntilTrigger + currentTime + this.latency;
-            onSchedule?.(hap, targetTime, this.cps);
-          }
-        });
-      };
-      this.channel.onmessage = (message) => {
-        if (!this.started) {
-          return;
-        }
-        const { payload, type } = message.data;
-        switch (type) {
-          case "tick": {
-            tickCallback(payload);
-          }
-        }
-      };
-    }
-    sendMessage(type, payload) {
-      this.worker.port.postMessage({ type, payload, id: this.id });
-    }
-    now() {
-      const gap2 = (this.getTime() - this.time_at_last_tick_message) * this.cps;
-      return this.cycle + gap2;
-    }
-    setCps(cps2 = 1) {
-      this.sendMessage("cpschange", { cps: cps2 });
-    }
-    setCycle(cycle) {
-      this.sendMessage("setcycle", { cycle });
-    }
-    setStarted(started) {
-      this.sendMessage("toggle", { started });
-      this.started = started;
-      this.onToggle?.(started);
-    }
-    start() {
-      logger("[cyclist] start");
-      this.setStarted(true);
-    }
-    stop() {
-      logger("[cyclist] stop");
-      this.collator.reset();
-      this.setStarted(false);
-    }
-    setPattern(pat, autostart = false) {
-      this.pattern = pat;
-      if (autostart && !this.started) {
-        this.start();
-      }
-    }
-    log(begin2, end2, haps) {
-      const onsets = haps.filter((h2) => h2.hasOnset());
-      console.log(`${begin2.toFixed(4)} - ${end2.toFixed(4)} ${Array(onsets.length).fill("I").join("")}`);
-    }
-  };
-
-  // build/engine-src/strudel/packages/core/repl.mjs
-  function repl({
-    onSchedule,
-    defaultOutput,
-    onEvalError,
-    beforeEval,
-    beforeStart,
-    afterEval,
-    getTime: getTime2,
-    transpiler: transpiler2,
-    onToggle,
-    editPattern,
-    onUpdateState,
-    sync = false,
-    setInterval,
-    clearInterval,
-    id: id2,
-    mondo = false
-  }) {
-    if (defaultOutput) {
-      throw new Error(
-        "defaultOutput has been removed. use onSchedule(hap, time, cps) instead. see https://codeberg.org/uzu/strudel/pulls/2138/"
-      );
-    }
-    const state = {
-      schedulerError: void 0,
-      evalError: void 0,
-      code: "// LOADING",
-      activeCode: "// LOADING",
-      pattern: void 0,
-      miniLocations: [],
-      widgets: [],
-      pending: false,
-      started: false
-    };
-    const transpilerOptions = {
-      id: id2
-    };
-    const updateState = (update) => {
-      Object.assign(state, update);
-      state.isDirty = state.code !== state.activeCode;
-      state.error = state.evalError || state.schedulerError;
-      onUpdateState?.(state);
-    };
-    const schedulerOptions = {
-      onSchedule: getSchedule({ onSchedule }),
-      getTime: getTime2,
-      onToggle: (started) => {
-        updateState({ started });
-        setIsStarted(started);
-        onToggle?.(started);
-        if (!started) {
-          reset_state();
-        }
-      },
-      setInterval,
-      clearInterval,
-      beforeStart
-    };
-    const scheduler2 = sync && typeof SharedWorker != "undefined" ? new NeoCyclist(schedulerOptions) : new Cyclist(schedulerOptions);
-    setScheduleFunc(schedulerOptions.onSchedule);
-    setCpsFunc(() => scheduler2.cps);
-    let pPatterns = {};
-    let anonymousIndex = 0;
-    let allTransform;
-    let eachTransform;
-    const hush = function() {
-      pPatterns = {};
-      anonymousIndex = 0;
-      allTransform = void 0;
-      eachTransform = void 0;
-      return silence;
-    };
-    function unpure(pat) {
-      if (pat._Pattern) {
-        return pat.__pure;
-      }
-      return pat;
-    }
-    const setPattern2 = async (pattern2, autostart = true) => {
-      pattern2 = editPattern?.(pattern2) || pattern2;
-      await scheduler2.setPattern(pattern2, autostart);
-      setPattern(pattern2);
-      return pattern2;
-    };
-    setTime(() => scheduler2.now());
-    setClockTime(() => scheduler2.getTime());
-    const stop = () => scheduler2.stop();
-    const start = () => scheduler2.start();
-    const pause = () => scheduler2.pause();
-    const toggle = () => scheduler2.toggle();
-    const setCps = (cps2) => {
-      scheduler2.setCps(unpure(cps2));
-      return silence;
-    };
-    const setCpm = (cpm2) => {
-      scheduler2.setCps(unpure(cpm2) / 60);
-      return silence;
-    };
-    let allTransforms = [];
-    const all5 = function(transform) {
-      allTransforms.push(transform);
-      return silence;
-    };
-    const each = function(transform) {
-      eachTransform = transform;
-      return silence;
-    };
-    const injectPatternMethods = () => {
-      Pattern.prototype.p = function(id3) {
-        if (typeof id3 === "string" && (id3.startsWith("_") || id3.endsWith("_"))) {
-          return silence;
-        }
-        if (id3.includes("$")) {
-          id3 = `${id3}${anonymousIndex}`;
-          anonymousIndex++;
-        }
-        pPatterns[id3] = this;
-        return this;
-      };
-      Pattern.prototype.q = function(id3) {
-        return silence;
-      };
-      try {
-        for (let i3 = 1; i3 < 10; ++i3) {
-          Object.defineProperty(Pattern.prototype, `d${i3}`, {
-            get() {
-              return this.p(i3);
-            },
-            configurable: true
-          });
-          Object.defineProperty(Pattern.prototype, `p${i3}`, {
-            get() {
-              return this.p(i3);
-            },
-            configurable: true
-          });
-          Pattern.prototype[`q${i3}`] = silence;
-        }
-      } catch (err) {
-        console.warn("injectPatternMethods: error:", err);
-      }
-      const cpm2 = register("cpm", function(cpm3, pat) {
-        return pat._fast(cpm3 / 60 / scheduler2.cps);
-      });
-      return evalScope({
-        all: all5,
-        each,
-        hush,
-        cpm: cpm2,
-        setCps,
-        setcps: setCps,
-        setCpm,
-        setcpm: setCpm
-      });
-    };
-    const evaluate3 = async (code, autostart = true, shouldHush = true) => {
-      if (!code) {
-        throw new Error("no code to evaluate");
-      }
-      try {
-        updateState({ code, pending: true });
-        await injectPatternMethods();
-        setTime(() => scheduler2.now());
-        setClockTime(() => scheduler2.getTime());
-        await beforeEval?.({ code });
-        allTransforms = [];
-        shouldHush && hush();
-        if (mondo) {
-          code = `mondolang\`${code}\``;
-        }
-        let { pattern: pattern2, meta } = await evaluate(code, transpiler2, transpilerOptions);
-        if (Object.keys(pPatterns).length) {
-          let patterns = [];
-          let soloActive = false;
-          for (const [key, value2] of Object.entries(pPatterns)) {
-            const isSolod = key.length > 1 && key.startsWith("S");
-            if (isSolod && soloActive === false) {
-              patterns = [];
-              soloActive = true;
-            }
-            if (!soloActive || soloActive && isSolod) {
-              const valWithState = value2.withState((state2) => state2.setControls({ id: key }));
-              patterns.push(valWithState);
-            }
-          }
-          if (eachTransform) {
-            patterns = patterns.map((x) => eachTransform(x));
-          }
-          pattern2 = stack(...patterns);
-        } else if (eachTransform) {
-          pattern2 = eachTransform(pattern2);
-        }
-        if (allTransforms.length) {
-          for (const transform of allTransforms) {
-            pattern2 = transform(pattern2);
-          }
-        }
-        if (!isPattern(pattern2)) {
-          pattern2 = silence;
-        }
-        logger(`[eval] code updated`);
-        pattern2 = await setPattern2(pattern2, autostart);
-        updateState({
-          miniLocations: meta?.miniLocations || [],
-          widgets: meta?.widgets || [],
-          sliders: meta?.sliders || [],
-          activeCode: code,
-          pattern: pattern2,
-          evalError: void 0,
-          schedulerError: void 0,
-          pending: false
-        });
-        afterEval?.({ code, pattern: pattern2, meta });
-        return pattern2;
-      } catch (err) {
-        logger(`[eval] error: ${err.message}`, "error");
-        console.error(err);
-        updateState({ evalError: err, pending: false });
-        onEvalError?.(err);
-      }
-    };
-    const setCode = (code) => updateState({ code });
-    return { scheduler: scheduler2, evaluate: evaluate3, start, stop, pause, setCps, setPattern: setPattern2, setCode, toggle, state };
-  }
-  var getSchedule = ({ onSchedule }) => async (hap, t, cps2) => {
-    try {
-      if (!hap.context.onSchedule || !hap.context.dominantSchedule) {
-        await onSchedule(hap, t, cps2);
-      }
-      if (hap.context.onSchedule) {
-        await hap.context.onSchedule(hap, t, cps2);
-      }
-    } catch (err) {
-      errorLogger(err, "getSchedule");
-    }
-  };
-
-  // build/engine-src/strudel/packages/core/signal.mjs
-  function steady(value2) {
-    return new Pattern((state) => [new Hap(void 0, state.span, value2)]);
-  }
-  var signal = (func2) => {
-    const query = (state) => [new Hap(void 0, state.span, func2(state.span.begin, state.controls))];
-    return new Pattern(query);
-  };
-  var saw = signal((t) => _mod(t, 1));
-  var saw2 = saw.toBipolar();
-  var isaw = signal((t) => 1 - _mod(t, 1));
-  var isaw2 = isaw.toBipolar();
-  var sine2 = signal((t) => Math.sin(Math.PI * 2 * t));
-  var sine = sine2.fromBipolar();
-  var cosine = sine._early(fraction_default(1).div(4));
-  var cosine2 = sine2._early(fraction_default(1).div(4));
-  var square = signal((t) => Math.floor(_mod(t * 2, 2)));
-  var square2 = square.toBipolar();
-  var isquare = signal((t) => 1 - Math.floor(_mod(t * 2, 2)));
-  var isquare2 = isquare.toBipolar();
-  var tri = fastcat(saw, isaw);
-  var tri2 = fastcat(saw2, isaw2);
-  var itri = fastcat(isaw, saw);
-  var itri2 = fastcat(isaw2, saw2);
-  var time2 = signal(id);
-  var _mouseY = 0;
-  var _mouseX = 0;
-  if (typeof window !== "undefined") {
-    document.addEventListener("mousemove", (e) => {
-      _mouseY = e.clientY / document.body.clientHeight;
-      _mouseX = e.clientX / document.body.clientWidth;
-    });
-  }
-  var mousey = signal(() => _mouseY);
-  var mouseY = signal(() => _mouseY);
-  var mousex = signal(() => _mouseX);
-  var mouseX = signal(() => _mouseX);
-  var _murmurHashFinalizer = (x) => {
-    x |= 0;
-    x ^= x >>> 16;
-    x = Math.imul(x, 2246822507);
-    x ^= x >>> 13;
-    x = Math.imul(x, 3266489909);
-    x ^= x >>> 16;
-    return x >>> 0;
-  };
-  var _tToT = (t) => {
-    return Math.floor(t * 536870912);
-  };
-  var _decorrelate = (T, i3 = 0, seed2 = 0) => {
-    const lowBits = T >>> 0 >>> 0;
-    const highBits = Math.floor(T / 4294967296) >>> 0;
-    let key = lowBits ^ Math.imul(highBits ^ 2246822507, 3266489909);
-    key ^= Math.imul(i3 ^ 2135587861, 2654435769);
-    key ^= Math.imul(seed2 ^ 374761393, 668265261);
-    return key >>> 0;
-  };
-  var randAt = (T, i3 = 0, seed2 = 0) => {
-    return _murmurHashFinalizer(_decorrelate(T, i3, seed2)) / 4294967296;
-  };
-  var timeToRands = (t, n2, seed2 = 0) => {
-    const T = _tToT(t);
-    if (n2 === 1) {
-      return randAt(T, 0, seed2);
-    }
-    const out = new Array(n2);
-    for (let i3 = 0; i3 < n2; i3++) out[i3] = randAt(T, i3, seed2);
-    return out;
-  };
-  var __xorwise = (x) => {
-    const a = x << 13 ^ x;
-    const b = a >> 17 ^ a;
-    return b << 5 ^ b;
-  };
-  var __frac = (x) => x - Math.trunc(x);
-  var __timeToIntSeed = (x) => __xorwise(Math.trunc(__frac(x / 300) * 536870912));
-  var __intSeedToRand = (x) => x % 536870912 / 536870912;
-  var __timeToRandsPrime = (seed2, n2) => {
-    if (n2 === 1) {
-      return Math.abs(__intSeedToRand(seed2));
-    }
-    const result = [];
-    for (let i3 = 0; i3 < n2; i3++) {
-      result.push(__intSeedToRand(seed2));
-      seed2 = __xorwise(seed2);
-    }
-    return result;
-  };
-  var __timeToRands = (t, n2) => __timeToRandsPrime(__timeToIntSeed(t), n2);
-  var RNG_MODE = "legacy";
-  var getRandsAtTime = (t, n2 = 1, seed2 = 0) => {
-    return RNG_MODE === "legacy" ? __timeToRands(t + seed2, n2) : timeToRands(t, n2, seed2);
-  };
-  var useRNG = (mode3 = "legacy") => RNG_MODE = mode3;
-  var run = (n2) => saw.range(0, n2).round().segment(n2);
-  var binary = (n2) => {
-    const nBits = reify(n2).log2().floor().add(1);
-    return binaryN(n2, nBits);
-  };
-  var binaryN = (n2, nBits = 16) => {
-    nBits = reify(nBits);
-    const bitPos = run(nBits).mul(-1).add(nBits.sub(1));
-    return reify(n2).segment(nBits).brshift(bitPos).band(pure(1));
-  };
-  var binaryL = (n2) => {
-    const nBits = reify(n2).log2().floor().add(1);
-    return binaryNL(n2, nBits);
-  };
-  var binaryNL = (n2, nBits = 16) => {
-    return reify(n2).withValue((v2) => (bits) => {
-      const bList = [];
-      for (let i3 = bits - 1; i3 >= 0; i3--) {
-        bList.push(v2 >> i3 & 1);
-      }
-      return bList;
-    }).appLeft(reify(nBits));
-  };
-  var randL = (n2) => {
-    return signal((t, controls) => (nVal) => getRandsAtTime(t, nVal, controls.randSeed).map(Math.abs)).appLeft(reify(n2));
-  };
-  var randrun = (n2) => {
-    return signal((t, controls) => {
-      let rands = getRandsAtTime(t.floor().add(0.5), n2, controls.randSeed);
-      if (!Array.isArray(rands)) rands = [rands];
-      const nums = rands.map((n3, i4) => [n3, i4]).sort((a, b) => (a[0] > b[0]) - (a[0] < b[0])).map((x) => x[1]);
-      const i3 = _mod(t.cyclePos().mul(n2).floor(), n2);
-      return nums[i3];
-    })._segment(n2);
-  };
-  var _rearrangeWith = (ipat, n2, pat) => {
-    const pats = [...Array(n2).keys()].map((i3) => pat.zoom(fraction_default(i3).div(n2), fraction_default(i3 + 1).div(n2)));
-    return ipat.fmap((i3) => pats[i3].repeatCycles(n2)._fast(n2)).innerJoin();
-  };
-  var shuffle = register("shuffle", (n2, pat) => {
-    return _rearrangeWith(randrun(n2), n2, pat);
-  });
-  var scramble = register("scramble", (n2, pat) => {
-    return _rearrangeWith(_irand(n2)._segment(n2), n2, pat);
-  });
-  var withSeed = (func2, pat) => {
-    return new Pattern((state) => {
-      let { randSeed, ...controls } = state.controls;
-      randSeed = func2(randSeed);
-      return pat.query(state.setControls({ ...controls, randSeed }));
-    }, pat._steps);
-  };
-  var seed = register("seed", (n2, pat) => {
-    return withSeed(() => n2, pat);
-  });
-  var rand = signal((t, controls) => getRandsAtTime(t, 1, controls.randSeed));
-  var rand2 = rand.toBipolar();
-  var _brandBy = (p) => rand.fmap((x) => x < p);
-  var brandBy = (pPat) => reify(pPat).fmap(_brandBy).innerJoin();
-  var brand = _brandBy(0.5);
-  var _irand = (i3) => rand.fmap((x) => Math.trunc(x * i3));
-  var irand = (ipat) => reify(ipat).fmap(_irand).innerJoin();
-  var __chooseWith = (pat, xs) => {
-    xs = xs.map(reify);
-    if (xs.length == 0) {
-      return silence;
-    }
-    return pat.range(0, xs.length).fmap((i3) => {
-      const key = Math.min(Math.max(Math.floor(i3), 0), xs.length - 1);
-      return xs[key];
-    });
-  };
-  var chooseWith = (pat, xs) => {
-    return __chooseWith(pat, xs).outerJoin();
-  };
-  var chooseInWith = (pat, xs) => {
-    return __chooseWith(pat, xs).innerJoin();
-  };
-  var choose = (...xs) => chooseWith(rand, xs);
-  var chooseIn = (...xs) => chooseInWith(rand, xs);
-  Pattern.prototype.choose = function(...xs) {
-    return chooseWith(this, xs);
-  };
-  Pattern.prototype.choose2 = function(...xs) {
-    return chooseWith(this.fromBipolar(), xs);
-  };
-  var chooseCycles = (...xs) => chooseInWith(rand.segment(1), xs);
-  var randcat = chooseCycles;
-  var _wchooseWith = function(pat, ...pairs2) {
-    const values = pairs2.map((pair) => reify(pair[0]));
-    const weights = [];
-    let total = pure(0);
-    for (const pair of pairs2) {
-      total = total.add(pair[1]);
-      weights.push(total);
-    }
-    const weightspat = sequenceP(weights);
-    const match = function(r) {
-      const findpat = total.mul(r);
-      return weightspat.fmap((weights2) => (find) => values[weights2.findIndex((x) => x > find, weights2)]).appLeft(findpat);
-    };
-    return pat.bind(match);
-  };
-  var wchooseWith = (...args) => _wchooseWith(...args).outerJoin();
-  var wchoose = (...pairs2) => wchooseWith(rand, ...pairs2);
-  var wchooseCycles = (...pairs2) => _wchooseWith(rand.segment(1), ...pairs2).innerJoin();
-  var wrandcat = wchooseCycles;
-  function _perlin(t, seed2 = 0) {
-    let ta = Math.floor(t);
-    let tb = ta + 1;
-    const smootherStep = (x) => 6 * x ** 5 - 15 * x ** 4 + 10 * x ** 3;
-    const interp = (x) => (a) => (b) => a + smootherStep(x) * (b - a);
-    const ra = getRandsAtTime(ta, 1, seed2);
-    const rb = getRandsAtTime(tb, 1, seed2);
-    const v2 = interp(t - ta)(ra)(rb);
-    return v2;
-  }
-  function _berlin(t, seed2 = 0) {
-    const prevRidgeStartIndex = Math.floor(t);
-    const nextRidgeStartIndex = prevRidgeStartIndex + 1;
-    const prevRidgeBottomPoint = getRandsAtTime(prevRidgeStartIndex, 1, seed2);
-    const height2 = getRandsAtTime(nextRidgeStartIndex, 1, seed2);
-    const nextRidgeTopPoint = prevRidgeBottomPoint + height2;
-    const currentPercent = (t - prevRidgeStartIndex) / (nextRidgeStartIndex - prevRidgeStartIndex);
-    const interp = (a, b, t2) => {
-      return a + t2 * (b - a);
-    };
-    return interp(prevRidgeBottomPoint, nextRidgeTopPoint, currentPercent) / 2;
-  }
-  var perlin = signal((t, controls) => _perlin(t, controls.randSeed));
-  var berlin = signal((t, controls) => _berlin(t, controls.randSeed));
-  var degradeByWith = register("degradeByWith", (withPat, x, pat) => {
-    if (!isPattern(withPat)) withPat = pure(withPat);
-    return pat.fmap((a) => (_) => a).appLeft(withPat.filterValues((v2) => v2 > x));
-  });
-  var degradeBy = register(
-    "degradeBy",
-    function(x, pat) {
-      return pat._degradeByWith(rand, x);
-    },
-    true,
-    true
-  );
-  var degrade = register("degrade", (pat) => pat._degradeBy(0.5), true, true);
-  var undegradeBy = register(
-    "undegradeBy",
-    function(x, pat) {
-      return pat._degradeByWith(
-        rand.fmap((r) => 1 - r),
-        x
-      );
-    },
-    true,
-    true
-  );
-  var undegrade = register("undegrade", (pat) => pat._undegradeBy(0.5), true, true);
-  var sometimesBy = register("sometimesBy", function(patx, func2, pat) {
-    return reify(patx).fmap((x) => stack(pat._degradeBy(x), func2(pat._undegradeBy(1 - x)))).innerJoin();
-  });
-  var sometimes = register("sometimes", function(func2, pat) {
-    return pat._sometimesBy(0.5, func2);
-  });
-  var someCyclesBy = register("someCyclesBy", function(patx, func2, pat) {
-    return reify(patx).fmap(
-      (x) => stack(
-        pat._degradeByWith(rand._segment(1), x),
-        func2(pat._degradeByWith(rand.fmap((r) => 1 - r)._segment(1), 1 - x))
-      )
-    ).innerJoin();
-  });
-  var someCycles = register("someCycles", function(func2, pat) {
-    return pat._someCyclesBy(0.5, func2);
-  });
-  var often = register("often", function(func2, pat) {
-    return pat.sometimesBy(0.75, func2);
-  });
-  var rarely = register("rarely", function(func2, pat) {
-    return pat.sometimesBy(0.25, func2);
-  });
-  var almostNever = register("almostNever", function(func2, pat) {
-    return pat.sometimesBy(0.1, func2);
-  });
-  var almostAlways = register("almostAlways", function(func2, pat) {
-    return pat.sometimesBy(0.9, func2);
-  });
-  var never = register("never", function(_, pat) {
-    return pat;
-  });
-  var always = register("always", function(func2, pat) {
-    return func2(pat);
-  });
-  function _keyDown(keyname) {
-    if (Array.isArray(keyname) === false) {
-      keyname = [keyname];
-    }
-    const keyState2 = getCurrentKeyboardState();
-    return keyname.every((x) => {
-      const keyName = keyAlias.get(x) ?? x;
-      return keyState2[keyName];
-    });
-  }
-  var whenKey = register("whenKey", function(input, func2, pat) {
-    return pat.when(_keyDown(input), func2);
-  });
-  var keyDown = register("keyDown", function(pat) {
-    return pat.fmap(_keyDown);
-  });
-  var cyclesPer = new Pattern(function(state) {
-    return [new Hap(void 0, state.span, state.span.duration)];
-  });
-  var per = new Pattern(function(state) {
-    return [new Hap(void 0, state.span, fraction_default(1).div(state.span.duration))];
-  });
-  var perCycle = per;
-  var perx = new Pattern(function(state) {
-    const n2 = fraction_default(1).div(state.span.duration);
-    return [new Hap(void 0, state.span, Math.log(n2) / Math.log(2) + 1)];
-  });
-  var open = signal((t) => t.min(1));
-  var close = signal((t) => fraction_default(1).sub(t).max(0));
-
-  // build/engine-src/strudel/packages/core/speak.mjs
-  var synth;
-  try {
-    synth = window?.speechSynthesis;
-  } catch (err) {
-    console.warn("cannot use window: not in browser?");
-  }
-  var allVoices = synth?.getVoices();
-  function triggerSpeech(words, lang, voice2) {
-    synth.cancel();
-    const utterance = new SpeechSynthesisUtterance(words);
-    utterance.lang = lang;
-    allVoices = synth.getVoices();
-    const voices = allVoices.filter((v2) => v2.lang.includes(lang));
-    if (typeof voice2 === "number") {
-      utterance.voice = voices[voice2 % voices.length];
-    } else if (typeof voice2 === "string") {
-      utterance.voice = voices.find((voice3) => voice3.name === voice3);
-    }
-    speechSynthesis.speak(utterance);
-  }
-  var speak = register("speak", function(lang, voice2, pat) {
-    return pat.onSchedule((hap) => {
-      triggerSpeech(hap.value, lang, voice2);
-    });
-  });
-
-  // build/engine-src/strudel/packages/core/ui.mjs
-  var backgroundImage = function(src2, animateOptions = {}) {
-    const container = document.getElementById("code");
-    const bg = "background-image:url(" + src2 + ");background-size:contain;";
-    container.style = bg;
-    const { className: initialClassName } = container;
-    const handleOption = (option, value2) => {
-      ({
-        style: () => container.style = bg + ";" + value2,
-        className: () => container.className = value2 + " " + initialClassName
-      })[option]();
-    };
-    const funcOptions = Object.entries(animateOptions).filter(([_, v2]) => typeof v2 === "function");
-    const stringOptions = Object.entries(animateOptions).filter(([_, v2]) => typeof v2 === "string");
-    stringOptions.forEach(([option, value2]) => handleOption(option, value2));
-    if (funcOptions.length === 0) {
-      return;
-    }
-  };
-  var cleanupUi = () => {
-    const container = document.getElementById("code");
-    if (container) {
-      container.style = "";
-    }
-  };
-
-  // build/engine-src/strudel/packages/core/index.mjs
-  logger("\u{1F300} @strudel/core loaded \u{1F300}");
-  if (globalThis._strudelLoaded) {
-    console.warn(
-      `@strudel/core was loaded more than once...
-This might happen when you have multiple versions of strudel installed. 
-Please check with "npm ls @strudel/core".`
-    );
-  }
-  globalThis._strudelLoaded = true;
+  // js/host.mjs
+  init_core();
 
   // build/engine-src/strudel/packages/mini/index.mjs
   var mini_exports = {};
@@ -15337,11 +26084,11 @@ Please check with "npm ls @strudel/core".`
 
   // build/engine-src/strudel/packages/mini/krill-parser.js
   function peg$subclass(child, parent) {
-    function C() {
+    function C2() {
       this.constructor = child;
     }
-    C.prototype = parent.prototype;
-    child.prototype = new C();
+    C2.prototype = parent.prototype;
+    child.prototype = new C2();
   }
   function peg$SyntaxError(message, expected, found, location) {
     var self = Error.call(this, message);
@@ -15600,34 +26347,34 @@ Please check with "npm ls @strudel/core".`
       return s2;
     };
     var peg$f8 = function(a) {
-      return (x) => x.options_["weight"] = (x.options_["weight"] ?? 1) + (a ?? 2) - 1;
+      return (x3) => x3.options_["weight"] = (x3.options_["weight"] ?? 1) + (a ?? 2) - 1;
     };
     var peg$f9 = function(a) {
-      return (x) => {
-        const reps = (x.options_["reps"] ?? 1) + (a ?? 2) - 1;
-        x.options_["reps"] = reps;
-        x.options_["ops"] = x.options_["ops"].filter((x2) => x2.type_ !== "replicate");
-        x.options_["ops"].push({ type_: "replicate", arguments_: { amount: reps } });
-        x.options_["weight"] = reps;
+      return (x3) => {
+        const reps = (x3.options_["reps"] ?? 1) + (a ?? 2) - 1;
+        x3.options_["reps"] = reps;
+        x3.options_["ops"] = x3.options_["ops"].filter((x4) => x4.type_ !== "replicate");
+        x3.options_["ops"].push({ type_: "replicate", arguments_: { amount: reps } });
+        x3.options_["weight"] = reps;
       };
     };
-    var peg$f10 = function(p, s2, r) {
-      return (x) => x.options_["ops"].push({ type_: "bjorklund", arguments_: { pulse: p, step: s2, rotation: r } });
+    var peg$f10 = function(p, s2, r2) {
+      return (x3) => x3.options_["ops"].push({ type_: "bjorklund", arguments_: { pulse: p, step: s2, rotation: r2 } });
     };
     var peg$f11 = function(a) {
-      return (x) => x.options_["ops"].push({ type_: "stretch", arguments_: { amount: a, type: "slow" } });
+      return (x3) => x3.options_["ops"].push({ type_: "stretch", arguments_: { amount: a, type: "slow" } });
     };
     var peg$f12 = function(a) {
-      return (x) => x.options_["ops"].push({ type_: "stretch", arguments_: { amount: a, type: "fast" } });
+      return (x3) => x3.options_["ops"].push({ type_: "stretch", arguments_: { amount: a, type: "fast" } });
     };
     var peg$f13 = function(a) {
-      return (x) => x.options_["ops"].push({ type_: "degradeBy", arguments_: { amount: a, seed: seed2++ } });
+      return (x3) => x3.options_["ops"].push({ type_: "degradeBy", arguments_: { amount: a, seed: seed2++ } });
     };
     var peg$f14 = function(s2) {
-      return (x) => x.options_["ops"].push({ type_: "tail", arguments_: { element: s2 } });
+      return (x3) => x3.options_["ops"].push({ type_: "tail", arguments_: { element: s2 } });
     };
     var peg$f15 = function(s2) {
-      return (x) => x.options_["ops"].push({ type_: "range", arguments_: { element: s2 } });
+      return (x3) => x3.options_["ops"].push({ type_: "range", arguments_: { element: s2 } });
     };
     var peg$f16 = function(s2, ops) {
       const result = new ElementStub(s2, { ops: [], weight: 1, reps: 1 });
@@ -15667,7 +26414,7 @@ Please check with "npm ls @strudel/core".`
     var peg$f25 = function(s2) {
       return { name: "target", args: { name: s2 } };
     };
-    var peg$f26 = function(p, s2, r) {
+    var peg$f26 = function(p, s2, r2) {
       return { name: "bjorklund", args: { pulse: p, step: parseInt(s2) } };
     };
     var peg$f27 = function(a) {
@@ -15701,8 +26448,8 @@ Please check with "npm ls @strudel/core".`
     var peg$f36 = function(sc) {
       return sc;
     };
-    var peg$f37 = function(c) {
-      return c;
+    var peg$f37 = function(c2) {
+      return c2;
     };
     var peg$f38 = function(v2) {
       return new CommandStub("setcps", { value: v2 });
@@ -17733,6 +28480,8 @@ Please check with "npm ls @strudel/core".`
   ];
 
   // build/engine-src/strudel/packages/mini/mini.mjs
+  init_core();
+  init_fraction2();
   var randOffset = 3e-4;
   var applyOptions = (parent, enter) => (pat, i3) => {
     const ast = parent.source_[i3];
@@ -17777,9 +28526,9 @@ Please check with "npm ls @strudel/core".`
           case "range": {
             const friend = enter(op.arguments_.element);
             pat = reify(pat);
-            const arrayRange = (start, stop, step = 1) => Array.from(
-              { length: Math.abs(stop - start) / step + 1 },
-              (value2, index5) => start < stop ? start + index5 * step : start - index5 * step
+            const arrayRange = (start, stop2, step = 1) => Array.from(
+              { length: Math.abs(stop2 - start) / step + 1 },
+              (value2, index5) => start < stop2 ? start + index5 * step : start - index5 * step
             );
             let range5 = (apat, bpat) => apat.squeezeBind((a) => bpat.bind((b) => fastcat(...arrayRange(a, b))));
             pat = range5(pat, friend);
@@ -17807,27 +28556,27 @@ Please check with "npm ls @strudel/core".`
           case "stack": {
             pat = stack(...children);
             if (with_steps.length) {
-              pat._steps = lcm(...with_steps.map((x) => fraction_default(x._steps)));
+              pat._steps = lcm(...with_steps.map((x3) => fraction_default(x3._steps)));
             }
             break;
           }
           case "polymeter_slowcat": {
             pat = stack(...children.map((child) => child._slow(child.__weight)));
             if (with_steps.length) {
-              pat._steps = lcm(...with_steps.map((x) => fraction_default(x._steps)));
+              pat._steps = lcm(...with_steps.map((x3) => fraction_default(x3._steps)));
             }
             break;
           }
           case "polymeter": {
-            const stepsPerCycle = ast.arguments_.stepsPerCycle ? enter(ast.arguments_.stepsPerCycle).fmap((x) => fraction_default(x)) : pure(fraction_default(children.length > 0 ? children[0].__weight : 1));
-            const aligned = children.map((child) => child.fast(stepsPerCycle.fmap((x) => x.div(child.__weight))));
+            const stepsPerCycle = ast.arguments_.stepsPerCycle ? enter(ast.arguments_.stepsPerCycle).fmap((x3) => fraction_default(x3)) : pure(fraction_default(children.length > 0 ? children[0].__weight : 1));
+            const aligned = children.map((child) => child.fast(stepsPerCycle.fmap((x3) => x3.div(child.__weight))));
             pat = stack(...aligned);
             break;
           }
           case "rand": {
             pat = chooseInWith(rand.early(randOffset * ast.arguments_.seed).segment(1), children);
             if (with_steps.length) {
-              pat._steps = lcm(...with_steps.map((x) => fraction_default(x._steps)));
+              pat._steps = lcm(...with_steps.map((x3) => fraction_default(x3._steps)));
             }
             break;
           }
@@ -17848,7 +28597,7 @@ Please check with "npm ls @strudel/core".`
               pat.__weight = weightSum;
               pat._steps = weightSum;
               if (with_steps.length) {
-                pat._steps = pat._steps.mul(lcm(...with_steps.map((x) => fraction_default(x._steps))));
+                pat._steps = pat._steps.mul(lcm(...with_steps.map((x3) => fraction_default(x3._steps))));
               }
             } else {
               pat = sequence(...children);
@@ -17893,7 +28642,7 @@ Please check with "npm ls @strudel/core".`
   var getLeafLocation = (code, leaf, globalOffset = 0) => {
     const { start, end: end2 } = leaf.location_;
     const actual = code?.split("").slice(start.offset, end2.offset).join("");
-    const [offsetStart = 0, offsetEnd = 0] = actual ? actual.split(leaf.source_).map((p) => p.split("").filter((c) => c === " ").length) : [];
+    const [offsetStart = 0, offsetEnd = 0] = actual ? actual.split(leaf.source_).map((p) => p.split("").filter((c2) => c2 === " ").length) : [];
     return [start.offset + offsetStart + globalOffset, end2.offset - offsetEnd + globalOffset];
   };
   var mini2ast = (code, start = 0, userCode = code) => {
@@ -17974,8 +28723,10 @@ Please check with "npm ls @strudel/core".`
 
   // build/engine-src/strudel/packages/tonal/tonal.mjs
   init_dist32();
+  init_core();
 
   // build/engine-src/strudel/packages/tonal/tonleiter.mjs
+  init_core();
   init_dist32();
   var flats = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
   var pcs2 = ["c", "db", "d", "eb", "e", "f", "gb", "g", "ab", "a", "bb", "b"];
@@ -17993,19 +28744,19 @@ Please check with "npm ls @strudel/core".`
     return match.slice(1);
   }
   var midi2chroma = (midi3) => midi3 % 12;
-  var step2semitones = (x) => {
-    let num3 = Number(x);
+  var step2semitones = (x3) => {
+    let num3 = Number(x3);
     if (!isNaN(num3)) {
       return num3;
     }
-    return interval_default.semitones(x);
+    return interval_default.semitones(x3);
   };
-  var x2midi = (x, defaultOctave) => {
-    if (typeof x === "number") {
-      return x;
+  var x2midi = (x3, defaultOctave) => {
+    if (typeof x3 === "number") {
+      return x3;
     }
-    if (typeof x === "string") {
-      return noteToMidi(x, defaultOctave);
+    if (typeof x3 === "string") {
+      return noteToMidi(x3, defaultOctave);
     }
   };
   var midi2note2 = (midi3, sharp = false) => {
@@ -18031,8 +28782,8 @@ Please check with "npm ls @strudel/core".`
     return bestIndex;
   }
   var scaleSteps = {};
-  function stepInNamedScale(step, scale3, anchor2, preferHigher) {
-    const [root, scaleName] = scale_default.tokenize(scale3);
+  function stepInNamedScale(step, scale4, anchor2, preferHigher) {
+    const [root, scaleName] = scale_default.tokenize(scale4);
     const rootMidi = x2midi(root);
     const rootChroma = midi2chroma(rootMidi);
     if (!scaleSteps[scaleName]) {
@@ -18115,8 +28866,8 @@ Please check with "npm ls @strudel/core".`
   var octavesInterval = (octaves2) => (octaves2 <= 0 ? -1 : 1) + octaves2 * 7 + "P";
   function getScale(scaleName) {
     scaleName = scaleName.replaceAll(":", " ");
-    const scale3 = scale_default.get(scaleName);
-    const { tonic, empty: empty2 } = scale3;
+    const scale4 = scale_default.get(scaleName);
+    const { tonic, empty: empty2 } = scale4;
     if (empty2 && isNote(scaleName) || empty2 && !tonic) {
       throw new Error(
         `Scale name ${scaleName} is incomplete. Make sure to use ":" instead of spaces, example: .scale("C:major")`
@@ -18124,11 +28875,11 @@ Please check with "npm ls @strudel/core".`
     } else if (empty2) {
       throw new Error(`Invalid scale name "${scaleName}"`);
     }
-    return scale3;
+    return scale4;
   }
-  function scaleStep2(step, scale3) {
+  function scaleStep2(step, scale4) {
     step = Math.ceil(step);
-    let { intervals: intervals2, tonic } = getScale(scale3);
+    let { intervals: intervals2, tonic } = getScale(scale4);
     tonic = tonic || "C";
     const { pc, oct: oct2 = 3 } = note_default.get(tonic);
     const octaveOffset = Math.floor(step / intervals2.length);
@@ -18136,8 +28887,8 @@ Please check with "npm ls @strudel/core".`
     const interval3 = interval_default.add(intervals2[scaleStep3], octavesInterval(octaveOffset));
     return note_default.transpose(pc + oct2, interval3);
   }
-  function scaleOffset(scale3, offset3, note4) {
-    let { notes: notes3 } = getScale(scale3);
+  function scaleOffset(scale4, offset3, note4) {
+    let { notes: notes3 } = getScale(scale4);
     notes3 = notes3.map((note5) => note_default.get(note5).pc);
     offset3 = Number(offset3);
     if (isNaN(offset3)) {
@@ -18146,7 +28897,7 @@ Please check with "npm ls @strudel/core".`
     const { pc: fromPc, oct: oct2 = 3 } = note_default.get(note4);
     const noteIndex = notes3.indexOf(fromPc);
     if (noteIndex === -1) {
-      throw new Error(`note "${note4}" is not in scale "${scale3}"`);
+      throw new Error(`note "${note4}" is not in scale "${scale4}"`);
     }
     let i3 = noteIndex, o = oct2, n2 = fromPc;
     const direction = Math.sign(offset3);
@@ -18245,16 +28996,16 @@ Please check with "npm ls @strudel/core".`
     const [scaleMidis, scaleNotes2] = scaleToMidisAndNotes[scaleName];
     const rootMidi = scaleMidis[0];
     const octaveDiff = Math.floor((noteMidi - rootMidi) / 12);
-    const alignedMidis = scaleMidis.map((m2) => m2 + 12 * octaveDiff);
+    const alignedMidis = scaleMidis.map((m3) => m3 + 12 * octaveDiff);
     const noteIdx = nearestNumberIndex(noteMidi, alignedMidis, preferHigher);
     const noteMatch = scaleNotes2[noteIdx];
     return note_default.transpose(noteMatch, interval_default.fromSemitones(12 * octaveDiff));
   }
   var scale2 = register(
     "scale",
-    function(scale3, pat) {
-      if (Array.isArray(scale3)) {
-        scale3 = scale3.flat().join(" ");
+    function(scale4, pat) {
+      if (Array.isArray(scale4)) {
+        scale4 = scale4.flat().join(" ");
       }
       return pat.withHaps((haps) => {
         haps = haps.map((hap) => {
@@ -18272,15 +29023,15 @@ Please check with "npm ls @strudel/core".`
           }
           let scaleNote;
           if (isNote(noteOrStep)) {
-            scaleNote = _getNearestScaleNote(scale3, noteOrStep);
+            scaleNote = _getNearestScaleNote(scale4, noteOrStep);
             hap.value = { ...otherValues, note: scaleNote };
           } else {
             try {
               const [number, offset3] = _convertStepToNumberAndOffset(noteOrStep);
               if (otherValues.anchor) {
-                scaleNote = stepInNamedScale(number, scale3, otherValues.anchor);
+                scaleNote = stepInNamedScale(number, scale4, otherValues.anchor);
               } else {
-                scaleNote = scaleStep2(number, scale3);
+                scaleNote = scaleStep2(number, scale4);
               }
               if (offset3 != 0) scaleNote = note_default.transpose(scaleNote, interval_default.fromSemitones(offset3));
             } catch (err) {
@@ -18289,7 +29040,7 @@ Please check with "npm ls @strudel/core".`
             }
           }
           hap.value = isObject ? { ...otherValues, note: scaleNote } : scaleNote;
-          return hap.setContext({ ...hap.context, scale: scale3 });
+          return hap.setContext({ ...hap.context, scale: scale4 });
         });
         return removeUndefineds(haps);
       });
@@ -18300,6 +29051,7 @@ Please check with "npm ls @strudel/core".`
   );
 
   // build/engine-src/strudel/packages/tonal/voicings.mjs
+  init_core();
   var import_chord_voicings = __toESM(require_dist(), 1);
 
   // build/engine-src/strudel/packages/tonal/ireal.mjs
@@ -18981,6 +29733,9 @@ Please check with "npm ls @strudel/core".`
     xen: () => xen
   });
 
+  // build/engine-src/strudel/packages/xen/xen.mjs
+  init_core();
+
   // build/engine-src/strudel/packages/xen/tunejs.js
   function Tune() {
     this.scale = [];
@@ -19052,10 +29807,10 @@ Please check with "npm ls @strudel/core".`
     n2 = Math.floor(n2 * 1e9) / 1e9;
     return n2;
   };
-  Tune.prototype.loadScale = function(scale3) {
+  Tune.prototype.loadScale = function(scale4) {
     let name3;
-    if (typeof scale3 === "string") name3 = scale3;
-    var freqs = isArrayOfNumbers(scale3) ? scale3 : TuningList[scale3].frequencies;
+    if (typeof scale4 === "string") name3 = scale4;
+    var freqs = isArrayOfNumbers(scale4) ? scale4 : TuningList[scale4].frequencies;
     this.scale = [];
     for (var i3 = 0; i3 < freqs.length - 1; i3++) {
       this.scale.push(freqs[i3] / freqs[0]);
@@ -19105,8 +29860,8 @@ Please check with "npm ls @strudel/core".`
   function isArrayOfNumbers(arg) {
     return Array.isArray(arg) && arg.length > 0 && arg.every((item) => typeof item === "number" && !isNaN(item));
   }
-  Tune.prototype.isValidScale = function(scale3) {
-    return !!TuningList[scale3] || isArrayOfNumbers(scale3);
+  Tune.prototype.isValidScale = function(scale4) {
+    return !!TuningList[scale4] || isArrayOfNumbers(scale4);
   };
   Tune.prototype.chord = function(midis) {
     var output = [];
@@ -19131,30 +29886,30 @@ Please check with "npm ls @strudel/core".`
   var presets = {
     "12ji": [1 / 1, 16 / 15, 9 / 8, 6 / 5, 5 / 4, 4 / 3, 45 / 32, 3 / 2, 8 / 5, 5 / 3, 16 / 9, 15 / 8]
   };
-  function _withBase(freq3, scale3) {
-    return scale3.map((r) => r * freq3);
+  function _withBase(freq3, scale4) {
+    return scale4.map((r2) => r2 * freq3);
   }
   var defaultBase = 220;
-  var isEdo = (scale3) => /^[1-9]+[0-9]*edo$/.test(scale3);
-  function getXenScale(scale3, indices) {
+  var isEdo = (scale4) => /^[1-9]+[0-9]*edo$/.test(scale4);
+  function getXenScale(scale4, indices) {
     let tune2 = new Tune();
-    if (typeof scale3 === "string") {
-      if (isEdo(scale3)) {
-        scale3 = edo(scale3);
-      } else if (presets[scale3]) {
-        scale3 = presets[scale3];
-      } else if (tune2.isValidScale(scale3)) {
-        tune2.loadScale(scale3);
-        scale3 = tune2.scale;
+    if (typeof scale4 === "string") {
+      if (isEdo(scale4)) {
+        scale4 = edo(scale4);
+      } else if (presets[scale4]) {
+        scale4 = presets[scale4];
+      } else if (tune2.isValidScale(scale4)) {
+        tune2.loadScale(scale4);
+        scale4 = tune2.scale;
       } else {
-        throw new Error('unknown scale name: "' + scale3 + '"');
+        throw new Error('unknown scale name: "' + scale4 + '"');
       }
     }
-    scale3 = _withBase(defaultBase, scale3);
+    scale4 = _withBase(defaultBase, scale4);
     if (!indices) {
-      return scale3;
+      return scale4;
     }
-    return scale3.filter((_, i3) => indices.includes(i3));
+    return scale4.filter((_, i3) => indices.includes(i3));
   }
   function xenOffset(xenScale, offset3, index5 = 0) {
     const i3 = _mod(index5 + offset3, xenScale.length);
@@ -19168,7 +29923,7 @@ Please check with "npm ls @strudel/core".`
       const JIsc2 = (input) => {
         let k = parray(input);
         return new Pattern((state) => {
-          let res = k.withValue((x) => x.map((y) => y.reduce((acc, v2) => acc / v2))).query(state);
+          let res = k.withValue((x3) => x3.map((y2) => y2.reduce((acc, v2) => acc / v2))).query(state);
           return res;
         });
       };
@@ -19188,7 +29943,7 @@ Please check with "npm ls @strudel/core".`
           let st = new State(hap.wholeOrPart().intersection(state.span), state.controls);
           let sc = scaleNameOrRatios.query(st);
           let isStr = typeof sc[0].value == "string";
-          let isRawScale = Array.isArray(sc[0].value) && sc[0].value.every((x) => typeof x == "number");
+          let isRawScale = Array.isArray(sc[0].value) && sc[0].value.every((x3) => typeof x3 == "number");
           if (!isStr && !isRawScale) {
             sc = sc[0].value;
           } else if (isRawScale) {
@@ -19202,8 +29957,8 @@ Please check with "npm ls @strudel/core".`
             let sc2 = JIsc2(sc).query(st);
             let index5 = _mod(i3, sc.length);
             for (let j = 0; j < scaleByIndices[index5].length; j++) {
-              let scale3 = getXenScale(sc2[j].value);
-              let freq3 = xenOffset(scale3, parseNumeral(i3));
+              let scale4 = getXenScale(sc2[j].value);
+              let freq3 = xenOffset(scale4, parseNumeral(i3));
               let newHap = hap;
               freq3 = trimFreq(freq3);
               newHap.value = { ...otherValues, freq: freq3 };
@@ -19219,8 +29974,8 @@ Please check with "npm ls @strudel/core".`
           } else if (isStr) {
             for (let j = 0; j < sc.length; j++) {
               let scaleName = sc[j].value;
-              let scale3 = getXenScale(scaleName);
-              let freq3 = xenOffset(scale3, parseNumeral(i3));
+              let scale4 = getXenScale(scaleName);
+              let freq3 = xenOffset(scale4, parseNumeral(i3));
               let newHap = hap;
               freq3 = trimFreq(freq3);
               newHap.value = { ...otherValues, freq: freq3 };
@@ -19302,12 +30057,13 @@ Please check with "npm ls @strudel/core".`
   });
 
   // build/engine-src/strudel/packages/xen/tune.mjs
-  var tune = register("tune", (scale3, pat) => {
+  init_core();
+  var tune = register("tune", (scale4, pat) => {
     const tune2 = new Tune();
-    if (!tune2.isValidScale(scale3)) {
-      throw new Error('not a valid tune.js scale name: "' + scale3 + '". See http://abbernie.github.io/tune/scales.html');
+    if (!tune2.isValidScale(scale4)) {
+      throw new Error('not a valid tune.js scale name: "' + scale4 + '". See http://abbernie.github.io/tune/scales.html');
     }
-    tune2.loadScale(scale3);
+    tune2.loadScale(scale4);
     tune2.tonicize(1);
     return pat.withHap((hap) => {
       if (typeof hap.value !== "object") {
@@ -19323,6 +30079,9 @@ Please check with "npm ls @strudel/core".`
     edoScale: () => edoScale,
     packageName: () => packageName2
   });
+
+  // build/engine-src/strudel/packages/edo/edo.mjs
+  init_core();
 
   // build/engine-src/strudel/packages/edo/edoscale.mjs
   var M = 2;
@@ -19393,9 +30152,9 @@ Please check with "npm ls @strudel/core".`
         return false;
       }
     }
-    setMedium(m2) {
-      if (this.medium !== m2) {
-        this.medium = m2;
+    setMedium(m3) {
+      if (this.medium !== m3) {
+        this.medium = m3;
         this.updateEdo();
       } else {
         return false;
@@ -19637,8 +30396,8 @@ Please check with "npm ls @strudel/core".`
     return division === 0 ? 1 : Math.pow(2, division / edivisions);
   }
   var Intervals = class {
-    constructor(scale3) {
-      this.scale = scale3;
+    constructor(scale4) {
+      this.scale = scale4;
       this.intLabels = [];
       this.intNoms = [];
       this.intRatios = [];
@@ -19650,10 +30409,10 @@ Please check with "npm ls @strudel/core".`
       const labToErr = {};
       const labToInd = {};
       this.ratios[0] = 1;
-      for (let i3 = 0; i3 < scale3.length; i3++) {
-        division += scale3.stepValue(i3);
-        this.ratios[i3 + 1] = ratio2(division, scale3.edivisions);
-        if (i3 < scale3.length) {
+      for (let i3 = 0; i3 < scale4.length; i3++) {
+        division += scale4.stepValue(i3);
+        this.ratios[i3 + 1] = ratio2(division, scale4.edivisions);
+        if (i3 < scale4.length) {
           const nearest = ratios_default.nearestInterval(this.ratios[i3 + 1]);
           const closeness = nearest[0];
           const ratio4 = nearest[1];
@@ -19696,11 +30455,11 @@ Please check with "npm ls @strudel/core".`
     intervalError(i3) {
       return this.intErrors[i3];
     }
-    nearestDegreeTo(r, threshold) {
+    nearestDegreeTo(r2, threshold) {
       let min = 1;
       let degree2 = null;
       for (const [i3, v2] of Object.entries(this.ratios)) {
-        const diff = Math.abs((r - v2) / r);
+        const diff = Math.abs((r2 - v2) / r2);
         if (diff < min) {
           min = diff;
           degree2 = parseInt(i3, 10);
@@ -19735,8 +30494,8 @@ Please check with "npm ls @strudel/core".`
     return 12 * (Math.log(freq3 / tuning2) / denom) + 69;
   }
   var Pitches = class {
-    constructor(scale3, intervals2, tuning2, midi_start, root_octave) {
-      this.scale = scale3;
+    constructor(scale4, intervals2, tuning2, midi_start, root_octave) {
+      this.scale = scale4;
       this.intervals = intervals2;
       this.base_freq = midi_to_hz(midi_start, tuning2);
       this.root_octave = root_octave;
@@ -19750,8 +30509,8 @@ Please check with "npm ls @strudel/core".`
       for (let oct2 = 0; oct2 <= 8; oct2++) {
         this.octdegfreqs[oct2] = {};
         this.octdegmidis[oct2] = {};
-        f = get_freq(this.base_freq, scale3.edivisions, scale3.tonic, oct2, this.root_octave);
-        for (let deg = 0; deg < scale3.length; deg++) {
+        f = get_freq(this.base_freq, scale4.edivisions, scale4.tonic, oct2, this.root_octave);
+        for (let deg = 0; deg < scale4.length; deg++) {
           index5 = index5 + 1;
           this.freqs[index5] = parseFloat((f * intervals2.ratio(deg)).toFixed(3));
           this.midis[index5] = parseFloat(hz_to_midi(f * intervals2.ratio(deg), tuning2).toFixed(4));
@@ -19805,9 +30564,9 @@ Please check with "npm ls @strudel/core".`
       } else {
         const [base_note, sequence2, large, small] = scaleDefinition;
         const root_octave = tokenizeNote(base_note)[2] || 3;
-        const scale3 = new EdoScale(large, small, sequence2);
-        const intervals2 = new Intervals(scale3);
-        pitches = new Pitches(scale3, intervals2, 440, noteToMidi(base_note), root_octave);
+        const scale4 = new EdoScale(large, small, sequence2);
+        const intervals2 = new Intervals(scale4);
+        pitches = new Pitches(scale4, intervals2, 440, noteToMidi(base_note), root_octave);
         pitchesCache.set(key, pitches);
       }
       return pat.fmap((value2) => {
@@ -19838,6 +30597,12 @@ Please check with "npm ls @strudel/core".`
 
   // build/engine-src/strudel/packages/edo/index.mjs
   var packageName2 = "@strudel/edo";
+
+  // js/host.mjs
+  init_webaudio2();
+
+  // build/engine-src/strudel/packages/transpiler/index.mjs
+  init_core();
 
   // build/engine-src/strudel/node_modules/.pnpm/acorn@8.14.0/node_modules/acorn/dist/acorn.mjs
   var astralIdentifierCodes = [509, 0, 227, 0, 150, 4, 294, 9, 1368, 2, 2, 1, 6, 3, 41, 2, 5, 0, 166, 1, 574, 3, 9, 9, 7, 9, 32, 4, 318, 1, 80, 3, 71, 10, 50, 3, 123, 2, 54, 14, 32, 10, 3, 1, 11, 3, 46, 10, 8, 0, 46, 9, 7, 2, 37, 13, 2, 9, 6, 1, 45, 0, 13, 2, 49, 13, 9, 3, 2, 11, 83, 11, 7, 0, 3, 0, 158, 11, 6, 9, 7, 3, 56, 1, 2, 6, 3, 1, 3, 2, 10, 0, 11, 1, 3, 6, 4, 4, 68, 8, 2, 0, 3, 0, 2, 3, 2, 4, 2, 0, 15, 1, 83, 17, 10, 9, 5, 0, 82, 19, 13, 9, 214, 6, 3, 8, 28, 1, 83, 16, 16, 9, 82, 12, 9, 9, 7, 19, 58, 14, 5, 9, 243, 14, 166, 9, 71, 5, 2, 1, 3, 3, 2, 0, 2, 1, 13, 9, 120, 6, 3, 6, 4, 0, 29, 9, 41, 6, 2, 3, 9, 0, 10, 10, 47, 15, 343, 9, 54, 7, 2, 7, 17, 9, 57, 21, 2, 13, 123, 5, 4, 0, 2, 1, 2, 6, 2, 0, 9, 9, 49, 4, 2, 1, 2, 4, 9, 9, 330, 3, 10, 1, 2, 0, 49, 6, 4, 4, 14, 10, 5350, 0, 7, 14, 11465, 27, 2343, 9, 87, 9, 39, 4, 60, 6, 26, 9, 535, 9, 470, 0, 2, 54, 8, 3, 82, 0, 12, 1, 19628, 1, 4178, 9, 519, 45, 3, 22, 543, 4, 4, 5, 9, 7, 3, 6, 31, 3, 149, 2, 1418, 49, 513, 54, 5, 49, 9, 0, 15, 0, 23, 4, 2, 14, 1361, 6, 2, 16, 3, 6, 2, 1, 2, 4, 101, 0, 161, 6, 10, 9, 357, 0, 62, 13, 499, 13, 245, 1, 2, 9, 726, 6, 110, 6, 6, 9, 4759, 9, 787719, 239];
@@ -22926,8 +33691,8 @@ Please check with "npm ls @strudel/core".`
     if (this.options.ecmaVersion < 6 && this.input.slice(start, end2).indexOf("\\") !== -1) {
       return;
     }
-    var re = this.strict ? this.reservedWordsStrict : this.reservedWords;
-    if (re.test(name3)) {
+    var re2 = this.strict ? this.reservedWordsStrict : this.reservedWords;
+    if (re2.test(name3)) {
       if (!this.inAsync && name3 === "await") {
         this.raiseRecoverable(start, "Cannot use keyword 'await' outside an async function");
       }
@@ -23270,12 +34035,12 @@ Please check with "npm ls @strudel/core".`
     if (i3 >= l) {
       return -1;
     }
-    var c = s2.charCodeAt(i3);
-    if (!(forceU || this.switchU) || c <= 55295 || c >= 57344 || i3 + 1 >= l) {
-      return c;
+    var c2 = s2.charCodeAt(i3);
+    if (!(forceU || this.switchU) || c2 <= 55295 || c2 >= 57344 || i3 + 1 >= l) {
+      return c2;
     }
     var next = s2.charCodeAt(i3 + 1);
-    return next >= 56320 && next <= 57343 ? (c << 10) + next - 56613888 : c;
+    return next >= 56320 && next <= 57343 ? (c2 << 10) + next - 56613888 : c2;
   };
   RegExpValidationState.prototype.nextIndex = function nextIndex(i3, forceU) {
     if (forceU === void 0) forceU = false;
@@ -23284,8 +34049,8 @@ Please check with "npm ls @strudel/core".`
     if (i3 >= l) {
       return l;
     }
-    var c = s2.charCodeAt(i3), next;
-    if (!(forceU || this.switchU) || c <= 55295 || c >= 57344 || i3 + 1 >= l || (next = s2.charCodeAt(i3 + 1)) < 56320 || next > 57343) {
+    var c2 = s2.charCodeAt(i3), next;
+    if (!(forceU || this.switchU) || c2 <= 55295 || c2 >= 57344 || i3 + 1 >= l || (next = s2.charCodeAt(i3 + 1)) < 56320 || next > 57343) {
       return i3 + 1;
     }
     return i3 + 2;
@@ -26059,7 +36824,7 @@ Please check with "npm ls @strudel/core".`
         const { widgets, options } = context;
         const { emitWidgets } = options;
         const type = node.callee.property.name;
-        const idx = widgets.filter((w) => w.type === type).length;
+        const idx = widgets.filter((w3) => w3.type === type).length;
         const widgetConfig = {
           from: node.start,
           to: node.end,
@@ -26128,9 +36893,9 @@ Please check with "npm ls @strudel/core".`
   registerTranspilerPlugin(widgetTranspilerPlugins);
 
   // js/host.mjs
-  var ready = evalScope(core_exports, edo_exports, tonal_exports, mini_exports, xen_exports);
+  var ready = evalScope(core_exports, edo_exports, tonal_exports, mini_exports, xen_exports, webaudio_exports);
   var evalError;
-  var { evaluate: evaluate2, scheduler } = repl({
+  var { evaluate: evaluate2, scheduler, setCps } = repl({
     transpiler,
     // ponytail: clock frozen at 0, so scheduler.now()/getTime() users see t=0; M2 injects rendered-frame time.
     getTime: () => 0,
@@ -26141,6 +36906,12 @@ Please check with "npm ls @strudel/core".`
     onEvalError: (err) => evalError = err
   });
   var time3 = (t) => t.valueOf();
+  var clock = { cps: 0.5, cycle: 0, seconds: 0 };
+  var cycleAt = (t) => clock.cycle + (t - clock.seconds) * clock.cps;
+  var onSchedule = getSchedule({ onSchedule: webaudioOutput });
+  var midiEvents = [];
+  var toRack = (hap, t, cps2) => midiEvents.push({ t, cps: cps2, duration: time3(hap.duration) / cps2, value: hap.value });
+  register("midi", (pat) => pat.onSchedule(toRack, true));
   globalThis.__patchisserie = {
     async evaluate(code) {
       await ready;
@@ -26164,6 +36935,33 @@ Please check with "npm ls @strudel/core".`
         locations: hap.context.locations ?? []
       }));
     },
+    // superdough on the engine's AudioContext, with strudel.cc's built-in sounds (its prebake minus the online banks).
+    async initAudio() {
+      await ready;
+      await initAudio();
+      registerSynthSounds();
+      registerZZFXSounds();
+      const soundfonts = await Promise.resolve().then(() => (init_soundfonts(), soundfonts_exports));
+      await evalScope(soundfonts);
+      soundfonts.registerSoundfonts();
+    },
+    setCps,
+    /** Restarts the timeline: `cycle` sounds at context time `seconds`. */
+    setClock(seconds2, cycle = 0) {
+      clock = { cps: scheduler.cps, cycle, seconds: seconds2 };
+    },
+    /** Schedules every onset in context time [t0, t1). Resolves once superdough has built the voices. */
+    schedule(t0, t1) {
+      if (!scheduler.pattern) return Promise.resolve();
+      if (scheduler.cps !== clock.cps) clock = { cps: scheduler.cps, cycle: cycleAt(t0), seconds: t0 };
+      const haps = scheduler.pattern.queryArc(cycleAt(t0), cycleAt(t1), { _cps: clock.cps }).filter((hap) => hap.hasOnset()).sort((a, b) => time3(a.whole.begin) - time3(b.whole.begin));
+      const at2 = (hap) => clock.seconds + (time3(hap.whole.begin) - clock.cycle) / clock.cps;
+      return Promise.all(haps.map((hap) => onSchedule(hap, at2(hap), hap.value.cps ?? clock.cps)));
+    },
+    /** Drains the .midi() events collected since the last call. */
+    midiEvents: () => midiEvents.splice(0),
+    /** superdough's orbits and buses back to their initial state; their nodes become garbage. */
+    resetAudio: () => resetGlobalEffects(),
     // Test seam: the upstream tune regression stringifies haps with hap.show() like Strudel's own test.
     get pattern() {
       return scheduler.pattern;

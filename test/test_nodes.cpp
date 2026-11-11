@@ -547,3 +547,59 @@ TEST(analyser_passes_through_with_fft_bookkeeping) {
 	CHECK(r.L[0] == 0.5f);
 	CHECK(a->fftSize == 1024 && a->frequencyBinCount() == 512);
 }
+
+// --- Review regressions ---
+
+TEST(param_ramp_already_past_jumps_to_target) {
+	ParamRig r(true, 1);
+	r.run(10);                                 // now = frame 1280
+	r.event(AudioParam::Linear, 5, 640 / kSr); // ended before it could start: V1 from T1 (used to fill the queue)
+	std::vector<float> v = r.run(1);
+	CHECK(v[0] == 5 && v[127] == 5);
+	r.event(AudioParam::Set, 7, r.f0 / kSr); // the queue still takes events
+	CHECK(r.run(1)[0] == 7);
+}
+
+TEST(cycle_delay_shorter_than_a_quantum_still_echoes) {
+	Rig r;
+	auto* d = r.make<DelayNode>(0.001); // maxDelayTime 48 frames < the 128-frame minimum in a cycle
+	d->delayTime.value = 0.001f;
+	auto* fb = r.make<GainNode>();
+	fb->gain.value = 0.5f;
+	r.g->connect(r.play(click()), d);
+	r.g->connect(d, fb);
+	r.g->connect(fb, d);
+	r.g->connect(d, r.dest());
+	r.render(512);
+	CHECK_NEAR(r.L[128], 1, 1e-6);
+	CHECK_NEAR(r.L[256], 0.5, 1e-6);
+}
+
+TEST(buffer_loop_wraps_at_huge_playback_rate) {
+	std::vector<float> ramp(8);
+	for (int i = 0; i < 8; i++)
+		ramp[i] = (float)i;
+	Rig r;
+	auto* s = r.play(buffer(ramp));
+	r.g->setAttr(s, AttrLoop, 1);
+	r.g->setAttr(s, AttrLoopStart, 2 / kSr);
+	r.g->setAttr(s, AttrLoopEnd, 6 / kSr);
+	s->playbackRate.value = 4e9f + 1; // == 1 (mod the 4-frame loop) as a float: a wrap loop would spin 1e9 times
+	r.g->connect(s, r.dest());
+	r.render(8);
+	float step = 4e9f + 1;
+	for (int k = 1; k < 8; k++) { // frame k plays position k * step wrapped into [2, 6)
+		double want = 2 + std::fmod(k * (double)step - 2, 4);
+		CHECK(r.L[k] == (float)want);
+	}
+}
+
+TEST(reverse_playback_honours_duration) {
+	Rig r;
+	auto* s = r.play(buffer(std::vector<float>(1000, 1.f)), 0, 999 / kSr, 100 / kSr);
+	s->playbackRate.value = -1;
+	r.g->connect(s, r.dest());
+	r.render(1024);
+	for (int k = 0; k < 1024; k++)
+		CHECK(r.L[k] == (k < 100 ? 1.f : 0.f)); // 100 frames of buffer time, backwards (used to run to position 0)
+}

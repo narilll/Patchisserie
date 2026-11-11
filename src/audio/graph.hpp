@@ -4,6 +4,14 @@
 // the graph and applies them at quantum boundaries. Nothing is allocated, freed or locked on the render thread:
 // dead objects go back through a lock-free trash stack and are deleted by Graph::collect() on the producer.
 // Pure logic: no Rack UI headers, testable on the host.
+//
+// Contracts for the producer (the JS binding, src/audio/webaudio_js.cpp, honours them):
+// (a) Commands carry raw Node* / AudioParam*: whatever can still post for a node (e.g. a JS AudioParam wrapper) keeps
+//     the node undisposed.
+// (b) A started source that has not ended is kept undisposed until its Ended event is delivered (its onended may be
+//     the only thing referencing it).
+// (c) post() == false means "full": queue and retry later, never drop a command.
+// (d) Whoever renders enables flush-to-zero / denormals-are-zero (DenormalsOff, or Rack's system::resetFpuFlags()).
 #include <atomic>
 #include <cmath>
 #include <cstdint>
@@ -21,8 +29,22 @@ constexpr int kMaxChannels = 2;
 
 /** Context time -> first sample frame at or after it. The epsilon absorbs JS rounding of `frame / sampleRate`. */
 inline int64_t timeToFrame(double t, double sampleRate) {
-	return (int64_t)std::ceil(t * sampleRate - 1e-3);
+	double f = std::ceil(t * sampleRate - 1e-3);
+	return f > 9e18    ? INT64_C(9000000000000000000)
+		   : f > -9e18 ? (int64_t)f
+					   : -INT64_C(9000000000000000000); // stop(1e20)
 }
+
+/** Flush-to-zero + denormals-are-zero for the scope (contract (d)); restores the thread's previous FPU mode. */
+struct DenormalsOff {
+	DenormalsOff();
+	~DenormalsOff();
+	DenormalsOff(const DenormalsOff&) = delete;
+	DenormalsOff& operator=(const DenormalsOff&) = delete;
+
+  private:
+	uint64_t saved = 0;
+};
 
 class Graph;
 struct Node;

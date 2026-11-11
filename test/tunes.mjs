@@ -45,8 +45,8 @@ export async function setup(read) {
     membrane: mockNode, noise: mockNode, metal: mockNode, lowpass: mockNode, highpass: mockNode,
   };
   const uiHelpersMocked = { backgroundImage: id };
-  // Upstream puts the real @strudel/webaudio (superdough) in scope; tunes only call these, for side effects.
-  // ponytail: replace with the real superdough exports once it is bundled (M1c).
+  // The real @strudel/webaudio is in the engine's scope like upstream's; only samples() is mocked, since it would
+  // fetch sample maps over the network (Node) or find no fetch() at all (qjs). Tunes call it for side effects only.
   const webaudioMocked = { samples: () => Promise.resolve() };
   const canvasCtx = { clearRect: () => {}, fillText: () => {}, fillRect: () => {}, canvas: { width: 100, height: 100 } };
   const audioCtx = { currentTime: 1 };
