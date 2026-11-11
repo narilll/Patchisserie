@@ -7,12 +7,12 @@ import * as tonal from '@strudel/tonal';
 import * as xen from '@strudel/xen';
 import * as edo from '@strudel/edo';
 import * as webaudio from '@strudel/webaudio';
-import { transpiler } from '@strudel/transpiler';
+import { registerTranspilerPlugin, transpiler } from '@strudel/transpiler';
 import { H } from '@strudel/hydra';
 
 // Same scope as strudel.cc (website/src/repl/util.mjs loadModules) minus visual/IO packages; soundfonts join in
-// initAudio(). Of @strudel/hydra: its H() and our initHydra() (below).
-const ready = core.evalScope(core, edo, tonal, mini, xen, webaudio, { H, initHydra });
+// initAudio(). Of @strudel/hydra: its H() and our initHydra(); hydra.ojack.xyz's loadScript() (below).
+const ready = core.evalScope(core, edo, tonal, mini, xen, webaudio, { H, initHydra, loadScript });
 
 // Strudel's canvas visuals need a canvas, which Rack doesn't have (out of v1). As upstream without a `window` (ours is
 // for superdough): .draw() returns the pattern, so .scope(), .spiral() etc. play on and draw nothing; the few that
@@ -345,15 +345,15 @@ const api = (globalThis.__patchisserie = {
 
   /**
    * Icing's frame (src/engine.cpp, once per UI frame): Hydra's tick() at `time` (s, Icing's clock) while Filo plays
-   * `cycle` at `cps`, with Meyda's loudness of the AUDIO input (24 Bark bands, total). Returns null (no Hydra, or
-   * its fps skipped this frame) or [display (-1: render() all four, 0-3: render(oN)), time, width, height, then per
-   * output: its program id (0: none), n, its n uniform values].
+   * `cycle`, with Meyda's loudness of the AUDIO input (24 Bark bands, total). Returns null (no Hydra, or its fps
+   * skipped this frame) or [display (-1: render() all four, 0-3: render(oN)), time, width, height, then per output:
+   * its program id (0: none), n, its n uniform values]. Hydra's bpm stays its own (30, or what the code sets), as on
+   * strudel.cc: its arrays (fast(), smooth()) run at that pace.
    */
-  hydraFrame(time, cycle, cps, specific, total) {
+  hydraFrame(time, cycle, specific, total) {
     if (!hydra) return null;
     frameCycle = cycle;
     features = { loudness: { specific, total } };
-    hydra.sandbox.set('bpm', cps * 240); // Strudel's 4 beats per cycle
     const dt = frameTime === undefined ? 0 : Math.max(0, time - frameTime) * 1000;
     frameTime = time;
     ticked = false;
@@ -422,15 +422,18 @@ class Output {
   render([pass]) {
     const names = Object.keys(pass.uniforms);
     this.fns = Object.values(pass.uniforms);
-    const samplers = names.map((n) => pass.frag.includes(`uniform sampler2D ${n};`));
-    this.program = api.hydraProgram(this.id, pass.frag, names, samplers);
+    this.samplers = names.map((n) => pass.frag.includes(`uniform sampler2D ${n};`));
+    this.program = api.hydraProgram(this.id, pass.frag, names, this.samplers);
     visible = true;
   }
   tick(props) {
-    // A sampler's value is its output's index (src/hydra.cpp samples that output's other buffer); -1: a source.
-    this.values = this.fns.map((f) => {
+    // A sampler's value is its output's index (src/hydra.cpp samples that output's other buffer); -1: a source. A
+    // float's is what WebGL's uniform1f() makes of it, ToNumber(): an array index out of range (undefined) is NaN, as
+    // hydra-synth's smooth() before its first step; NaN reaches glUniform1f() as it does WebGL's. An RGBA8 buffer
+    // can't keep it (Apple's GL stores 0, as Chrome's WebGL does): feedback recovers with the next finite frame.
+    this.values = this.fns.map((f, i) => {
       const v = f({}, props);
-      return typeof v === 'number' ? v : v instanceof Output ? v.id : -1;
+      return v instanceof Output ? v.id : this.samplers[i] ? -1 : Number(v);
     });
     ticked = true;
   }
@@ -505,6 +508,31 @@ async function initHydra(options) {
   installHydra();
   return hydra;
 }
+
+/**
+ * hydra.ojack.xyz's loadScript(url) (hydra-synth's global there): runs an extension's script in global scope, so its
+ * setFunction() calls add to Hydra's functions. It starts Hydra as initHydra() does first: the editor's examples never
+ * call initHydra(). The script comes through fetch(): https only, kept in the disk cache like samples. Unlike
+ * hydra-synth's (which only logs), a failure rejects: the evaluate fails with the reason.
+ */
+async function loadScript(url) {
+  await initHydra();
+  try {
+    (0, eval)(await (await fetch(url)).text());
+  } catch (e) {
+    throw new Error(`loadScript ${url}: ${e}`); // with its kind: SyntaxError, ReferenceError (DOM), ...
+  }
+}
+// hydra.ojack.xyz's loadScript("https://...") as written: its string is not mini-notation (Strudel's double quotes).
+registerTranspilerPlugin({
+  walk: () => ({
+    enter(node) {
+      if (node.type !== 'CallExpression' || node.callee.name !== 'loadScript') return;
+      this.skip();
+      return true;
+    },
+  }),
+});
 
 function installHydra() {
   strudelGlobals ??= new Map(Object.keys(hydra.synth).map((n) => [n, Object.getOwnPropertyDescriptor(globalThis, n)]));

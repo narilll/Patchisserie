@@ -13,8 +13,8 @@ globalThis.addEventListener = () => {};
 const host = globalThis.__patchisserie;
 
 const bands = (f) => Array.from({ length: 24 }, (_, i) => f(i));
-/** hydraFrame() at Icing time t (s), Filo at `cycle` with `cps`, silent AUDIO; parsed. */
-const frame = (t, cycle = 0, cps = 0.5, specific = bands(() => 0)) => parse(host.hydraFrame(t, cycle, cps, specific, 0));
+/** hydraFrame() at Icing time t (s), Filo at `cycle`, silent AUDIO; parsed. */
+const frame = (t, cycle = 0, specific = bands(() => 0)) => parse(host.hydraFrame(t, cycle, specific, 0));
 function parse(f) {
   if (!f) return f;
   const [display, time, width, height, ...rest] = f;
@@ -30,7 +30,7 @@ const ok = async (code) => assert.deepEqual(await host.evaluate(code), { ok: tru
 
 test('no frames before initHydra()', async () => {
   await ok('note("c")');
-  assert.equal(host.hydraFrame(0, 0, 0.5, bands(() => 0), 0), null);
+  assert.equal(host.hydraFrame(0, 0, bands(() => 0), 0), null);
   assert.deepEqual(host.hydraPrograms(), []);
 });
 
@@ -106,7 +106,7 @@ test("a.fft: hydra-synth's binning, smoothing, cutoff and scale of Meyda's loudn
 a.setSmooth(0.4); a.setCutoff(2); a.setScale(10); a.setBins(4); a.show(); a.hide()
 osc(() => a.fft[0], 0.1, () => a.fft[3]).out()`);
   const specific = bands((i) => i + 1);
-  const fft = (t) => parse(host.hydraFrame(t, 0, 0.5, specific, 300)).outputs[0].values;
+  const fft = (t) => parse(host.hydraFrame(t, 0, specific, 300)).outputs[0].values;
   const near = (got, want) => got.forEach((g, i) => assert.ok(Math.abs(g - want[i]) < 1e-12, `${got} vs ${want}`));
   // 4 bins of 6 bands: sums 21 and 129 (bins 0, 3); each bin = 0.6 sum + 0.4 previous; fft = (bin - 2) / 10.
   near(fft(5), [(0.6 * 21 - 2) / 10, (0.6 * 129 - 2) / 10]);
@@ -117,17 +117,31 @@ osc(() => a.fft[0], 0.1, () => a.fft[1]).out()`);
   near(fft(5.2), [78, 222]); // bands 1-12, 13-24
 });
 
-test('bpm is Filo\'s tempo (4 beats per cycle), time counts seconds since initHydra() times speed', async () => {
+// A sketch's arrays (fast(), smooth()) step at bpm / 60 per second: at a forced 120 (Filo's tempo, once) one that
+// builds up on strudel.cc in 8 s steps stayed near black (test/glcheck.cpp).
+test("bpm is Hydra's own (30, or what the code sets) as on strudel.cc; time counts seconds since initHydra() times speed", async () => {
   await ok('await initHydra()\nspeed = 1\nosc(({ bpm }) => bpm, 0.1, ({ time }) => time).out()');
-  const [bpm0, t0] = frame(10, 0, 0.5).outputs[0].values;
-  const [bpm1, t1] = frame(10.5, 0, 0.75).outputs[0].values;
-  assert.deepEqual([bpm0, bpm1], [120, 180]);
+  const [bpm0, t0] = frame(10).outputs[0].values;
+  const [bpm1, t1] = frame(10.5, 3).outputs[0].values;
+  assert.deepEqual([bpm0, bpm1], [30, 30]);
+  await ok('await initHydra()\nbpm = 60\nosc(({ bpm }) => bpm).out()');
+  assert.deepEqual(frame(10.6).outputs[0].values, [60]);
+  await ok('await initHydra()\nosc(({ bpm }) => bpm).out()'); // Hydra's state, as on hydra.ojack.xyz
+  assert.deepEqual(frame(10.7).outputs[0].values, [60]);
+  await ok('await initHydra()\nbpm = 30');
   assert.ok(Math.abs(t1 - t0 - 0.5) < 1e-9, `${t1 - t0}`);
   await ok('await initHydra()\nspeed = 2\nosc(({ bpm }) => bpm, 0.1, ({ time }) => time).out()');
   const t2 = frame(11).outputs[0].values[1];
   const t3 = frame(11.5).outputs[0].values[1];
   assert.ok(Math.abs(t3 - t2 - 1) < 1e-9, `${t3 - t2}`);
   await ok('await initHydra()\nspeed = 1');
+});
+
+test("a uniform's value is what WebGL's uniform1f() makes of it: ToNumber()", async () => {
+  // hydra-synth hands an array's element over as it is: undefined (out of range, as smooth() before its first step)
+  // is NaN, null 0, '0.5' 0.5. A function's non-number gives the input's default (hydra-synth's own check).
+  await ok("await initHydra()\nosc([undefined], [null], ['0.5']).out()");
+  assert.deepEqual(frame(10.8).outputs[0].values, [NaN, 0, 0.5]);
 });
 
 test('setResolution() and render(oN) reach the frame', async () => {
@@ -188,4 +202,59 @@ test("Strudel's canvas visuals and feedStrudel draw nothing but don't stop the c
   assert.equal(host.query(0, 1).length, 4);
   assert.equal(lines.filter((l) => /\[draw\]/.test(l)).length, 1, lines.join('\n'));
   assert.ok(lines.some((l) => /feedStrudel/.test(l)), lines.join('\n'));
+});
+
+// hydra.ojack.xyz's extensions: the fixture is lib-color.js as served by metagrowing.org (AGPL-3.0, header kept).
+const libColorUrl = 'https://metagrowing.org/extra-shaders-for-hydra/lib-color.js';
+const libColor = readFileSync(new URL('fixtures/lib-color.js', import.meta.url), 'utf8');
+/** evaluate(code) with fetch() serving `scripts` (url -> text) and failing for anything else. */
+async function withScripts(scripts, code) {
+  const fetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (!(url in scripts)) throw new TypeError(`fetch ${url}: download failed`);
+    return new Response(scripts[url]);
+  };
+  try {
+    return await host.evaluate(code);
+  } finally {
+    globalThis.fetch = fetch;
+  }
+}
+
+test("loadScript() runs an extension in global scope, before initHydra() too: its setFunction() transforms make shaders", async () => {
+  // hydra.ojack.xyz's example as written: no initHydra(), double quotes (not mini-notation here).
+  const example = `await loadScript("${libColorUrl}")
+
+osc(3, 0.5, 1)
+    .rotate(() => -0.17 * time)
+    .colreflect(osc(12, 0.23, 1)
+        .rotate(() => 0.1 * time), 0.3)
+    .out(o0)
+render(o0)`;
+  host.hydraPrograms();
+  assert.deepEqual(await withScripts({ [libColorUrl]: libColor }, example), { ok: true });
+  const [o0, ...more] = host.hydraPrograms();
+  assert.deepEqual(more, []);
+  assert.match(o0.frag, /vec4 colreflect\(vec4 _c0, vec4 _c1, float amount\)/);
+  assert.match(o0.frag, /gl_FragColor = colreflect\(osc\(rotate\(st/);
+  assert.equal(frame(20).display, 0);
+  // After initHydra(), and its functions stay for later code, as on hydra.ojack.xyz.
+  const after = `await initHydra()\nawait loadScript('${libColorUrl}')\nosc().sepia(0.5).out(o1)`;
+  assert.deepEqual(await withScripts({ [libColorUrl]: libColor }, after), { ok: true });
+  await ok('await initHydra()\nosc().colreflect(noise()).levels(4).out(o1)');
+  assert.match(host.hydraPrograms().at(-1).frag, /gl_FragColor = levels\(colreflect\(/);
+});
+
+test('loadScript() failures fail the evaluate with the reason', async () => {
+  const url = 'https://example.com/ext.js';
+  const cases = [
+    [{}, /^loadScript https:\/\/example\.com\/ext\.js: TypeError: fetch https:\/\/example\.com\/ext\.js: download failed$/],
+    [{ [url]: 'setFunction({' }, /^loadScript https:\/\/example\.com\/ext\.js: SyntaxError: /],
+    [{ [url]: "document.head.appendChild(document.createElement('script'))" }, /: ReferenceError: document is not defined$/],
+  ];
+  for (const [scripts, error] of cases) {
+    const r = await withScripts(scripts, `await loadScript("${url}")\nosc().out()`);
+    assert.equal(r.ok, false, JSON.stringify(scripts));
+    assert.match(r.error, error);
+  }
 });

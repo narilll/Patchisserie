@@ -566,12 +566,12 @@ struct Engine::Js {
 		JSValue specific = JS_NewArray(ctx);
 		for (int i = 0; i < hydra::kBarkBands; i++)
 			JS_SetPropertyUint32(ctx, specific, i, JS_NewFloat64(ctx, q.specific[i]));
-		JSValue args[5] = {JS_NewFloat64(ctx, q.time), JS_NewFloat64(ctx, t.cycle), JS_NewFloat64(ctx, t.cps), specific,
+		JSValue args[4] = {JS_NewFloat64(ctx, q.time), JS_NewFloat64(ctx, t.cycle), specific,
 						   JS_NewFloat64(ctx, q.total)};
 		double seconds = e->cfg_.tickDeadline; // a frame stalls the query loop like a tick
 		deadline = now() + seconds;
 		interrupted = false;
-		JSValue r = JS_Call(ctx, hydraFrame, JS_UNDEFINED, 5, args);
+		JSValue r = JS_Call(ctx, hydraFrame, JS_UNDEFINED, 4, args);
 		deadline = 0;
 		JS_FreeValue(ctx, specific);
 		if (JS_IsException(r)) { // an endless loop in a uniform function: never again, every frame

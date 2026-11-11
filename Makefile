@@ -111,6 +111,27 @@ render: build/test/render
 
 .PHONY: render
 
+# Icing's shaders and passes on this machine's GL driver (test/glcheck.cpp). Not part of `make test`: CI runners may
+# have no GL. The plugin's own objects minus its Rack UI, linked to libRack like the plugin.
+GLCHECK_OBJECTS := $(filter-out build/src/plugin.cpp.o build/src/editor/%,$(OBJECTS))
+GLCHECK_LIBS := -L$(RACK_DIR) -lRack
+ifdef ARCH_MAC
+GLCHECK_LIBS += -framework OpenGL -lobjc
+endif
+ifdef ARCH_LIN
+GLCHECK_LIBS += -lGL
+endif
+ifdef ARCH_WIN
+GLCHECK_LIBS += -lopengl32
+endif
+build/glcheck: test/glcheck.cpp $(GLCHECK_OBJECTS)
+	$(CXX) $(filter-out -MMD -MP,$(CXXFLAGS)) -o $@ test/glcheck.cpp $(GLCHECK_OBJECTS) $(GLCHECK_LIBS)
+
+glcheck: build/glcheck
+	DYLD_LIBRARY_PATH=$(RACK_DIR) LD_LIBRARY_PATH=$(RACK_DIR) build/glcheck
+
+.PHONY: glcheck
+
 # QuickJS CLI for headless engine tests. Vendor C: no warnings, strict IEEE math.
 QJS_SOURCES := $(addprefix $(QJS_DIR)/,quickjs.c libregexp.c libunicode.c dtoa.c quickjs-libc.c qjs.c gen/repl.c gen/standalone.c)
 

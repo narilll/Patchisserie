@@ -18,7 +18,7 @@ globalThis.window = globalThis;
 globalThis.addEventListener = () => {};
 const hydra = await host.evaluate('await initHydra()\nsrc(o0).modulate(noise(3), 0.005).blend(shape(4), 0.01).out(o0)');
 const [program, ...more] = host.hydraPrograms();
-const frame = host.hydraFrame(0, 0, 0.5, Array(24).fill(1), 24);
+const frame = host.hydraFrame(0, 0, Array(24).fill(1), 24);
 if (!hydra.ok || more.length || !/gl_FragColor = blend\(src\(modulate\(st, noise/.test(program?.frag) || frame?.[4] !== program.id) {
   print(`qjs smoke FAILED: Hydra ${JSON.stringify(hydra)} ${JSON.stringify(frame)}\n${program?.frag}`);
   std.exit(1);

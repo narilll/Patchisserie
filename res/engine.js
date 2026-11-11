@@ -39757,7 +39757,7 @@ registerProcessor('${name3}', MyProcessor);
   var H = (p) => () => reify(p).queryArc(getTime(), getTime())[0].value;
 
   // js/host.mjs
-  var ready = evalScope(core_exports, edo_exports, tonal_exports, mini_exports, xen_exports, webaudio_exports, { H, initHydra });
+  var ready = evalScope(core_exports, edo_exports, tonal_exports, mini_exports, xen_exports, webaudio_exports, { H, initHydra, loadScript });
   var drawSaid = false;
   var noCanvas = (result) => function() {
     if (!drawSaid) drawSaid = true, console.warn("[draw] Strudel canvas visuals (scope, pianoroll, ...) are not shown in Rack");
@@ -40045,15 +40045,15 @@ registerProcessor('${name3}', MyProcessor);
     resetAudio: () => resetGlobalEffects(),
     /**
      * Icing's frame (src/engine.cpp, once per UI frame): Hydra's tick() at `time` (s, Icing's clock) while Filo plays
-     * `cycle` at `cps`, with Meyda's loudness of the AUDIO input (24 Bark bands, total). Returns null (no Hydra, or
-     * its fps skipped this frame) or [display (-1: render() all four, 0-3: render(oN)), time, width, height, then per
-     * output: its program id (0: none), n, its n uniform values].
+     * `cycle`, with Meyda's loudness of the AUDIO input (24 Bark bands, total). Returns null (no Hydra, or its fps
+     * skipped this frame) or [display (-1: render() all four, 0-3: render(oN)), time, width, height, then per output:
+     * its program id (0: none), n, its n uniform values]. Hydra's bpm stays its own (30, or what the code sets), as on
+     * strudel.cc: its arrays (fast(), smooth()) run at that pace.
      */
-    hydraFrame(time4, cycle, cps2, specific, total) {
+    hydraFrame(time4, cycle, specific, total) {
       if (!hydra) return null;
       frameCycle = cycle;
       features = { loudness: { specific, total } };
-      hydra.sandbox.set("bpm", cps2 * 240);
       const dt2 = frameTime === void 0 ? 0 : Math.max(0, time4 - frameTime) * 1e3;
       frameTime = time4;
       ticked = false;
@@ -40109,14 +40109,14 @@ registerProcessor('${name3}', MyProcessor);
     render([pass]) {
       const names10 = Object.keys(pass.uniforms);
       this.fns = Object.values(pass.uniforms);
-      const samplers = names10.map((n2) => pass.frag.includes(`uniform sampler2D ${n2};`));
-      this.program = api.hydraProgram(this.id, pass.frag, names10, samplers);
+      this.samplers = names10.map((n2) => pass.frag.includes(`uniform sampler2D ${n2};`));
+      this.program = api.hydraProgram(this.id, pass.frag, names10, this.samplers);
       visible = true;
     }
     tick(props) {
-      this.values = this.fns.map((f) => {
+      this.values = this.fns.map((f, i3) => {
         const v2 = f({}, props);
-        return typeof v2 === "number" ? v2 : v2 instanceof _Output ? v2.id : -1;
+        return v2 instanceof _Output ? v2.id : this.samplers[i3] ? -1 : Number(v2);
       });
       ticked = true;
     }
@@ -40196,6 +40196,23 @@ registerProcessor('${name3}', MyProcessor);
     installHydra();
     return hydra;
   }
+  async function loadScript(url) {
+    await initHydra();
+    try {
+      (0, eval)(await (await fetch(url)).text());
+    } catch (e) {
+      throw new Error(`loadScript ${url}: ${e}`);
+    }
+  }
+  registerTranspilerPlugin({
+    walk: () => ({
+      enter(node) {
+        if (node.type !== "CallExpression" || node.callee.name !== "loadScript") return;
+        this.skip();
+        return true;
+      }
+    })
+  });
   function installHydra() {
     strudelGlobals ??= new Map(Object.keys(hydra.synth).map((n2) => [n2, Object.getOwnPropertyDescriptor(globalThis, n2)]));
     hydra.sandbox.makeGlobal = true;

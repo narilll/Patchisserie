@@ -22,8 +22,14 @@ $: s("bd*4")
 - The visuals belong to code that calls `initHydra()`: an evaluate without it hushes them, and so does Filo's STOP
   (strudel.cc clears Hydra on stop too). An evaluate brings them back: the PLAY button or Cmd/Ctrl+Enter (the PLAY
   trigger input only restarts the transport).
-- `H(pattern)` is the pattern's value at the cycle Filo plays, `bpm` is Filo's tempo (cps × 240), `time` counts
-  seconds (× `speed`) since the first `initHydra()`.
+- `H(pattern)` is the pattern's value at the cycle Filo plays. `bpm` is Hydra's own, as on strudel.cc: 30 unless the
+  code sets it (Hydra's arrays step at bpm / 60 per second). `time` counts seconds (× `speed`) since the first
+  `initHydra()`.
+- `loadScript(url)` (hydra.ojack.xyz's) runs an extension, e.g. `await loadScript("https://.../lib-color.js")`: it
+  starts Hydra as `initHydra()` does, then evaluates the script (https only, cached like samples) in global scope, so
+  its `setFunction()`s join Hydra's functions for this and later code (a new source name, like those of
+  `a.setBins()`, also stays global for Strudel's code). Its URL is a plain string, double quotes too. A failed fetch or
+  script fails the evaluate.
 - `a.fft` (`a.setBins`, `setSmooth`, `setCutoff`, `setScale`) listens to the AUDIO input, unpatched to Filo's L+R.
 - Not in Icing: the sources `s0`-`s3` (`initCam`, `initVideo`, `initImage`, `initScreen`, `initStream` fail with an
   error), the mouse (always 0), `a.show()` (draws nothing), Strudel's canvas visuals.
@@ -41,6 +47,7 @@ make test-js    # engine tests: host, Hydra, upstream tune snapshots in Node and
 make render     # offline audio renders (build/render/*.wav, after scripts/fetch-test-samples);
                 # node --test test/render.test.mjs compares them with Chrome
 make tsan       # graph, worklet, engine and download threading tests under ThreadSanitizer
+make glcheck    # Icing's shaders and passes on this machine's GL driver (not in `make test`: needs a display)
 make bench      # CPU per graph voice and per worklet processor (release build)
 make render-bench   # the render set 20x + all patterns stacked: CPU (gate G4), leaks and RSS (G2)
 scripts/update-engine [ref]   # re-pin Strudel (default: main) and with it hydra-synth, rebuild res/engine.js, run test-js;
