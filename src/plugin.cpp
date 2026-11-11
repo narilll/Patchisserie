@@ -69,7 +69,7 @@ struct Filo : Module {
 	dsp::BooleanTrigger stopButton; // the PLAY button evaluates the code: FiloWidget::step(), on the UI thread
 	dsp::PulseGenerator trigPulse[16], clkPulse, resetPulse;
 	filo::Sequencer::Outputs out;
-	// midin() in the code: driver, device and channel from the menu (Rack's), saved in the patch.
+	// midin() and midikeys() in the code: driver, device and channel from the menu (Rack's), saved in the patch.
 	midi::InputQueue midiInput;
 	// process()'s, reused: tryPop() copies into its bytes, which keep their capacity (Rack's own MIDI modules make one
 	// per sample). ponytail: while messages wait, tryPop() locks Rack's queue mutex and frees the popped one, as in
@@ -327,7 +327,7 @@ struct FiloWidget : ModuleWidget {
 		menu->addChild(createMenuItem("Reset TRIG/CC channel maps", "", [=] { m->engine->resetMaps(); }));
 
 		menu->addChild(new MenuSeparator);
-		menu->addChild(createMenuLabel("MIDI input (midin() in the code)"));
+		menu->addChild(createMenuLabel("MIDI input (midin(), midikeys() in the code)"));
 		appendMidiMenu(menu, &m->midiInput);
 
 		menu->addChild(new MenuSeparator);

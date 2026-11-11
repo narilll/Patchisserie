@@ -7,6 +7,20 @@ VCV Rack 2 plugin that runs [Strudel](https://strudel.cc) live coding and [Hydra
 
 Status: early development.
 
+## Filo's editor
+
+| Key (Ctrl on Windows/Linux) | |
+|---|---|
+| Cmd+Enter, PLAY button | evaluate and play (already playing: just update the code) |
+| Cmd+. , STOP button | stop: hush, gates down |
+| Cmd+/ | comment / uncomment the selected lines |
+| Ctrl+Space (also Cmd+I on macOS) | completions; they also open while typing a name. Up/Down, Tab or Enter accepts, Esc closes |
+| double-click / triple-click | select the word / the whole line |
+| FULL button, Esc | fullscreen editor, back |
+
+Rest the mouse on a function name to see its docs (Strudel's and Hydra's, from `res/strudel-docs.json`, regenerated
+by `scripts/update-engine`).
+
 ## MIDI input
 
 Choose a MIDI driver, device and channel in Filo's menu (saved in the patch); the code reads it as on strudel.cc:
@@ -16,11 +30,26 @@ let cc = await midin('My controller')
 $: note("c2 eb2 g2").s("sawtooth").lpf(cc(74).range(200, 4000)).lpq(cc(71).range(0, 10))
 ```
 
-The device is the one in the menu, whatever name `midin()` gets (none chosen: it warns in the log). `cc(n)` is CC n's
-latest value / 127 (0 until one arrives), `cc(n, chan)` that of MIDI channel `chan` (1-16) only; other messages are
-ignored. As on strudel.cc, values are read when Strudel queries the pattern, about 100-150 ms ahead of what plays, and
-apply per note: a knob turn reaches the notes that start after that. They stay across evaluates, not across reopening
-the patch.
+The device is the one in the menu, whatever name `midin()` or `midikeys()` gets (none chosen: it warns in the log).
+`cc(n)` is CC n's latest value / 127 (0 until one arrives), `cc(n, chan)` that of MIDI channel `chan` (1-16) only;
+other messages are ignored. As on strudel.cc, values are read when Strudel queries the pattern, about 100-150 ms ahead
+of what plays, and apply per note: a knob turn reaches the notes that start after that. They stay across evaluates, not
+across reopening the patch.
+
+`midikeys()` plays the keyboard's notes through the code, as on strudel.cc:
+
+```js
+const kb = await midikeys('My keyboard')
+$: kb().s("tri").lpf(80).lpe(6).lpd(0.1).room(2).delay(0.35)
+$: kb("0.5 1").s("saw").add(note(rand.mul(0.3))).lpf(1000)
+$: kb().filterValues((v) => v.midichan == 2).midi() // MIDI channel 2's notes also on V/OCT, GATE and VEL
+```
+
+Each note-on plays `noteLength` cycles (`kb(noteLength)`, default 0.5, a pattern too): note-offs are ignored, as on
+strudel.cc. Its haps carry `note`, `velocity` (0-1), `midichan` (1-16) and `midikey`. Notes play only while the
+transport runs (stopped, Filo ignores them), each a fixed time after Rack delivers it: what Filo renders ahead (20 ms at
+least, 2 audio blocks if more), one audio block and a 12 ms scheduling margin, 39 ms at 48 kHz with 256-frame blocks.
+Sound and `.midi()` gates land on the same sample.
 
 ## Icing (Hydra)
 

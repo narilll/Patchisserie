@@ -9,7 +9,7 @@
 //             and Icing's Hydra frames (hydra::Exchange)
 //   JS        QuickJS runtime #1 (res/engine.js, Hydra too); producer of the graph's commands and of seq.queue
 //   render    renders the graph (and its worklet scope, QuickJS #2) into the ring, ahead of the audio thread
-//   audio     process(): ring -> L/R, seq -> CV, transport, the timeline snapshot and MIDI CCs for the JS thread
+//   audio     process(): ring -> L/R, seq -> CV, transport, the timeline snapshot, MIDI CCs and notes for the JS thread
 // Between threads only atomics, SPSC queues and the two mutexes above; the audio and render threads never lock or
 // allocate (graph.hpp, worklets.hpp).
 //
@@ -145,8 +145,17 @@ class Engine {
 	/** Restarts both threads at the new rate and re-evaluates the code. Blocks: call where process() can't run. */
 	void setSampleRate(double sampleRate);
 	/** A message from Filo's MIDI input (Rack's midi::Message: status nibble, channel 0-15, data bytes). midin()'s
-	cc() reads the CCs, value / 127, per channel and the latest of any channel; the rest is ignored. */
+	cc() reads the CCs, value / 127, per channel and the latest of any channel; note-ons and -offs go to midikeys() on
+	the JS thread with this frame (full: dropped, counted); the rest is ignored. */
 	void midiMessage(int status, int channel, int data1, int data2) {
+		if (status == 0x8 || status == 0x9) {
+			if (notes_.full())
+				droppedNotes.store(droppedNotes.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
+			else
+				notes_.push({frame_, epoch_, (uint8_t)status, (uint8_t)(channel & 0xf), (uint8_t)(data1 & 0x7f),
+							 (uint8_t)(data2 & 0x7f)});
+			return;
+		}
 		if (status != 0xb)
 			return;
 		double v = (data2 & 0x7f) / 127.;
@@ -160,6 +169,7 @@ class Engine {
 	std::atomic<int64_t> missingFrames{0};        // played as silence: the ring was empty
 	std::atomic<double> renderBusy{0}, jsBusy{0}; // s spent rendering / running JS (not sleeping)
 	std::atomic<double> tickLate{0};              // s a query loop run came after 20 ms + this, at worst (reset it)
+	std::atomic<int64_t> droppedNotes{0};         // MIDI notes midiMessage() dropped: the JS thread was behind
 
 	// Internals shared with engine.cpp's thread functions.
 	struct Js;
@@ -219,6 +229,15 @@ class Engine {
 
 	// Audio -> JS: the MIDI input's latest CC values, [MIDI channel 1-16, 0: any][CC]. They outlive a restart.
 	std::atomic<double> midiCC_[17][128] = {};
+	// Audio -> JS: the MIDI input's note-ons and -offs (midikeys()), with their frame and epoch. SPSC; the JS thread
+	// polls it every 1 ms (the audio thread never wakes anyone). ponytail: 256, then dropped (the JS thread stalled).
+	struct MidiNote {
+		int64_t frame;
+		uint32_t epoch;
+		uint8_t status, channel, note, velocity;
+	};
+	rack::dsp::RingBuffer<MidiNote, 256> notes_;
+	std::atomic<int> keyDelay_{0}; // frames from a note's arrival to its sound (setBlockFrames())
 
 	// UI -> JS.
 	mutable std::mutex m_;

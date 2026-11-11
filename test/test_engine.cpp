@@ -609,6 +609,99 @@ TEST(engine_midin_cc) {
 	CHECK(warnings() == 1);
 }
 
+// midikeys() on Filo's MIDI input, fed as Filo::process() feeds it, at real time: each note-on sounds (superdough) and
+// gates (.midi()) exactly once, on one frame, a constant delay after its own frame: the ring (1024 frames at 48 kHz) +
+// a block (256) + 12 ms. Note-offs and velocity 0 change nothing; stopped, notes are ignored; nothing is replayed after
+// a PLAY, an evaluate or a sample-rate restart.
+TEST(engine_midikeys) {
+	auto r = std::make_unique<Rig>("engine-midikeys");
+	r->engine->setBlockFrames(256); // the Rig's blocks, as Filo::process() tells it Rack's
+	r->engine->midiDevice = true;   // the JS thread polls the notes every 1 ms
+	const std::string code = "const kb = await midikeys('Keys')\n$: kb().s(\"bd\")\n$: kb().midi()";
+	CHECK(r->evaluate(code, true));
+	CHECK(r->until([&] { return r->engine->seq.started(); }, 10));
+	// A note-on `offset` frames into a block (Rack spreads them).
+	auto play = [&](int offset) {
+		r->run(offset);
+		int64_t f = r->frame();
+		r->engine->midiMessage(0x9, 0, 36, 100);
+		return f;
+	};
+	play(0); // bd loads with the first note
+	r->seconds(0.5);
+	int64_t a = r->frame(), delay = 1024 + 256 + 576;
+	std::vector<int64_t> arrivals, latencies;
+	int once = 0;
+	for (int i = 0; i < 16; i++) {
+		arrivals.push_back(play(i * 37 % 256));
+		r->run(2400);
+		r->engine->midiMessage(0x8, 0, 36, 64); // note-off: ignored
+		r->engine->midiMessage(0x9, 0, 38, 0);  // velocity 0: a note-off
+		r->run(12000 - 2400 - i * 37 % 256);
+	}
+	r->seconds(0.5);
+	for (int64_t f : arrivals) {
+		std::vector<int64_t> g = r->gateRises(f, f + 12000), k = r->kicks(f, f + 12000);
+		CHECK(g.size() <= 1 && k.size() <= 1); // never twice: tick() doesn't query them again
+		once += g.size() == 1 && k == g;
+		if (!g.empty())
+			latencies.push_back(g[0] - f);
+	}
+	CHECK(r->aligned(a, r->frame()) == once);
+	auto [lo, hi] = std::minmax_element(latencies.begin(), latencies.end());
+	double mean = 0;
+	for (int64_t l : latencies)
+		mean += (double)l / latencies.size();
+	if (!latencies.empty())
+		std::printf("  note-on -> sound and gate: %d of 16 once, on one frame; %.2f ms (%lld frames) mean, %lld-%lld "
+					"frames (jitter %.2f ms), expected %lld; %lld notes dropped\n",
+					once, 1e3 * mean / r->sr, (long long)std::llround(mean), (long long)*lo, (long long)*hi,
+					1e3 * (*hi - *lo) / r->sr, (long long)delay, (long long)r->engine->droppedNotes.load());
+	TIMED_CHECK(once == 16);
+	TIMED_CHECK(!latencies.empty() && *lo == delay && *hi == delay);
+
+	// Stopped: ignored, and not replayed by the next PLAY.
+	r->engine->stop();
+	r->seconds(0.3);
+	int64_t s = r->frame();
+	for (int i = 0; i < 3; i++) {
+		play(100);
+		r->seconds(0.1);
+	}
+	r->engine->play();
+	CHECK(r->until([&] { return r->engine->seq.started(); }, 2));
+	r->seconds(1);
+	CHECK(r->gateRises(s, r->frame()).empty() && r->kicks(s, r->frame()).empty());
+
+	// An evaluate replays nothing; the next note plays.
+	int64_t e = play(0);
+	r->seconds(0.5);
+	CHECK(r->gateRises(e, r->frame()).size() == 1);
+	CHECK(r->evaluate(code));
+	e = r->frame();
+	r->seconds(1);
+	CHECK(r->gateRises(e, r->frame()).empty());
+	e = play(0);
+	r->seconds(0.5);
+	CHECK(r->gateRises(e, r->frame()).size() == 1);
+
+	// A sample-rate restart right after a note: the new runtime never plays it; the next note plays, with the new
+	// delay.
+	r->engine->midiMessage(0x9, 0, 36, 100);
+	r->engine->setSampleRate(44100);
+	r->sr = 44100;
+	r->paceStart = 0;
+	e = r->frame();
+	CHECK(r->evaluate(code));
+	r->seconds(1);
+	CHECK(r->gateRises(e, r->frame()).empty());
+	e = play(0);
+	r->seconds(0.5);
+	std::vector<int64_t> g = r->gateRises(e, r->frame());
+	CHECK(g.size() == 1);
+	TIMED_CHECK(g.size() == 1 && g[0] - e == 896 + 256 + 530);
+}
+
 // Icing's frames on the real engine (plan item 8): Hydra from Filo's code, H() at the cycle Filo plays, a.fft from the
 // request, src(o0) as a sampler, real shaders through the GLSL conversion; Filo's events stay exact at 60 frames/s;
 // STOP hushes; a restart drops Hydra until the code makes it again; an endless uniform function is interrupted.

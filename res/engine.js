@@ -39757,7 +39757,7 @@ registerProcessor('${name3}', MyProcessor);
   var H = (p) => () => reify(p).queryArc(getTime(), getTime())[0].value;
 
   // js/host.mjs
-  var ready = evalScope(core_exports, edo_exports, tonal_exports, mini_exports, xen_exports, webaudio_exports, { H, initHydra, loadScript, midin });
+  var ready = evalScope(core_exports, edo_exports, tonal_exports, mini_exports, xen_exports, webaudio_exports, { H, initHydra, loadScript, midin, midikeys });
   var drawSaid = false;
   var noCanvas = (result) => function() {
     if (!drawSaid) drawSaid = true, console.warn("[draw] Strudel canvas visuals (scope, pianoroll, ...) are not shown in Rack");
@@ -39795,16 +39795,37 @@ registerProcessor('${name3}', MyProcessor);
   };
   register("midi", (pat) => pat.onSchedule(toRack, true));
   var midiSaid = false;
-  async function midin(input) {
+  function midiInput(name3, input) {
     if (isPattern(input)) {
       const hint = "Make sure to pass device name with single quotes. Example: midin('IAC Driver Bus 1')";
       throw new Error(`[midi] Midi input cannot be a pattern. ${hint}`);
     }
     if (!api.midiDevice() && !midiSaid) {
       midiSaid = true;
-      console.warn(`[midi] midin('${input}'): choose a MIDI device in Filo's menu`);
+      console.warn(`[midi] ${name3}('${input}'): choose a MIDI device in Filo's menu`);
     }
+  }
+  async function midin(input) {
+    midiInput("midin", input);
     return (cc, chan) => ref(() => api.midiCC(cc, chan ?? 0));
+  }
+  var keyHaps = {};
+  async function midikeys(input) {
+    midiInput("midikeys", input);
+    keyHaps[input] ??= [];
+    return (noteLength = 0.5) => {
+      const lengths = reify(noteLength);
+      return new Pattern(
+        (state) => keyHaps[input].flatMap(
+          (hap) => lengths.query(state.setSpan(hap.wholeOrPart())).map((length) => {
+            const nl = length.value ?? 0.5;
+            const whole = new TimeSpan(hap.whole.begin, hap.whole.begin.add(nl));
+            const part = new TimeSpan(hap.part.begin, hap.part.begin.add(nl));
+            return new Hap(whole, part, hap.value, hap.combineContext(length));
+          })
+        )
+      );
+    };
   }
   var dirtSamples = {
     casio: ["casio/high.wav", "casio/low.wav", "casio/noise.wav"],
@@ -39916,6 +39937,43 @@ registerProcessor('${name3}', MyProcessor);
   };
   var byOnset = (a2, b) => time3(a2.whole.begin) - time3(b.whole.begin) || (b.value.cps !== void 0) - (a2.value.cps !== void 0);
   var rt = { epoch: -1, from: 0, cps: 0, tempos: [], late: false };
+  var tl = { frame: 0, cycle: 0, cps: 0, sr: 48e3, external: false };
+  var tempo = (at2, value2) => {
+    rt.cps = Math.fround(value2);
+    api.rackEvent(Tempo, at2, at2, 0, 0, -1, "", rt.cps);
+    if (!tl.external) rt.tempos.push({ cycle: at2, cps: rt.cps });
+  };
+  var kEps = 1e-9;
+  var sampleAt = (f, c2, k, b) => Math.max(f, Math.ceil(f + (b - kEps - c2) / k * tl.sr));
+  var timeAt = (b) => {
+    let [f, c2, k] = [tl.frame, tl.cycle, tl.cps];
+    for (const t of rt.tempos) {
+      if (t.cycle > b) break;
+      const p = sampleAt(f, c2, k, t.cycle);
+      [c2, f, k] = [c2 + (p - f) * k / tl.sr, p, t.cps];
+    }
+    return sampleAt(f, c2, k, b) / tl.sr;
+  };
+  var cpsAt = (b) => rt.tempos.reduce((k, t) => t.cycle <= b ? t.cps : k, tl.cps);
+  function dispatch(haps, earliest) {
+    for (const hap of haps) {
+      const onset = time3(hap.whole.begin);
+      const b = Math.max(onset, earliest);
+      const cpsHap = hap.value.cps;
+      if (cpsHap !== void 0 && Math.fround(cpsHap) !== rt.cps) {
+        tempo(b, cpsHap);
+        scheduler.setCps(cpsHap);
+      }
+      rackShift = b - onset;
+      const t = timeAt(b);
+      onSchedule(hap, t, cpsHap ?? cpsAt(b));
+      rackShift = 0;
+      const locations = hap.context.locations ?? [];
+      if (!locations.length) continue;
+      const [from, to] = [Math.round(t * tl.sr), Math.round(timeAt(time3(hap.whole.end) + b - onset) * tl.sr)];
+      for (const { start, end: end2 } of locations) api.rackHighlight(patternId, from, to, start, end2);
+    }
+  }
   var api = globalThis.__patchisserie = {
     async evaluate(code, id2 = 0) {
       await ready;
@@ -40001,44 +40059,47 @@ registerProcessor('${name3}', MyProcessor);
       const end2 = cycle + lookahead2 * cps2;
       if (end2 <= from) return;
       rt.tempos = rt.tempos.filter((t) => t.cycle > cycle - cps2 / sr + 1e-9);
-      const tempo = (at3, value2) => {
-        rt.cps = Math.fround(value2);
-        api.rackEvent(Tempo, at3, at3, 0, 0, -1, "", rt.cps);
-        if (!external2) rt.tempos.push({ cycle: at3, cps: rt.cps });
-      };
-      const eps = 1e-9;
-      const first = (f, c2, k, b) => Math.max(f, Math.ceil(f + (b - eps - c2) / k * sr));
-      const at2 = (b) => {
-        let [f, c2, k] = [frame, cycle, cps2];
-        for (const t of rt.tempos) {
-          if (t.cycle > b) break;
-          const p = first(f, c2, k, t.cycle);
-          [c2, f, k] = [c2 + (p - f) * k / sr, p, t.cps];
-        }
-        return first(f, c2, k, b) / sr;
-      };
-      const cpsAt = (b) => rt.tempos.reduce((k, t) => t.cycle <= b ? t.cps : k, cps2);
+      Object.assign(tl, { frame, cycle, cps: cps2, sr, external: external2 });
       if (Math.fround(scheduler.cps) !== rt.cps) tempo(Math.max(from, earliest), scheduler.cps);
       const haps = scheduler.pattern.queryArc(from, end2, { _cps: scheduler.cps }).filter((hap) => hap.hasOnset()).sort(byOnset);
-      for (const hap of haps) {
-        const onset = time3(hap.whole.begin);
-        const b = Math.max(onset, earliest);
-        const cpsHap = hap.value.cps;
-        if (cpsHap !== void 0 && Math.fround(cpsHap) !== rt.cps) {
-          tempo(b, cpsHap);
-          scheduler.setCps(cpsHap);
-        }
-        rackShift = b - onset;
-        const t = at2(b);
-        onSchedule(hap, t, cpsHap ?? cpsAt(b));
-        rackShift = 0;
-        const locations = hap.context.locations ?? [];
-        if (!locations.length) continue;
-        const [from2, to] = [Math.round(t * sr), Math.round(at2(time3(hap.whole.end) + b - onset) * sr)];
-        for (const { start, end: end3 } of locations) api.rackHighlight(patternId, from2, to, start, end3);
-      }
+      dispatch(haps, earliest);
       rt.from = end2;
       rt.late = false;
+    },
+    /**
+     * midikeys()' notes from Filo's MIDI input as soon as the engine sees them (src/engine.cpp polls every 1 ms between
+     * ticks): `notes` has 5 numbers per message (its playback frame, status nibble, channel 0-15, note, velocity), the
+     * rest is the timeline as tick() gets it. As upstream's trigger, each note-on becomes a hap of every midikeys()
+     * input, `delay` frames after its own (or on the first frame both sound and .midi() can still make, as tick()'s
+     * RESET onsets); the playing pattern is queried around them and what comes from midikeys() is dispatched as tick()
+     * does, then they are forgotten. Note-offs (and note-ons with velocity 0) are ignored, as upstream: fixed lengths.
+     */
+    keys(notes3, frame, cycle, cps2, playing, sr, delay2, rendered = -Infinity) {
+      if (!playing || !scheduler.pattern || !(cps2 > 0) || !Object.keys(keyHaps).length) return;
+      const soon = Math.ceil(Math.max(frame, rendered + 0.01 * sr));
+      const cycleOf = (f) => cycle + (f - frame) / sr * cps2;
+      let [from, to] = [Infinity, -Infinity];
+      for (let i3 = 0; i3 + 5 <= notes3.length; i3 += 5) {
+        const [arrival, status, channel2, note4, velocity2] = notes3.slice(i3, i3 + 5);
+        if (status !== 9 || velocity2 === 0) continue;
+        const c2 = cycleOf(Math.max(arrival + delay2, soon));
+        const span = new TimeSpan(c2, c2);
+        for (const input in keyHaps) {
+          const midikey = `${input}_${note4}`;
+          const value2 = { midikey, note: Math.round(note4), velocity: velocity2 / 127, midichan: channel2 + 1 };
+          keyHaps[input].push(new Hap(span, span, value2, {}));
+        }
+        [from, to] = [Math.min(from, c2), Math.max(to, c2)];
+      }
+      if (from > to) return;
+      Object.assign(tl, { frame, cycle, cps: cps2, sr });
+      let haps;
+      try {
+        haps = scheduler.pattern.queryArc(from - 1e-6, to + 1e-6, { _cps: scheduler.cps });
+      } finally {
+        for (const input in keyHaps) keyHaps[input] = [];
+      }
+      dispatch(haps.filter((hap) => hap.value?.midikey !== void 0 && hap.hasOnset()).sort(byOnset), cycleOf(soon));
     },
     /** Where .midi() events go (kind, begin, end, note, velocity, midichan, key, value); the engine replaces it. */
     rackEvent: (kind, begin2, end2, note4, velocity2, midichan2, key, value2) => midiEvents.push({ kind, begin: begin2, end: end2, note: note4, velocity: velocity2, midichan: midichan2, key, value: value2 }),

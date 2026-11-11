@@ -12,8 +12,8 @@ import { H } from '@strudel/hydra';
 
 // Same scope as strudel.cc (website/src/repl/util.mjs loadModules) minus visual/IO packages; soundfonts join in
 // initAudio(). Of @strudel/hydra: its H() and our initHydra(); hydra.ojack.xyz's loadScript(); @strudel/midi's midin()
-// (below).
-const ready = core.evalScope(core, edo, tonal, mini, xen, webaudio, { H, initHydra, loadScript, midin });
+// and midikeys() (below).
+const ready = core.evalScope(core, edo, tonal, mini, xen, webaudio, { H, initHydra, loadScript, midin, midikeys });
 
 // Strudel's canvas visuals need a canvas, which Rack doesn't have (out of v1). As upstream without a `window` (ours is
 // for superdough): .draw() returns the pattern, so .scope(), .spiral() etc. play on and draw nothing; the few that
@@ -52,8 +52,8 @@ const highlights = []; // where highlights go without an engine (tests): see rac
 // ccn/ccv a CC, both mapped to channels on the C++ side.
 const [Note, Trig, CC, Tempo] = [0, 1, 2, 3];
 const midiEvents = []; // where events go without an engine (tests): see rackEvent below
-// Cycles tick() shifts the hap it schedules by (a RESET's late onsets). toRack runs within that call: .midi() is
-// dominant, so getSchedule calls it before its first await.
+// Cycles dispatch() shifts the hap it schedules by (late onsets). toRack runs within that call: .midi() is dominant, so
+// getSchedule calls it before its first await.
 let rackShift = 0;
 const toRack = (hap) => {
   const v = hap.value;
@@ -70,17 +70,43 @@ core.register('midi', (pat) => pat.onSchedule(toRack, true));
 // it. As upstream, cc(n, chan?) is a pattern of CC n's latest value / 127 (on MIDI channel chan 1-16, or any), 0 until
 // one arrives, read whenever Strudel queries it. Only CC messages count (upstream takes any message's data bytes).
 // ponytail: values aren't persisted (upstream: localStorage per device, sent back to it on connect): 0 after a reload.
-let midiSaid = false; // the no-device warning, once per evaluate
-async function midin(input) {
+let midiSaid = false; // the no-device warning (midin() and midikeys() alike), once per evaluate
+function midiInput(name, input) {
   if (core.isPattern(input)) {
     const hint = "Make sure to pass device name with single quotes. Example: midin('IAC Driver Bus 1')";
     throw new Error(`[midi] Midi input cannot be a pattern. ${hint}`);
   }
   if (!api.midiDevice() && !midiSaid) {
     midiSaid = true;
-    console.warn(`[midi] midin('${input}'): choose a MIDI device in Filo's menu`);
+    console.warn(`[midi] ${name}('${input}'): choose a MIDI device in Filo's menu`);
   }
+}
+async function midin(input) {
+  midiInput('midin', input);
   return (cc, chan) => core.ref(() => api.midiCC(cc, chan ?? 0));
+}
+
+// @strudel/midi's midikeys(input) on the same input: kb(noteLength = 0.5) is a pattern of the notes just played,
+// { midikey: `${input}_${note}`, note, velocity: v / 127, midichan: 1-16 }, noteLength cycles long (a pattern too).
+// Its query is upstream's: every note held, whatever the span. As upstream's trigger, a note-on doesn't wait for the
+// query loop: keys() below holds it here only while it queries and dispatches it, so tick() never gets it.
+const keyHaps = {}; // input -> the notes keys() is dispatching
+async function midikeys(input) {
+  midiInput('midikeys', input);
+  keyHaps[input] ??= [];
+  return (noteLength = 0.5) => {
+    const lengths = core.reify(noteLength);
+    return new core.Pattern((state) =>
+      keyHaps[input].flatMap((hap) =>
+        lengths.query(state.setSpan(hap.wholeOrPart())).map((length) => {
+          const nl = length.value ?? 0.5;
+          const whole = new core.TimeSpan(hap.whole.begin, hap.whole.begin.add(nl));
+          const part = new core.TimeSpan(hap.part.begin, hap.part.begin.add(nl));
+          return new core.Hap(whole, part, hap.value, hap.combineContext(length));
+        }),
+      ),
+    );
+  };
 }
 
 // strudel.cc's Dirt-Samples subset (website/src/repl/prebake.mjs), served from its CDN.
@@ -196,8 +222,50 @@ const dirtSamples = {
 // Onset order like the Cyclist: by begin, cps changes first among equals.
 const byOnset = (a, b) =>
   time(a.whole.begin) - time(b.whole.begin) || (b.value.cps !== undefined) - (a.value.cps !== undefined);
-// Realtime query state, see tick().
+// Realtime query state, see tick(); `tl`: the timeline snapshot of the last tick() or keys().
 const rt = { epoch: -1, from: 0, cps: 0, tempos: [], late: false };
+const tl = { frame: 0, cycle: 0, cps: 0, sr: 48000, external: false };
+const tempo = (at, value) => {
+  rt.cps = Math.fround(value); // what the Sequencer stores
+  api.rackEvent(Tempo, at, at, 0, 0, -1, '', rt.cps);
+  if (!tl.external) rt.tempos.push({ cycle: at, cps: rt.cps });
+};
+// Frame of cycle b: through the tempo changes still ahead, each taking effect on the first sample at or after its
+// cycle (with the Sequencer's kEps); snapped to that sample, the one the Sequencer fires on, never before the sample
+// of the last change (that sample's cycle may be past b: back from it at a slower cps is a frame early).
+const kEps = 1e-9;
+const sampleAt = (f, c, k, b) => Math.max(f, Math.ceil(f + ((b - kEps - c) / k) * tl.sr));
+const timeAt = (b) => {
+  let [f, c, k] = [tl.frame, tl.cycle, tl.cps];
+  for (const t of rt.tempos) {
+    if (t.cycle > b) break;
+    const p = sampleAt(f, c, k, t.cycle);
+    [c, f, k] = [c + ((p - f) * k) / tl.sr, p, t.cps];
+  }
+  return sampleAt(f, c, k, b) / tl.sr;
+};
+const cpsAt = (b) => rt.tempos.reduce((k, t) => (t.cycle <= b ? t.cps : k), tl.cps);
+// Haps (by onset) to Strudel's dispatch: sounds at their onset's frame, .midi() events at its cycle, an onset before
+// `earliest` (a cycle) moved there, duration kept; their mini-notation locations to rackHighlight() with those frames.
+function dispatch(haps, earliest) {
+  for (const hap of haps) {
+    const onset = time(hap.whole.begin);
+    const b = Math.max(onset, earliest);
+    const cpsHap = hap.value.cps;
+    if (cpsHap !== undefined && Math.fround(cpsHap) !== rt.cps) {
+      tempo(b, cpsHap); // .cps(): like the Cyclist, the global tempo from this hap on
+      scheduler.setCps(cpsHap);
+    }
+    rackShift = b - onset;
+    const t = timeAt(b);
+    onSchedule(hap, t, cpsHap ?? cpsAt(b));
+    rackShift = 0;
+    const locations = hap.context.locations ?? [];
+    if (!locations.length) continue;
+    const [from, to] = [Math.round(t * tl.sr), Math.round(timeAt(time(hap.whole.end) + b - onset) * tl.sr)];
+    for (const { start, end } of locations) api.rackHighlight(patternId, from, to, start, end);
+  }
+}
 
 const api = (globalThis.__patchisserie = {
   async evaluate(code, id = 0) {
@@ -296,50 +364,53 @@ const api = (globalThis.__patchisserie = {
     if (end <= from) return;
     // Applied by now (fired before the snapshot's sample, part of its cps): a change at `cycle` itself fires on it.
     rt.tempos = rt.tempos.filter((t) => t.cycle > cycle - cps / sr + 1e-9);
-    const tempo = (at, value) => {
-      rt.cps = Math.fround(value); // what the Sequencer stores
-      api.rackEvent(Tempo, at, at, 0, 0, -1, '', rt.cps);
-      if (!external) rt.tempos.push({ cycle: at, cps: rt.cps });
-    };
-    // Frame of cycle b: through the tempo changes still ahead, each taking effect on the first sample at or after
-    // its cycle (with the Sequencer's kEps); snapped to that sample, the one the Sequencer fires on, never before the
-    // sample of the last change (that sample's cycle may be past b: back from it at a slower cps is a frame early).
-    const eps = 1e-9;
-    const first = (f, c, k, b) => Math.max(f, Math.ceil(f + ((b - eps - c) / k) * sr));
-    const at = (b) => {
-      let [f, c, k] = [frame, cycle, cps];
-      for (const t of rt.tempos) {
-        if (t.cycle > b) break;
-        const p = first(f, c, k, t.cycle);
-        [c, f, k] = [c + ((p - f) * k) / sr, p, t.cps];
-      }
-      return first(f, c, k, b) / sr;
-    };
-    const cpsAt = (b) => rt.tempos.reduce((k, t) => (t.cycle <= b ? t.cps : k), cps);
+    Object.assign(tl, { frame, cycle, cps, sr, external });
     if (Math.fround(scheduler.cps) !== rt.cps) tempo(Math.max(from, earliest), scheduler.cps); // setcps(), setcpm()
     const haps = scheduler.pattern
       .queryArc(from, end, { _cps: scheduler.cps })
       .filter((hap) => hap.hasOnset())
       .sort(byOnset);
-    for (const hap of haps) {
-      const onset = time(hap.whole.begin);
-      const b = Math.max(onset, earliest);
-      const cpsHap = hap.value.cps;
-      if (cpsHap !== undefined && Math.fround(cpsHap) !== rt.cps) {
-        tempo(b, cpsHap); // .cps(): like the Cyclist, the global tempo from this hap on
-        scheduler.setCps(cpsHap);
-      }
-      rackShift = b - onset;
-      const t = at(b);
-      onSchedule(hap, t, cpsHap ?? cpsAt(b));
-      rackShift = 0;
-      const locations = hap.context.locations ?? [];
-      if (!locations.length) continue;
-      const [from, to] = [Math.round(t * sr), Math.round(at(time(hap.whole.end) + b - onset) * sr)];
-      for (const { start, end } of locations) api.rackHighlight(patternId, from, to, start, end);
-    }
+    dispatch(haps, earliest);
     rt.from = end;
     rt.late = false;
+  },
+
+  /**
+   * midikeys()' notes from Filo's MIDI input as soon as the engine sees them (src/engine.cpp polls every 1 ms between
+   * ticks): `notes` has 5 numbers per message (its playback frame, status nibble, channel 0-15, note, velocity), the
+   * rest is the timeline as tick() gets it. As upstream's trigger, each note-on becomes a hap of every midikeys()
+   * input, `delay` frames after its own (or on the first frame both sound and .midi() can still make, as tick()'s
+   * RESET onsets); the playing pattern is queried around them and what comes from midikeys() is dispatched as tick()
+   * does, then they are forgotten. Note-offs (and note-ons with velocity 0) are ignored, as upstream: fixed lengths.
+   */
+  keys(notes, frame, cycle, cps, playing, sr, delay, rendered = -Infinity) {
+    if (!playing || !scheduler.pattern || !(cps > 0) || !Object.keys(keyHaps).length) return;
+    const soon = Math.ceil(Math.max(frame, rendered + 0.01 * sr)); // tick()'s
+    // ponytail: at the snapshot's cps; a tempo change within the delay moves a note's frame (sound and gate still
+    // together). Through rt.tempos (timeAt()'s inverse) if that ever matters.
+    const cycleOf = (f) => cycle + ((f - frame) / sr) * cps;
+    let [from, to] = [Infinity, -Infinity];
+    for (let i = 0; i + 5 <= notes.length; i += 5) {
+      const [arrival, status, channel, note, velocity] = notes.slice(i, i + 5);
+      if (status !== 9 || velocity === 0) continue;
+      const c = cycleOf(Math.max(arrival + delay, soon));
+      const span = new core.TimeSpan(c, c);
+      for (const input in keyHaps) {
+        const midikey = `${input}_${note}`;
+        const value = { midikey, note: Math.round(note), velocity: velocity / 127, midichan: channel + 1 };
+        keyHaps[input].push(new core.Hap(span, span, value, {}));
+      }
+      [from, to] = [Math.min(from, c), Math.max(to, c)];
+    }
+    if (from > to) return;
+    Object.assign(tl, { frame, cycle, cps, sr });
+    let haps;
+    try {
+      haps = scheduler.pattern.queryArc(from - 1e-6, to + 1e-6, { _cps: scheduler.cps });
+    } finally {
+      for (const input in keyHaps) keyHaps[input] = [];
+    }
+    dispatch(haps.filter((hap) => hap.value?.midikey !== undefined && hap.hasOnset()).sort(byOnset), cycleOf(soon));
   },
 
   /** Where .midi() events go (kind, begin, end, note, velocity, midichan, key, value); the engine replaces it. */

@@ -260,3 +260,47 @@ test("midin(): cc(n, chan?) is a pattern of the input's latest CC value when que
     Object.assign(host, { midiCC, midiDevice });
   }
 });
+
+// @strudel/midi's midikeys() on the same input. keys(notes, frame, cycle, cps, playing, sr, delay, rendered) stands in
+// for the engine's poll: 5 numbers per MIDI message (its frame, status nibble, channel 0-15, note, velocity).
+test('midikeys(): kb(noteLength) plays each note-on once, at once, `delay` frames after it', async () => {
+  const { midiDevice } = host;
+  const warn = console.warn;
+  const lines = [];
+  console.warn = (...a) => lines.push(a.map(String).join(' '));
+  globalThis.__sched = [];
+  try {
+    const code =
+      "globalThis.__promise = midikeys('Keys')\nconst kb = await __promise\nglobalThis.__kb = kb\n" +
+      "let cc = await midin('Keys')\n$: kb().midi()\n" +
+      '$: kb("0.25 1").onSchedule((hap, t) => __sched.push([t * 48000, hap.duration.valueOf(), hap.value]), true)';
+    assert.deepEqual(await host.evaluate(code), { ok: true });
+    assert.deepEqual(lines, ["[midi] midikeys('Keys'): choose a MIDI device in Filo's menu"]); // midin()'s too
+    assert.ok(globalThis.__promise instanceof Promise);
+    assert.ok(globalThis.__kb() instanceof host.pattern.constructor);
+    host.tick(0, 0, 0.5, 90, true, false, 48000, 0.1); // [0, 0.05)
+    host.midiEvents();
+    // At frame 1256, the render thread at 2280: frame 1000's note-on plays at 2856 (cycle 0.02975); its note-off and a
+    // note-on with velocity 0 change nothing.
+    const notes = [1000, 9, 2, 60, 127, 1000, 8, 2, 60, 0, 1010, 9, 0, 62, 0];
+    host.keys(notes, 1256, 1256 / 96000, 0.5, true, 48000, 1856, 2280);
+    assert.deepEqual(events(), [[0, 0.02975, 0.52975, 60, '', 0]]); // kb(): 0.5 cycles
+    assert.deepEqual(__sched.splice(0), [[2856, 0.25, { midikey: 'Keys_60', note: 60, velocity: 1, midichan: 3 }]]);
+    // The JS too late for frame 2000 + 1856: on the first frame both can still make, the render thread's + 10 ms.
+    host.keys([2000, 9, 0, 64, 64], 3000, 3000 / 96000, 0.5, true, 48000, 1856, 4000);
+    assert.deepEqual(events().map((e) => [e[1] * 96000, e[3]]), [[4480, 64]]);
+    assert.deepEqual(__sched.splice(0).map((s) => s[0]), [4480]);
+    // kb("0.25 1"): the second half of the cycle is 1 cycle long.
+    host.keys([48144, 9, 0, 65, 100], 48200, 48200 / 96000, 0.5, true, 48000, 1856, 49000);
+    assert.deepEqual(__sched.splice(0).map((s) => [s[0], s[1]]), [[50000, 1]]);
+    events();
+    // Played, then forgotten: the query loop's windows over them get nothing; stopped, notes are ignored.
+    host.tick(2400, 0.025, 0.5, 90, true, false, 48000, 1); // [0.05, 0.525)
+    assert.deepEqual(host.query(0, 2), []);
+    host.keys([60000, 9, 0, 60, 100], 60000, 0.625, 0.5, false, 48000, 1856, 61024);
+    assert.deepEqual([events(), __sched], [[], []]);
+  } finally {
+    console.warn = warn;
+    host.midiDevice = midiDevice;
+  }
+});

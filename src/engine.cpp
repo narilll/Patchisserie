@@ -31,6 +31,10 @@ constexpr double kLookahead = 0.1;   // s the JS thread schedules beyond what th
 constexpr double kJobBudget = 0.02;  // s of promise jobs before a tick (evaluates), so ticks keep coming
 constexpr double kVoiceBudget = 0.1; // s of jobs after it: superdough builds this tick's voices before anything else
 constexpr double kStartDelay = 0.07; // s beyond the ring: PLAY starts there, so the first events are scheduled in time
+constexpr double kPoll = 0.001;      // s between two looks at the MIDI notes while a MIDI device is chosen
+// midikeys(): a note sounds the ring + a block (where the render and audio threads may be when the JS thread sees it)
+// + this after its frame: tick()'s 10 ms margin, 2 ms for the poll and the JS thread's wake-up.
+constexpr double kKeyMargin = 0.012;
 constexpr int kQuantum = audio::kQuantum;
 
 double now() {
@@ -120,6 +124,7 @@ const char* kGlue = R"js((function (native, local) {
         ),
     samples: (map) => boot.then(() => register((local = map))),
     tick: host.tick,
+    keys: host.keys,
     revert: host.revert,
     cancel: __webaudio.cancel,
     hydraFrame: host.hydraFrame,
@@ -137,8 +142,8 @@ struct Engine::Js {
 	JSContext* ctx = nullptr;
 	audio::WebAudioHost host;
 	JSValue settle = JS_UNDEFINED, api = JS_UNDEFINED, evaluate = JS_UNDEFINED, tick = JS_UNDEFINED,
-			revert = JS_UNDEFINED, samples = JS_UNDEFINED, cancel = JS_UNDEFINED, hydraFrame = JS_UNDEFINED,
-			hydraHush = JS_UNDEFINED;
+			keys = JS_UNDEFINED, revert = JS_UNDEFINED, samples = JS_UNDEFINED, cancel = JS_UNDEFINED,
+			hydraFrame = JS_UNDEFINED, hydraHush = JS_UNDEFINED;
 	double deadline = 0; // now() past which JS is interrupted; 0: none
 	bool interrupted = false, booted = false, playAfter = false, queueFullSaid = false;
 	int evaluating = 0;        // evaluates in flight
@@ -459,6 +464,7 @@ struct Engine::Js {
 			return false;
 		evaluate = JS_GetPropertyStr(ctx, api, "evaluate");
 		tick = JS_GetPropertyStr(ctx, api, "tick");
+		keys = JS_GetPropertyStr(ctx, api, "keys");
 		revert = JS_GetPropertyStr(ctx, api, "revert");
 		samples = JS_GetPropertyStr(ctx, api, "samples");
 		cancel = JS_GetPropertyStr(ctx, api, "cancel");
@@ -470,7 +476,7 @@ struct Engine::Js {
 	void free() {
 		if (!ctx)
 			return;
-		for (JSValue v : {settle, api, evaluate, tick, revert, samples, cancel, hydraFrame, hydraHush})
+		for (JSValue v : {settle, api, evaluate, tick, keys, revert, samples, cancel, hydraFrame, hydraHush})
 			JS_FreeValue(ctx, v);
 		JS_FreeContext(ctx);
 		JS_FreeRuntime(rt); // asserts that nothing leaked
@@ -578,6 +584,40 @@ struct Engine::Js {
 		}
 	}
 
+	/** midikeys(): the MIDI input's notes to host.keys() at once, with the timeline as tick() gets it. A new epoch
+	waits for its first tick; notes of an older one (before a play, stop or reset) are dropped. False: none. */
+	bool notes() {
+		if (e->notes_.empty())
+			return false;
+		Timeline t = e->timeline();
+		if (t.epoch != tickEpoch)
+			return false;
+		JSValue a = JS_NewArray(ctx);
+		uint32_t n = 0;
+		while (!e->notes_.empty()) {
+			MidiNote k = e->notes_.shift();
+			if (k.epoch == t.epoch)
+				for (double v :
+					 {(double)k.frame, (double)k.status, (double)k.channel, (double)k.note, (double)k.velocity})
+					JS_SetPropertyUint32(ctx, a, n++, JS_NewFloat64(ctx, v));
+		}
+		if (n) {
+			double sr = e->cfg_.sampleRate;
+			JSValue args[8] = {a,
+							   JS_NewFloat64(ctx, (double)t.frame),
+							   JS_NewFloat64(ctx, t.cycle),
+							   JS_NewFloat64(ctx, t.cps),
+							   JS_NewBool(ctx, t.playing),
+							   JS_NewFloat64(ctx, sr),
+							   JS_NewInt32(ctx, e->keyDelay_.load()),
+							   JS_NewFloat64(ctx, e->graph_->currentTime() * sr)};
+			call(keys, 8, args, e->cfg_.tickDeadline, "[midikeys]");
+			runJobs(kVoiceBudget); // superdough builds their voices
+		}
+		JS_FreeValue(ctx, a);
+		return true;
+	}
+
 	/** Icing's frame: Hydra's tick() with the request's audio analysis, at the cycle Filo plays now. */
 	void frame(const hydra::Exchange::Request& q) {
 		Timeline t = e->timeline();
@@ -649,12 +689,23 @@ struct Engine::Js {
 			double t1 = now();
 			e->jsBusy.store(e->jsBusy.load() + (t1 - t0));
 			next = std::max(next + kTick, t1);
-			// Until the next tick: Icing's frames, each as soon as it is requested; one at most runs past the tick.
+			// Until the next tick: Icing's frames, each as soon as it is requested, and the MIDI notes, polled every
+			// kPoll while a device is chosen; one at most runs past the tick.
 			using Clock = std::chrono::steady_clock; // now()'s
-			auto until =
-				Clock::time_point(std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(next)));
-			for (hydra::Exchange::Request q; !e->abort_.load() && now() < next && e->hydra.wait(until, q);) {
+			for (hydra::Exchange::Request q; !e->abort_.load();) {
 				double f0 = now();
+				if (f0 >= next)
+					break;
+				if (ctx && notes()) {
+					e->jsBusy.store(e->jsBusy.load() + (now() - f0));
+					continue;
+				}
+				double until = e->midiDevice.load(std::memory_order_relaxed) ? std::min(next, f0 + kPoll) : next;
+				auto tp = Clock::time_point(
+					std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(until)));
+				if (!e->hydra.wait(tp, q))
+					continue;
+				f0 = now();
 				if (ctx)
 					frame(q);
 				e->jsBusy.store(e->jsBusy.load() + (now() - f0));
@@ -728,6 +779,7 @@ void Engine::start() {
 	hydra.clear(); // Hydra lives in the JS runtime: the code's next evaluate makes it again
 	frame_ = 0;
 	playback_ = 0;
+	notes_.clear(); // the old timeline's
 	if (startAt_ >= 0)
 		startAt_ = 0;             // a pending PLAY starts at once: the new JS thread needs its boot time anyway
 	seq.queue.setEpoch(++epoch_); // the new JS thread queries everything again
@@ -777,6 +829,7 @@ void Engine::setBlockFrames(int frames) {
 	int fill = std::max((int)std::ceil(cfg_.sampleRate * 0.02), 2 * frames);
 	fill = (fill + kQuantum - 1) / kQuantum * kQuantum;
 	fill_.store(std::min(fill, kRing - kQuantum));
+	keyDelay_.store(fill_.load() + frames + (int)std::ceil(kKeyMargin * cfg_.sampleRate));
 }
 
 uint32_t Engine::evaluate(const std::string& code, bool play) {
