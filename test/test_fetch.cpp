@@ -136,3 +136,20 @@ TEST(fetch_worker_completions) {
 	});
 	slow.request("https://h/slow.wav", std::make_shared<fetch::Inbox>(), 5);
 }
+
+TEST(fetch_remote_url_rules) {
+	auto ok = [](const char* url) { return fetch::remoteUrl(url); };
+	CHECK(ok("https://raw.githubusercontent.com/a/b.wav") == "https://raw.githubusercontent.com/a/b.wav");
+	CHECK(ok("http://strudel.b-cdn.net/x.json") == "https://strudel.b-cdn.net/x.json"); // upgraded
+	CHECK(ok("https://example.com:8443/x") == "https://example.com:8443/x");
+	CHECK(ok("https://Example.COM/x?a=b@c") == "https://Example.COM/x?a=b@c"); // '@' after the authority is fine
+	for (const char* bad : {"https://localhost/x", "https://foo.localhost/x", "https://printer.local/x",
+							"https://127.0.0.1/x", "https://0x7f.0.0.1/x", "https://2130706433/x", "https://[::1]/x",
+							"https://evil@127.0.0.1/x", "https://intranet/x", "ftp://example.com/x",
+							"file:///etc/passwd", "https://LOCALHOST:8080/x", "https://Printer.LOCAL/x",
+							"https://example.com@evil.com/x", "https://10.0.0.1:80", "patchisserie:engine.js"}) {
+		std::string why;
+		CHECK(fetch::remoteUrl(bad, &why).empty());
+		CHECK(why.find(bad) != std::string::npos);
+	}
+}

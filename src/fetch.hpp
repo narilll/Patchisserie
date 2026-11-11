@@ -17,6 +17,9 @@ using Downloader = std::function<bool(const std::string& url, const std::string&
 /** root/rel when rel is relative and the result, symlinks resolved, stays inside root; else "". */
 std::string inside(const std::string& root, const std::string& rel);
 
+/** The https URL to fetch for a remote `url`; "" (and the reason in *why) when refused. */
+std::string remoteUrl(const std::string& url, std::string* why = nullptr);
+
 /** Cache file of an http(s) URL: root/<host>/<path>[@<query>]; "" for other URLs or characters outside the URL-safe
 set (superdough's sample maps arrive percent-encoded). */
 std::string cachePath(const std::string& root, const std::string& url);

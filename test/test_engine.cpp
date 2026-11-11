@@ -3,10 +3,12 @@
 // start frame is extrapolated exactly from the first two non-zero samples); downloads fail (no network).
 #include <algorithm>
 #include <chrono>
+#include <condition_variable>
 #include <cstdio>
 #include <fstream>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <thread>
 
 #include <dr_wav.h>
@@ -63,6 +65,7 @@ void writeKick(const std::string& path, unsigned rate) {
 
 struct Rig {
 	std::string dir;
+	fetch::Downloader download; // the worker's downloader; set before the engine requests anything (default: fails)
 	std::unique_ptr<fetch::Worker> web;
 	std::unique_ptr<Engine> engine;
 	std::mutex logM;
@@ -81,7 +84,9 @@ struct Rig {
 		dir = tempDir(name);
 		fs::create_directories(dir + "/samples/bd");
 		writeKick(dir + "/samples/bd/kick.wav", 48000);
-		web.reset(new fetch::Worker(dir + "/cache", [](const std::string&, const std::string&) { return false; }));
+		web.reset(new fetch::Worker(
+			dir + "/cache", [this](const std::string& u, const std::string& f) { return download && download(u, f); },
+			3));
 		filo::EngineConfig c;
 		c.sampleRate = sr;
 		c.samplesDir = dir + "/samples";
@@ -378,4 +383,121 @@ TEST(engine_sample_rate_restart) {
 	r->seconds(3);
 	TIMED_CHECK(r->every(24000, a, r->frame()));
 	TIMED_CHECK(r->aligned(a, r->frame() - 4800) >= 4);
+}
+
+namespace {
+
+int evals(Rig& r) {
+	int n = 0;
+	std::lock_guard<std::mutex> lock(r.logM);
+	for (auto& l : r.logs)
+		n += l.find("[eval]") != std::string::npos;
+	return n;
+}
+
+} // namespace
+
+// A sample-rate restart before the evaluate reported back must not lose its auto-play; one after it must not start
+// a stopped transport.
+TEST(engine_restart_keeps_pending_autoplay) {
+	{
+		auto r = std::make_unique<Rig>("engine-sr-pending", 44100);
+		r->engine->evaluate("$: note(\"c*4\").midi()", true); // not reported back yet
+		r->seconds(0.02);
+		r->engine->setSampleRate(48000);
+		r->sr = 48000;
+		r->paceStart = 0;
+		CHECK(r->until([&] { return r->gateRiseAfter(0); }, 30));
+	}
+	{
+		auto r = std::make_unique<Rig>("engine-sr-stopped", 44100);
+		CHECK(r->evaluate("$: note(\"c*4\").midi()", true));
+		CHECK(r->until([&] { return r->gateRiseAfter(0); }, 10));
+		r->engine->stop();
+		r->seconds(0.5);
+		int n = evals(*r);
+		r->engine->setSampleRate(48000);
+		r->sr = 48000;
+		r->paceStart = 0;
+		CHECK(r->until([&] { return evals(*r) > n; }, 30)); // re-evaluated, and stays stopped
+		int64_t a = r->frame();
+		r->seconds(2);
+		CHECK(!r->gateRiseAfter(a));
+	}
+}
+
+// A completion of the old runtime (restart) must not settle the new runtime's fetch with the same id.
+TEST(engine_stale_download_after_restart) {
+	std::mutex m;
+	std::condition_variable cv;
+	std::set<std::string> requested, released;
+	auto release = [&](const std::string& u) {
+		std::lock_guard<std::mutex> lock(m);
+		released.insert(u);
+		cv.notify_all();
+	};
+	auto r = std::make_unique<Rig>("engine-stale-dl", 44100);
+	r->download = [&](const std::string& url, const std::string& file) {
+		if (url.find("test.invalid/") == std::string::npos)
+			return false;
+		std::unique_lock<std::mutex> lock(m);
+		requested.insert(url);
+		cv.notify_all();
+		cv.wait(lock, [&] { return released.count(url) > 0; });
+		std::ofstream(file, std::ios::binary) << "0123456789";
+		return true;
+	};
+	auto wasRequested = [&](const char* u) {
+		std::lock_guard<std::mutex> lock(m);
+		return requested.count(u) > 0;
+	};
+	r->engine->evaluate("const u = 'https://test.invalid/' + getAudioContext().sampleRate + '.bin';\n"
+						"fetch(u).then((x) => x.arrayBuffer()).then((b) => console.log('FETCH ok ' + u + ' ' + "
+						"b.byteLength), (e) => console.log('FETCH fail ' + u + ' ' + e.message));",
+						false);
+	CHECK(r->until([&] { return wasRequested("https://test.invalid/44100.bin"); }, 30));
+	r->engine->setSampleRate(48000);
+	r->sr = 48000;
+	r->paceStart = 0;
+	CHECK(r->until([&] { return wasRequested("https://test.invalid/48000.bin"); }, 30));
+	release("https://test.invalid/44100.bin"); // the old runtime's download lands
+	r->seconds(1);
+	CHECK(!r->logged("FETCH fail") && !r->logged("[fetch]"));
+	release("https://test.invalid/48000.bin");
+	CHECK(r->until([&] { return r->logged("FETCH ok https://test.invalid/48000.bin 10"); }, 10));
+	CHECK(!r->logged("FETCH fail") && !r->logged("[fetch]"));
+	release("https://test.invalid/44100.bin");
+}
+
+// superdough fetches 'keys/C#3.wav' as 'keys/C%233.wav'.
+TEST(engine_local_sample_with_hash) {
+	auto r = std::make_unique<Rig>("engine-hash", 48000);
+	fs::create_directories(r->dir + "/samples/keys");
+	writeKick(r->dir + "/samples/keys/C#3.wav", 48000);
+	r->engine->setSamplesDir(r->dir + "/samples");
+	CHECK(r->evaluate("$: s(\"keys\")", true));
+	CHECK(r->until([&] { return !r->kicks(0, r->frame()).empty(); }, 10));
+}
+
+// RESET on exactly the frame a pending PLAY starts: the epoch changes, so the JS sends cycle 0's events again.
+TEST(engine_reset_on_start_frame_bumps_epoch) {
+	filo::EngineConfig c;
+	c.resDir = "res";
+	Engine e(c);
+	filo::Sequencer::Inputs in;
+	filo::Sequencer::Outputs out;
+	float l, r;
+	e.play();
+	e.process(in, out, l, r);
+	filo::Engine::Timeline t = e.timeline();
+	CHECK(t.playing && !e.seq.started());
+	int64_t startAt = t.frame;
+	CHECK(startAt > 1);
+	for (int64_t f = 1; f < startAt; f++)
+		e.process(in, out, l, r);
+	CHECK(!e.seq.started());
+	in.resetEdge = true; // this is frame startAt
+	e.process(in, out, l, r);
+	CHECK(e.seq.started());
+	CHECK(e.timeline().epoch == t.epoch + 1);
 }

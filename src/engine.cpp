@@ -87,6 +87,7 @@ const char* kPrelude = R"js((function (native) {
   };
   return (id, body) => {
     const w = waiting.get(id);
+    if (!w) return;
     waiting.delete(id);
     body ? w.resolve(new Response(body)) : w.reject(new TypeError(`fetch ${w.url}: download failed`));
   };
@@ -188,12 +189,27 @@ struct Engine::Js {
 
 	/** Local file behind a URL: res/ (patchisserie:), the samples folder (localsamples:), the disk cache (http[s],
 	downloaded or not yet). "" when there is none. */
-	std::string file(const std::string& url) const {
+	std::string file(std::string& url) {
 		if (startsWith(url, "patchisserie:"))
-			return fetch::inside(e->cfg_.resDir, url.substr(13));
+			return fetch::inside(e->cfg_.resDir, unhash(url.substr(13)));
 		if (startsWith(url, "localsamples:"))
-			return fetch::inside(samplesDir, url.substr(13));
-		return e->cfg_.web ? fetch::cachePath(e->cfg_.web->root(), url) : "";
+			return fetch::inside(samplesDir, unhash(url.substr(13)));
+		if (!e->cfg_.web)
+			return "";
+		std::string why, https = fetch::remoteUrl(url, &why); // every remote fetch passes here
+		if (https.empty()) {
+			say("[fetch] " + why, true);
+			return "";
+		}
+		url = https;
+		return fetch::cachePath(e->cfg_.web->root(), url);
+	}
+
+	/** superdough's loadBuffer rewrites '#' to %23; decoded before inside() validates the path. */
+	static std::string unhash(std::string path) {
+		for (size_t i; (i = path.find("%23")) != std::string::npos;)
+			path.replace(i, 3, "#");
+		return path;
 	}
 
 	/** {sound: ['sound/file.wav', ...]} for the subfolders of dir, or null. */
@@ -297,6 +313,9 @@ struct Engine::Js {
 			std::string error = str(ctx, argv[1]);
 			js->e->setMessage(line ? "line " + std::to_string(line) + ": " + error : error);
 		}
+		std::lock_guard<std::mutex> lock(js->e->m_);
+		if (!js->e->codePending_) // reported back: a restart re-evaluates without playing (the transport plays on)
+			js->e->playAfter_ = false;
 		return JS_UNDEFINED;
 	}
 
@@ -326,8 +345,8 @@ struct Engine::Js {
 		JS_SetContextOpaque(ctx, this);
 		host.graph = e->graph_.get();
 		host.worklets = e->scope_;
-		host.resolve = [this](const std::string& url) { // audioWorklet.addModule(): local, or cached already
-			std::string path = file(url);
+		host.resolve = [this](const std::string& module) { // audioWorklet.addModule(): local, or cached already
+			std::string url = module, path = file(url);
 			std::error_code ec;
 			return path.empty() || !fs::exists(fs::u8path(path), ec) ? std::string() : path;
 		};
@@ -555,6 +574,8 @@ Engine::~Engine() {
 
 void Engine::start() {
 	abort_ = false;
+	downloads_ =
+		std::make_shared<fetch::Inbox>(); // completions of the previous runtime's downloads land in the old one
 	graph_.reset(new audio::Graph(cfg_.sampleRate));
 	scope_ = new audio::WorkletScope(cfg_.sampleRate);
 	ring_.clear();
@@ -598,8 +619,7 @@ void Engine::setSampleRate(double sampleRate) {
 	seq.setSampleRate((float)sampleRate);
 	{
 		std::lock_guard<std::mutex> lock(m_);
-		codePending_ = !code_.empty();
-		playAfter_ = false; // the transport plays on
+		codePending_ = !code_.empty(); // playAfter_ stays: an evaluate that hasn't reported back is still to play
 	}
 	start();
 }
@@ -687,7 +707,8 @@ bool Engine::process(const Sequencer::Inputs& input, Sequencer::Outputs& out, fl
 		seq.start();
 		startAt_ = -1;
 		started = true;
-	} else if (input.resetEdge) {
+	}
+	if (input.resetEdge) {
 		epoch_++;
 		started = seq.started();
 	}

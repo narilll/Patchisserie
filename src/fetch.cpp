@@ -5,6 +5,7 @@
 #include <cctype>
 #include <chrono>
 #include <condition_variable>
+#include <cstring>
 #include <thread>
 #include <vector>
 
@@ -33,6 +34,36 @@ std::string inside(const std::string& root, const std::string& rel) {
 	if (ec || r.empty() || *r.begin() == ".." || r == ".")
 		return "";
 	return p.u8string();
+}
+
+// ponytail: checks the URL text only. DNS names that resolve to private IPs (rebinding) and HTTP redirects followed by
+// Rack's network::requestDownload are not checked; upgrade path: an own curl handle with CURLOPT_REDIR_PROTOCOLS_STR
+// "https" and a CURLOPT_OPENSOCKETFUNCTION that checks the peer IP.
+std::string remoteUrl(const std::string& url, std::string* why) {
+	auto refuse = [&](const char* rule) {
+		if (why)
+			*why = "refused " + url + ": " + rule;
+		return std::string();
+	};
+	std::string u = url.compare(0, 7, "http://") == 0 ? "https://" + url.substr(7) : url; // like HTTPS-only mode
+	if (u.compare(0, 8, "https://") != 0)
+		return refuse("only https:// is fetched");
+	std::string auth = u.substr(8, u.find_first_of("/?#", 8) - 8);
+	if (auth.find('@') != std::string::npos)
+		return refuse("no user@ in the host");
+	if (auth[0] == '[')
+		return refuse("no IPv6 literal");
+	std::string host = auth.substr(0, auth.find(':'));
+	std::transform(host.begin(), host.end(), host.begin(), [](char c) { return (char)std::tolower((unsigned char)c); });
+	auto ends = [&](const char* suffix) {
+		size_t n = std::strlen(suffix);
+		return host.size() > n && host.compare(host.size() - n, n, suffix) == 0;
+	};
+	std::string last = host.substr(host.rfind('.') + 1); // npos + 1 = 0: the whole host
+	bool letter = std::any_of(last.begin(), last.end(), [](char c) { return std::isalpha((unsigned char)c); });
+	if (host.find('.') == std::string::npos || ends(".localhost") || ends(".local") || !letter)
+		return refuse("no local or private hosts (localhost, .local, single-label names, IP addresses)");
+	return u;
 }
 
 std::string cachePath(const std::string& root, const std::string& url) {
