@@ -9,6 +9,7 @@
 #include <quickjs.h>
 
 #include "audio/graph.hpp"
+#include "audio/worklets.hpp"
 
 namespace audio {
 
@@ -16,7 +17,13 @@ struct WebAudioHost {
 	/** Graph behind `new AudioContext()`; the embedder renders it (render thread, or an offline loop) and must keep
 	it alive until the JS context is freed. */
 	Graph* graph = nullptr;
-	/** fetch(): URL -> local file path, "" if unavailable. Unset: plain paths and file:// URLs only. */
+	/** AudioWorkletGlobalScope of `graph`: created by the embedder before rendering and released after the graph.
+	Its runtime runs where the graph renders, and that thread calls collectGarbage(). Unset: no worklets there. */
+	WorkletScope* worklets = nullptr;
+	/** False: supersaw and wavetable run their JS processors too (oracle, benchmarks). */
+	bool nativeWorklets = true;
+	/** fetch() and audioWorklet.addModule(): URL -> local file path, "" if unavailable. Unset: plain paths, file://
+	URLs and patchisserie:<file> = res/<file>. */
 	std::function<std::string(const std::string& url)> resolve;
 	/** strudel.log events (Strudel's logger) and binding errors. */
 	std::function<void(const std::string& message, const std::string& type)> log;

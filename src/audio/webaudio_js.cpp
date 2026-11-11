@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <deque>
+#include <map>
 
 #include "audio/decode.hpp"
 #include "audio/nodes.hpp"
@@ -20,7 +21,10 @@ struct Ctx {
 	Graph* graph;
 	bool owned; // an OfflineAudioContext's private graph; the realtime one belongs to the embedder
 	int refs = 1;
-	std::deque<Command> pending; // contract (c): commands the full queue refused, retried in order
+	std::deque<Command> pending;   // contract (c): commands the full queue refused, retried in order
+	WorkletScope* scope = nullptr; // one reference: the realtime one is the embedder's, an offline one is made here
+	// ponytail: native wavetables by superdough's key, kept for the context's life like worklets.mjs' tablesCache.
+	std::map<std::string, WavetableData*> tables;
 
 	Ctx(Graph* g, bool owned) : graph(g), owned(owned) {}
 	~Ctx() {
@@ -32,6 +36,9 @@ struct Ctx {
 		}
 		if (owned)
 			delete graph;
+		release(scope); // after the graph: its worklet nodes hold their own references
+		for (auto& t : tables)
+			release(t.second);
 	}
 	void flush() {
 		while (!pending.empty() && graph->post(pending.front()))
@@ -171,6 +178,47 @@ JSValue newFloats(JSContext* ctx, const float* p, size_t n) {
 	return a;
 }
 
+/** A structured-clone-ish copy of v (JS_WriteObject: JSON-like values, typed arrays, shared references), or nullptr
+with an exception pending (functions, symbols, ...). */
+Blob* serialize(JSContext* ctx, JSValueConst v) {
+	size_t size = 0;
+	uint8_t* bytes = JS_WriteObject(ctx, &size, v, JS_WRITE_OBJ_REFERENCE);
+	if (!bytes)
+		return nullptr;
+	auto* blob = new Blob;
+	blob->bytes.assign(bytes, bytes + size);
+	js_free(ctx, bytes);
+	return blob;
+}
+
+std::string localPath(const std::string& url) {
+	if (url.compare(0, 7, "file://") == 0)
+		return url.substr(7);
+	if (url.compare(0, 13, "patchisserie:") == 0)
+		return "res/" + url.substr(13);
+	return url.find("://") == std::string::npos ? url : "";
+}
+
+bool readFile(const std::string& path, std::string& bytes) {
+	FILE* f = std::fopen(path.c_str(), "rb");
+	if (!f)
+		return false;
+	char chunk[1 << 16];
+	for (size_t n; (n = std::fread(chunk, 1, sizeof chunk, f)) > 0;)
+		bytes.append(chunk, n);
+	std::fclose(f);
+	return true;
+}
+
+/** [a, b, c], taking the values over. */
+JSValue array3(JSContext* ctx, JSValue a, JSValue b, JSValue c) {
+	JSValue out = JS_NewArray(ctx);
+	JS_SetPropertyUint32(ctx, out, 0, a);
+	JS_SetPropertyUint32(ctx, out, 1, b);
+	JS_SetPropertyUint32(ctx, out, 2, c);
+	return out;
+}
+
 /** [values...], or [<slot 0>, values...] with `skipFirst`. */
 JSValue array(JSContext* ctx, std::initializer_list<double> values, bool skipFirst = false) {
 	JSValue a = JS_NewArray(ctx);
@@ -195,8 +243,10 @@ NATIVE(ctxRealtime) {
 	Binding* b = B;
 	if (!b->host->graph)
 		return JS_ThrowTypeError(ctx, "AudioContext: this engine has no audio output");
-	if (!b->realtime)
+	if (!b->realtime) {
 		b->realtime = new Ctx(b->host->graph, false);
+		b->realtime->scope = Resource::retain(b->host->worklets);
+	}
 	return wrap(ctx, b, new CtxHandle(b->realtime));
 }
 
@@ -228,13 +278,47 @@ NATIVE(destination) {
 	return wrap(ctx, B, new NodeHandle(h->c, h->c->graph->destination(), false));
 }
 
+/** The AudioWorkletNode's node for create(ctx, 'worklet', id, {name, inputs, channels, options}), checked by
+webaudio.js; nullptr with an exception pending. */
+Node* workletNode(JSContext* ctx, const Binding* b, Ctx* c, JSValueConst arg) {
+	JSValue v = JS_GetPropertyStr(ctx, arg, "name");
+	std::string name = str(ctx, v);
+	JS_FreeValue(ctx, v);
+	const ProcessorDef* def = c->scope ? c->scope->find(name) : nullptr;
+	if (!def) {
+		JS_ThrowTypeError(ctx, "webaudio: no processor '%s'", name.c_str());
+		return nullptr;
+	}
+	v = JS_GetPropertyStr(ctx, arg, "inputs");
+	int inputs = (int)num(ctx, v);
+	JS_FreeValue(ctx, v);
+	std::vector<int> channels;
+	v = JS_GetPropertyStr(ctx, arg, "channels");
+	int64_t n = 0;
+	JS_GetLength(ctx, v, &n);
+	for (int64_t i = 0; i < n; i++) {
+		JSValue ch = JS_GetPropertyInt64(ctx, v, i);
+		channels.push_back((int)num(ctx, ch));
+		JS_FreeValue(ctx, ch);
+	}
+	JS_FreeValue(ctx, v);
+	v = JS_GetPropertyStr(ctx, arg, "options");
+	Blob* options = serialize(ctx, v); // the processor constructor's argument
+	JS_FreeValue(ctx, v);
+	if (!options)
+		return nullptr;
+	return createWorkletNode(c->graph->sampleRate(), c->scope, *def, inputs, channels, options,
+							 b->host->nativeWorklets);
+}
+
 /** create(ctx, kind, id, arg) -> [handle, inputs, outputs, channelCount, mode, interpretation,
 (default, min, max, aRate) per param]. Read before the Create is posted: afterwards the render thread owns the node. */
 NATIVE(create) {
 	GET(CtxHandle, h, argv[0]);
 	std::string kind = str(ctx, argv[1]);
-	double sr = h->c->graph->sampleRate(), arg = num(ctx, argv[3]);
-	Node* n = kind == "gain"           ? (Node*)new GainNode(sr)
+	double sr = h->c->graph->sampleRate(), arg = kind == "worklet" ? 0 : num(ctx, argv[3]);
+	Node* n = kind == "worklet"        ? workletNode(ctx, B, h->c, argv[3])
+			  : kind == "gain"         ? (Node*)new GainNode(sr)
 			  : kind == "biquad"       ? (Node*)new BiquadFilterNode(sr)
 			  : kind == "oscillator"   ? (Node*)new OscillatorNode(sr)
 			  : kind == "constant"     ? (Node*)new ConstantSourceNode(sr)
@@ -249,7 +333,8 @@ NATIVE(create) {
 			  : kind == "analyser"     ? (Node*)new AnalyserNode(sr)
 									   : nullptr;
 	if (!n)
-		return JS_ThrowTypeError(ctx, "webaudio: unknown node kind '%s'", kind.c_str());
+		return JS_HasException(ctx) ? JS_EXCEPTION
+									: JS_ThrowTypeError(ctx, "webaudio: unknown node kind '%s'", kind.c_str());
 	n->id = (uint64_t)num(ctx, argv[2]);
 	std::vector<double> params;
 	for (const AudioParam* p : n->params)
@@ -452,23 +537,127 @@ NATIVE(stop) { // (node, when)
 	return JS_UNDEFINED;
 }
 
-NATIVE(poll) { // (ctx) -> ids of the sources that ended
+NATIVE(poll) { // (ctx) -> [id of an ended source | [type ('message' | 'processorerror'), node id, value], ...]
 	GET(CtxHandle, h, argv[0]);
+	Binding* b = B;
 	Ctx* c = h->c;
 	c->flush();
 	c->graph->collect();
-	JSValue ended = JS_NewArray(ctx);
+	JSValue events = JS_NewArray(ctx);
 	uint32_t i = 0;
 	Event e;
 	while (c->graph->pollEvent(e)) {
-		if (e.type == Event::Ended)
-			JS_SetPropertyUint32(ctx, ended, i++, JS_NewFloat64(ctx, (double)e.id));
-		else
-			B->log(e.code == EdgePoolFull ? "[webaudio] error: too many connections, one was dropped"
+		auto* blob = static_cast<Blob*>(e.data);
+		std::string text = blob && e.type != Event::Message ? std::string(blob->bytes.begin(), blob->bytes.end()) : "";
+		JSValue value = JS_UNDEFINED;
+		if (e.type == Event::Ended) {
+			JS_SetPropertyUint32(ctx, events, i++, JS_NewFloat64(ctx, (double)e.id));
+		} else if (e.type == Event::Error) {
+			b->log(e.code == EdgePoolFull ? "[webaudio] error: too many connections, one was dropped"
 										  : "[webaudio] error: too many automation events on one AudioParam",
 				   "error");
+		} else if (e.type == Event::Message) {
+			value = JS_ReadObject(ctx, blob->bytes.data(), blob->bytes.size(), JS_READ_OBJ_REFERENCE);
+			if (JS_IsException(value)) {
+				JS_FreeValue(ctx, JS_GetException(ctx));
+				b->log("[worklet] error: a processor message could not be read", "error");
+				value = JS_UNDEFINED;
+			}
+		} else if (e.type == Event::ProcessorError) {
+			b->log("[worklet] error: " + text + " (the node is silent from now on)", "error");
+			value = JS_NewStringLen(ctx, text.data(), text.size());
+		} else {
+			b->log("[worklet] " + text, e.code ? "error" : "");
+		}
+		if (!JS_IsUndefined(value)) {
+			JSValue type = JS_NewString(ctx, e.type == Event::Message ? "message" : "processorerror");
+			JS_SetPropertyUint32(ctx, events, i++, array3(ctx, type, JS_NewFloat64(ctx, (double)e.id), value));
+		}
+		release(e.data);
 	}
-	return ended;
+	return events;
+}
+
+NATIVE(addModule) { // (ctx, url) -> [[name, 'native' | 'script' | 'disabled', feature, [param names]], ...]
+	GET(CtxHandle, h, argv[0]);
+	Binding* b = B;
+	Ctx* c = h->c;
+	std::string url = str(ctx, argv[1]);
+	if (!c->scope) {
+		if (!c->owned)
+			return JS_ThrowPlainError(ctx, "this engine has no AudioWorklet scope");
+		c->scope = new WorkletScope(c->graph->sampleRate()); // rendered on this thread too
+	}
+	if (!c->scope->loaded(url)) { // a module URL is evaluated once per scope (spec module map)
+		std::string path = b->host->resolve ? b->host->resolve(url) : localPath(url), source, error;
+		if (path.empty() || !readFile(path, source))
+			return JS_ThrowPlainError(ctx, "cannot read %s", url.c_str());
+		if (!c->scope->load(source, url, error))
+			return JS_ThrowPlainError(ctx, "%s: %s", url.c_str(), error.c_str());
+		for (const ProcessorDef& d : c->scope->processors())
+			if (d.policy == ProcessorDef::Native && !d.nativeMatches)
+				b->log("[worklet] warning: " + d.name + " declares other parameters than its native port: using JS",
+					   "warning");
+	}
+	JSValue out = JS_NewArray(ctx);
+	uint32_t i = 0;
+	for (const ProcessorDef& d : c->scope->processors()) {
+		bool native = d.policy == ProcessorDef::Native && d.nativeMatches && b->host->nativeWorklets;
+		const char* mode = d.policy == ProcessorDef::Disabled ? "disabled" : native ? "native" : "script";
+		JSValue names = JS_NewArray(ctx);
+		for (uint32_t k = 0; k < d.params.size(); k++)
+			JS_SetPropertyUint32(ctx, names, k, JS_NewString(ctx, d.params[k].name.c_str()));
+		JSValue entry = array3(ctx, JS_NewString(ctx, d.name.c_str()), JS_NewString(ctx, mode),
+							   d.feature ? JS_NewString(ctx, d.feature) : JS_NULL);
+		JS_SetPropertyUint32(ctx, entry, 3, names);
+		JS_SetPropertyUint32(ctx, out, i++, entry);
+	}
+	return out;
+}
+
+NATIVE(post) { // (worklet node, message): a structured-clone-ish copy to its processor's port
+	GET(NodeHandle, h, argv[0]);
+	Blob* blob = serialize(ctx, argv[1]);
+	if (!blob)
+		return JS_EXCEPTION;
+	setAttr(h, AttrMessage, 0, blob);
+	return JS_UNDEFINED;
+}
+
+NATIVE(initialize) { // (native worklet node, key | null, Float32Array[] | null): its processor's 'initialize' message
+	GET(NodeHandle, h, argv[0]);
+	WavetableData* table = nullptr;
+	if (!isNull(argv[1])) {
+		std::string key = str(ctx, argv[1]);
+		auto it = h->c->tables.find(key);
+		if (it != h->c->tables.end()) {
+			table = it->second;
+		} else if (JS_IsArray(argv[2])) { // copied once per key, then shared by every note
+			int64_t n = 0;
+			JS_GetLength(ctx, argv[2], &n);
+			auto* t = new WavetableData;
+			for (int64_t f = 0; f < n; f++) {
+				JSValue frame = JS_GetPropertyInt64(ctx, argv[2], f);
+				size_t len = 0;
+				const float* p = floats(ctx, frame, len);
+				JS_FreeValue(ctx, frame);
+				if (p && f == 0)
+					t->frameLen = (int)len;
+				if (!p || (int)len != t->frameLen) {
+					delete t;
+					return p ? JS_ThrowRangeError(ctx, "wavetable: frames of different lengths") : JS_EXCEPTION;
+				}
+				t->data.insert(t->data.end(), p, p + len);
+			}
+			t->frames = (int)n;
+			if (n > 0 && t->frameLen > 0)
+				table = h->c->tables[key] = t;
+			else
+				delete t;
+		}
+	}
+	setAttr(h, AttrInitialize, 0, Resource::retain(table));
+	return JS_UNDEFINED;
 }
 
 NATIVE(render) { // (offlineCtx, length, channels) -> the rendered buffer
@@ -554,26 +743,15 @@ NATIVE(decode) { // (ArrayBuffer, sampleRate) -> buffer
 	return wrap(ctx, B, new ResHandle(b));
 }
 
-std::string localPath(const std::string& url) {
-	if (url.compare(0, 7, "file://") == 0)
-		return url.substr(7);
-	return url.find("://") == std::string::npos ? url : "";
-}
-
 NATIVE(fetch) { // (url) -> ArrayBuffer
 	Binding* b = B;
 	std::string url = str(ctx, argv[0]);
 	std::string path = b->host->resolve ? b->host->resolve(url) : localPath(url);
 	if (path.empty())
 		return JS_ThrowPlainError(ctx, "fetch %s: not available offline", url.c_str());
-	FILE* f = std::fopen(path.c_str(), "rb");
-	if (!f)
-		return JS_ThrowPlainError(ctx, "fetch %s: cannot read %s", url.c_str(), path.c_str());
 	std::string bytes;
-	char chunk[1 << 16];
-	for (size_t n; (n = std::fread(chunk, 1, sizeof chunk, f)) > 0;)
-		bytes.append(chunk, n);
-	std::fclose(f);
+	if (!readFile(path, bytes))
+		return JS_ThrowPlainError(ctx, "fetch %s: cannot read %s", url.c_str(), path.c_str());
 	return JS_NewArrayBufferCopy(ctx, reinterpret_cast<const uint8_t*>(bytes.data()), bytes.size());
 }
 
@@ -621,6 +799,9 @@ const NativeFn kNatives[] = {
 	{"start", start, 4},
 	{"stop", stop, 2},
 	{"poll", poll, 1},
+	{"addModule", addModule, 2},
+	{"post", post, 2},
+	{"initialize", initialize, 3},
 	{"render", render, 3},
 	{"bufferNew", bufferNew, 2},
 	{"bufferInfo", bufferInfo, 1},

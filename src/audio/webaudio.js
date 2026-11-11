@@ -10,7 +10,7 @@
   'use strict';
   const S = Symbol('webaudio');
   let nextId = 1;
-  let realtime; // { h, playing }: the embedder's graph, shared by every AudioContext
+  let realtime; // graph(): the embedder's, shared by every AudioContext
 
   const error = (name, message) => new DOMException(message, name); // QuickJS-ng has DOMException
   const finite = (v, what) => {
@@ -168,14 +168,14 @@
     compressor: ['threshold', 'knee', 'ratio', 'attack', 'release'],
   };
 
-  // Native node for a just-constructed JS node (any subclass: `this` honours new.target), then AudioNodeOptions.
-  function init(node, ctx, kind, opts, arg = 0) {
+  // Native node for a just-constructed JS node (any subclass: `this` honours new.target), then AudioNodeOptions and
+  // the initial param `values`.
+  function init(node, ctx, kind, opts, arg = 0, names = PARAMS[kind] ?? [], values = opts) {
     if (!(ctx instanceof BaseAudioContext)) {
       throw new TypeError(`${node.constructor.name}: argument 1 is not a BaseAudioContext`);
     }
     const id = nextId++;
     const [h, ins, outs, cc, mode, interp, ...p] = native.create(ctx[S].h, kind, id, arg);
-    const names = PARAMS[kind] ?? [];
     if (p.length !== 4 * names.length) throw new Error(`webaudio binding: ${kind} params out of sync with nodes.hpp`);
     const st = { ctx, h, id, ins, outs, cc, mode: modes[mode], interp: interpretations[interp], params: [] };
     node[S] = st;
@@ -188,7 +188,7 @@
     if (opts?.channelCount !== undefined) node.channelCount = opts.channelCount;
     if (opts?.channelCountMode !== undefined) node.channelCountMode = opts.channelCountMode;
     if (opts?.channelInterpretation !== undefined) node.channelInterpretation = opts.channelInterpretation;
-    names.forEach((name, i) => opts?.[name] !== undefined && (st.params[i].value = opts[name]));
+    names.forEach((name, i) => values?.[name] !== undefined && (st.params[i].value = values[name]));
     return st;
   }
   const defineParams = (Class, kind) =>
@@ -565,16 +565,100 @@
     AnalyserNode.prototype[`get${kind}Data`] = (array) => array.fill(0);
   }
 
-  // M1c-3 runs the processors (res/worklets.js) on the render thread.
-  class AudioWorkletNode extends AudioNode {
-    constructor(ctx, name) {
-      super();
-      throw error('NotSupportedError', `AudioWorkletNode '${name}': worklets are not available yet`);
+  // --- AudioWorklet: processors run in the context's AudioWorkletGlobalScope where its graph renders (worklets.hpp);
+  // supersaw and wavetable are native ports with the same parameters and messages ---
+
+  class AudioWorklet {
+    constructor() {
+      throw new TypeError('Illegal constructor');
+    }
+    // Spec: the context's node name -> parameter descriptors map is filled before the promise resolves.
+    addModule(url) {
+      const st = this[S];
+      return new Promise((resolve) => {
+        for (const [name, mode, feature, params] of native.addModule(st.h, String(url))) {
+          st.processors.set(name, { mode, feature, params });
+        }
+        resolve();
+      }).catch((e) => {
+        throw error('AbortError', `audioWorklet.addModule: ${e.message}`);
+      });
     }
   }
-  class AudioWorklet {
-    addModule() {
-      return Promise.resolve(); // ponytail: superdough's worklet module is res/worklets.js, loaded in M1c-3
+
+  // ponytail: plain messages (no transfer list, no MessageChannel); start() and close() do nothing.
+  class MessagePort extends EventTarget {
+    constructor() {
+      throw new TypeError('Illegal constructor');
+    }
+    get onmessage() {
+      return this[S]?.onmessage ?? null;
+    }
+    set onmessage(fn) {
+      this[S].onmessage = typeof fn === 'function' ? fn : null;
+    }
+    postMessage(message) {
+      const st = this[S];
+      if (st.mode !== 'native') return void native.post(st.h, message);
+      // A native port understands what superdough sends its processor: {type: 'initialize', payload}.
+      if (message?.type === 'initialize') {
+        native.initialize(st.h, message.payload?.key ?? null, message.payload?.frames ?? null);
+      }
+    }
+    start() {}
+    close() {}
+  }
+
+  // Worklet nodes by id, for port messages and processorerror from the render thread; entries go with their nodes.
+  const forget = new FinalizationRegistry(({ worklets, id }) => worklets.delete(id));
+  class AudioWorkletNode extends AudioNode {
+    constructor(ctx, name, opts) {
+      super();
+      if (!(ctx instanceof BaseAudioContext)) throw new TypeError('AudioWorkletNode: argument 1 is not a BaseAudioContext');
+      name = String(name);
+      const def = ctx[S].processors.get(name);
+      if (!def) throw error('InvalidStateError', `AudioWorkletNode: no processor '${name}' (audioWorklet.addModule first)`);
+      if (def.mode === 'disabled') {
+        throw error('NotSupportedError', `AudioWorkletNode '${name}': ${def.feature} is not available in Patchisserie v1`);
+      }
+      const inputs = opts?.numberOfInputs ?? 1;
+      const outputs = opts?.numberOfOutputs ?? 1;
+      if (inputs === 0 && outputs === 0) throw error('NotSupportedError', 'AudioWorkletNode: no inputs and no outputs');
+      let channels = opts?.outputChannelCount;
+      if (channels !== undefined) {
+        channels = [...channels];
+        if (channels.length !== outputs) throw error('IndexSizeError', 'AudioWorkletNode: outputChannelCount length');
+        if (!channels.every((n) => n >= 1 && n <= 2)) throw error('NotSupportedError', `outputChannelCount ${channels}`);
+      }
+      const options = {
+        numberOfInputs: inputs,
+        numberOfOutputs: outputs,
+        outputChannelCount: channels,
+        parameterData: opts?.parameterData ?? {},
+        processorOptions: opts?.processorOptions,
+      };
+      // Spec: without outputChannelCount, one input and one output follow the input's channel count (0), else mono.
+      const computed = channels ?? Array(outputs).fill(inputs === 1 && outputs === 1 ? 0 : 1);
+      const arg = { name, inputs, channels: computed, options };
+      const st = init(this, ctx, 'worklet', opts, arg, def.params, opts?.parameterData);
+      st.parameters = new Map(def.params.map((p, i) => [p, st.params[i]])); // ponytail: a Map as AudioParamMap
+      st.port = Object.create(MessagePort.prototype);
+      st.port[S] = { h: st.h, mode: def.mode, onmessage: null };
+      st.onprocessorerror = null;
+      ctx[S].worklets.set(st.id, new WeakRef(this));
+      forget.register(this, { worklets: ctx[S].worklets, id: st.id });
+    }
+    get parameters() {
+      return this[S]?.parameters;
+    }
+    get port() {
+      return this[S]?.port;
+    }
+    get onprocessorerror() {
+      return this[S]?.onprocessorerror ?? null;
+    }
+    set onprocessorerror(fn) {
+      this[S].onprocessorerror = typeof fn === 'function' ? fn : null;
     }
   }
 
@@ -656,19 +740,38 @@
 
   // --- Contexts ---
 
-  function context(ctx, h, playing) {
+  // Per graph (every AudioContext shares the realtime one): sources pinned until 'ended', worklet nodes, processors.
+  const graph = (h) => ({ h, playing: new Map(), worklets: new Map(), processors: new Map() });
+  function context(ctx, shared) {
     const destination = Object.create(AudioDestinationNode.prototype);
-    destination[S] = { ctx, h: native.destination(h), ins: 1, outs: 0, cc: 2, mode: 'explicit', interp: 'speakers' };
-    ctx[S] = { h, playing, sr: native.sampleRate(h), destination, state: 'running', worklet: new AudioWorklet() };
+    destination[S] = { ctx, h: native.destination(shared.h), ins: 1, outs: 0, cc: 2, mode: 'explicit', interp: 'speakers' };
+    const worklet = Object.create(AudioWorklet.prototype);
+    worklet[S] = shared;
+    ctx[S] = { ...shared, sr: native.sampleRate(shared.h), destination, state: 'running', worklet };
     return ctx[S];
   }
-  // Graph events -> 'ended' on the sources that are still pinned in `playing`; frees retired graph objects.
+  // Graph events -> 'ended' on the sources still pinned in `playing`, port messages and processorerror on worklet
+  // nodes still alive; frees retired graph objects.
   function poll(c) {
-    for (const id of native.poll(c.h)) {
-      const node = c.playing.get(id);
+    for (const e of native.poll(c.h)) {
+      if (typeof e === 'number') {
+        const node = c.playing.get(e);
+        if (!node) continue;
+        c.playing.delete(e);
+        fire(node, new Event('ended'), node[S].onended);
+        continue;
+      }
+      const [type, id, value] = e;
+      const node = c.worklets.get(id)?.deref();
       if (!node) continue;
-      c.playing.delete(id);
-      fire(node, new Event('ended'), node[S].onended);
+      const event = new Event(type);
+      if (type === 'message') {
+        event.data = value;
+        fire(node[S].port, event, node[S].port[S].onmessage);
+      } else {
+        event.message = value;
+        fire(node, event, node[S].onprocessorerror);
+      }
     }
   }
 
@@ -754,8 +857,8 @@
   class AudioContext extends BaseAudioContext {
     constructor() {
       super();
-      realtime ??= { h: native.ctxRealtime(), playing: new Map() };
-      context(this, realtime.h, realtime.playing);
+      realtime ??= graph(native.ctxRealtime());
+      context(this, realtime);
     }
     get baseLatency() {
       return 0;
@@ -790,7 +893,7 @@
       if (!(n >= 1 && n <= 32) || !(o.length >= 1) || !(o.sampleRate >= 3000 && o.sampleRate <= 768000)) {
         throw error('NotSupportedError', `OfflineAudioContext(${n}, ${o.length}, ${o.sampleRate})`);
       }
-      Object.assign(context(this, native.ctxOffline(o.sampleRate), new Map()), {
+      Object.assign(context(this, graph(native.ctxOffline(o.sampleRate))), {
         n,
         len: Math.floor(o.length),
         state: 'suspended',

@@ -55,14 +55,21 @@ struct Disposable {
 	virtual ~Disposable() = default;
 };
 
-/** Immutable data handed to the render thread (buffers, curves, wavetables, IR kernels). Refcounted: whoever drops
-the last reference frees it, the render thread via Graph::drop() (deferred to the producer). */
+/** Immutable data handed to the render thread (buffers, curves, wavetables, IR kernels, messages). Refcounted:
+whoever drops the last reference frees it, the render thread via Graph::drop() (deferred to the producer). */
 struct Resource : Disposable {
 	std::atomic<int> refs{1};
+	Resource() { live().fetch_add(1, std::memory_order_relaxed); }
+	~Resource() override { live().fetch_sub(1, std::memory_order_relaxed); }
 	template <class T> static T* retain(T* r) {
 		if (r)
 			r->refs.fetch_add(1, std::memory_order_relaxed);
 		return r;
+	}
+	/** Process-wide count of live resources (leak gate G2). */
+	static std::atomic<int>& live() {
+		static std::atomic<int> n{0};
+		return n;
 	}
 };
 /** Producer-side release. */
@@ -139,6 +146,8 @@ enum Attr : int {
 	AttrOversample,
 	AttrPeriodicWave,
 	AttrFftSize,
+	AttrMessage,    // AudioWorkletNode port message (worklets.hpp Blob)
+	AttrInitialize, // native worklet 'initialize' message: its wavetable (worklets.hpp WavetableData) or none
 };
 
 struct Edge {
@@ -178,6 +187,8 @@ struct Node : Disposable {
 	virtual void start(double /*when*/, double /*offset*/, double /*duration*/) {}
 	virtual void stop(double /*when*/) {}
 	virtual DelayNode* asDelay() { return nullptr; }
+	/** Render thread, once: the graph dropped the node and hands it to the producer for deletion next. */
+	virtual void retire() {}
 
 	// Render-thread bookkeeping, owned by Graph.
 	Graph* graph = nullptr;
@@ -200,9 +211,11 @@ struct Command {
 };
 
 struct Event {
-	enum Type : uint8_t { Ended, Error } type;
-	uint64_t id; // node id
-	int code;    // Error: ErrorCode
+	/** Message: a port message (serialized), ProcessorError / Log: UTF-8 text (Log: id 0, code 1 = error). */
+	enum Type : uint8_t { Ended, Error, Message, ProcessorError, Log } type;
+	uint64_t id;              // node id
+	int code;                 // Error: ErrorCode
+	Resource* data = nullptr; // ownership passes to whoever polls the event
 };
 enum ErrorCode { EdgePoolFull = 1, ParamEventsFull };
 

@@ -1,15 +1,27 @@
-// Offline render harness (make render; plan gates G1-G3 via node --test test/render.test.mjs, G2 here).
-// res/engine.js + superdough in QuickJS on the webaudio_js binding, with this loop rendering the realtime graph where
-// the plugin has its render thread. Scheduling mirrors upstream renderPatternAudio (strudel.cc's WAV export, used for
-// the Chrome references): per cycle, onset haps queried and awaited through superdough() one cycle ahead.
-// Writes build/render/<id>.wav; asserts non-silence, no logged errors, exact sample onsets (`samples`) and that the
-// node count returns to its baseline after every pattern. https URLs come from build/render-cache/<host>/<path>.
+// Offline render harness (make render; plan gates G1-G3 via node --test test/render.test.mjs, G2 here, G4: --bench).
+// res/engine.js + superdough in QuickJS on the webaudio_js binding, with this loop rendering the realtime graph
+// (and its worklet scope) where the plugin has its render thread. Scheduling mirrors upstream renderPatternAudio
+// (strudel.cc's WAV export, used for the Chrome references): per cycle, onset haps queried and awaited through
+// superdough() one cycle ahead.
+// Writes build/render/<id>.wav; asserts non-silence, no logged errors, exact sample onsets (`samples`), that the node
+// count returns to its baseline after every pattern and that a disabled worklet ('stretch') is a logged error.
+// https URLs come from build/render-cache/<host>/<path>.
+// Flags: --bench        CPU per pattern and for all patterns stacked (G4), no WAVs (make render-bench: release build)
+//        --loop N       the set N times: after the first pass, nodes and native resources return to the same count
+//                       after every pattern, and RSS is printed per pass (G2)
+//        --js-worklets  supersaw/wavetable as their JS processors instead of the native ports
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <memory>
 #include <sstream>
+
+#include <sys/resource.h>
+#ifdef __APPLE__
+#include <mach/mach.h>
+#endif
 
 #include <dr_wav.h>
 
@@ -77,10 +89,29 @@ std::string readFile(const std::string& path) {
 }
 
 std::string cachePath(const std::string& url) {
-	const std::string https = "https://";
+	const std::string https = "https://", res = "patchisserie:";
+	if (url.compare(0, res.size(), res) == 0)
+		return "res/" + url.substr(res.size());
 	if (url.compare(0, https.size(), https) != 0)
 		return url.find("://") == std::string::npos ? url : "";
 	return "build/render-cache/" + url.substr(https.size(), url.find('?') - https.size());
+}
+
+/** Resident set size in MiB (peak where the platform has no cheap current value). */
+double rssMiB() {
+#ifdef __APPLE__
+	mach_task_basic_info info;
+	mach_msg_type_number_t n = MACH_TASK_BASIC_INFO_COUNT;
+	if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t)&info, &n) == KERN_SUCCESS)
+		return info.resident_size / 1048576.0;
+#endif
+	rusage u{};
+	getrusage(RUSAGE_SELF, &u);
+	return u.ru_maxrss / 1024.0; // Linux: KiB
+}
+
+double now() {
+	return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
 struct Harness {
@@ -89,17 +120,21 @@ struct Harness {
 	static constexpr int kStep = 2 * kQuantum;
 	double sr = 48000;
 	std::unique_ptr<Graph> graph;
+	WorkletScope* worklets = nullptr;
 	WebAudioHost host;
 	JSRuntime* rt = nullptr;
 	JSContext* ctx = nullptr;
 	std::vector<std::string> errors; // logged by the current pattern
 	int peakNodes = 0;
+	double renderSeconds = 0; // time spent in Graph::render (the plugin's render thread)
 
 	~Harness() {
 		if (ctx)
 			JS_FreeContext(ctx);
 		if (rt)
 			JS_FreeRuntime(rt); // asserts that the binding leaked no JS object
+		graph.reset();
+		release(worklets);
 	}
 
 	std::string string(JSValueConst v) {
@@ -160,12 +195,16 @@ struct Harness {
 		return s;
 	}
 
-	bool init() {
+	bool init(bool nativeWorklets, bool quiet) {
 		graph.reset(new Graph(sr));
+		worklets = new WorkletScope(sr);
 		host.graph = graph.get();
+		host.worklets = worklets;
+		host.nativeWorklets = nativeWorklets;
 		host.resolve = cachePath;
-		host.log = [this](const std::string& message, const std::string& type) {
-			std::printf("  [log] %s\n", message.c_str());
+		host.log = [this, quiet](const std::string& message, const std::string& type) {
+			if (!quiet)
+				std::printf("  [log] %s\n", message.c_str());
 			if (type == "error" || message.find("error") != std::string::npos)
 				errors.push_back(message);
 		};
@@ -203,10 +242,12 @@ struct Harness {
 		float L[kStep], R[kStep];
 		for (int64_t done = 0; done < frames;) {
 			int n = (int)std::min<int64_t>(kStep, frames - done);
+			double t = now();
 			{
 				DenormalsOff ftz; // contract (d)
 				graph->render(L, R, n);
 			}
+			renderSeconds += now() - t;
 			if (out)
 				for (int i = 0; i < n; i++)
 					out->insert(out->end(), {L[i], R[i]});
@@ -228,8 +269,10 @@ struct Harness {
 		for (int k = 0; k < steps && graph->nodeCount() != baseline; k++) {
 			render(4096);
 			JS_RunGC(rt);
+			worklets->collectGarbage(); // the render thread's GC hook (here: the same thread)
 		}
 		render(kStep); // apply the last disposals
+		graph->collect();
 		return graph->nodeCount();
 	}
 };
@@ -249,83 +292,170 @@ bool writeWav(const std::string& path, const std::vector<float>& interleaved, do
 	return n == interleaved.size() / 2;
 }
 
+struct Result {
+	int64_t t0; // the export's frame 0 on the graph's timeline
+	double wall, render, peak;
+	int peakNodes, nodesAfter;
+	std::vector<std::string> problems;
+};
+
+/** One pattern, like renderPatternAudio: `cycles` cycles of `code` from the graph's current time. */
+Result renderPattern(Harness& h, const std::string& code, double cps, int cycles, int baseline, const char* wavPath) {
+	// Start on a whole second: a float32 AudioParam holds that time exactly, as at the references' t = 0. Worklet
+	// sources gate on float32 begin/end params (`currentTime <= begin`): a begin rounded below t0 starts a quantum
+	// early.
+	const int64_t second = (int64_t)h.sr;
+	h.render((second - (int64_t)std::llround(h.graph->currentTime() * h.sr) % second) % second);
+	h.errors.clear();
+	h.peakNodes = 0;
+	h.renderSeconds = 0;
+	double t = now();
+	int64_t frames = (int64_t)std::llround(cycles / cps * h.sr);
+	int64_t t0 = (int64_t)std::llround(h.graph->currentTime() * h.sr); // the export's frame 0
+	std::string t0s = std::to_string(t0) + " / " + std::to_string(h.sr);
+	std::vector<float> wav;
+	JSValue str = JS_NewStringLen(h.ctx, code.data(), code.size());
+	JSValue global = JS_GetGlobalObject(h.ctx);
+	JS_SetPropertyStr(h.ctx, global, "__code", str);
+	JS_FreeValue(h.ctx, global);
+	bool ok = h.run("__render.begin(__code)", "<begin>");
+	for (int c = 0; ok && c < cycles; c++) {
+		// Like renderPatternAudioInChunks: cycle c is scheduled when rendering reaches cycle c - 1.
+		int64_t until = (int64_t)std::llround(std::max(c - 1, 0) / cps * h.sr);
+		ok = h.render(until - (int64_t)wav.size() / 2, &wav) &&
+			 h.run("__render.chunk(" + std::to_string(c) + ", " + std::to_string(c + 1) + ", " + std::to_string(cps) +
+					   ", " + t0s + ")",
+				   "<chunk>");
+	}
+	ok = ok && h.render(frames - (int64_t)wav.size() / 2, &wav);
+	Result r{t0, now() - t, h.renderSeconds, 0, h.peakNodes, 0, {}};
+	for (float v : wav)
+		r.peak = std::max(r.peak, (double)std::fabs(v));
+	bool written = !wavPath || writeWav(wavPath, wav, h.sr);
+	r.nodesAfter = h.settle(baseline);
+	r.problems = h.errors;
+	if (!ok || !written)
+		r.problems.push_back(!ok ? "render failed" : "cannot write the wav");
+	if (!(r.peak > 1e-3))
+		r.problems.push_back("silent");
+	if (r.nodesAfter != baseline)
+		r.problems.push_back("nodes did not return to the baseline (G2)");
+	return r;
+}
+
 } // namespace
 
-int main() {
-	auto clock = [] { return std::chrono::steady_clock::now(); };
-	auto seconds = [](auto a, auto b) { return std::chrono::duration<double>(b - a).count(); };
+int main(int argc, char** argv) {
+	bool bench = false, jsWorklets = false;
+	int loops = 1;
+	for (int i = 1; i < argc; i++) {
+		if (!std::strcmp(argv[i], "--bench"))
+			bench = true;
+		else if (!std::strcmp(argv[i], "--js-worklets"))
+			jsWorklets = true;
+		else if (!std::strcmp(argv[i], "--loop") && i + 1 < argc)
+			loops = std::max(1, std::atoi(argv[++i]));
+	}
+	bool quiet = bench || loops > 1;
 	Harness h;
-	auto t = clock();
-	if (!h.init())
+	double t = now();
+	if (!h.init(!jsWorklets, quiet))
 		return 1;
 	h.sr = h.number("__render.set.sampleRate");
 	double cps = h.number("__render.set.cps");
 	int cycles = (int)h.number("__render.set.cycles");
 	int patterns = (int)h.number("__render.set.patterns.length");
 	int baseline = h.settle(-1, 20);
-	std::printf("engine + preload: %.2f s, baseline %d nodes\n", seconds(t, clock()), baseline);
+	std::printf("engine + preload: %.2f s, baseline %d nodes, %d resources%s\n", now() - t, baseline,
+				Resource::live().load(), jsWorklets ? ", JS supersaw/wavetable" : "");
 	std::system("mkdir -p build/render");
+	const double audio = cycles / cps;
 
-	int failures = 0;
-	for (int p = 0; p < patterns; p++) {
-		std::string at = "__render.set.patterns[" + std::to_string(p) + "]";
-		std::string id = h.text(at + ".id");
-		if (h.text(at + ".worklet") == "true") {
-			std::printf("skip %s: needs AudioWorklet (M1c-3)\n", id.c_str());
-			continue;
+	int failures = 0, warmResources = -1;
+	double warmRss = 0;
+	std::string stacked;
+	for (int loop = 0; loop < loops; loop++) {
+		bool table = bench && loop == 0;
+		if (table)
+			std::printf("%-10s %8s %8s %8s %6s\n", "pattern", "render%", "js%", "total%", "nodes");
+		for (int p = 0; p < patterns; p++) {
+			std::string at = "__render.set.patterns[" + std::to_string(p) + "]";
+			std::string id = h.text(at + ".id"), code = h.text(at + ".code");
+			if (loop == 0)
+				stacked += (stacked.empty() ? "" : ", ") + code;
+			if (!quiet)
+				std::printf("%s: %s\n", id.c_str(), code.c_str());
+			std::string wav = "build/render/" + id + ".wav";
+			Result r = renderPattern(h, code, cps, cycles, baseline, bench ? nullptr : wav.c_str());
+			int resources = Resource::live().load();
+			if (warmResources >= 0 && resources != warmResources)
+				r.problems.push_back("native resources " + std::to_string(resources) + ", after the first pass " +
+									 std::to_string(warmResources) + " (G2)");
+			if (id == "samples") { // bd sd hh*2 sd at cps 0.5: every start on its exact frame
+				std::string starts = h.text("JSON.stringify(__render.starts.map((t) => Math.round(t * " +
+											std::to_string(h.sr) + ") - " + std::to_string(r.t0) + "))");
+				std::string want = "[";
+				for (int c = 0; c < cycles; c++)
+					for (int f : {0, 24000, 48000, 60000, 72000})
+						want += (want.size() > 1 ? "," : "") + std::to_string(c * 96000 + f);
+				want += "]";
+				if (starts != want)
+					r.problems.push_back("onsets " + starts + ", want " + want);
+				else if (!quiet)
+					std::printf("  onsets: %s\n", starts.c_str());
+			}
+			if (table)
+				std::printf("%-10s %7.1f%% %7.1f%% %7.1f%% %6d\n", id.c_str(), 100 * r.render / audio,
+							100 * (r.wall - r.render) / audio, 100 * r.wall / audio, r.peakNodes);
+			else if (!quiet)
+				std::printf("  %s: %.2f s wall (%.1fx realtime), peak %.3f, nodes peak %d -> %d (baseline %d), "
+							"resources %d\n",
+							r.problems.empty() ? "ok" : "FAIL", r.wall, audio / r.wall, r.peak, r.peakNodes,
+							r.nodesAfter, baseline, resources);
+			for (const std::string& problem : r.problems)
+				std::printf("    %s: %s\n", id.c_str(), problem.c_str());
+			failures += !r.problems.empty();
 		}
-		std::printf("%s: %s\n", id.c_str(), h.text(at + ".code").c_str());
-		h.errors.clear();
-		h.peakNodes = 0;
-		t = clock();
-		int64_t frames = (int64_t)std::llround(cycles / cps * h.sr);
-		int64_t t0 = (int64_t)std::llround(h.graph->currentTime() * h.sr); // the export's frame 0
-		std::string t0s = std::to_string(t0) + " / " + std::to_string(h.sr);
-		std::vector<float> wav;
-		bool ok = h.run("__render.begin(" + at + ".code)", "<begin>");
-		for (int c = 0; ok && c < cycles; c++) {
-			// Like renderPatternAudioInChunks: cycle c is scheduled when rendering reaches cycle c - 1.
-			int64_t until = (int64_t)std::llround(std::max(c - 1, 0) / cps * h.sr);
-			ok = h.render(until - (int64_t)wav.size() / 2, &wav) &&
-				 h.run("__render.chunk(" + std::to_string(c) + ", " + std::to_string(c + 1) + ", " +
-						   std::to_string(cps) + ", " + t0s + ")",
-					   "<chunk>");
+		double stackRender = 0;
+		if (bench) { // G4: the reference patch, all patterns at once
+			Result r = renderPattern(h, "stack(" + stacked + ")", cps, cycles, baseline, nullptr);
+			stackRender = r.render / audio;
+			if (table)
+				std::printf("%-10s %7.1f%% %7.1f%% %7.1f%% %6d  (all patterns at once)\n", "stack", 100 * stackRender,
+							100 * (r.wall - r.render) / audio, 100 * r.wall / audio, r.peakNodes);
+			if (stackRender > 0.25)
+				r.problems.push_back("G4: the render thread needs more than 25 % of one core");
+			for (const std::string& problem : r.problems)
+				std::printf("    stack: %s\n", problem.c_str());
+			failures += !r.problems.empty();
 		}
-		ok = ok && h.render(frames - (int64_t)wav.size() / 2, &wav);
-		double wall = seconds(t, clock());
-		float peak = 0;
-		for (float v : wav)
-			peak = std::max(peak, std::fabs(v));
-		bool written = writeWav("build/render/" + id + ".wav", wav, h.sr);
-		int peakNodes = h.peakNodes;
-		int after = h.settle(baseline);
-
-		std::vector<std::string> problems = h.errors;
-		if (!ok || !written)
-			problems.push_back(!ok ? "render failed" : "cannot write the wav");
-		if (!(peak > 1e-3f))
-			problems.push_back("silent");
-		if (after != baseline)
-			problems.push_back("nodes did not return to the baseline (G2)");
-		if (id == "samples") { // bd sd hh*2 sd at cps 0.5: every start on its exact frame
-			std::string starts = h.text("JSON.stringify(__render.starts.map((t) => Math.round(t * " +
-										std::to_string(h.sr) + ") - " + std::to_string(t0) + "))");
-			std::string want = "[";
-			for (int c = 0; c < cycles; c++)
-				for (int f : {0, 24000, 48000, 60000, 72000})
-					want += (want.size() > 1 ? "," : "") + std::to_string(c * 96000 + f);
-			want += "]";
-			if (starts != want)
-				problems.push_back("onsets " + starts + ", want " + want);
-			else
-				std::printf("  onsets: %s\n", starts.c_str());
+		if (warmResources < 0)
+			warmResources = Resource::live().load();
+		double rss = rssMiB();
+		if (loop == 1)
+			warmRss = rss;
+		if (loops > 1) {
+			std::printf("pass %d: RSS %.1f MiB, %d nodes, %d native resources", loop + 1, rss, h.graph->nodeCount(),
+						Resource::live().load());
+			if (bench)
+				std::printf(", stack render %.1f %%", 100 * stackRender);
+			std::printf("\n");
 		}
-		std::printf("  %s: %.2f s wall (%.1fx realtime, ASan build), peak %.3f, nodes peak %d -> %d (baseline %d)\n",
-					problems.empty() ? "ok" : "FAIL", wall, cycles / cps / wall, peak, peakNodes, after, baseline);
-		for (const std::string& problem : problems)
-			std::printf("    %s\n", problem.c_str());
-		failures += !problems.empty();
+		if (loop > 1 && rss > warmRss + 8) { // ponytail: allocator noise is a few MiB; a leak grows every pass
+			std::printf("    RSS grew %.1f MiB since pass 2 (G2)\n", rss - warmRss);
+			failures++;
+		}
 	}
+
+	// A disabled processor is a clear error in the log, not a crash (off t = 0: superdough starts stretch 40 ms early).
+	Result r = renderPattern(h, "note(\"~ c3\").s(\"sawtooth\").stretch(2)", cps, 1, baseline, nullptr);
+	bool reported = false;
+	for (const std::string& e : r.problems)
+		reported |= e.find("stretch is not available") != std::string::npos;
+	std::printf("stretch: %s, nodes %d (baseline %d)\n", reported ? "reported as an error" : "FAIL: no error logged",
+				r.nodesAfter, baseline);
+	failures += !reported || r.nodesAfter != baseline;
+
 	std::printf("%d patterns failed\n", failures);
 	return failures ? 1 : 0;
 }

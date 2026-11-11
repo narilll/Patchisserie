@@ -1,13 +1,73 @@
-// Rough CPU benchmark (make bench): 64 voices of saw -> biquad -> gain -> panner plus one 2 s stereo convolver reverb.
-// Prints microseconds per 128-frame quantum; asserts nothing.
+// Rough CPU benchmark (make bench): 64 voices of saw -> biquad -> gain -> panner plus one 2 s stereo convolver reverb,
+// then one voice of every res/worklets.js processor (QuickJS, and the native ports), each in an OfflineAudioContext
+// like superdough would set it up. Prints microseconds per 128-frame quantum; asserts nothing.
 #include <chrono>
 #include <cstdio>
 #include <memory>
 #include <random>
 
 #include "audio/nodes.hpp"
+#include "js_rig.hpp"
 
 using namespace audio;
+
+// One voice per processor, minus the sawtooth that feeds the effects. `native` = the native ports' turn.
+const char* kWorkletBench = R"js(
+const sr = 48000, frames = 2 * sr, quanta = frames / 128, budget = (1e6 * 128) / sr;
+async function time(build) {
+  const ac = new OfflineAudioContext(2, frames, sr);
+  await ac.audioWorklet.addModule('patchisserie:worklets.js');
+  build(ac);
+  const t0 = performance.now();
+  await ac.startRendering();
+  return ((performance.now() - t0) * 1000) / quanta;
+}
+const saw = (ac) => {
+  const o = new OscillatorNode(ac, { type: 'sawtooth', frequency: 110 });
+  o.start();
+  return o;
+};
+const live = { begin: 0, end: 1e9 };
+const effect = (name, parameterData = {}, processorOptions) =>
+  Object.assign((ac) => saw(ac).connect(new AudioWorkletNode(ac, name, { parameterData, processorOptions })).connect(ac.destination), { effect: true });
+const source = (name, parameterData, init) => (ac) => {
+  const n = new AudioWorkletNode(ac, name, { outputChannelCount: [2], parameterData: { ...live, ...parameterData } });
+  init?.(n);
+  n.connect(ac.destination);
+};
+const table = Float32Array.from({ length: 64 * 2048 }, (_, i) => Math.sin((i * (1 + (i >> 11))) / 326));
+const frames64 = Array.from({ length: 64 }, (_, f) => table.subarray(f * 2048, (f + 1) * 2048));
+const wavetable = (voices) => source('wavetable-oscillator-processor', { voices, frequency: 220, position: 0.5 }, (n) =>
+  n.port.postMessage({ type: 'initialize', payload: { key: `bench${voices}`, frameLen: 2048, frames: frames64 } }));
+const cases = native ? [
+  ['supersaw-oscillator (5 voices) native', source('supersaw-oscillator', { frequency: 110 })],
+  ['wavetable (1 voice) native', wavetable(1)],
+  ['wavetable (5 voices) native', wavetable(5)],
+] : [
+  ['crush-processor', effect('crush-processor', { crush: 4 })],
+  ['shape-processor', effect('shape-processor', { shape: 0.5 })],
+  ['coarse-processor', effect('coarse-processor', { coarse: 4 })],
+  ['distort-processor', effect('distort-processor', { distort: 0.5 }, { algorithm: 'scurve' })],
+  ['ladder-processor', effect('ladder-processor', { frequency: 800, q: 0.5 })],
+  ['djf-processor (lowpass)', effect('djf-processor', { value: 0.3 })],
+  ['transient-processor', effect('transient-processor', {}, { ...live, attack: 0.5, sustain: -0.5 })],
+  ['lfo-processor', source('lfo-processor', { frequency: 2, depth: 1 })],
+  ['envelope-processor', source('envelope-processor', {})],
+  ['pulse-oscillator', source('pulse-oscillator', { frequency: 110 })],
+  ['byte-beat-processor', source('byte-beat-processor', { frequency: 110 }, (n) =>
+    n.port.postMessage({ codeText: 't*(t>>10^t)', byteBeatStartTime: 0, frequency: 110 }))],
+  ['supersaw-oscillator (5 voices)', source('supersaw-oscillator', { frequency: 110 })],
+  ['wavetable (1 voice)', wavetable(1)],
+  ['wavetable (5 voices)', wavetable(5)],
+];
+const base = await time((ac) => saw(ac).connect(ac.destination));
+const lines = [];
+for (const [label, build] of cases) {
+  const us = Math.max(0, (await time(build)) - (build.effect ? base : 0));
+  lines.push(`${label.padEnd(40)} ${us.toFixed(1).padStart(7)} us/quantum ${((100 * us) / budget).toFixed(2).padStart(6)} % of one core`);
+}
+return lines.join('\n');
+)js";
 
 static double run(bool sweep, bool reverb) {
 	const double sr = 48000;
@@ -70,5 +130,11 @@ int main() {
 			std::printf("64 voices%s%s: %.1f us/quantum (%.1f%% of one core)\n", sweep ? " + filter sweep" : "",
 						reverb ? " + 2 s reverb" : "", us, 100 * us / budget);
 		}
+	std::printf("one voice per worklet processor at 48 kHz (effects: minus their sawtooth input):\n");
+	for (bool native : {false, true}) {
+		JsRig r(native);
+		std::string out = r.run(std::string("const native = ") + (native ? "true" : "false") + ";\n" + kWorkletBench);
+		std::printf("%s\n", out.c_str());
+	}
 	return 0;
 }

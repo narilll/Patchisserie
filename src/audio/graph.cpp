@@ -187,6 +187,8 @@ Graph::~Graph() {
 			delete c.node;
 		release(c.res);
 	}
+	while (!events_.empty())
+		release(events_.shift().data);
 	for (Node* n = head_; n;) {
 		Node* next = n->next;
 		delete n;
@@ -231,6 +233,8 @@ void Graph::drop(Resource* r) {
 void Graph::emit(Event e) {
 	if (!events_.full())
 		events_.push(e);
+	else
+		drop(e.data);
 }
 
 void Graph::render(float* left, float* right, int frames) {
@@ -417,6 +421,7 @@ void Graph::remove(Node* n) {
 	if (n->next)
 		n->next->prev = n->prev;
 	nodeCount_--;
+	n->retire();
 	trash(n);
 }
 

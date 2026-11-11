@@ -1,13 +1,33 @@
 #!/usr/bin/env bash
 # Pins Strudel to a ref (default: main), rebuilds res/engine.js + res/worklets.js and runs the regression.
-# Usage: scripts/update-engine [ref]
+# Usage: scripts/update-engine [--dry-run] [--ack-superdough <sha>] [ref]
+# Stops (exit 1) before touching anything when
+# - packages/superdough, packages/webaudio or packages/soundfonts changed between the pinned commit
+#   (res/ENGINE_VERSIONS) and the new one: prints the diff. After reviewing it, re-run with
+#   --ack-superdough <new sha> to proceed (recorded in res/ENGINE_VERSIONS), then run the audio regression;
+# - worklets.mjs registers a processor that src/audio/worklets.cpp (kProcessors) does not list.
+# --dry-run: fetch and check only. STRUDEL_REPO overrides the upstream (test/update-engine.test.mjs: a local repo).
 # Third-party code stays under build/ (gitignored); Strudel sources are never modified.
 set -euo pipefail
 
+dry=false
+ack=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+  --dry-run) dry=true ;;
+  --ack-superdough)
+    ack="${2:?--ack-superdough needs the new commit sha}"
+    shift
+    ;;
+  *) break ;;
+  esac
+  shift
+done
 ref="${1:-main}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 src="$root/build/engine-src/strudel"
-repo=https://codeberg.org/uzu/strudel.git
+repo="${STRUDEL_REPO:-https://codeberg.org/uzu/strudel.git}"
+versions="$root/res/ENGINE_VERSIONS"
 
 if [ ! -d "$src/.git" ]; then
   mkdir -p "$src"
@@ -15,7 +35,55 @@ if [ ! -d "$src/.git" ]; then
   git -C "$src" remote add origin "$repo"
 fi
 git -C "$src" fetch -q --depth 1 origin "$ref"
-git -C "$src" checkout -q --force --detach FETCH_HEAD
+new="$(git -C "$src" rev-parse FETCH_HEAD)"
+
+# Guard 1: the audio packages (plan "Updaty"). The pinned commit is normally the checkout's current HEAD.
+pinned="$(awk '$1 == "strudel" { print $2 }' "$versions" 2>/dev/null || true)"
+audio=(packages/superdough packages/webaudio packages/soundfonts)
+changed=""
+if [ -n "$pinned" ] && [ "$pinned" != "$new" ]; then
+  git -C "$src" cat-file -e "$pinned^{commit}" 2>/dev/null || git -C "$src" fetch -q --depth 1 origin "$pinned"
+  changed="$(git -C "$src" diff --name-only "$pinned" "$new" -- "${audio[@]}")"
+  if [ -n "$changed" ] && [ "$ack" != "$new" ]; then
+    {
+      echo "update-engine: STOP, the audio packages changed between ${pinned:0:12} (pinned) and ${new:0:12} ($ref):"
+      git -C "$src" diff --stat "$pinned" "$new" -- "${audio[@]}"
+      echo "Changed files:"
+      echo "$changed"
+      echo "Review: git -C $src diff $pinned $new -- ${audio[*]}"
+      echo "Proceed: scripts/update-engine --ack-superdough $new $ref"
+      echo "then run the audio regression: node scripts/render-reference.mjs && make render test-render"
+    } >&2
+    exit 1
+  fi
+fi
+
+# Guard 2: every processor worklets.mjs registers is native, a reviewed script or disabled in kProcessors.
+registered="$(git -C "$src" show "$new:packages/superdough/worklets.mjs" |
+  sed -nE "s/.*registerProcessor\(['\"]([^'\"]+)['\"].*/\1/p" | sort -u)"
+listed="$(sed -nE 's/.*\{"([a-z0-9-]+)", ProcessorDef::(Native|Script|Disabled).*/\1/p' \
+  "$root/src/audio/worklets.cpp" | sort -u)"
+unknown="$(comm -23 <(echo "$registered") <(echo "$listed"))"
+if [ -z "$registered" ] || [ -n "$unknown" ]; then
+  {
+    echo "update-engine: STOP, worklets.mjs registers processors missing in src/audio/worklets.cpp kProcessors"
+    echo "(measure each with make bench, then list it as Native, Script or Disabled):"
+    echo "${unknown:-(no registerProcessor('...') call found)}"
+  } >&2
+  exit 1
+fi
+
+# The acknowledgement that let this update through, else the last one recorded.
+recorded="$(awk '$1 == "superdough-ack" { print $2 }' "$versions" 2>/dev/null || true)"
+if [ -n "$changed" ]; then
+  recorded="$new"
+fi
+if $dry; then
+  echo "update-engine: dry run, $ref = $new passes the guards${changed:+, records superdough-ack $new}"
+  exit 0
+fi
+
+git -C "$src" checkout -q --force --detach "$new"
 
 # Only the bundled packages' runtime deps, at Strudel's lockfile versions, without install scripts.
 # CI=true: non-interactive (pnpm would otherwise prompt before purging a stale node_modules).
@@ -30,11 +98,17 @@ node "$root/scripts/build-engine.mjs"
 {
   echo "# Written by scripts/update-engine: res/engine.js is built from exactly these sources."
   echo "strudel $(git -C "$src" log -1 --format='%H %cI') $repo (ref: $ref)"
-} >"$root/res/ENGINE_VERSIONS"
+  if [ -n "$recorded" ]; then
+    echo "superdough-ack $recorded (audio package changes reviewed up to this commit)"
+  fi
+} >"$versions"
 
 # Upstream tune regression fixtures, pinned together with the engine (see test/tunes.mjs).
 cp "$src/website/src/repl/tunes.mjs" "$src/website/src/repl/piano.mjs" "$src/test/runtime.mjs" \
   "$src/test/__snapshots__/tunes.test.mjs.snap" "$root/test/upstream/"
 
 make -C "$root" test-js
-cat "$root/res/ENGINE_VERSIONS"
+cat "$versions"
+if [ -n "$changed" ]; then
+  echo "update-engine: the audio packages changed: node scripts/render-reference.mjs && make render test-render"
+fi

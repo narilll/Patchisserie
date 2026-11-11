@@ -6,7 +6,6 @@ EXTRA_CXXFLAGS += -std=c++17
 
 SOURCES += $(wildcard src/*.cpp)
 AUDIO_SOURCES := $(wildcard src/audio/*.cpp)
-GRAPH_SOURCES := src/audio/graph.cpp src/audio/nodes.cpp
 SOURCES += $(AUDIO_SOURCES)
 # Web Audio classes for QuickJS, embedded as a C array (Rack's xxd rule): src_audio_webaudio_js[].
 BINARIES += src/audio/webaudio.js
@@ -30,12 +29,20 @@ TEST_FLAGS := -std=c++17 -g -O1 -Wall -Wextra -Isrc -Itest -I$(RACK_DIR)/include
 TEST_SOURCES += $(AUDIO_SOURCES)
 TEST_FLAGS += -I$(RACK_DIR)/dep/include
 
-# Vendor C and the embedded webaudio.js for host builds, under ASan like the code that calls them.
-HOST_OBJECTS := $(patsubst %,build/test/asan/%.o,$(VENDOR_SOURCES)) build/test/asan/webaudio.js.o
+# Vendor C and the embedded webaudio.js for host builds, per flavour like the code that calls them: asan (tests,
+# render), tsan, release (benchmarks, plugin-like optimization).
+host_objects = $(patsubst %,build/test/$(1)/%.o,$(VENDOR_SOURCES)) build/test/$(1)/webaudio.js.o
+HOST_OBJECTS := $(call host_objects,asan)
 build/test/asan/%.c.o: %.c
 	@mkdir -p $(@D)
 	$(CC) -std=gnu11 -g -O2 $(VENDOR_FLAGS) -fsanitize=address -c -o $@ $<
-build/test/asan/webaudio.js.o: src/audio/webaudio.js
+build/test/tsan/%.c.o: %.c
+	@mkdir -p $(@D)
+	$(CC) -std=gnu11 -g -O2 $(VENDOR_FLAGS) -fsanitize=thread -c -o $@ $<
+build/test/release/%.c.o: %.c
+	@mkdir -p $(@D)
+	$(CC) -std=gnu11 -O3 $(VENDOR_FLAGS) -c -o $@ $<
+build/test/%/webaudio.js.o: src/audio/webaudio.js
 	@mkdir -p $(@D)
 	xxd -i $< | $(CC) -c -o $@ -xc -
 
@@ -48,23 +55,35 @@ test: build/test/run
 
 .PHONY: test
 
-# Graph tests (command/event queues, producer thread vs render thread) under ThreadSanitizer.
-build/test/tsan: test/main.cpp test/check.hpp test/test_graph.cpp $(GRAPH_SOURCES) $(wildcard src/audio/*.hpp)
+# Graph and worklet tests (command/event queues, the worklet runtime on the render thread vs the JS thread) under
+# ThreadSanitizer.
+TSAN_TESTS := test/main.cpp test/test_graph.cpp test/test_worklets.cpp
+build/test/run-tsan: $(TSAN_TESTS) $(wildcard test/*.hpp) $(AUDIO_SOURCES) $(call host_objects,tsan) $(wildcard src/audio/*.hpp)
 	@mkdir -p $(@D)
-	$(CXX) $(TEST_FLAGS) -fsanitize=thread -o $@ test/main.cpp test/test_graph.cpp $(GRAPH_SOURCES)
+	$(CXX) $(TEST_FLAGS) -fsanitize=thread -o $@ $(TSAN_TESTS) $(AUDIO_SOURCES) $(call host_objects,tsan)
 
-tsan: build/test/tsan
-	build/test/tsan
+tsan: build/test/run-tsan
+	build/test/run-tsan
 
-# Rough CPU benchmark with plugin-like optimization (prints, asserts nothing).
-build/test/bench: test/bench_audio.cpp $(GRAPH_SOURCES) $(wildcard src/audio/*.hpp)
+# CPU benchmarks with plugin-like optimization, no sanitizers: graph nodes and every worklet processor per voice
+# (bench, prints only), the whole render set + all patterns stacked (render-bench, plan G2/G4: fails on a leak or
+# a render thread above 25 % of one core).
+RELEASE_FLAGS := -std=c++17 -O3 -funsafe-math-optimizations -Wall -Wextra -Isrc -Itest -I$(RACK_DIR)/include -I$(RACK_DIR)/dep/include -isystem $(QJS_DIR) -isystem vendor/dr_libs
+build/test/bench: test/bench_audio.cpp $(AUDIO_SOURCES) $(call host_objects,release) $(wildcard src/audio/*.hpp)
 	@mkdir -p $(@D)
-	$(CXX) -std=c++17 -O3 -funsafe-math-optimizations -Wall -Wextra -Isrc -I$(RACK_DIR)/include -I$(RACK_DIR)/dep/include -o $@ test/bench_audio.cpp $(GRAPH_SOURCES)
+	$(CXX) $(RELEASE_FLAGS) -o $@ test/bench_audio.cpp $(AUDIO_SOURCES) $(call host_objects,release)
 
 bench: build/test/bench
 	build/test/bench
 
-.PHONY: tsan bench
+build/test/render-bench: test/render/render.cpp $(AUDIO_SOURCES) $(call host_objects,release) $(wildcard src/audio/*.hpp)
+	@mkdir -p $(@D)
+	$(CXX) $(RELEASE_FLAGS) -o $@ test/render/render.cpp $(AUDIO_SOURCES) $(call host_objects,release)
+
+render-bench: build/test/render-bench
+	build/test/render-bench --bench --loop 20
+
+.PHONY: tsan bench render-bench
 
 # Offline render harness (plan gates G1-G3): res/engine.js + superdough on an offline-driven graph, under ASan.
 # Writes build/render/<id>.wav; `node --test test/render.test.mjs` compares them with the Chrome references.
