@@ -55,6 +55,7 @@ struct Filo : Module {
 		RESET_OUTPUT,
 		OUTPUTS_LEN
 	};
+	enum LightId { PLAY_LIGHT, LIGHTS_LEN };
 
 	std::unique_ptr<filo::Engine> engine;
 	// Settings: set by the UI thread (menu, JSON), read by process(), like Rack's own modules.
@@ -65,14 +66,14 @@ struct Filo : Module {
 	bool added = false;
 
 	dsp::SchmittTrigger playIn, stopIn, clockIn, resetIn;
-	dsp::BooleanTrigger playButton, stopButton;
+	dsp::BooleanTrigger stopButton; // the PLAY button evaluates the code: FiloWidget::step(), on the UI thread
 	dsp::PulseGenerator trigPulse[16], clkPulse, resetPulse;
 	filo::Sequencer::Outputs out;
 	std::atomic<float> mono{0}; // audio thread -> the Icing on the right: (L + R) / 2, its unpatched AUDIO input
 
 	Filo() {
-		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, 0);
-		configButton(PLAY_PARAM, "Play");
+		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
+		configButton(PLAY_PARAM, "Play (evaluates the code, like Cmd/Ctrl+Enter)");
 		configButton(STOP_PARAM, "Stop (hush, gates down)");
 		configButton(FULLSCREEN_PARAM, "Fullscreen editor (Esc closes)");
 		configInput(PLAY_INPUT, "Play trigger");
@@ -112,9 +113,8 @@ struct Filo : Module {
 	void onSampleRateChange(const SampleRateChangeEvent& e) override { engine->setSampleRate(e.sampleRate); }
 
 	void process(const ProcessArgs& args) override {
-		bool play = playButton.process(params[PLAY_PARAM].getValue() > 0.f);
-		play |= playIn.process(inputs[PLAY_INPUT].getVoltage(), 0.1f, 1.f); // both triggers see every sample
-		bool stop = stopButton.process(params[STOP_PARAM].getValue() > 0.f);
+		bool play = playIn.process(inputs[PLAY_INPUT].getVoltage(), 0.1f, 1.f); // the transport only
+		bool stop = stopButton.process(params[STOP_PARAM].getValue() > 0.f);    // both triggers see every sample
 		stop |= stopIn.process(inputs[STOP_INPUT].getVoltage(), 0.1f, 1.f);
 		if (play)
 			engine->play();
@@ -123,6 +123,7 @@ struct Filo : Module {
 		if (args.frame % 4096 == 0)
 			engine->setBlockFrames(APP->engine->getBlockFrames());
 		filo::Sequencer& seq = engine->seq;
+		lights[PLAY_LIGHT].setBrightness(seq.started() ? 1.f : 0.f);
 		seq.voices.setChannels(voices);
 		seq.voices.setMode((filo::VoiceAllocator::Mode)polyMode);
 		seq.clockOut.setDivision(clkDivision);
@@ -230,7 +231,7 @@ struct FiloWidget : ModuleWidget {
 	editor::View* view;                // the panel's editor
 	WeakPtr<editor::Overlay> overlay;  // the fullscreen editor, while open
 	editor::Doc preview{kDefaultCode}; // the module browser's
-	bool fullscreenDown = false;
+	bool fullscreenDown = false, playDown = false;
 
 	FiloWidget(Filo* module) {
 		setModule(module);
@@ -246,7 +247,11 @@ struct FiloWidget : ModuleWidget {
 		auto label = [&](float x, float y, const char* name) { text->labels.push_back({mm2px(Vec(x, y - 5)), name}); };
 		const char* names[] = {"PLAY", "STOP", "FULL"};
 		for (int i = 0; i < Filo::PARAMS_LEN; i++) {
-			addParam(createParamCentered<VCVButton>(mm2px(Vec(9 + 13 * i, 105)), module, i));
+			Vec pos = mm2px(Vec(9 + 13 * i, 105));
+			if (i == Filo::PLAY_PARAM) // lit red while playing
+				addParam(createLightParamCentered<VCVLightBezel<RedLight>>(pos, module, i, Filo::PLAY_LIGHT));
+			else
+				addParam(createParamCentered<VCVButton>(pos, module, i));
 			label(9 + 13 * i, 105, names[i]);
 		}
 		const char* inputs[] = {"PLAY", "STOP", "CLOCK", "RESET"};
@@ -277,6 +282,11 @@ struct FiloWidget : ModuleWidget {
 			overlay = o;
 		}
 		fullscreenDown = down;
+		// PLAY: evaluate what the editor shows and play (like strudel.cc's play button; already playing: just update).
+		down = module && module->params[Filo::PLAY_PARAM].getValue() > 0.f;
+		if (down && !playDown)
+			static_cast<Filo*>(module)->evaluate(true);
+		playDown = down;
 	}
 
 	void appendContextMenu(Menu* menu) override {

@@ -20,7 +20,8 @@ $: s("bd*4")
 - `initHydra()` makes Hydra's names global for the rest of that evaluate (`noise`, `shape`, `speed`, `hush`, `time`
   and `src` are Hydra's then); the next evaluate starts with Strudel's again. Its options are ignored.
 - The visuals belong to code that calls `initHydra()`: an evaluate without it hushes them, and so does Filo's STOP
-  (strudel.cc clears Hydra on stop too). PLAY does not bring them back, an evaluate does.
+  (strudel.cc clears Hydra on stop too). An evaluate brings them back: the PLAY button or Cmd/Ctrl+Enter (the PLAY
+  trigger input only restarts the transport).
 - `H(pattern)` is the pattern's value at the cycle Filo plays, `bpm` is Filo's tempo (cps × 240), `time` counts
   seconds (× `speed`) since the first `initHydra()`.
 - `a.fft` (`a.setBins`, `setSmooth`, `setCutoff`, `setScale`) listens to the AUDIO input, unpatched to Filo's L+R.
