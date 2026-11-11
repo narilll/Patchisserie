@@ -38,11 +38,12 @@ const grouped = (db, g) =>
     (_, i) => 10 * Math.log10(db.slice(i * g, (i + 1) * g).reduce((s, v) => s + 10 ** (v / 10), 0)),
   );
 
-function bandFailures(ours, ref, { group = 1, floor = FLOOR_DB, what }) {
+function bandFailures(ours, ref, { group = 1, floor = FLOOR_DB, refOnly = false, what }) {
   const [o, r] = [grouped(ours, group), grouped(ref, group)];
   const top = Math.max(...r) + floor;
   return r.flatMap((v, b) =>
-    Math.max(v, o[b]) > top && !(Math.abs(o[b] - v) <= BARK_DB)
+    // refOnly: ours is one random realization, so near-silent bands (+4 dB spread at -33 dB) are judged by the fixed reference alone
+    (refOnly ? v : Math.max(v, o[b])) > top && !(Math.abs(o[b] - v) <= BARK_DB)
       ? [
           `${what} ${BARK_EDGES[b * group]}-${BARK_EDGES[(b + 1) * group]} Hz: ${o[b].toFixed(2)} dB, reference ${v.toFixed(2)} dB`,
         ]
@@ -79,7 +80,7 @@ for (const { id } of set.patterns) {
         failures.push(`onsets ${JSON.stringify(ours.onsets)}, reference ${JSON.stringify(ref.onsets)} (±${tolerance})`);
       if (random) {
         failures.push(
-          ...bandFailures(ours.bark_db, ref.bark_db, { group: random.group, floor: -30, what: 'whole file' }),
+          ...bandFailures(ours.bark_db, ref.bark_db, { group: random.group, floor: -30, refOnly: true, what: 'whole file' }),
         );
       } else {
         failures.push(...bandFailures(ours.bark_db, ref.bark_db, { what: 'whole file' }));
