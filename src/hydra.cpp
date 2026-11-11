@@ -31,9 +31,6 @@ float Analyser::analyse(float sampleRate, float* specific) const {
 
 // --- GL ---
 
-// ponytail: canvas sizes beyond this (setResolution()) are clamped; GL 2.0 guarantees less, real GPUs more.
-static const int kMaxSize = 4096;
-
 // hydra-synth's output.js vertex shader and big triangle, verbatim (uv = position, so fragment code ports unchanged).
 static const char* kVert = R"(precision mediump float;
 attribute vec2 position;
@@ -347,7 +344,8 @@ unsigned Renderer::other(int output) const {
 
 void Renderer::render(NVGcontext* vg, const Exchange::Frame& f) {
 	int w = rack::math::clamp(f.width, 1, kMaxSize), h = rack::math::clamp(f.height, 1, kMaxSize);
-	if (!display_ || w != w_ || h != h_) { // first frame, setResolution()
+	if (!display_ || w != w_ ||
+		h != h_) { // first frame, a new canvas size (window, setResolution()): feedback restarts
 		for (auto& pair : fbo_)
 			for (NVGLUframebuffer*& fb : pair)
 				deleteFb(fb);
@@ -427,9 +425,12 @@ void Renderer::drawPreview(NVGcontext* vg, float x, float y, float w, float h) {
 	nvgFill(vg);
 }
 
-void Renderer::present() const {
+void Renderer::present(int fw, int fh) const {
 	if (!display_ || failed_)
 		return;
+	float s = std::min((float)fw / w_, (float)fh / h_); // the canvas's aspect; the rest stays as the caller cleared it
+	int vw = std::max(1, (int)std::lround(w_ * s)), vh = std::max(1, (int)std::lround(h_ * s));
+	glViewport((fw - vw) / 2, (fh - vh) / 2, vw, vh);
 	glUseProgram(blit_);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, display_->texture); // rebind every frame to see the Rack context's writes
@@ -554,6 +555,7 @@ void Window::update(GLFWwindow* rack, const char* title, WindowGeometry& g, bool
 		glfwSetWindowShouldClose(win, GLFW_FALSE);
 		open = false;
 	}
+	fbWidth = fbHeight = 0;
 	if (!open) {
 		if (win && glfwGetWindowAttrib(win, GLFW_VISIBLE))
 			glfwHideWindow(win);
@@ -585,6 +587,7 @@ void Window::update(GLFWwindow* rack, const char* title, WindowGeometry& g, bool
 	glfwGetFramebufferSize(win, &fw, &fh);
 	glViewport(0, 0, fw, fh);
 	draw(fw, fh);
+	fbWidth = fw, fbHeight = fh;
 	glfwSwapBuffers(win);
 	glfwMakeContextCurrent(rack);
 }

@@ -480,6 +480,8 @@ struct IcingWidget : ModuleWidget {
 	hydra::Renderer renderer;
 	hydra::Window output;
 	hydra::Analyser analyser;
+	hydra::CanvasSize canvas{0, 0}, wanted{0, 0}; // sent to Hydra; the latest wish, sent once it holds for a while
+	int wantedFrames = 0;
 	bool outputOpen = false;
 	int64_t filoId = -1; // the Filo whose Hydra this renders (-1: none)
 	IcingPreview* preview;
@@ -538,15 +540,24 @@ struct IcingWidget : ModuleWidget {
 			hydra::Exchange::Request q;
 			q.time = system::getTime();
 			q.total = analyser.analyse(APP->engine->getSampleRate(), q.specific);
+			// The canvas follows the output window (the preview aspect without one). A resize storm applies once the
+			// size has held for ~0.1 s; the first size at once.
+			hydra::CanvasSize want =
+				hydra::canvasSize(output.fbWidth, output.fbHeight, kPreviewMm.size.x / kPreviewMm.size.y);
+			wantedFrames = want == wanted ? wantedFrames + 1 : 0;
+			wanted = want;
+			if (canvas.w == 0 || wantedFrames >= 6)
+				canvas = wanted;
+			q.width = canvas.w, q.height = canvas.h;
 			engine->hydra.request(q);
 			renderer.update(APP->window->vg, engine->hydra, [=](const std::string& line) { engine->log(line, true); });
 		}
 		if (outputOpen && output.win && glfwGetKey(output.win, GLFW_KEY_ESCAPE) == GLFW_PRESS) // sticky: a tap counts
 			m->window.fullscreen = false;
-		output.update(APP->window->win, "Icing", m->window, outputOpen, [&](int, int) {
+		output.update(APP->window->win, "Icing", m->window, outputOpen, [&](int fw, int fh) {
 			glClear(GL_COLOR_BUFFER_BIT);
 			if (f)
-				renderer.present();
+				renderer.present(fw, fh);
 		});
 	}
 

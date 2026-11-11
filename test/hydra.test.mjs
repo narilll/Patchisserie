@@ -14,7 +14,7 @@ const host = globalThis.__patchisserie;
 
 const bands = (f) => Array.from({ length: 24 }, (_, i) => f(i));
 /** hydraFrame() at Icing time t (s), Filo at `cycle`, silent AUDIO; parsed. */
-const frame = (t, cycle = 0, specific = bands(() => 0)) => parse(host.hydraFrame(t, cycle, specific, 0));
+const frame = (t, cycle = 0, specific = bands(() => 0), w, h) => parse(host.hydraFrame(t, cycle, specific, 0, w, h));
 function parse(f) {
   if (!f) return f;
   const [display, time, width, height, ...rest] = f;
@@ -149,6 +149,29 @@ test('setResolution() and render(oN) reach the frame', async () => {
   const f = frame(12);
   assert.deepEqual([f.display, f.width, f.height], [2, 640, 360]);
   await ok('await initHydra()\nsetResolution(1280, 720)\nrender(o0)');
+});
+
+test("the UI's canvas size reaches width, height and the frame; setResolution() holds until an evaluate without it", async () => {
+  await ok('await initHydra()\nosc().out()\nglobalThis.seen = () => [width, height]');
+  assert.deepEqual([frame(20).width, frame(20).height], [1280, 720]); // no size pushed: Hydra's own
+  let f = frame(21, 0, bands(() => 0), 1280, 1032);
+  assert.deepEqual([f.width, f.height], [1280, 1032]);
+  assert.deepEqual(globalThis.seen(), [1280, 1032]);
+  f = frame(22, 0, bands(() => 0), 1920, 1080); // the window opened
+  assert.deepEqual([f.width, f.height], [1920, 1080]);
+  assert.deepEqual(globalThis.seen(), [1920, 1080]);
+  // setResolution() wins over what the UI pushes ...
+  await ok('await initHydra()\nsetResolution(640, 360)\nosc().out()');
+  f = frame(23, 0, bands(() => 0), 1280, 1032);
+  assert.deepEqual([f.width, f.height], [640, 360]);
+  // ... until an evaluate that doesn't call it, or hush().
+  await ok('await initHydra()\nosc().out()');
+  f = frame(24, 0, bands(() => 0), 1280, 1032);
+  assert.deepEqual([f.width, f.height], [1280, 1032]);
+  await ok('await initHydra()\nsetResolution(640, 360)\nosc().out()');
+  host.hydraHush();
+  await ok('await initHydra()\nosc().out()');
+  assert.deepEqual([frame(25, 0, bands(() => 0), 800, 600).width], [800]);
 });
 
 test("Hydra's other sources are ignored, warning once: the source stays empty", async () => {

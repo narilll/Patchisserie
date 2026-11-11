@@ -93,6 +93,9 @@ $: s("bd*4")
   that calls `initHydra()`, as on hydra.ojack.xyz; `hush()`, an evaluate without `initHydra()` and STOP clear it. A
   failure (download, not an image, too large) is logged; the sketch runs on.
 - `a.fft` (`a.setBins`, `setSmooth`, `setCutoff`, `setScale`) listens to the AUDIO input, unpatched to Filo's L+R.
+- The canvas follows what shows it: the output window's framebuffer size (4096 at most) while the window is open, else
+  the preview's aspect at 1280 px on the long side; `setResolution(w, h)` overrides it until an evaluate without it.
+  The preview and the window fit the image, keeping its aspect.
 - The panel shows a preview; the menu opens an output window (borderless "Fullscreen", Esc leaves it), whose
   position is saved in the patch. Closing the window hides it.
 - What Icing doesn't do: see [Not supported](#not-supported).

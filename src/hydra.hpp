@@ -2,6 +2,7 @@
 // Hydra (Icing) graphics. GLSL conversion, the audio loudness and the frame exchange with Filo's JS thread are pure
 // and unit-tested; Analyser::analyse (Rack's FFT), Renderer and Window are GL/Rack and live in hydra.cpp.
 // No Rack or GL includes here, so test/ and engine.hpp can include this header.
+#include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -92,6 +93,27 @@ class Analyser {
 	unsigned pos_ = 0;
 };
 
+// --- Canvas size ---
+
+/** Canvas sizes beyond this are clamped (setResolution(), a huge window); GL 2.0 guarantees less, real GPUs more. */
+constexpr int kMaxSize = 4096;
+
+struct CanvasSize {
+	int w, h;
+	bool operator==(const CanvasSize& o) const { return w == o.w && h == o.h; }
+};
+
+/** The canvas follows what shows it: the output window's framebuffer while it is shown (`fbW` x `fbH` > 0), else the
+preview's aspect (`previewAspect` = width / height) with a long side of 1280. (setResolution()'s override lives in
+js/host.mjs.) */
+inline CanvasSize canvasSize(int fbW, int fbH, float previewAspect) {
+	if (fbW > 0 && fbH > 0)
+		return {std::min(fbW, kMaxSize), std::min(fbH, kMaxSize)};
+	const int kLong = 1280;
+	return previewAspect >= 1 ? CanvasSize{kLong, std::max(1, (int)std::lround(kLong / previewAspect))}
+							  : CanvasSize{std::max(1, (int)std::lround(kLong * previewAspect)), kLong};
+}
+
 // --- Frames ---
 
 /** Icing's UI thread <-> its Filo's JS thread, which owns Hydra (plan item 8). Neither side waits for the other:
@@ -107,6 +129,7 @@ class Exchange {
 		double time = 0; // s, Icing's clock
 		float specific[kBarkBands] = {};
 		float total = 0;
+		int width = 0, height = 0; // the canvas size wanted (canvasSize()); 0: keep what Hydra has
 	};
 	struct Program {
 		uint32_t id = 0;                   // 0: none
@@ -234,8 +257,9 @@ class Renderer {
 	exchange's frame if it is new. Restores the GL state it touches. */
 	void update(NVGcontext* vg, const Exchange& x, const Error& error);
 	void drawPreview(NVGcontext* vg, float x, float y, float w, float h);
-	/** Draws the displayed image into the bound framebuffer (Window's, in its context: programs are shared). */
-	void present() const;
+	/** Draws the displayed image, fitted and centred, into the bound `fw` x `fh` framebuffer (Window's, in its
+	context: programs are shared). */
+	void present(int fw, int fh) const;
 	/** Black, no programs, no images: for another Filo (or none) from here on. */
 	void reset();
 	/** Deletes the GL objects; the next update() recreates them (e.g. in a new context). */
@@ -276,7 +300,8 @@ class Renderer {
 aren't shared: Icing's only samples Renderer's texture. */
 struct Window {
 	GLFWwindow* win = nullptr;
-	bool fullscreen = false; // applied state; WindowGeometry::fullscreen is the wanted one
+	bool fullscreen = false;       // applied state; WindowGeometry::fullscreen is the wanted one
+	int fbWidth = 0, fbHeight = 0; // the framebuffer of the last drawn frame; 0: hidden, closed or iconified
 
 	/** Reconciles the window with `open`/`g` (a new one is titled `title`) and draws a frame: `draw(framebuffer width,
 	height)` with the window's context current and its viewport set. Title-bar close writes back into `open`. Must run

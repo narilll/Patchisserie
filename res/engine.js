@@ -40563,6 +40563,8 @@ registerProcessor('${name3}', MyProcessor);
       const hydraBefore = strudelGlobals !== void 0;
       restoreStrudel();
       hydraCalled = false;
+      const sizeBefore = userSize;
+      userSize = false;
       said.clear();
       midiSaid = false;
       try {
@@ -40575,6 +40577,7 @@ registerProcessor('${name3}', MyProcessor);
         [previous, previousId, patternId] = [before, patternId, id2];
         return { ok: true };
       }
+      userSize ||= sizeBefore;
       if (hydraBefore && !strudelGlobals) installHydra();
       const line = evalError.loc?.line ?? Number(/^\[mini\] parse error at line (\d+)/.exec(evalError.message)?.[1]);
       return line ? { ok: false, error: evalError.message, line } : { ok: false, error: evalError.message };
@@ -40707,10 +40710,14 @@ registerProcessor('${name3}', MyProcessor);
      * `cycle`, with Meyda's loudness of the AUDIO input (24 Bark bands, total). Returns null (no Hydra, or its fps
      * skipped this frame) or [display (-1: render() all four, 0-3: render(oN)), time, width, height, then per output:
      * its program id (0: none), n, its n uniform values]. Hydra's bpm stays its own (30, or what the code sets), as on
-     * strudel.cc: its arrays (fast(), smooth()) run at that pace.
+     * strudel.cc: its arrays (fast(), smooth()) run at that pace. `width` x `height` (when > 0): the canvas size wanted
+     * by the UI (the output window's, or the preview's aspect), which width, height and `resolution` follow unless the
+     * code's setResolution() holds.
      */
-    hydraFrame(time4, cycle, specific, total) {
+    hydraFrame(time4, cycle, specific, total, width = 0, height2 = 0) {
       if (!hydra) return null;
+      if (!userSize && width > 0 && height2 > 0 && (width !== hydra.canvas.width || height2 !== hydra.canvas.height))
+        hydra.resizeTo(width, height2);
       frameCycle = cycle;
       features = { loudness: { specific, total } };
       const dt2 = frameTime === void 0 ? 0 : Math.max(0, time4 - frameTime) * 1e3;
@@ -40725,6 +40732,7 @@ registerProcessor('${name3}', MyProcessor);
     },
     /** Hydra's hush(): every output black, update() a no-op (Filo's STOP, an evaluate without initHydra()). */
     hydraHush() {
+      userSize = false;
       if (hydra && visible) once(() => hydra.hush());
       visible = false;
     },
@@ -40758,6 +40766,7 @@ registerProcessor('${name3}', MyProcessor);
   var hydra;
   var strudelGlobals;
   var hydraCalled = false;
+  var userSize = false;
   var visible = false;
   var features = null;
   var [frameTime, frameCycle, ticked] = [void 0, 0, false];
@@ -40803,6 +40812,18 @@ registerProcessor('${name3}', MyProcessor);
       Promise.resolve().then(() => (init_audio(), audio_exports))
     ]);
     class Hydra2 extends HydraRenderer2 {
+      setResolution(w3, h4) {
+        userSize = true;
+        super.setResolution(w3, h4);
+      }
+      // setResolution() without its console.log()s; the outputs' resize() is a no-op here.
+      resizeTo(w3, h4) {
+        this.canvas.width = this.width = w3;
+        this.canvas.height = this.height = h4;
+        this.sandbox.set("width", w3);
+        this.sandbox.set("height", h4);
+        this.s.forEach((s2) => s2.resize(w3, h4));
+      }
       _initRegl() {
         this.regl = regl;
         this.renderAll = this.renderFbo = () => {

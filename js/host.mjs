@@ -343,6 +343,8 @@ const api = (globalThis.__patchisserie = {
     const hydraBefore = strudelGlobals !== undefined;
     restoreStrudel(); // Strudel's names again, unless this code calls initHydra()
     hydraCalled = false;
+    const sizeBefore = userSize;
+    userSize = false; // setResolution() holds until an evaluate without it
     said.clear();
     midiSaid = false;
     try {
@@ -355,6 +357,7 @@ const api = (globalThis.__patchisserie = {
       [previous, previousId, patternId] = [before, patternId, id];
       return { ok: true };
     }
+    userSize ||= sizeBefore; // the previous code plays on
     if (hydraBefore && !strudelGlobals) installHydra(); // the previous code plays on, with its Hydra globals
     // acorn syntax errors carry loc; mini-notation errors only say "at line N" in the message.
     const line = evalError.loc?.line ?? Number(/^\[mini\] parse error at line (\d+)/.exec(evalError.message)?.[1]);
@@ -510,10 +513,14 @@ const api = (globalThis.__patchisserie = {
    * `cycle`, with Meyda's loudness of the AUDIO input (24 Bark bands, total). Returns null (no Hydra, or its fps
    * skipped this frame) or [display (-1: render() all four, 0-3: render(oN)), time, width, height, then per output:
    * its program id (0: none), n, its n uniform values]. Hydra's bpm stays its own (30, or what the code sets), as on
-   * strudel.cc: its arrays (fast(), smooth()) run at that pace.
+   * strudel.cc: its arrays (fast(), smooth()) run at that pace. `width` x `height` (when > 0): the canvas size wanted
+   * by the UI (the output window's, or the preview's aspect), which width, height and `resolution` follow unless the
+   * code's setResolution() holds.
    */
-  hydraFrame(time, cycle, specific, total) {
+  hydraFrame(time, cycle, specific, total, width = 0, height = 0) {
     if (!hydra) return null;
+    if (!userSize && width > 0 && height > 0 && (width !== hydra.canvas.width || height !== hydra.canvas.height))
+      hydra.resizeTo(width, height);
     frameCycle = cycle;
     features = { loudness: { specific, total } };
     const dt = frameTime === undefined ? 0 : Math.max(0, time - frameTime) * 1000;
@@ -528,6 +535,7 @@ const api = (globalThis.__patchisserie = {
   },
   /** Hydra's hush(): every output black, update() a no-op (Filo's STOP, an evaluate without initHydra()). */
   hydraHush() {
+    userSize = false;
     if (hydra && visible) once(() => hydra.hush());
     visible = false;
   },
@@ -573,6 +581,7 @@ core.Pattern.prototype.piano = function () {
 let hydraReady, hydra; // the renderer, created by the first initHydra()
 let strudelGlobals; // while Hydra's are installed: the globals they replaced, name -> property descriptor or undefined
 let hydraCalled = false; // initHydra() ran in this evaluate
+let userSize = false; // the code called setResolution(): it, not the UI's size, is the canvas
 let visible = false; // something drew (or an image loads) since the last hush
 let features = null; // this frame's AUDIO analysis, as Meyda's features (hydra-synth's Audio reads it)
 let [frameTime, frameCycle, ticked] = [undefined, 0, false];
@@ -625,6 +634,18 @@ async function createHydra() {
     import('hydra-synth/src/lib/audio.js'),
   ]);
   class Hydra extends HydraRenderer {
+    setResolution(w, h) {
+      userSize = true;
+      super.setResolution(w, h);
+    }
+    // setResolution() without its console.log()s; the outputs' resize() is a no-op here.
+    resizeTo(w, h) {
+      this.canvas.width = this.width = w;
+      this.canvas.height = this.height = h;
+      this.sandbox.set('width', w);
+      this.sandbox.set('height', h);
+      this.s.forEach((s) => s.resize(w, h));
+    }
     _initRegl() {
       this.regl = regl;
       this.renderAll = this.renderFbo = () => {};

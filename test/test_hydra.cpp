@@ -163,3 +163,13 @@ TEST(exchange_sources_change_ids_and_clear) {
 	CHECK(x.source(0, b, got) && got.id == 0 && got.path.empty());
 	CHECK(x.setSource(0, s) > b);
 }
+
+TEST(canvas_size_follows_the_window_else_the_preview_aspect) {
+	float aspect = 138.4f / 111.6f; // Icing's preview
+	hydra::CanvasSize closed = hydra::canvasSize(0, 0, aspect);
+	CHECK(closed == (hydra::CanvasSize{1280, 1032}));
+	CHECK(hydra::canvasSize(0, 600, aspect) == closed); // no framebuffer yet
+	CHECK(hydra::canvasSize(1920, 1080, aspect) == (hydra::CanvasSize{1920, 1080}));
+	CHECK(hydra::canvasSize(5120, 2880, aspect) == (hydra::CanvasSize{4096, 2880})); // clamped to the 4096 max
+	CHECK(hydra::canvasSize(0, 0, 0.5f) == (hydra::CanvasSize{640, 1280}));          // portrait: the long side is 1280
+}

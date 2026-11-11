@@ -209,7 +209,7 @@ Image readBack(const hydra::Renderer& renderer, int w, int h) {
 	glViewport(0, 0, w, h);
 	glClearColor(0, 0, 0, 0);
 	glClear(GL_COLOR_BUFFER_BIT);
-	renderer.present();
+	renderer.present(w, h);
 	Image im;
 	im.w = w, im.h = h;
 	im.px.resize(4 * (size_t)w * h);
@@ -393,6 +393,41 @@ int main() {
 					png.c_str(), 100 * im.lit(), im.ripple(1, 0), im.ripple(0, 1),
 					why.empty() ? "ok" : ("FAIL " + why).c_str());
 		failures += shaderFailed || !why.empty();
+	}
+	// The canvas follows its window: the preview's aspect, 16:9, and back. Every size draws and leaves no GL error.
+	std::printf("canvas resize\n");
+	{
+		renderer.reset();
+		uint32_t id = engine.evaluate("await initHydra()\nhush()\nosc(10, 0.1, 1).out()", false);
+		for (double until = now() + 60; engine.report().id != id && now() < until;) {
+			runAudio(engine, 256);
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		}
+		std::string why;
+		for (hydra::CanvasSize size : {hydra::CanvasSize{1280, 1032}, {1920, 1080}, {1280, 1032}, {800, 1200}}) {
+			hydra::Exchange::Frame f;
+			for (int i = 0; i < 4 && why.empty(); i++) {
+				hydra::Exchange::Request q;
+				q.time = t += 1.0 / 60;
+				q.width = size.w, q.height = size.h;
+				engine.hydra.request(q);
+				for (double until = now() + 2; !engine.hydra.frame(seen, f) && now() < until;)
+					runAudio(engine, 64);
+				seen = f.seq;
+				renderer.update(vg, engine.hydra, [&](const std::string& line) { why = line; });
+			}
+			Image im = readBack(renderer, size.w, size.h);
+			GLenum error = glGetError();
+			std::printf("  %dx%d: frame %dx%d, %.1f %% lit\n", size.w, size.h, f.width, f.height, 100 * im.lit());
+			if (why.empty())
+				why = error ? "GL error " + std::to_string(error)
+					  : f.width != size.w || f.height != size.h
+						  ? "the frame is not " + std::to_string(size.w) + "x" + std::to_string(size.h)
+					  : im.lit() < 0.2 ? "nothing drawn"
+									   : "";
+		}
+		std::printf("  -> %s\n", why.empty() ? "ok" : ("FAIL " + why).c_str());
+		failures += !why.empty();
 	}
 	std::printf("editor window\n");
 	std::string why = editorWindow(win);
