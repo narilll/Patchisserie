@@ -5,6 +5,7 @@
 // and what each image looks like; exits 1 when a shader fails or an image isn't what hydra draws.
 #include <rack.hpp>
 
+#include <array>
 #include <chrono>
 #include <cstdio>
 #include <thread>
@@ -49,6 +50,7 @@ struct Case {
 	std::string code;                               // after initHydra() and hush()
 	std::function<std::string(const Image&)> check; // "" when it looks like hydra's, else what is wrong
 	int frames = 30;
+	const char* error = nullptr; // the Renderer's error line this case must give (part of it)
 };
 
 std::string atLeast(const Image& im, double lit) {
@@ -56,6 +58,44 @@ std::string atLeast(const Image& im, double lit) {
 }
 
 const char kLibColorUrl[] = "https://metagrowing.org/extra-shaders-for-hydra/lib-color.js";
+// test/fixtures/quadrants.png: 2x2, red top left, green top right, blue bottom left, white bottom right. Not an
+// image: lib-color.js. Missing: the download fails.
+const char kQuadrantsUrl[] = "https://example.com/quadrants.png";
+const char kNotAnImageUrl[] = "https://example.com/lib-color.png";
+const char kMissingUrl[] = "https://example.com/missing.png";
+
+using Rgba = std::array<int, 4>;
+const Rgba kRed{255, 0, 0, 255}, kGreen{0, 255, 0, 255}, kBlue{0, 0, 255, 255}, kWhite{255, 255, 255, 255};
+struct Probe {
+	double x, y; // hydra's st: x to the right, y down from the canvas top
+	Rgba rgba;
+};
+/** The pixels hydra-synth's own WebGL renderer gives for the same sketch (Chrome, read back with regl.read()). */
+std::function<std::string(const Image&)> pixels(std::vector<Probe> want) {
+	return [=](const Image& im) {
+		for (const Probe& p : want) {
+			const uint8_t* got = im.at((int)(p.x * im.w), im.h - 1 - (int)(p.y * im.h));
+			if (!std::equal(got, got + 4, p.rgba.begin())) {
+				char s[128];
+				std::snprintf(s, sizeof s, "at %g, %g: %d %d %d %d, hydra: %d %d %d %d", p.x, p.y, got[0], got[1],
+							  got[2], got[3], p.rgba[0], p.rgba[1], p.rgba[2], p.rgba[3]);
+				return std::string(s);
+			}
+		}
+		return std::string();
+	};
+}
+/** sN.initImage(url) as hydra.ojack.xyz writes it, the image in the disk cache already, as after a first run: the
+frames don't wait for a download (test_engine.cpp's engine_hydra_image_source does). */
+std::string initImage(int n, const char* url) {
+	return std::string("await fetch('") + url + "')\ns" + std::to_string(n) + ".initImage(\"" + url + "\")\n";
+}
+std::string transparent(const Image& im) {
+	for (uint8_t c : im.px)
+		if (c)
+			return "not transparent black everywhere";
+	return "";
+}
 
 std::vector<Case> cases() {
 	auto lit = [](double share) { return [=](const Image& im) { return atLeast(im, share); }; };
@@ -115,6 +155,32 @@ std::vector<Case> cases() {
 			 "\")\nosc(3, 0.5, 1).rotate(() => -0.17 * time).colreflect(osc(12, 0.23, 1).rotate(() => 0.1 * time), "
 			 "0.3).out(o0)\nrender(o0)",
 		 lit(0.5)},
+		// initImage(): upright as on hydra's canvas, stretched over it, nearest; its texture where src(s0) reads.
+		{"initImage src(s0)", initImage(0, kQuadrantsUrl) + "src(s0).out()",
+		 pixels({{0.01, 0.01, kRed},
+				 {0.99, 0.01, kGreen},
+				 {0.01, 0.99, kBlue},
+				 {0.99, 0.99, kWhite},
+				 {0.3, 0.3, kRed},
+				 {0.45, 0.45, kRed},
+				 {0.55, 0.55, kWhite},
+				 {0.7, 0.7, kWhite},
+				 {0.49, 0.25, kRed},
+				 {0.51, 0.25, kGreen}})},
+		// modulate: st + 0.05 (sin(5 st.x) + 1) in x and y, wrapped by src()'s fract() (red in the blue quadrant).
+		{"initImage modulate", initImage(0, kQuadrantsUrl) + "src(s0).modulate(osc(5, 0), .1).out()",
+		 pixels({{0.45, 0.25, kGreen},
+				 {0.3, 0.95, kRed},
+				 {0.1, 0.75, kBlue},
+				 {0.7, 0.7, kWhite},
+				 {0.38, 0.25, kRed},
+				 {0.43, 0.25, kGreen}})},
+		// Before (or without) an image a source is hydra-synth's 1x1 texture of zeros; after clear() too.
+		{"initImage missing", std::string("s1.initImage(\"") + kMissingUrl + "\")\nsrc(s1).out()", transparent},
+		{"initImage clear()", // after the image: initImage()'s fetch settles first
+		 initImage(0, kQuadrantsUrl) + "src(s0).out()\nawait fetch('" + kQuadrantsUrl + "')\ns0.clear()", transparent},
+		{"initImage not an image", initImage(2, kNotAnImageUrl) + "src(s2).out()", transparent, 30,
+		 "s2.initImage(): https://example.com/lib-color.png: not an image"},
 	};
 }
 
@@ -195,7 +261,10 @@ int main() {
 	std::string cache = "build/glcheck-out/cache";
 	rack::system::removeRecursively(cache);
 	fetch::Worker web(cache, [](const std::string& url, const std::string& file) {
-		return url == kLibColorUrl && rack::system::copy("test/fixtures/lib-color.js", file);
+		const char* fixture = url == kLibColorUrl || url == kNotAnImageUrl ? "test/fixtures/lib-color.js"
+							  : url == kQuadrantsUrl                       ? "test/fixtures/quadrants.png"
+																		   : nullptr;
+		return fixture && rack::system::copy(fixture, file);
 	});
 	filo::EngineConfig c;
 	c.resDir = "res";
@@ -226,7 +295,7 @@ int main() {
 			continue;
 		}
 		hydra::Exchange::Frame f;
-		bool shaderFailed = false;
+		bool shaderFailed = false, errorSeen = false;
 		for (int i = 0; i < k.frames; i++) {
 			hydra::Exchange::Request q;
 			q.time = t += 1.0 / 60;
@@ -235,8 +304,10 @@ int main() {
 				runAudio(engine, 64);
 			seen = f.seq;
 			renderer.update(vg, engine.hydra, [&](const std::string& line) {
-				std::printf("  FAIL %s\n", line.c_str());
-				shaderFailed = true;
+				bool expected = k.error && line.find(k.error) != std::string::npos;
+				std::printf("  %s %s\n", expected ? "error, as expected:" : "FAIL", line.c_str());
+				errorSeen |= expected;
+				shaderFailed |= !expected;
 			});
 		}
 		for (int o = 0; o < hydra::Exchange::kOutputs; o++) {
@@ -249,7 +320,9 @@ int main() {
 		}
 		Image im = readBack(renderer, f.width, f.height);
 		GLenum error = glGetError();
-		std::string why = error ? "GL error " + std::to_string(error) : k.check(im);
+		std::string why = error                   ? "GL error " + std::to_string(error)
+						  : k.error && !errorSeen ? std::string("no error \"") + k.error + "\""
+												  : k.check(im);
 		std::string png = "build/glcheck-out/" + std::to_string(&k - &all[0]) + ".png";
 		stbi_write_png(png.c_str(), im.w, im.h, 4, im.at(0, im.h - 1), -4 * im.w); // top row first
 		std::printf("  %dx%d after %d frames (%s): %.1f %% lit, ripple x %.2f y %.2f -> %s\n", im.w, im.h, k.frames,

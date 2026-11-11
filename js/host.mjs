@@ -12,20 +12,83 @@ import { H } from '@strudel/hydra';
 
 // Same scope as strudel.cc (website/src/repl/util.mjs loadModules) minus visual/IO packages; soundfonts join in
 // initAudio(). Of @strudel/hydra: its H() and our initHydra(); hydra.ojack.xyz's loadScript(); @strudel/midi's midin()
-// and midikeys() (below).
-const ready = core.evalScope(core, edo, tonal, mini, xen, webaudio, { H, initHydra, loadScript, midin, midikeys });
+// and midikeys(); stand-ins for strudel.cc's editor slider, gamepad, motion and Csound loaders (below).
+const ready = core.evalScope(core, edo, tonal, mini, xen, webaudio, {
+  ...{ H, initHydra, loadScript, midin, midikeys, slider, sliderWithID, gamepad, ...motion() },
+  ...{ loadCsound, loadCSound: loadCsound, loadcsound: loadCsound, loadOrc: loadCsound },
+});
 
-// Strudel's canvas visuals need a canvas, which Rack doesn't have (out of v1). As upstream without a `window` (ours is
-// for superdough): .draw() returns the pattern, so .scope(), .spiral() etc. play on and draw nothing; the few that
-// take a canvas before drawing do the same. They warn once.
-let drawSaid = false;
+// What Rack doesn't do is ignored, so code from strudel.cc and hydra.ojack.xyz runs as is: one log line each, once
+// per runtime.
+const ignored = new Set();
+const ignore = (key, line) => ignored.has(key) || (ignored.add(key), console.warn(line));
+
+// Strudel's canvas visuals and editor widgets need a canvas or the editor, which Rack doesn't have (out of v1). As
+// upstream without a `window` (ours is for superdough): .draw() returns the pattern, so .scope(), .spiral() etc. play
+// on and draw nothing; the few that take a canvas before drawing, the inline widgets and .markcss() do the same.
 const noCanvas = (result) =>
   function () {
-    if (!drawSaid) (drawSaid = true), console.warn('[draw] Strudel canvas visuals (scope, pianoroll, ...) are not shown in Rack');
+    ignore('draw', '[draw] Strudel canvas visuals and editor widgets (scope, pianoroll, ...) are not shown in Rack');
     return result ?? this;
   };
-for (const name of ['draw', 'pianoroll', 'pitchwheel']) core.Pattern.prototype[name] = noCanvas();
+const widgets = ['_scope', '_pianoroll', '_punchcard', '_spiral', '_pitchwheel', 'markcss'];
+for (const name of ['draw', 'pianoroll', 'pitchwheel', ...widgets]) core.Pattern.prototype[name] = noCanvas();
 core.Pattern.prototype.animate = noCanvas(core.silence);
+// strudel.cc's slider(value, min, max, step), which its transpiler makes sliderWithID(id, value, min, max): the value.
+function slider(value) {
+  ignore('slider', "[slider] slider() is strudel.cc's editor widget: in Rack it stays at its value");
+  return core.pure(value);
+}
+function sliderWithID(id, value) {
+  return slider(value);
+}
+
+// Strudel's outputs Rack doesn't bundle send nothing: the pattern is left as it is, so it plays through superdough.
+const elsewhere = { osc: 'OSC (SuperDirt)', serial: 'serial', csound: 'Csound', csoundm: 'Csound', mqtt: 'MQTT' };
+for (const [name, what] of Object.entries(elsewhere))
+  core.Pattern.prototype[name] = function () {
+    ignore(name, `[${name}] .${name}(): ${what} is not available in Rack, the pattern plays through superdough`);
+    return this;
+  };
+async function loadCsound() {
+  ignore('loadCsound', '[csound] Csound is not available in Rack: loadCsound() does nothing');
+}
+
+// @strudel/gamepad's gamepad(index), in its shape: every axis and button 0 (Rack has no gamepad input).
+function gamepad() {
+  ignore('gamepad', '[gamepad] gamepad() is not available in Rack: its axes and buttons stay 0');
+  const zero = core.signal(() => 0);
+  const axes = { x1: zero, y1: zero, x2: zero, y2: zero };
+  for (const k of Object.keys(axes)) axes[`${k}_2`] = zero.toBipolar();
+  const keys = 'a b x y lb rb lt rt back start l3 ls r3 rs u up d down l left r right'.split(' '); // its buttonMap
+  const sequence = () => core.signal(() => false);
+  return {
+    ...axes,
+    buttons: Array.from({ length: 16 }, () => ({ value: zero, toggle: zero })),
+    ...Object.fromEntries(keys.flatMap((k) => [k, k.toUpperCase(), `tgl${k}`, `tgl${k.toUpperCase()}`].map((n) => [n, zero]))),
+    ...{ checkSequence: sequence, btnSequence: sequence, btnSeq: sequence, btnseq: sequence },
+    raw: core.signal((t) => ({ axes: [0, 0, 0, 0], buttons: Array(16).fill(0), t })),
+  };
+}
+
+// @strudel/motion's signals at 0, upstream's value until a motion event (Rack has none); enableMotion() does nothing.
+function motion() {
+  const none = () => ignore('motion', '[motion] device motion is not available in Rack: its signals stay 0');
+  const still = core.signal(() => (none(), 0));
+  return {
+    enableMotion: async () => none(),
+    ...Object.fromEntries(
+      `accelerationX accelerationY accelerationZ accX accY accZ gravityX gravityY gravityZ gravX gravY gravZ
+      orientationAlpha orientationBeta orientationGamma orientationA orientationB orientationG orientationX
+      orientationY orientationZ oriA oriB oriG oriX oriY oriZ absoluteOrientationAlpha absoluteOrientationBeta
+      absoluteOrientationGamma absOriA absOriB absOriG absoluteOrientationX absoluteOrientationY absoluteOrientationZ
+      absOriX absOriY absOriZ rotationAlpha rotationBeta rotationGamma rotationX rotationY rotationZ rotA rotB rotG
+      rotX rotY rotZ`
+        .split(/\s+/)
+        .map((n) => [n, still]),
+    ),
+  };
+}
 
 let evalError;
 let seconds = 0; // playback position of the last tick()
@@ -471,6 +534,10 @@ const api = (globalThis.__patchisserie = {
   },
   /** Drains the programs collected by the default hydraProgram. */
   hydraPrograms: () => hydraPrograms.splice(0),
+  /** Where initImage()'s images go once fetched (source 0-3, its URL; "": none); the engine replaces it. */
+  hydraSource: (source, url) => hydraSources.push({ source, url }),
+  /** Drains the images collected by the default hydraSource. */
+  hydraSources: () => hydraSources.splice(0),
 
   // Test seam: the upstream tune regression stringifies haps with hap.show() like Strudel's own test.
   get pattern() {
@@ -501,10 +568,11 @@ core.Pattern.prototype.piano = function () {
 let hydraReady, hydra; // the renderer, created by the first initHydra()
 let strudelGlobals; // while Hydra's are installed: the globals they replaced, name -> property descriptor or undefined
 let hydraCalled = false; // initHydra() ran in this evaluate
-let visible = false; // something drew since the last hush
+let visible = false; // something drew (or an image loads) since the last hush
 let features = null; // this frame's AUDIO analysis, as Meyda's features (hydra-synth's Audio reads it)
 let [frameTime, frameCycle, ticked] = [undefined, 0, false];
 const hydraPrograms = []; // where programs go without an engine (tests): see hydraProgram
+const hydraSources = []; // where images go without an engine (tests): see hydraSource
 let programs = 0;
 scheduler.now = () => frameCycle; // Strudel's getTime() (H()): the cycle Filo plays at the frame
 
@@ -521,13 +589,15 @@ class Output {
     visible = true;
   }
   tick(props) {
-    // A sampler's value is its output's index (src/hydra.cpp samples that output's other buffer); -1: a source. A
+    // A sampler's value is its output's index (src/hydra.cpp samples that output's other buffer), or 4 + a source's
+    // (src/hydra.cpp's Exchange::kOutputs + 0-3: its image, transparent black without one); -1: neither. A
     // float's is what WebGL's uniform1f() makes of it, ToNumber(): an array index out of range (undefined) is NaN, as
     // hydra-synth's smooth() before its first step; NaN reaches glUniform1f() as it does WebGL's. An RGBA8 buffer
     // can't keep it (Apple's GL stores 0, as Chrome's WebGL does): feedback recovers with the next finite frame.
     this.values = this.fns.map((f, i) => {
       const v = f({}, props);
-      return v instanceof Output ? v.id : this.samplers[i] ? -1 : Number(v);
+      const source = hydra.s.indexOf(v);
+      return v instanceof Output ? v.id : this.samplers[i] ? (source < 0 ? -1 : 4 + source) : Number(v);
     });
     ticked = true;
   }
@@ -541,7 +611,7 @@ class Output {
 }
 
 const regl = { texture: () => ({}), _refresh: () => {} }; // what hydra-synth's sources and setResolution() still call
-const external = ['init', 'initCam', 'initImage', 'initVideo', 'initScreen', 'initStream'];
+const external = ['init', 'initCam', 'initVideo', 'initScreen', 'initStream'];
 
 async function createHydra() {
   // Loaded here, not at startup: hydra-synth's module body needs window.addEventListener (src/audio/webaudio.js).
@@ -585,10 +655,21 @@ async function createHydra() {
     enableStreamCapture: false,
   });
   h.s.forEach((s, i) => {
-    for (const m of external)
-      s[m] = () => {
-        throw new Error(`s${i}.${m}(): Hydra's external sources are not available in Icing`);
-      };
+    for (const m of external) // as a source that never loads: it stays empty
+      s[m] = () => ignore('sources', `[hydra] s${i}.${m}(): camera, video, screen and stream sources are not available in Icing`);
+    // hydra-synth's initImage(url): the image becomes the source's texture once loaded; until then the source keeps
+    // what it had. Fetched like samples (https, disk cache); src/hydra.cpp decodes the file on Rack's UI thread. A
+    // failure is logged, the code runs on.
+    // ponytail: params (regl's texture options) are ignored: nearest, clamp, as hydra-synth's defaults.
+    s.initImage = (url = '') => {
+      visible = true; // hush() clears it
+      fetch(url).then(
+        () => api.hydraSource(i, String(url)),
+        (e) => console.error(`[hydra] s${i}.initImage(): ${e?.message ?? e}`),
+      );
+    };
+    s.clear = () => api.hydraSource(i, ''); // hydra-synth's: transparent black, as before an image
+    s.getTexture = () => s; // Output.tick()
   });
   return h;
 }
@@ -617,11 +698,13 @@ async function loadScript(url) {
     throw new Error(`loadScript ${url}: ${e}`); // with its kind: SyntaxError, ReferenceError (DOM), ...
   }
 }
-// hydra.ojack.xyz's loadScript("https://...") as written: its string is not mini-notation (Strudel's double quotes).
+// hydra.ojack.xyz's loadScript("https://...") and s0.initImage("https://...") as written: their strings are not
+// mini-notation (Strudel's double quotes).
 registerTranspilerPlugin({
   walk: () => ({
     enter(node) {
-      if (node.type !== 'CallExpression' || node.callee.name !== 'loadScript') return;
+      const { type, callee } = node;
+      if (type !== 'CallExpression' || (callee.name !== 'loadScript' && callee.property?.name !== 'initImage')) return;
       this.skip();
       return true;
     },

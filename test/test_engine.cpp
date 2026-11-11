@@ -793,3 +793,30 @@ TEST(engine_hydra_frames) {
 	run(1);
 	CHECK(r->gateRiseAfter(a) && f.values[0].size() == 2);
 }
+
+// initImage(): fetched into the disk cache (http:// upgraded) or found locally, then source N is that file for Icing's
+// UI thread to load; a failed download is logged; STOP clears the images.
+TEST(engine_hydra_image_source) {
+	auto r = std::make_unique<Rig>("engine-hydra-image");
+	r->download = [](const std::string& url, const std::string& file) {
+		if (url != "https://test.invalid/a.png")
+			return false;
+		std::ofstream(file, std::ios::binary) << "png";
+		return true;
+	};
+	hydra::Exchange& x = r->engine->hydra;
+	hydra::Exchange::Source s0, s1, s;
+	CHECK(r->evaluate("await initHydra()\ns0.initImage(\"http://test.invalid/a.png\")\n"
+					  "s1.initImage('localsamples:bd/kick.wav')\ns2.initImage('https://test.invalid/missing.png')\n"
+					  "src(s0).modulate(s1).out()"));
+	CHECK(r->until([&] { return x.source(0, 0, s0) && x.source(1, 0, s1); }, 10));
+	CHECK(s0.url == "http://test.invalid/a.png");
+	CHECK(s0.path == fetch::cachePath(r->dir + "/cache", "https://test.invalid/a.png"));
+	CHECK(s1.url == "localsamples:bd/kick.wav" && s1.path == fetch::inside(r->dir + "/samples", "bd/kick.wav"));
+	CHECK(r->until(
+		[&] { return r->logged("[hydra] s2.initImage(): fetch https://test.invalid/missing.png: download failed"); },
+		10));
+	CHECK(!x.source(2, 0, s));
+	r->engine->stop();
+	CHECK(r->until([&] { return x.source(0, s0.id, s) && s.path.empty(); }, 10));
+}

@@ -1,6 +1,9 @@
 #include "hydra.hpp"
 
+#include <climits>
+
 #include <rack.hpp>
+#include <stb_image.h> // libRack's (NanoVG's image loader)
 
 #if defined ARCH_MAC
 #include <objc/message.h>
@@ -213,6 +216,45 @@ static void deleteFb(NVGLUframebuffer*& fb) {
 	fb = nullptr;
 }
 
+/** An RGBA texture of `rgba` (rows from the top) with hydra-synth's regl.texture() defaults: nearest, clamp, and
+WebGL's flipY false (the top row at t = 0, which hydra's canvas shows at the top). Binds unit 0's texture. */
+static GLuint texture(int w, int h, const void* rgba) {
+	GLuint t = 0;
+	glGenTextures(1, &t);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, t);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba); // RGBA rows: any alignment
+	return t;
+}
+
+/** stb_image's RGBA of the file at `path` (PNG, JPEG, BMP, GIF's first frame, ...), or null and why. */
+static stbi_uc* decode(const std::string& path, int& w, int& h, std::string& why) {
+	std::vector<uint8_t> bytes;
+	try {
+		bytes = rack::system::readFile(path); // UTF-8 paths on Windows too, unlike stbi_load()
+	} catch (const std::exception& e) {
+		why = e.what();
+		return nullptr;
+	}
+	int n = 0, size = (int)std::min<size_t>(bytes.size(), INT_MAX);
+	if (!stbi_info_from_memory(bytes.data(), size, &w, &h, &n)) {
+		why = std::string("not an image (") + stbi_failure_reason() + ")";
+		return nullptr;
+	}
+	if (w > kMaxSize || h > kMaxSize) { // as the canvas
+		why = std::to_string(w) + "x" + std::to_string(h) + " is too large (" + std::to_string(kMaxSize) + " at most)";
+		return nullptr;
+	}
+	stbi_uc* px = stbi_load_from_memory(bytes.data(), size, &w, &h, &n, 4);
+	if (!px)
+		why = std::string("cannot decode it (") + stbi_failure_reason() + ")";
+	return px;
+}
+
 void Renderer::update(NVGcontext* vg, const Exchange& x, const Error& error) {
 	if (failed_)
 		return;
@@ -226,11 +268,19 @@ void Renderer::update(NVGcontext* vg, const Exchange& x, const Error& error) {
 			failed_ = true;
 			return;
 		}
+		SavedGlState saved;
+		const uint8_t zero[4] = {};
+		none_ = texture(1, 1, zero);
 	}
 	for (int i = 0; i < Exchange::kOutputs; i++) {
 		Exchange::Program p;
 		if (x.program(i, programs_[i].id, p))
 			compile(i, p, error);
+	}
+	for (int i = 0; i < Exchange::kSources; i++) {
+		Exchange::Source s;
+		if (x.source(i, sources_[i].id, s))
+			load(i, s, error);
 	}
 	Exchange::Frame f;
 	if (x.frame(seq_, f)) {
@@ -260,6 +310,35 @@ void Renderer::compile(int output, const Exchange::Program& p, const Error& erro
 		q.locations.push_back(glGetUniformLocation(q.gl, name.c_str()));
 	q.samplers = p.samplers;
 	q.samplers.resize(q.locations.size());
+}
+
+void Renderer::load(int source, const Exchange::Source& s, const Error& error) {
+	Source& t = sources_[source];
+	t.id = s.id;
+	// ponytail: the same file again (an evaluate repeating initImage()) is not decoded again; a local file edited since
+	// needs a new name or a restart.
+	if (s.path == t.path)
+		return;
+	if (s.path.empty()) {                // clear(), hush()
+		glDeleteTextures(1, &t.texture); // 0 is ignored
+		t.texture = 0;
+		t.path.clear();
+		return;
+	}
+	// ponytail: decoded on the UI thread, a frame's hitch for a large image (~0.1 s for 1920x1080). A decode thread if
+	// that shows.
+	int w = 0, h = 0;
+	std::string why;
+	stbi_uc* px = decode(s.path, w, h, why);
+	if (!px) { // the source keeps its last image, as hydra-synth's when an image doesn't load
+		error("[hydra] s" + std::to_string(source) + ".initImage(): " + s.url + ": " + why);
+		return;
+	}
+	SavedGlState saved;
+	glDeleteTextures(1, &t.texture);
+	t.texture = texture(w, h, px);
+	t.path = s.path;
+	stbi_image_free(px);
 }
 
 unsigned Renderer::other(int output) const {
@@ -307,8 +386,10 @@ void Renderer::render(NVGcontext* vg, const Exchange::Frame& f) {
 				glUniform1f(p.locations[k], v[k]); // -1 (optimized out) is ignored
 				continue;
 			}
-			bool output = v[k] >= 0 && v[k] < Exchange::kOutputs; // false for NaN
-			bindSampler(p.locations[k], output ? other((int)v[k]) : 0, unit);
+			float s = v[k] - Exchange::kOutputs;
+			bool output = v[k] >= 0 && v[k] < Exchange::kOutputs, source = s >= 0 && s < Exchange::kSources; // NaN: no
+			GLuint image = source ? sources_[(int)s].texture : 0;
+			bindSampler(p.locations[k], output ? other((int)v[k]) : image ? image : none_, unit);
 		}
 		drawTriangle();
 	}
@@ -360,6 +441,10 @@ void Renderer::reset() {
 		glDeleteProgram(p.gl); // 0 is ignored
 		p = Program();
 	}
+	for (Source& s : sources_) {
+		glDeleteTextures(1, &s.texture);
+		s = Source();
+	}
 	seq_ = 0;
 	clearImages();
 }
@@ -385,6 +470,9 @@ void Renderer::destroy() {
 		glDeleteProgram(p.gl); // 0 is ignored
 	for (unsigned p : {one_, all_, blit_})
 		glDeleteProgram(p);
+	for (Source& s : sources_)
+		glDeleteTextures(1, &s.texture);
+	glDeleteTextures(1, &none_);
 	*this = Renderer();
 }
 

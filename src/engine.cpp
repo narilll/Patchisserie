@@ -98,13 +98,14 @@ const char* kPrelude = R"js((function (native) {
 }))js";
 
 // After res/engine.js: superdough, the local samples (registered again after strudel.cc's online maps, so local names
-// win), the .midi() event, highlight and Hydra shader sinks, the MIDI input, and what the C++ loop calls.
+// win), the .midi() event, highlight and Hydra shader and image sinks, the MIDI input, and what the C++ loop calls.
 const char* kGlue = R"js((function (native, local) {
   'use strict';
   const host = __patchisserie;
   host.rackEvent = native.rack;
   host.rackHighlight = native.highlight;
   host.hydraProgram = native.hydraProgram;
+  host.hydraSource = native.hydraSource;
   host.midiCC = native.midiCC;
   host.midiDevice = native.midiDevice;
   const register = (map) => map && samples(map, 'localsamples:', { prebake: true, tag: 'local' });
@@ -370,6 +371,22 @@ struct Engine::Js {
 		return JS_NewUint32(ctx, self(ctx)->e->hydra.setProgram(output, std::move(p)));
 	}
 
+	/** host.hydraSource(source, url): initImage()'s image, fetched already (the file behind url), or none (""). */
+	static JSValue nHydraSource(JSContext* ctx, JSValueConst, int, JSValueConst* argv) {
+		Js* js = self(ctx);
+		int32_t source = 0;
+		JS_ToInt32(ctx, &source, argv[0]);
+		if (source < 0 || source >= hydra::Exchange::kSources)
+			return JS_ThrowRangeError(ctx, "no source s%d", source);
+		hydra::Exchange::Source s;
+		s.url = str(ctx, argv[1]);
+		std::string url = s.url;
+		if (!url.empty())
+			s.path = js->file(url);
+		js->e->hydra.setSource(source, std::move(s));
+		return JS_UNDEFINED;
+	}
+
 	/** host.midiCC(cc, chan): that CC's latest value (0..1) on MIDI channel chan (1-16; 0: any); 0 before one
 	arrives, and for numbers out of range. */
 	static JSValue nMidiCC(JSContext* ctx, JSValueConst, int, JSValueConst* argv) {
@@ -437,6 +454,7 @@ struct Engine::Js {
 					   {"highlight", nHighlight, 5},
 					   {"booted", nBooted, 0},
 					   {"hydraProgram", nHydraProgram, 4},
+					   {"hydraSource", nHydraSource, 2},
 					   {"midiCC", nMidiCC, 2},
 					   {"midiDevice", nMidiDevice, 0}};
 			for (auto& f : fns)

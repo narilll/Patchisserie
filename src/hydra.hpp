@@ -97,10 +97,12 @@ class Analyser {
 /** Icing's UI thread <-> its Filo's JS thread, which owns Hydra (plan item 8). Neither side waits for the other:
 each slot holds only the latest value, behind a mutex held for copies. The UI posts a request per frame; the JS
 thread wakes up for it, evaluates the outputs' uniforms (H(), a.fft, ...) and publishes them; the UI renders the
-latest published frame (one frame behind). Shaders travel only when they change, as hydra-synth's source. */
+latest published frame (one frame behind). Shaders and source images travel only when they change, as hydra-synth's
+source. */
 class Exchange {
   public:
 	static constexpr int kOutputs = 4; // o0-o3
+	static constexpr int kSources = 4; // s0-s3
 	struct Request {
 		double time = 0; // s, Icing's clock
 		float specific[kBarkBands] = {};
@@ -110,7 +112,14 @@ class Exchange {
 		uint32_t id = 0;                   // 0: none
 		std::string frag;                  // GLSL ES, as hydra-synth generated it
 		std::vector<std::string> uniforms; // the ones a Frame sets, in its order
-		std::vector<bool> samplers; // which are sampler2D: the value is an output (0-3), its other buffer; -1: none
+		// Which are sampler2D: the value is an output (0-3: its other buffer) or kOutputs + a source (4-7); -1: none.
+		std::vector<bool> samplers;
+	};
+	/** initImage()'s image, as a local file the UI thread loads. */
+	struct Source {
+		uint32_t id = 0;  // 0: none
+		std::string path; // the disk cache's file, or res/'s, or the samples folder's; "": none (clear())
+		std::string url;  // as the code gave it, for messages
 	};
 	struct Frame {
 		uint64_t seq = 0; // 0: none
@@ -144,6 +153,14 @@ class Exchange {
 		out = programs_[output];
 		return true;
 	}
+	/** Source `source`'s image, if it is not `have` (id 0: it has none any more). */
+	bool source(int source, uint32_t have, Source& out) const {
+		std::lock_guard<std::mutex> lock(m_);
+		if (sources_[source].id == have)
+			return false;
+		out = sources_[source];
+		return true;
+	}
 
 	// --- JS thread ---
 	/** Takes the pending request, waiting for one until `until` at most. */
@@ -163,16 +180,25 @@ class Exchange {
 		programs_[output] = std::move(p);
 		return lastId_;
 	}
+	/** As setProgram(), from the same ids. */
+	uint32_t setSource(int source, Source s) {
+		std::lock_guard<std::mutex> lock(m_);
+		s.id = ++lastId_;
+		sources_[source] = std::move(s);
+		return lastId_;
+	}
 	void publish(Frame f) {
 		std::lock_guard<std::mutex> lock(m_);
 		f.seq = ++seq_;
 		frame_ = std::move(f);
 	}
-	/** A new JS runtime: no programs, no frame. */
+	/** A new JS runtime: no programs, no images, no frame. */
 	void clear() {
 		std::lock_guard<std::mutex> lock(m_);
 		for (Program& p : programs_)
 			p = Program();
+		for (Source& s : sources_)
+			s = Source();
 		frame_ = Frame();
 		pending_ = false;
 	}
@@ -183,6 +209,7 @@ class Exchange {
 	Request request_;
 	bool pending_ = false;
 	Program programs_[kOutputs];
+	Source sources_[kSources];
 	Frame frame_;
 	uint32_t lastId_ = 0;
 	uint64_t seq_ = 0;
@@ -197,18 +224,19 @@ struct WindowGeometry {
 };
 
 /** Hydra's outputs as GL objects in Rack's context: two FBOs per output (ping-pong: src(o0) reads the other one,
-hydra-synth's getTexture()) and the displayed image, one output or the 2x2 grid. UI thread, Rack's context current.
+hydra-synth's getTexture()), a texture per source image, and the displayed image, one output or the 2x2 grid. UI
+thread, Rack's context current.
 */
 class Renderer {
   public:
 	using Error = std::function<void(const std::string& line)>;
-	/** Compiles the programs that changed (failures go to `error`) and renders the exchange's frame if it is new.
-	Restores the GL state it touches. */
+	/** Compiles the programs and loads the source images that changed (failures go to `error`) and renders the
+	exchange's frame if it is new. Restores the GL state it touches. */
 	void update(NVGcontext* vg, const Exchange& x, const Error& error);
 	void drawPreview(NVGcontext* vg, float x, float y, float w, float h);
 	/** Draws the displayed image into the bound framebuffer (Window's, in its context: programs are shared). */
 	void present() const;
-	/** Black, no programs: for another Filo (or none) from here on. */
+	/** Black, no programs, no images: for another Filo (or none) from here on. */
 	void reset();
 	/** Deletes the GL objects; the next update() recreates them (e.g. in a new context). */
 	void destroy();
@@ -221,7 +249,13 @@ class Renderer {
 		std::vector<int> locations; // of Exchange::Program::uniforms
 		std::vector<bool> samplers;
 	};
+	struct Source {
+		uint32_t id = 0;
+		std::string path;     // the file `texture` holds
+		unsigned texture = 0; // 0: none
+	};
 	void compile(int output, const Exchange::Program& p, const Error& error);
+	void load(int source, const Exchange::Source& s, const Error& error);
 	void render(NVGcontext* vg, const Exchange::Frame& f);
 	void clearImages();
 	unsigned other(int output) const; // the buffer src(oN) reads
@@ -229,6 +263,8 @@ class Renderer {
 	NVGLUframebuffer* display_ = nullptr; // display_->image: NanoVG preview; display_->texture: sampled by Window
 	int ping_[Exchange::kOutputs] = {};   // which of fbo_[i] holds output i's latest frame
 	Program programs_[Exchange::kOutputs];
+	Source sources_[Exchange::kSources];
+	unsigned none_ = 0; // what a source without image samples: hydra-synth's regl.texture({shape: [1, 1]}), 0 0 0 0
 	unsigned one_ = 0, all_ = 0; // hydra-synth's renderFbo (render(oN)) and renderAll (render()) passes
 	unsigned blit_ = 0;          // present()
 	int w_ = 0, h_ = 0;

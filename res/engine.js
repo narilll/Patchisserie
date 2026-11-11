@@ -39680,10 +39680,10 @@ registerProcessor('${name3}', MyProcessor);
       enter: function(node, parent, prop, index5) {
         if (!isWidgetMethod(node)) return;
         context.widgets ??= [];
-        const { widgets, options } = context;
+        const { widgets: widgets2, options } = context;
         const { emitWidgets } = options;
         const type = node.callee.property.name;
-        const idx = widgets.filter((w3) => w3.type === type).length;
+        const idx = widgets2.filter((w3) => w3.type === type).length;
         const widgetConfig = {
           from: node.start,
           to: node.end,
@@ -39691,7 +39691,7 @@ registerProcessor('${name3}', MyProcessor);
           type,
           id: options.id
         };
-        emitWidgets && widgets.push(widgetConfig);
+        emitWidgets && widgets2.push(widgetConfig);
         return this.replace(widgetWithLocation(node, widgetConfig));
       }
     })
@@ -39702,7 +39702,7 @@ registerProcessor('${name3}', MyProcessor);
         if (!isSliderFunction(node)) return;
         context.widgets ??= [];
         context.sliders ??= [];
-        const { options, widgets, sliders } = context;
+        const { options, widgets: widgets2, sliders } = context;
         const { emitWidgets } = options;
         const sliderConfig = {
           from: node.arguments[0].start,
@@ -39714,7 +39714,7 @@ registerProcessor('${name3}', MyProcessor);
           step: node.arguments[3]?.value,
           type: "slider"
         };
-        emitWidgets && widgets.push(sliderConfig);
+        emitWidgets && widgets2.push(sliderConfig);
         sliders.push(sliderConfig);
         return this.replace(sliderWithLocation(node));
       }
@@ -39757,14 +39757,65 @@ registerProcessor('${name3}', MyProcessor);
   var H = (p) => () => reify(p).queryArc(getTime(), getTime())[0].value;
 
   // js/host.mjs
-  var ready = evalScope(core_exports, edo_exports, tonal_exports, mini_exports, xen_exports, webaudio_exports, { H, initHydra, loadScript, midin, midikeys });
-  var drawSaid = false;
+  var ready = evalScope(core_exports, edo_exports, tonal_exports, mini_exports, xen_exports, webaudio_exports, {
+    ...{ H, initHydra, loadScript, midin, midikeys, slider, sliderWithID, gamepad, ...motion() },
+    ...{ loadCsound, loadCSound: loadCsound, loadcsound: loadCsound, loadOrc: loadCsound }
+  });
+  var ignored = /* @__PURE__ */ new Set();
+  var ignore = (key, line) => ignored.has(key) || (ignored.add(key), console.warn(line));
   var noCanvas = (result) => function() {
-    if (!drawSaid) drawSaid = true, console.warn("[draw] Strudel canvas visuals (scope, pianoroll, ...) are not shown in Rack");
+    ignore("draw", "[draw] Strudel canvas visuals and editor widgets (scope, pianoroll, ...) are not shown in Rack");
     return result ?? this;
   };
-  for (const name3 of ["draw", "pianoroll", "pitchwheel"]) Pattern.prototype[name3] = noCanvas();
+  var widgets = ["_scope", "_pianoroll", "_punchcard", "_spiral", "_pitchwheel", "markcss"];
+  for (const name3 of ["draw", "pianoroll", "pitchwheel", ...widgets]) Pattern.prototype[name3] = noCanvas();
   Pattern.prototype.animate = noCanvas(silence);
+  function slider(value2) {
+    ignore("slider", "[slider] slider() is strudel.cc's editor widget: in Rack it stays at its value");
+    return pure(value2);
+  }
+  function sliderWithID(id2, value2) {
+    return slider(value2);
+  }
+  var elsewhere = { osc: "OSC (SuperDirt)", serial: "serial", csound: "Csound", csoundm: "Csound", mqtt: "MQTT" };
+  for (const [name3, what] of Object.entries(elsewhere))
+    Pattern.prototype[name3] = function() {
+      ignore(name3, `[${name3}] .${name3}(): ${what} is not available in Rack, the pattern plays through superdough`);
+      return this;
+    };
+  async function loadCsound() {
+    ignore("loadCsound", "[csound] Csound is not available in Rack: loadCsound() does nothing");
+  }
+  function gamepad() {
+    ignore("gamepad", "[gamepad] gamepad() is not available in Rack: its axes and buttons stay 0");
+    const zero = signal(() => 0);
+    const axes = { x1: zero, y1: zero, x2: zero, y2: zero };
+    for (const k of Object.keys(axes)) axes[`${k}_2`] = zero.toBipolar();
+    const keys3 = "a b x y lb rb lt rt back start l3 ls r3 rs u up d down l left r right".split(" ");
+    const sequence2 = () => signal(() => false);
+    return {
+      ...axes,
+      buttons: Array.from({ length: 16 }, () => ({ value: zero, toggle: zero })),
+      ...Object.fromEntries(keys3.flatMap((k) => [k, k.toUpperCase(), `tgl${k}`, `tgl${k.toUpperCase()}`].map((n2) => [n2, zero]))),
+      ...{ checkSequence: sequence2, btnSequence: sequence2, btnSeq: sequence2, btnseq: sequence2 },
+      raw: signal((t) => ({ axes: [0, 0, 0, 0], buttons: Array(16).fill(0), t }))
+    };
+  }
+  function motion() {
+    const none = () => ignore("motion", "[motion] device motion is not available in Rack: its signals stay 0");
+    const still = signal(() => (none(), 0));
+    return {
+      enableMotion: async () => none(),
+      ...Object.fromEntries(
+        `accelerationX accelerationY accelerationZ accX accY accZ gravityX gravityY gravityZ gravX gravY gravZ
+      orientationAlpha orientationBeta orientationGamma orientationA orientationB orientationG orientationX
+      orientationY orientationZ oriA oriB oriG oriX oriY oriZ absoluteOrientationAlpha absoluteOrientationBeta
+      absoluteOrientationGamma absOriA absOriB absOriG absoluteOrientationX absoluteOrientationY absoluteOrientationZ
+      absOriX absOriY absOriZ rotationAlpha rotationBeta rotationGamma rotationX rotationY rotationZ rotA rotB rotG
+      rotX rotY rotZ`.split(/\s+/).map((n2) => [n2, still])
+      )
+    };
+  }
   var evalError;
   var seconds2 = 0;
   var { evaluate: evaluate2, scheduler, setCps } = repl({
@@ -40155,6 +40206,10 @@ registerProcessor('${name3}', MyProcessor);
     },
     /** Drains the programs collected by the default hydraProgram. */
     hydraPrograms: () => hydraPrograms.splice(0),
+    /** Where initImage()'s images go once fetched (source 0-3, its URL; "": none); the engine replaces it. */
+    hydraSource: (source2, url) => hydraSources.push({ source: source2, url }),
+    /** Drains the images collected by the default hydraSource. */
+    hydraSources: () => hydraSources.splice(0),
     // Test seam: the upstream tune regression stringifies haps with hap.show() like Strudel's own test.
     get pattern() {
       return scheduler.pattern;
@@ -40177,6 +40232,7 @@ registerProcessor('${name3}', MyProcessor);
   var features = null;
   var [frameTime, frameCycle, ticked] = [void 0, 0, false];
   var hydraPrograms = [];
+  var hydraSources = [];
   var programs = 0;
   scheduler.now = () => frameCycle;
   var Output2 = class _Output {
@@ -40194,7 +40250,8 @@ registerProcessor('${name3}', MyProcessor);
     tick(props) {
       this.values = this.fns.map((f, i3) => {
         const v2 = f({}, props);
-        return v2 instanceof _Output ? v2.id : this.samplers[i3] ? -1 : Number(v2);
+        const source2 = hydra.s.indexOf(v2);
+        return v2 instanceof _Output ? v2.id : this.samplers[i3] ? source2 < 0 ? -1 : 4 + source2 : Number(v2);
       });
       ticked = true;
     }
@@ -40209,7 +40266,7 @@ registerProcessor('${name3}', MyProcessor);
   };
   var regl = { texture: () => ({}), _refresh: () => {
   } };
-  var external = ["init", "initCam", "initImage", "initVideo", "initScreen", "initStream"];
+  var external = ["init", "initCam", "initVideo", "initScreen", "initStream"];
   async function createHydra() {
     const [{ default: HydraRenderer2 }, { default: Audio2 }] = await Promise.all([
       Promise.resolve().then(() => (init_hydra_synth(), hydra_synth_exports)),
@@ -40261,9 +40318,16 @@ registerProcessor('${name3}', MyProcessor);
     });
     h3.s.forEach((s2, i3) => {
       for (const m3 of external)
-        s2[m3] = () => {
-          throw new Error(`s${i3}.${m3}(): Hydra's external sources are not available in Icing`);
-        };
+        s2[m3] = () => ignore("sources", `[hydra] s${i3}.${m3}(): camera, video, screen and stream sources are not available in Icing`);
+      s2.initImage = (url = "") => {
+        visible = true;
+        fetch(url).then(
+          () => api.hydraSource(i3, String(url)),
+          (e) => console.error(`[hydra] s${i3}.initImage(): ${e?.message ?? e}`)
+        );
+      };
+      s2.clear = () => api.hydraSource(i3, "");
+      s2.getTexture = () => s2;
     });
     return h3;
   }
@@ -40285,7 +40349,8 @@ registerProcessor('${name3}', MyProcessor);
   registerTranspilerPlugin({
     walk: () => ({
       enter(node) {
-        if (node.type !== "CallExpression" || node.callee.name !== "loadScript") return;
+        const { type, callee } = node;
+        if (type !== "CallExpression" || callee.name !== "loadScript" && callee.property?.name !== "initImage") return;
         this.skip();
         return true;
       }

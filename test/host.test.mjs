@@ -304,3 +304,40 @@ test('midikeys(): kb(noteLength) plays each note-on once, at once, `delay` frame
     host.midiDevice = midiDevice;
   }
 });
+
+test("strudel.cc's widgets, outputs and inputs Rack doesn't have are ignored: the code plays, each warns once", async () => {
+  const warn = console.warn;
+  const lines = [];
+  console.warn = (...a) => lines.push(a.map(String).join(' '));
+  const code = `await loadCsound\`instr Organ
+endin\`
+const pad = gamepad(0)
+$: note("c e g").osc().serial().mqtt()._pianoroll()
+$: note("c3").csound('Organ').lpf(slider(800, 100, 2000)).gain(pad.a.add(1))._scope()
+$: n(accX.segment(4).range(0, 7)).scale("C:minor").markcss('color: red')`;
+  let haps;
+  try {
+    for (let i = 0; i < 2; i++) {
+      assert.deepEqual(await host.evaluate(code), { ok: true });
+      haps = host.query(0, 1);
+    }
+  } finally {
+    console.warn = warn;
+  }
+  assert.deepEqual(
+    haps.map((h) => h.value.note),
+    ['c', 'e', 'g', 'c3', 'C3', 'C3', 'C3', 'C3'],
+  );
+  assert.deepEqual([haps[3].value.cutoff, haps[3].value.gain], [800, 1]); // slider()'s value; gamepad's a: 0
+  assert.deepEqual(lines.sort(), [
+    "[csound] .csound(): Csound is not available in Rack, the pattern plays through superdough",
+    '[csound] Csound is not available in Rack: loadCsound() does nothing',
+    '[draw] Strudel canvas visuals and editor widgets (scope, pianoroll, ...) are not shown in Rack',
+    '[gamepad] gamepad() is not available in Rack: its axes and buttons stay 0',
+    '[motion] device motion is not available in Rack: its signals stay 0',
+    '[mqtt] .mqtt(): MQTT is not available in Rack, the pattern plays through superdough',
+    '[osc] .osc(): OSC (SuperDirt) is not available in Rack, the pattern plays through superdough',
+    '[serial] .serial(): serial is not available in Rack, the pattern plays through superdough',
+    "[slider] slider() is strudel.cc's editor widget: in Rack it stays at its value",
+  ]);
+});

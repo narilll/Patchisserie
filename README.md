@@ -74,6 +74,18 @@ $: s("bd*4")
   its `setFunction()`s join Hydra's functions for this and later code (a new source name, like those of
   `a.setBins()`, also stays global for Strudel's code). Its URL is a plain string, double quotes too. A failed fetch or
   script fails the evaluate.
+- `s0.initImage(url)` … `s3.initImage(url)` load an image (PNG, JPEG, BMP, GIF's first frame, …; 4096×4096 at most)
+  into that source, for `src(s0)`, `.modulate(s0)` and the rest, stretched over the canvas as in Hydra:
+  ```js
+  await initHydra()
+  s0.initImage("https://upload.wikimedia.org/wikipedia/commons/thumb/a/a8/Tour_Eiffel_Wikimedia_Commons.jpg/330px-Tour_Eiffel_Wikimedia_Commons.jpg")
+  src(s0).modulate(osc(5), .1).out()
+  ```
+  The URL loads like samples (https only, kept in the disk cache, so it works offline after the first load;
+  `localsamples:<path>` is a file in Filo's local samples folder) and is a plain string, as for `loadScript()`. Until
+  the image has loaded, and after `s0.clear()`, the source is transparent black. A loaded image stays for later code
+  that calls `initHydra()`, as on hydra.ojack.xyz; `hush()`, an evaluate without `initHydra()` and STOP clear it. A
+  failure (download, not an image, too large) is logged; the sketch runs on.
 - `a.fft` (`a.setBins`, `setSmooth`, `setCutoff`, `setScale`) listens to the AUDIO input, unpatched to Filo's L+R.
 - The panel shows a preview; the menu opens an output window (borderless "Fullscreen", Esc leaves it), whose
   position is saved in the patch. Closing the window hides it.
@@ -81,17 +93,19 @@ $: s("bd*4")
 
 ## Not supported
 
-Strudel and Hydra run unmodified, so most code from strudel.cc and hydra.ojack.xyz runs as is. What doesn't:
+Strudel and Hydra run unmodified, so most code from strudel.cc and hydra.ojack.xyz runs as is. What doesn't (the
+visuals, outputs, inputs and sources below that Rack lacks are ignored with one log line each, so the rest plays):
 
 **Strudel**
 - Canvas visuals: `.scope()`, `.tscope()`, `.fscope()`, `.spectrum()`, `.pianoroll()`, `.spiral()`, `.pitchwheel()`,
-  `.punchcard()` and `.wordfall()` play on but draw nothing (one log line); `.animate()` is silence. The editor's inline
-  widgets `._scope()`, `._pianoroll()`, `._punchcard()`, `._spiral()`, `._pitchwheel()`, `.markcss()` and `slider()`
-  are not defined, so code using them doesn't evaluate.
+  `.punchcard()` and `.wordfall()` play on but draw nothing; `.animate()` is silence. The editor's inline widgets
+  `._scope()`, `._pianoroll()`, `._punchcard()`, `._spiral()`, `._pitchwheel()` and `.markcss()` do nothing, and
+  `slider(value, min, max)` stays at `value`.
 - Sound: the `stretch` effect (phase vocoder) and kabelsalat are off; no microphone/audio input into Strudel; no
   `dough` engine or multichannel orbits (Filo's output is stereo L/R).
-- Outputs other than audio and `.midi()`: `.osc()` (SuperDirt), `.serial()`, `.csound()`, `.mqtt()`; inputs
-  `gamepad()`, `motion` / `acceleration`.
+- Outputs other than audio and `.midi()`: `.osc()` (SuperDirt), `.serial()`, `.csound()` and `.mqtt()` send nothing,
+  the pattern plays through superdough instead (`loadCsound` does nothing). Inputs: `gamepad()`'s axes and buttons
+  and the motion signals (`accelerationX`, `rotationAlpha`, …) stay 0.
 - `.midi()` sends notes, triggers and CCs only: `midicmd`, pitch bend, aftertouch, program change, NRPN, sysex and
   the port argument (`.midi('port')`) are ignored. `.midichan()` picks the output channel only in the MPE polyphony
   mode (Rotate, Reuse and Reset ignore it, like Rack's MIDI-CV).
@@ -107,8 +121,10 @@ Strudel and Hydra run unmodified, so most code from strudel.cc and hydra.ojack.x
   key bindings. The editor has no IME (composed input), and wide characters (CJK, emoji) take one cell.
 
 **Hydra**
-- Sources `s0`-`s3`: `initCam()`, `initVideo()`, `initImage()`, `initScreen()`, `initStream()` and `init({src})` fail
-  with an error. (A camera on macOS would also need VCV Rack itself to declare camera access.)
+- Sources `s0`-`s3`: `initCam()`, `initVideo()`, `initScreen()`, `initStream()` and `init({src})` do nothing, the
+  source stays empty. (A camera on macOS would also need VCV Rack itself to declare camera access.)
+  `initImage(url, params)` ignores `params` (Hydra's default texture options apply: nearest, clamp), a JPEG's EXIF
+  rotation and colour profiles.
 - `initHydra({feedStrudel})`: Strudel's canvas isn't drawn, so `s0` stays empty.
 - The mouse (`mouse.x`, `mouse.y`) is always 0; `a.show()` draws nothing.
 - `prev()` reads the previous frame, not the buffer being drawn.

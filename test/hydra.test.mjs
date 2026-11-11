@@ -66,9 +66,9 @@ test("Output collects each output's shader; src(o0) is a sampler of that output"
   const f = frame(1);
   assert.deepEqual(f.outputs[0], { program: o0.id, values: [0] }); // o0's index: src/hydra.cpp reads its other buffer
   assert.deepEqual(f.outputs[1], { program: o1.id, values: [] });
-  // Sources (s0-s3) are never initialised: no texture.
+  // A source's sampler is 4 + its index (src/hydra.cpp: its image, transparent black without one).
   await ok('await initHydra()\nsrc(s1).out(o2)');
-  assert.deepEqual(frame(2).outputs[2].values, [-1]);
+  assert.deepEqual(frame(2).outputs[2].values, [5]);
 });
 
 test('examples from the Hydra docs generate shaders', async () => {
@@ -151,12 +151,19 @@ test('setResolution() and render(oN) reach the frame', async () => {
   await ok('await initHydra()\nsetResolution(1280, 720)\nrender(o0)');
 });
 
-test("Hydra's external sources fail with a clear error", async () => {
-  for (const call of ['s0.initCam()', 's1.initVideo("x.mp4")', 's2.initImage("x.png")', 's3.initScreen()', 's0.init({})']) {
-    const r = await host.evaluate(`await initHydra()\n${call}`);
-    assert.equal(r.ok, false, call);
-    assert.match(r.error, /^s\d\.init\w*\(\): Hydra's external sources are not available in Icing/, call);
+test("Hydra's other sources are ignored, warning once: the source stays empty", async () => {
+  const warn = console.warn;
+  const lines = [];
+  console.warn = (...a) => lines.push(a.map(String).join(' '));
+  try {
+    for (const call of ['s0.initCam()', 's1.initVideo("x.mp4")', 's2.initStream("x")', 's3.initScreen()', 's0.init({})'])
+      await ok(`await initHydra()\n${call}\nsrc(s0).out()`);
+  } finally {
+    console.warn = warn;
   }
+  assert.deepEqual(lines, ['[hydra] s0.initCam(): camera, video, screen and stream sources are not available in Icing']);
+  assert.deepEqual(host.hydraSources().filter((s) => s.url), []);
+  assert.deepEqual(frame(25).outputs[0].values, [4]);
 });
 
 test("an evaluate without initHydra() and Filo's STOP (hydraHush) hush the visuals", async () => {
@@ -257,4 +264,49 @@ test('loadScript() failures fail the evaluate with the reason', async () => {
     assert.equal(r.ok, false, JSON.stringify(scripts));
     assert.match(r.error, error);
   }
+});
+
+test('sN.initImage(url): fetched, then source N\'s image, sampled by src(s0) and modulate(s1); clear(), hush()', async () => {
+  const [eiffel, cat] = ['https://example.com/eiffel.jpg', 'https://example.com/cat.png'];
+  const images = { [eiffel]: 'jpeg', [cat]: 'png' };
+  const later = () => new Promise((r) => setTimeout(r, 0)); // the fetch's then
+  host.hydraSources();
+  host.hydraPrograms();
+  // hydra.ojack.xyz's double quotes: a URL, not mini-notation.
+  const code = `await initHydra()\ns0.initImage("${eiffel}")\ns1.initImage('${cat}')\nsrc(s0).modulate(s1, 0.1).out()`;
+  assert.deepEqual(await withScripts(images, code), { ok: true });
+  await later();
+  assert.deepEqual(host.hydraSources(), [
+    { source: 0, url: eiffel },
+    { source: 1, url: cat },
+  ]);
+  const [o0, ...more] = host.hydraPrograms();
+  assert.deepEqual(more, []);
+  assert.deepEqual([o0.uniforms, o0.samplers], [['tex0', 'tex1'], [true, true]]);
+  assert.deepEqual(frame(30).outputs[0].values, [4, 5]);
+  // The images stay for later code that calls initHydra(), as on hydra.ojack.xyz; clear() drops one.
+  await ok('await initHydra()\ns1.clear()\nsrc(s0).out()');
+  assert.deepEqual(host.hydraSources(), [{ source: 1, url: '' }]);
+  // hush(), an evaluate without initHydra() and STOP clear them all.
+  await ok('note("c")');
+  assert.deepEqual(
+    host.hydraSources().map((s) => [s.source, s.url]),
+    [0, 1, 2, 3].map((i) => [i, '']),
+  );
+});
+
+test('initImage() failures are logged, the code runs on', async () => {
+  const error = console.error;
+  const lines = [];
+  console.error = (...a) => lines.push(a.map(String).join(' '));
+  try {
+    const code = 'await initHydra()\ns2.initImage("https://example.com/missing.png")\nsrc(s2).out()';
+    assert.deepEqual(await withScripts({}, code), { ok: true });
+    await new Promise((r) => setTimeout(r, 0));
+  } finally {
+    console.error = error;
+  }
+  assert.deepEqual(lines, ['[hydra] s2.initImage(): fetch https://example.com/missing.png: download failed']);
+  assert.deepEqual(host.hydraSources(), []);
+  assert.deepEqual(frame(31).outputs[0].values, [6]);
 });

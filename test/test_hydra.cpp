@@ -144,3 +144,22 @@ TEST(exchange_programs_change_ids_and_clear) {
 	CHECK(x.program(0, b, got) && got.id == 0 && got.frag.empty()); // the UI drops it
 	CHECK(x.setProgram(0, p) > b);                                  // never an id the UI may still hold
 }
+
+TEST(exchange_sources_change_ids_and_clear) {
+	Exchange x;
+	Exchange::Source s, got;
+	CHECK(!x.source(0, 0, got)); // none, as the UI has
+	s.path = "/cache/example.com/a.png";
+	s.url = "https://example.com/a.png";
+	uint32_t a = x.setSource(0, s);
+	CHECK(x.source(0, 0, got) && got.id == a && got.path == s.path && got.url == s.url);
+	CHECK(!x.source(0, a, got)); // loaded already
+	CHECK(!x.source(1, 0, got));
+	Exchange::Program p;
+	CHECK(x.setProgram(0, p) > a); // one id sequence: never a source's
+	uint32_t b = x.setSource(0, Exchange::Source());
+	CHECK(x.source(0, a, got) && got.id == b && got.path.empty()); // clear(): the UI drops the image
+	x.clear();                                                     // a new JS runtime
+	CHECK(x.source(0, b, got) && got.id == 0 && got.path.empty());
+	CHECK(x.setSource(0, s) > b);
+}
