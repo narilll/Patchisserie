@@ -569,3 +569,95 @@ TEST(engine_reset_input_late_but_complete) {
 	resetWhilePlaying(false);
 	resetWhilePlaying(true);
 }
+
+// Icing's frames on the real engine (plan item 8): Hydra from Filo's code, H() at the cycle Filo plays, a.fft from the
+// request, src(o0) as a sampler, real shaders through the GLSL conversion; Filo's events stay exact at 60 frames/s;
+// STOP hushes; a restart drops Hydra until the code makes it again; an endless uniform function is interrupted.
+TEST(engine_hydra_frames) {
+	auto r = std::make_unique<Rig>("engine-hydra");
+	hydra::Exchange& x = r->engine->hydra;
+	hydra::Exchange::Request q;
+	for (float& s : q.specific)
+		s = 1; // 4 bins of 6 bands: a.fft[0] -> (6 - 2) / 10 once smoothed
+	hydra::Exchange::Frame f;
+	uint64_t seen = 0;
+	int frames = 0;
+	std::set<float> h;               // what H("10 20") gave
+	auto run = [&](double seconds) { // the audio thread at real time, a frame request every 1/60 s
+		for (int64_t end = r->frame() + (int64_t)(seconds * r->sr); r->frame() < end;) {
+			r->run((int64_t)(r->sr / 60));
+			q.time = now();
+			x.request(q);
+			if (!x.frame(seen, f))
+				continue;
+			seen = f.seq, frames++;
+			if (!f.values[0].empty())
+				h.insert(f.values[0][0]);
+		}
+	};
+	const std::string sketch = std::string(kAligned) +
+							   "\nawait initHydra()\nosc(H(\"10 20\"), 0.1, () => a.fft[0]).out()\n"
+							   "src(o0).modulate(noise(3), 0.005).out(o1)\nrender()";
+	CHECK(r->evaluate(sketch, true));
+	CHECK(r->until([&] { return r->gateRiseAfter(0); }, 10));
+
+	// The JS thread's share and the longest query loop period (20 ms nominal), without frames and with.
+	double busy = r->engine->jsBusy, t = now();
+	r->engine->tickLate = 0;
+	r->seconds(3);
+	double without = (r->engine->jsBusy - busy) / (now() - t), lateWithout = r->engine->tickLate;
+	int64_t a = r->frame();
+	busy = r->engine->jsBusy, t = now();
+	r->engine->tickLate = 0;
+	run(5);
+	double with = (r->engine->jsBusy - busy) / (now() - t), late = r->engine->tickLate;
+	std::printf("  Hydra at 60 frames/s: %d frames, JS thread %.1f %% of a core (%.1f %% without frames), query loop "
+				"period up to 20 + %.2f ms (20 + %.2f ms without)\n",
+				frames, 100 * with, 100 * without, 1e3 * late, 1e3 * lateWithout);
+	TIMED_CHECK(r->every(24000, a, r->frame()));
+	TIMED_CHECK(r->aligned(a, r->frame() - 4800) >= 8);
+	CHECK(frames > 100);
+	CHECK(f.display == -1 && f.width == 1280 && f.height == 720 && f.time > 0);
+	CHECK(h.count(10) && h.count(20));
+	CHECK(f.values[0].size() == 2 && std::fabs(f.values[0][1] - 0.4f) < 1e-4); // [H(), a.fft[0]]
+	hydra::Exchange::Program p0, p1;
+	CHECK(x.program(0, 0, p0) && x.program(1, 0, p1));
+	CHECK(f.program[0] == p0.id && f.program[1] == p1.id);
+	CHECK(p0.uniforms == std::vector<std::string>({"frequency0", "offset0"}));
+	CHECK(p1.uniforms == std::vector<std::string>({"tex0"}) && p1.samplers == std::vector<bool>({true}));
+	CHECK(f.values[1] == std::vector<float>({0}));         // src(o0)
+	for (const hydra::Exchange::Program* p : {&p0, &p1}) { // real shaders through the GLSL conversion
+		std::string gl = hydra::glslEsToDesktop(p->frag);
+		CHECK(gl.compare(0, 13, "#version 120\n") == 0);
+		CHECK(gl.find("precision") == std::string::npos);
+		CHECK(std::count(gl.begin(), gl.end(), '\n') == std::count(p->frag.begin(), p->frag.end(), '\n') + 4);
+		CHECK(gl.find("gl_FragColor = ") != std::string::npos);
+	}
+
+	// STOP: every output black.
+	r->engine->stop();
+	run(0.3);
+	hydra::Exchange::Program s;
+	CHECK(x.program(0, p0.id, s) && s.frag.find("solid(st, 0., 0., 0., 0.)") != std::string::npos);
+	CHECK(f.display == 0); // hush(): render(o0)
+
+	// A sample-rate restart: no Hydra until the re-evaluated code makes it again.
+	CHECK(r->evaluate(sketch, true));
+	run(0.5);
+	r->engine->setSampleRate(44100);
+	r->sr = 44100;
+	r->paceStart = 0;
+	CHECK(!x.program(0, 0, s) && !x.frame(0, f));
+	CHECK(r->until([&] { return x.program(0, 0, s); }, 30));
+	CHECK(s.uniforms.size() == 2);
+
+	// An endless loop in a uniform function: that frame is interrupted and Hydra hushed; the engine goes on.
+	CHECK(r->evaluate("await initHydra()\nosc(() => { for (;;); }).out()"));
+	run(1.5); // the interrupt after 1 s; then Strudel's logger repeats "[eval] code updated" (not within 1 s)
+	CHECK(r->logged("[hydra] frame: took longer than 1 s and was interrupted (hushed)"));
+	CHECK(x.program(0, 0, s) && s.frag.find("solid(st, 0., 0., 0., 0.)") != std::string::npos);
+	CHECK(r->evaluate(sketch));
+	a = r->frame();
+	run(1);
+	CHECK(r->gateRiseAfter(a) && f.values[0].size() == 2);
+}

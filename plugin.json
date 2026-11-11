@@ -22,8 +22,8 @@
     {
       "slug": "Icing",
       "name": "Icing",
-      "description": "Hydra visuals with panel preview and output window",
-      "tags": ["Visual"]
+      "description": "Hydra visuals for the Filo on its left: panel preview, output window, AUDIO input for a.fft",
+      "tags": ["Visual", "Expander"]
     }
   ]
 }

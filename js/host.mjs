@@ -8,10 +8,11 @@ import * as xen from '@strudel/xen';
 import * as edo from '@strudel/edo';
 import * as webaudio from '@strudel/webaudio';
 import { transpiler } from '@strudel/transpiler';
+import { H } from '@strudel/hydra';
 
 // Same scope as strudel.cc (website/src/repl/util.mjs loadModules) minus visual/IO packages; soundfonts join in
-// initAudio().
-const ready = core.evalScope(core, edo, tonal, mini, xen, webaudio);
+// initAudio(). Of @strudel/hydra: its H() and our initHydra() (below).
+const ready = core.evalScope(core, edo, tonal, mini, xen, webaudio, { H, initHydra });
 
 let evalError;
 let seconds = 0; // playback position of the last tick()
@@ -173,15 +174,21 @@ const api = (globalThis.__patchisserie = {
     await ready;
     evalError = undefined;
     const before = scheduler.pattern;
+    const hydraBefore = strudelGlobals !== undefined;
+    restoreStrudel(); // Strudel's names again, unless this code calls initHydra()
+    hydraCalled = false;
+    said.clear();
     try {
       await evaluate(code, false); // false: don't start the Cyclist; errors land in onEvalError
     } catch (err) {
       evalError = err; // repl throws (outside its try) only for empty code
     }
     if (!evalError) {
+      if (!hydraCalled) api.hydraHush();
       [previous, previousId, patternId] = [before, patternId, id];
       return { ok: true };
     }
+    if (hydraBefore && !strudelGlobals) installHydra(); // the previous code plays on, with its Hydra globals
     // acorn syntax errors carry loc; mini-notation errors only say "at line N" in the message.
     const line = evalError.loc?.line ?? Number(/^\[mini\] parse error at line (\d+)/.exec(evalError.message)?.[1]);
     return line ? { ok: false, error: evalError.message, line } : { ok: false, error: evalError.message };
@@ -324,6 +331,41 @@ const api = (globalThis.__patchisserie = {
   /** superdough's orbits and buses back to their initial state; their nodes become garbage. */
   resetAudio: () => webaudio.resetGlobalEffects(),
 
+  /**
+   * Icing's frame (src/engine.cpp, once per UI frame): Hydra's tick() at `time` (s, Icing's clock) while Filo plays
+   * `cycle` at `cps`, with Meyda's loudness of the AUDIO input (24 Bark bands, total). Returns null (no Hydra, or
+   * its fps skipped this frame) or [display (-1: render() all four, 0-3: render(oN)), time, width, height, then per
+   * output: its program id (0: none), n, its n uniform values].
+   */
+  hydraFrame(time, cycle, cps, specific, total) {
+    if (!hydra) return null;
+    frameCycle = cycle;
+    features = { loudness: { specific, total } };
+    hydra.sandbox.set('bpm', cps * 240); // Strudel's 4 beats per cycle
+    const dt = frameTime === undefined ? 0 : Math.max(0, time - frameTime) * 1000;
+    frameTime = time;
+    ticked = false;
+    once(() => hydra.tick(dt));
+    if (!ticked) return null;
+    const out = [hydra.isRenderingAll ? -1 : (hydra.output.id ?? 0), hydra.synth.time, hydra.canvas.width];
+    out.push(hydra.canvas.height);
+    for (const o of hydra.o) out.push(o.program, o.values.length, ...o.values);
+    return out;
+  },
+  /** Hydra's hush(): every output black, update() a no-op (Filo's STOP, an evaluate without initHydra()). */
+  hydraHush() {
+    if (hydra && visible) once(() => hydra.hush());
+    visible = false;
+  },
+  /** Where Output's shaders go (output, GLSL ES source, uniform names, which of them are samplers); returns the
+   * program's id. The engine replaces it. */
+  hydraProgram(output, frag, uniforms, samplers) {
+    hydraPrograms.push({ id: ++programs, output, frag, uniforms, samplers });
+    return programs;
+  },
+  /** Drains the programs collected by the default hydraProgram. */
+  hydraPrograms: () => hydraPrograms.splice(0),
+
   // Test seam: the upstream tune regression stringifies haps with hap.show() like Strudel's own test.
   get pattern() {
     return scheduler.pattern;
@@ -343,3 +385,144 @@ core.Pattern.prototype.piano = function () {
       return { ...value, pan: (value.pan || 1) * pan };
     });
 };
+
+// --- Icing: Hydra (plan item 8) ---
+// hydra-synth's own renderer - its generator, eval sandbox, tick(), hush() and Audio's a.fft binning - minus WebGL:
+// Output keeps each output's shader and evaluates its uniforms per frame, Icing compiles and draws them on Rack's UI
+// thread (src/hydra.cpp). initHydra() installs Hydra's globals (hydra-synth's makeGlobal, as on strudel.cc), the next
+// evaluate() restores Strudel's. The visuals belong to code that calls initHydra(): an evaluate without it hushes
+// them (their functions would see Strudel's globals), and so does Filo's STOP (strudel.cc's clearHydra()).
+let hydraReady, hydra; // the renderer, created by the first initHydra()
+let strudelGlobals; // while Hydra's are installed: the globals they replaced, name -> property descriptor or undefined
+let hydraCalled = false; // initHydra() ran in this evaluate
+let visible = false; // something drew since the last hush
+let features = null; // this frame's AUDIO analysis, as Meyda's features (hydra-synth's Audio reads it)
+let [frameTime, frameCycle, ticked] = [undefined, 0, false];
+const hydraPrograms = []; // where programs go without an engine (tests): see hydraProgram
+let programs = 0;
+scheduler.now = () => frameCycle; // Strudel's getTime() (H()): the cycle Filo plays at the frame
+
+class Output {
+  constructor(id) {
+    Object.assign(this, { id, label: `o${id}`, precision: 'mediump', uniforms: {}, program: 0, fns: [], values: [] });
+  }
+  /** GlslSource.out(): this output's new shader. Its uniforms are functions, evaluated by tick() per frame. */
+  render([pass]) {
+    const names = Object.keys(pass.uniforms);
+    this.fns = Object.values(pass.uniforms);
+    const samplers = names.map((n) => pass.frag.includes(`uniform sampler2D ${n};`));
+    this.program = api.hydraProgram(this.id, pass.frag, names, samplers);
+    visible = true;
+  }
+  tick(props) {
+    // A sampler's value is its output's index (src/hydra.cpp samples that output's other buffer); -1: a source.
+    this.values = this.fns.map((f) => {
+      const v = f({}, props);
+      return typeof v === 'number' ? v : v instanceof Output ? v.id : -1;
+    });
+    ticked = true;
+  }
+  resize() {}
+  getCurrent() {
+    return this;
+  }
+  getTexture() {
+    return this;
+  }
+}
+
+const regl = { texture: () => ({}), _refresh: () => {} }; // what hydra-synth's sources and setResolution() still call
+const external = ['init', 'initCam', 'initImage', 'initVideo', 'initScreen', 'initStream'];
+
+async function createHydra() {
+  // Loaded here, not at startup: hydra-synth's module body needs window.addEventListener (src/audio/webaudio.js).
+  const [{ default: HydraRenderer }, { default: Audio }] = await Promise.all([
+    import('hydra-synth/src/hydra-synth.js'),
+    import('hydra-synth/src/lib/audio.js'),
+  ]);
+  class Hydra extends HydraRenderer {
+    _initRegl() {
+      this.regl = regl;
+      this.renderAll = this.renderFbo = () => {};
+    }
+    _initOutputs(n) {
+      this.o = Array.from({ length: n }, (_, i) => (this.synth[`o${i}`] = new Output(i)));
+      this.output = this.o[0];
+    }
+    // ponytail: Audio without its constructor (a canvas, the microphone): its defaults copied, as of hydra-synth 1.3.29.
+    _initAudio() {
+      this.synth.a = Object.assign(Object.create(Audio.prototype), {
+        vol: 0,
+        scale: 10,
+        max: 15,
+        cutoff: 2,
+        smooth: 0.4,
+        isDrawing: false,
+        beat: { holdFrames: 20, threshold: 40, _cutoff: 0, decay: 0.98, _framesSinceBeat: 0 },
+        onBeat: () => {},
+        meyda: { get: () => features },
+        show() {}, // no analyser overlay in Icing
+        hide() {},
+        draw() {},
+      });
+      this.synth.a.setBins(4); // also sets the globals a0-a3
+    }
+  }
+  const h = new Hydra({
+    canvas: { width: 1280, height: 720 },
+    precision: 'mediump', // blanked for GLSL 1.20 anyway; given, hydra-synth doesn't probe navigator.platform
+    makeGlobal: false, // installHydra()
+    autoLoop: false, // Icing's frames tick it
+    enableStreamCapture: false,
+  });
+  h.s.forEach((s, i) => {
+    for (const m of external)
+      s[m] = () => {
+        throw new Error(`s${i}.${m}(): Hydra's external sources are not available in Icing`);
+      };
+  });
+  return h;
+}
+
+/** strudel.cc's initHydra(): Hydra's functions, outputs and values as globals for the rest of this evaluate. Its
+ * options (canvas, DOM, microphone, Strudel canvas) are accepted and ignored. */
+async function initHydra() {
+  hydraCalled = true;
+  hydra = await (hydraReady ??= createHydra());
+  installHydra();
+  return hydra;
+}
+
+function installHydra() {
+  strudelGlobals ??= new Map(Object.keys(hydra.synth).map((n) => [n, Object.getOwnPropertyDescriptor(globalThis, n)]));
+  hydra.sandbox.makeGlobal = true;
+  for (const n of strudelGlobals.keys()) globalThis[n] = hydra.synth[n];
+}
+
+// ponytail: names Hydra adds later (setFunction(), a.setBins() beyond 4) stay global.
+function restoreStrudel() {
+  if (!strudelGlobals) return;
+  hydra.sandbox.tick(); // what the code assigned (speed, update, fps) stays Hydra's
+  hydra.sandbox.makeGlobal = false;
+  for (const [n, d] of strudelGlobals) d ? Object.defineProperty(globalThis, n, d) : delete globalThis[n];
+  strudelGlobals = undefined;
+}
+
+// hydra-synth logs a failing uniform or update() on every frame: each line once per evaluate.
+const said = new Set();
+function once(fn) {
+  // An interrupt skips the finally below: a wrapper left behind unwraps to what it wrapped.
+  const plain = Object.fromEntries(['log', 'warn', 'error'].map((k) => [k, console[k].plain ?? console[k]]));
+  for (const [k, f] of Object.entries(plain)) {
+    const quiet = (...a) => {
+      const line = a.map(String).join(' ');
+      if (said.size < 100 && !said.has(line)) said.add(line), f(...a);
+    };
+    console[k] = Object.assign(quiet, { plain: f });
+  }
+  try {
+    fn();
+  } finally {
+    Object.assign(console, plain);
+  }
+}

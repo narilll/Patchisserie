@@ -12,3 +12,15 @@ if (!res.ok || got !== want) {
   std.exit(1);
 }
 print('qjs smoke: note("c e g") -> 3 haps with locations OK');
+
+// Hydra's generator under QuickJS too. window.addEventListener: what src/audio/webaudio.js gives the engine.
+globalThis.window = globalThis;
+globalThis.addEventListener = () => {};
+const hydra = await host.evaluate('await initHydra()\nsrc(o0).modulate(noise(3), 0.005).blend(shape(4), 0.01).out(o0)');
+const [program, ...more] = host.hydraPrograms();
+const frame = host.hydraFrame(0, 0, 0.5, Array(24).fill(1), 24);
+if (!hydra.ok || more.length || !/gl_FragColor = blend\(src\(modulate\(st, noise/.test(program?.frag) || frame?.[4] !== program.id) {
+  print(`qjs smoke FAILED: Hydra ${JSON.stringify(hydra)} ${JSON.stringify(frame)}\n${program?.frag}`);
+  std.exit(1);
+}
+print('qjs smoke: initHydra() + src(o0).modulate(...).blend(...).out(o0) -> 1 shader and its frame OK');

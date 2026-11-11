@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Pins Strudel to a ref (default: main), rebuilds res/engine.js + res/worklets.js and runs the regression.
+# hydra-synth comes at the version Strudel's lockfile pins for @strudel/hydra.
 # Usage: scripts/update-engine [--dry-run] [--ack-superdough <sha>] [ref]
 # Stops (exit 1) before touching anything when
 # - packages/superdough, packages/webaudio or packages/soundfonts changed between the pinned commit
@@ -90,7 +91,7 @@ git -C "$src" checkout -q --force --detach "$new"
 (cd "$src" && CI=true pnpm install --prod --frozen-lockfile --ignore-scripts \
   --filter @strudel/core --filter @strudel/mini --filter @strudel/tonal \
   --filter @strudel/transpiler --filter @strudel/xen --filter @strudel/edo \
-  --filter superdough --filter @strudel/webaudio --filter @strudel/soundfonts)
+  --filter superdough --filter @strudel/webaudio --filter @strudel/soundfonts --filter @strudel/hydra)
 (cd "$root" && npm ci --ignore-scripts --no-audit --no-fund)
 
 node "$root/scripts/build-engine.mjs"
@@ -98,6 +99,7 @@ node "$root/scripts/build-engine.mjs"
 {
   echo "# Written by scripts/update-engine: res/engine.js is built from exactly these sources."
   echo "strudel $(git -C "$src" log -1 --format='%H %cI') $repo (ref: $ref)"
+  echo "hydra-synth $(node -p "require('$src/packages/hydra/node_modules/hydra-synth/package.json').version") (Strudel's lockfile)"
   if [ -n "$recorded" ]; then
     echo "superdough-ack $recorded (audio package changes reviewed up to this commit)"
   fi

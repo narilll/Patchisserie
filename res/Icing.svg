@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Icing, 16 HP. Placeholder panel for the M1b GL window spike. Preview frame matches kPreviewMm in src/plugin.cpp. -->
+<!-- Icing, 16 HP. Placeholder panel (M5): the preview frame matches kPreviewMm in src/plugin.cpp; the AUDIO label and
+the hint are drawn by the widget. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="81.28mm" height="128.5mm" viewBox="0 0 81.28 128.5">
   <rect width="81.28" height="128.5" fill="#f4d8e4"/>
   <rect y="0" width="81.28" height="7" fill="#e8a7c3"/>
   <rect y="121.5" width="81.28" height="7" fill="#e8a7c3"/>
   <rect x="1.54" y="11.7" width="78.2" height="44.8625" rx="1" fill="#2b1d24"/>
   <rect x="2.54" y="12.7" width="76.2" height="42.8625" fill="#000000"/>
-  <circle cx="20.32" cy="90" r="6" fill="#ffffff" stroke="#e8a7c3" stroke-width="1.5"/>
-  <circle cx="40.64" cy="90" r="6" fill="#ffffff" stroke="#e8a7c3" stroke-width="1.5"/>
-  <circle cx="60.96" cy="90" r="6" fill="#ffffff" stroke="#e8a7c3" stroke-width="1.5"/>
 </svg>

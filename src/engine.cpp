@@ -94,12 +94,13 @@ const char* kPrelude = R"js((function (native) {
 }))js";
 
 // After res/engine.js: superdough, the local samples (registered again after strudel.cc's online maps, so local names
-// win), the .midi() event and highlight sinks, and what the C++ loop calls.
+// win), the .midi() event, highlight and Hydra shader sinks, and what the C++ loop calls.
 const char* kGlue = R"js((function (native, local) {
   'use strict';
   const host = __patchisserie;
   host.rackEvent = native.rack;
   host.rackHighlight = native.highlight;
+  host.hydraProgram = native.hydraProgram;
   const register = (map) => map && samples(map, 'localsamples:', { prebake: true, tag: 'local' });
   const boot = host.initAudio().then(() => {
     register(local);
@@ -119,6 +120,8 @@ const char* kGlue = R"js((function (native, local) {
     tick: host.tick,
     revert: host.revert,
     cancel: __webaudio.cancel,
+    hydraFrame: host.hydraFrame,
+    hydraHush: host.hydraHush,
   };
 }))js";
 
@@ -132,7 +135,8 @@ struct Engine::Js {
 	JSContext* ctx = nullptr;
 	audio::WebAudioHost host;
 	JSValue settle = JS_UNDEFINED, api = JS_UNDEFINED, evaluate = JS_UNDEFINED, tick = JS_UNDEFINED,
-			revert = JS_UNDEFINED, samples = JS_UNDEFINED, cancel = JS_UNDEFINED;
+			revert = JS_UNDEFINED, samples = JS_UNDEFINED, cancel = JS_UNDEFINED, hydraFrame = JS_UNDEFINED,
+			hydraHush = JS_UNDEFINED;
 	double deadline = 0; // now() past which JS is interrupted; 0: none
 	bool interrupted = false, booted = false, playAfter = false, queueFullSaid = false;
 	int evaluating = 0;        // evaluates in flight
@@ -339,6 +343,26 @@ struct Engine::Js {
 		return JS_UNDEFINED;
 	}
 
+	/** host.hydraProgram(output, frag, uniform names, which are samplers) -> the program's id. */
+	static JSValue nHydraProgram(JSContext* ctx, JSValueConst, int, JSValueConst* argv) {
+		int32_t output = 0;
+		JS_ToInt32(ctx, &output, argv[0]);
+		if (output < 0 || output >= hydra::Exchange::kOutputs)
+			return JS_ThrowRangeError(ctx, "no output o%d", output);
+		hydra::Exchange::Program p;
+		p.frag = str(ctx, argv[1]);
+		int64_t n = 0;
+		JS_GetLength(ctx, argv[2], &n);
+		for (int64_t i = 0; i < n; i++) {
+			JSValue name = JS_GetPropertyInt64(ctx, argv[2], i), sampler = JS_GetPropertyInt64(ctx, argv[3], i);
+			p.uniforms.push_back(str(ctx, name));
+			p.samplers.push_back(JS_ToBool(ctx, sampler) > 0);
+			JS_FreeValue(ctx, name);
+			JS_FreeValue(ctx, sampler);
+		}
+		return JS_NewUint32(ctx, self(ctx)->e->hydra.setProgram(output, std::move(p)));
+	}
+
 	// --- Lifetime ---
 
 	/** Evaluates `source` (a function expression) and calls it with args. */
@@ -390,7 +414,8 @@ struct Engine::Js {
 					   {"rack", nRack, 8},
 					   {"evaluated", nEvaluated, 4},
 					   {"highlight", nHighlight, 5},
-					   {"booted", nBooted, 0}};
+					   {"booted", nBooted, 0},
+					   {"hydraProgram", nHydraProgram, 4}};
 			for (auto& f : fns)
 				JS_SetPropertyStr(ctx, natives, f.name, JS_NewCFunction(ctx, f.fn, f.name, f.length));
 			local = localMap(samplesDir);
@@ -419,13 +444,15 @@ struct Engine::Js {
 		revert = JS_GetPropertyStr(ctx, api, "revert");
 		samples = JS_GetPropertyStr(ctx, api, "samples");
 		cancel = JS_GetPropertyStr(ctx, api, "cancel");
+		hydraFrame = JS_GetPropertyStr(ctx, api, "hydraFrame");
+		hydraHush = JS_GetPropertyStr(ctx, api, "hydraHush");
 		return true;
 	}
 
 	void free() {
 		if (!ctx)
 			return;
-		for (JSValue v : {settle, api, evaluate, tick, revert, samples, cancel})
+		for (JSValue v : {settle, api, evaluate, tick, revert, samples, cancel, hydraFrame, hydraHush})
 			JS_FreeValue(ctx, v);
 		JS_FreeContext(ctx);
 		JS_FreeRuntime(rt); // asserts that nothing leaked
@@ -494,6 +521,8 @@ struct Engine::Js {
 				say("[webaudio] " + error, true);
 		}
 		deadline = 0;
+		if (e->hush_.exchange(false))
+			call(hydraHush, 0, nullptr, e->cfg_.tickDeadline, "[hydra]");
 		runJobs(kJobBudget);
 		Timeline t = e->timeline();
 		// RESET: what the old timeline scheduled past the render position never sounds. Before the tick reads that
@@ -531,18 +560,87 @@ struct Engine::Js {
 		}
 	}
 
+	/** Icing's frame: Hydra's tick() with the request's audio analysis, at the cycle Filo plays now. */
+	void frame(const hydra::Exchange::Request& q) {
+		Timeline t = e->timeline();
+		JSValue specific = JS_NewArray(ctx);
+		for (int i = 0; i < hydra::kBarkBands; i++)
+			JS_SetPropertyUint32(ctx, specific, i, JS_NewFloat64(ctx, q.specific[i]));
+		JSValue args[5] = {JS_NewFloat64(ctx, q.time), JS_NewFloat64(ctx, t.cycle), JS_NewFloat64(ctx, t.cps), specific,
+						   JS_NewFloat64(ctx, q.total)};
+		double seconds = e->cfg_.tickDeadline; // a frame stalls the query loop like a tick
+		deadline = now() + seconds;
+		interrupted = false;
+		JSValue r = JS_Call(ctx, hydraFrame, JS_UNDEFINED, 5, args);
+		deadline = 0;
+		JS_FreeValue(ctx, specific);
+		if (JS_IsException(r)) { // an endless loop in a uniform function: never again, every frame
+			std::string error = exception(ctx, seconds);
+			if (!e->abort_) {
+				say("[hydra] frame: " + error + " (hushed)", true);
+				call(hydraHush, 0, nullptr, e->cfg_.tickDeadline, "[hydra]");
+			}
+			return;
+		}
+		if (JS_IsArray(r)) { // [display, time, width, height, then per output: program, n, n values]
+			int64_t n = 0, k = 0;
+			JS_GetLength(ctx, r, &n);
+			auto next = [&](double& d) {
+				d = 0;
+				if (k >= n)
+					return;
+				JSValue v = JS_GetPropertyInt64(ctx, r, k++);
+				JS_ToFloat64(ctx, &d, v);
+				JS_FreeValue(ctx, v);
+			};
+			auto integer = [&]() { // the JS side's ints; NaN or out of range (setResolution(NaN)?): 0
+				double d;
+				next(d);
+				return std::isfinite(d) && std::fabs(d) < 1e9 ? (int64_t)d : 0;
+			};
+			hydra::Exchange::Frame f;
+			double time = 0;
+			f.display = (int)integer();
+			next(time);
+			f.time = (float)time;
+			f.width = (int)integer();
+			f.height = (int)integer();
+			for (int o = 0; o < hydra::Exchange::kOutputs; o++) {
+				f.program[o] = (uint32_t)integer();
+				for (int64_t m = integer(); m > 0 && k < n; m--) {
+					double v;
+					next(v);
+					f.values[o].push_back((float)v);
+				}
+			}
+			e->hydra.publish(std::move(f));
+		}
+		JS_FreeValue(ctx, r);
+	}
+
 	void run() {
 		if (!init())
 			free();
-		double next = now();
+		double next = now(), last = next - kTick;
 		while (!e->abort_.load()) {
 			double t0 = now();
+			e->tickLate.store(std::max(e->tickLate.load(), t0 - last - kTick));
+			last = t0;
 			if (ctx)
 				step();
 			double t1 = now();
 			e->jsBusy.store(e->jsBusy.load() + (t1 - t0));
 			next = std::max(next + kTick, t1);
-			std::this_thread::sleep_for(std::chrono::duration<double>(next - t1));
+			// Until the next tick: Icing's frames, each as soon as it is requested; one at most runs past the tick.
+			using Clock = std::chrono::steady_clock; // now()'s
+			auto until =
+				Clock::time_point(std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(next)));
+			for (hydra::Exchange::Request q; !e->abort_.load() && now() < next && e->hydra.wait(until, q);) {
+				double f0 = now();
+				if (ctx)
+					frame(q);
+				e->jsBusy.store(e->jsBusy.load() + (now() - f0));
+			}
 		}
 		free();
 	}
@@ -609,6 +707,7 @@ void Engine::start() {
 	graph_.reset(new audio::Graph(cfg_.sampleRate));
 	scope_ = new audio::WorkletScope(cfg_.sampleRate);
 	ring_.clear();
+	hydra.clear(); // Hydra lives in the JS runtime: the code's next evaluate makes it again
 	frame_ = 0;
 	playback_ = 0;
 	if (startAt_ >= 0)

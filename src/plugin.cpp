@@ -68,6 +68,7 @@ struct Filo : Module {
 	dsp::BooleanTrigger playButton, stopButton;
 	dsp::PulseGenerator trigPulse[16], clkPulse, resetPulse;
 	filo::Sequencer::Outputs out;
+	std::atomic<float> mono{0}; // audio thread -> the Icing on the right: (L + R) / 2, its unpatched AUDIO input
 
 	Filo() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, 0);
@@ -135,6 +136,7 @@ struct Filo : Module {
 			resetPulse.trigger(1e-3f);
 		outputs[L_OUTPUT].setVoltage(5.f * l); // superdough's full scale 1.0 = 5 V
 		outputs[R_OUTPUT].setVoltage(5.f * r);
+		mono.store(0.5f * (l + r), std::memory_order_relaxed);
 		for (int id : {VOCT_OUTPUT, GATE_OUTPUT, VEL_OUTPUT})
 			outputs[id].setChannels(out.channels);
 #pragma GCC diagnostic push
@@ -211,7 +213,7 @@ struct Filo : Module {
 static const math::Rect kEditorMm = math::Rect(3, 9, 197.2, 87);
 
 /** The port labels. */
-struct FiloText : widget::Widget {
+struct PanelText : widget::Widget {
 	std::vector<std::pair<math::Vec, std::string>> labels; // px, centered
 
 	void draw(const DrawArgs& args) override {
@@ -238,7 +240,7 @@ struct FiloWidget : ModuleWidget {
 		view->doc = module ? &module->doc : &preview;
 		view->engine = module ? module->engine.get() : nullptr;
 		addChild(view);
-		auto* text = createWidget<FiloText>(Vec());
+		auto* text = createWidget<PanelText>(Vec());
 		text->box.size = box.size;
 		addChild(text);
 		auto label = [&](float x, float y, const char* name) { text->labels.push_back({mm2px(Vec(x, y - 5)), name}); };
@@ -326,11 +328,32 @@ struct FiloWidget : ModuleWidget {
 	}
 };
 
-// ponytail: Icing is the M1b GL-window spike (hard-coded shader); M5 adds hydra-synth, the AUDIO input and Filo.
-struct Icing : Module {
-	hydra::WindowGeometry window;
+// --- Icing: Hydra for the Filo on its left ---
 
-	Icing() { config(0, 0, 0, 0); }
+static Model* modelFilo;
+
+struct Icing : Module {
+	enum InputId { AUDIO_INPUT, INPUTS_LEN };
+
+	hydra::WindowGeometry window;
+	/** Audio -> UI thread: what a.fft analyses, in Web Audio's full scale (5 V = 1). */
+	dsp::RingBuffer<float, 1 << 13> audio;
+
+	Icing() {
+		config(0, INPUTS_LEN, 0, 0);
+		configInput(AUDIO_INPUT, "Audio for a.fft (unpatched: the Filo's L+R)");
+	}
+
+	void process(const ProcessArgs&) override {
+		Module* left = leftExpander.module;
+		float x = 0;
+		if (inputs[AUDIO_INPUT].isConnected())
+			x = inputs[AUDIO_INPUT].getVoltage() / 5.f;
+		else if (left && left->model == modelFilo)
+			x = static_cast<Filo*>(left)->mono.load(std::memory_order_relaxed);
+		if (!audio.full()) // drained every UI frame; full while nothing renders
+			audio.push(x);
+	}
 
 	json_t* dataToJson() override {
 		const hydra::WindowGeometry& g = window;
@@ -351,16 +374,23 @@ struct Icing : Module {
 
 // Matches the preview frame in res/Icing.svg (mm).
 static const math::Rect kPreviewMm = math::Rect(2.54, 12.7, 76.2, 42.8625);
+static const Vec kAudioMm = Vec(40.64, 108);
 
 struct IcingWidget : ModuleWidget {
 	hydra::Renderer renderer;
 	hydra::Window output;
+	hydra::Analyser analyser;
 	bool outputOpen = false;
-	double startTime = system::getTime();
+	int64_t filoId = -1; // the Filo whose Hydra this renders (-1: none)
 
 	IcingWidget(Icing* module) {
 		setModule(module);
 		setPanel(createPanel(asset::plugin(pluginInstance, "res/Icing.svg")));
+		addInput(createInputCentered<PJ301MPort>(mm2px(kAudioMm), module, Icing::AUDIO_INPUT));
+		auto* text = createWidget<PanelText>(Vec());
+		text->box.size = box.size;
+		text->labels.push_back({mm2px(kAudioMm.minus(Vec(0, 5))), "AUDIO"});
+		addChild(text);
 	}
 
 	~IcingWidget() override {
@@ -376,17 +406,53 @@ struct IcingWidget : ModuleWidget {
 		ModuleWidget::onContextDestroy(e);
 	}
 
+	/** The Filo directly on the left, if any. Rack sets leftExpander.moduleId on this thread (the engine resolves
+	.module on its own). */
+	Filo* filo() const {
+		int64_t id = module->leftExpander.moduleId;
+		Module* m = id >= 0 ? APP->engine->getModule(id) : nullptr;
+		return m && m->model == modelFilo ? static_cast<Filo*>(m) : nullptr;
+	}
+
 	void step() override {
 		ModuleWidget::step();
+		hydra::collectWindows();
 		if (!module) // module browser preview
 			return;
+		Icing* m = static_cast<Icing*>(module);
+		Filo* f = filo();
+		if ((f ? f->id : -1) != filoId) { // moved, or its Filo was deleted or added
+			filoId = f ? f->id : -1;
+			renderer.reset();
+		}
+		while (!m->audio.empty())
+			analyser.push(m->audio.shift());
 		// Rendered here, not in draw(): draw() is skipped for off-screen modules, the output window must keep going.
-		renderer.render(APP->window->vg, system::getTime() - startTime);
-		output.update(APP->window->win, renderer, static_cast<Icing*>(module)->window, outputOpen);
+		if (f) {
+			filo::Engine* engine = f->engine.get();
+			hydra::Exchange::Request q;
+			q.time = system::getTime();
+			q.total = analyser.analyse(APP->engine->getSampleRate(), q.specific);
+			engine->hydra.request(q);
+			renderer.update(APP->window->vg, engine->hydra, [=](const std::string& line) { engine->log(line, true); });
+		}
+		output.update(APP->window->win, f ? &renderer : nullptr, m->window, outputOpen);
+	}
+
+	void draw(const DrawArgs& args) override {
+		ModuleWidget::draw(args);
+		if (filoId >= 0)
+			return;
+		math::Rect r(mm2px(kPreviewMm.pos), mm2px(kPreviewMm.size));
+		nvgFontFaceId(args.vg, APP->window->uiFont->handle);
+		nvgFontSize(args.vg, 11);
+		nvgFillColor(args.vg, nvgRGB(0xe8, 0xa7, 0xc3));
+		nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+		nvgText(args.vg, r.getCenter().x, r.getCenter().y, "Place directly right of a Filo", nullptr);
 	}
 
 	void drawLayer(const DrawArgs& args, int layer) override {
-		if (layer == 1) { // like lights: drawn after the room-brightness dimming
+		if (layer == 1 && filoId >= 0) { // like lights: drawn after the room-brightness dimming
 			math::Rect r(mm2px(kPreviewMm.pos), mm2px(kPreviewMm.size));
 			renderer.drawPreview(args.vg, r.pos.x, r.pos.y, r.size.x, r.size.y);
 		}
@@ -405,6 +471,6 @@ struct IcingWidget : ModuleWidget {
 void init(Plugin* p) {
 	pluginInstance = p;
 	loadSettings();
-	p->addModel(createModel<Filo, FiloWidget>("Filo"));
+	p->addModel(modelFilo = createModel<Filo, FiloWidget>("Filo"));
 	p->addModel(createModel<Icing, IcingWidget>("Icing"));
 }

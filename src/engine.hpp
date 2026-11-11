@@ -6,7 +6,8 @@
 //
 // Threads, and what each owns:
 //   UI (any)  evaluate(), play(), stop(), message(), report(), highlights(), the sticky maps (mutexes, shared with JS)
-//   JS        QuickJS runtime #1 (res/engine.js); producer of the graph's commands and of seq.queue
+//             and Icing's Hydra frames (hydra::Exchange)
+//   JS        QuickJS runtime #1 (res/engine.js, Hydra too); producer of the graph's commands and of seq.queue
 //   render    renders the graph (and its worklet scope, QuickJS #2) into the ring, ahead of the audio thread
 //   audio     process(): ring -> L/R, seq -> CV, transport, the timeline snapshot for the JS thread
 // Between threads only atomics, SPSC queues and the two mutexes above; the audio and render threads never lock or
@@ -29,6 +30,7 @@
 
 #include "dsp.hpp"
 #include "fetch.hpp"
+#include "hydra.hpp"
 
 namespace audio {
 class Graph;
@@ -121,7 +123,17 @@ class Engine {
 
 	// --- Any thread, applied by the next process() ---
 	void play() { transport_.store(Play); }
-	void stop() { transport_.store(Stop); }
+	/** Also hushes Hydra (strudel.cc clears it on stop). */
+	void stop() {
+		transport_.store(Stop);
+		hush_.store(true);
+	}
+
+	// --- Icing (its UI thread) ---
+	/** Hydra's frames and shaders: the JS thread serves each request between its ticks. */
+	hydra::Exchange hydra;
+	/** A line for the panel's message and the log (Icing's shader errors). */
+	void log(const std::string& line, bool warning) { say(line, warning); }
 
 	// --- Audio thread ---
 	/** Owned by the audio thread: settings (voices, mode, CLK division, PPC) are set on it directly. */
@@ -136,6 +148,7 @@ class Engine {
 	// --- Stats (any thread) ---
 	std::atomic<int64_t> missingFrames{0};        // played as silence: the ring was empty
 	std::atomic<double> renderBusy{0}, jsBusy{0}; // s spent rendering / running JS (not sleeping)
+	std::atomic<double> tickLate{0};              // s a query loop run came after 20 ms + this, at worst (reset it)
 
 	// Internals shared with engine.cpp's thread functions.
 	struct Js;
@@ -183,6 +196,8 @@ class Engine {
 
 	// Other threads -> audio.
 	std::atomic<int> transport_{None};
+	// Any thread -> JS: stop() was called.
+	std::atomic<bool> hush_{false};
 
 	// Audio -> JS: the timeline snapshot, seqlock over relaxed atomics.
 	std::atomic<uint32_t> tlSeq_{0};

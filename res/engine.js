@@ -97,9 +97,9 @@
     const f = Object.create(Fraction.prototype);
     f["s"] = n2 < C_ZERO ? -C_ONE : C_ONE;
     n2 = n2 < C_ZERO ? -n2 : n2;
-    const a = gcd(n2, d);
-    f["n"] = n2 / a;
-    f["d"] = d / a;
+    const a2 = gcd(n2, d);
+    f["n"] = n2 / a2;
+    f["d"] = d / a2;
     return f;
   }
   function factorize(num3) {
@@ -158,27 +158,27 @@
     }
     return 0;
   }
-  function gcd(a, b) {
-    if (!a)
+  function gcd(a2, b) {
+    if (!a2)
       return b;
     if (!b)
-      return a;
+      return a2;
     while (1) {
-      a %= b;
-      if (!a)
+      a2 %= b;
+      if (!a2)
         return b;
-      b %= a;
+      b %= a2;
       if (!b)
-        return a;
+        return a2;
     }
   }
-  function Fraction(a, b) {
-    parse(a, b);
+  function Fraction(a2, b) {
+    parse(a2, b);
     if (this instanceof Fraction) {
-      a = gcd(P["d"], P["n"]);
+      a2 = gcd(P["d"], P["n"]);
       this["s"] = P["s"];
-      this["n"] = P["n"] / a;
-      this["d"] = P["d"] / a;
+      this["n"] = P["n"] / a2;
+      this["d"] = P["d"] / a2;
     } else {
       return newFraction(P["s"] * P["n"], P["d"]);
     }
@@ -388,8 +388,8 @@
          *
          * Ex: new Fraction({n: 2, d: 3}).add("14.9") => 467 / 30
          **/
-        "add": function(a, b) {
-          parse(a, b);
+        "add": function(a2, b) {
+          parse(a2, b);
           return newFraction(
             this["s"] * this["n"] * P["d"] + P["s"] * this["d"] * P["n"],
             this["d"] * P["d"]
@@ -400,8 +400,8 @@
          *
          * Ex: new Fraction({n: 2, d: 3}).add("14.9") => -427 / 30
          **/
-        "sub": function(a, b) {
-          parse(a, b);
+        "sub": function(a2, b) {
+          parse(a2, b);
           return newFraction(
             this["s"] * this["n"] * P["d"] - P["s"] * this["d"] * P["n"],
             this["d"] * P["d"]
@@ -412,8 +412,8 @@
          *
          * Ex: new Fraction("-17.(345)").mul(3) => 5776 / 111
          **/
-        "mul": function(a, b) {
-          parse(a, b);
+        "mul": function(a2, b) {
+          parse(a2, b);
           return newFraction(
             this["s"] * P["s"] * this["n"] * P["n"],
             this["d"] * P["d"]
@@ -424,8 +424,8 @@
          *
          * Ex: new Fraction("-17.(345)").inverse().div(3)
          **/
-        "div": function(a, b) {
-          parse(a, b);
+        "div": function(a2, b) {
+          parse(a2, b);
           return newFraction(
             this["s"] * P["s"] * this["n"] * P["d"],
             this["d"] * P["n"]
@@ -445,11 +445,11 @@
          * Ex: new Fraction('4.(3)').mod([7, 8]) => (13/3) % (7/8) = (5/6)
          * Ex: new Fraction(20, 10).mod().equals(0) ? "is Integer"
          **/
-        "mod": function(a, b) {
-          if (a === void 0) {
+        "mod": function(a2, b) {
+          if (a2 === void 0) {
             return newFraction(this["s"] * this["n"] % this["d"], C_ONE);
           }
-          parse(a, b);
+          parse(a2, b);
           if (C_ZERO === P["n"] * this["d"]) {
             throw DivisionByZero();
           }
@@ -463,8 +463,8 @@
          *
          * Ex: new Fraction(5,8).gcd(3,7) => 1/56
          */
-        "gcd": function(a, b) {
-          parse(a, b);
+        "gcd": function(a2, b) {
+          parse(a2, b);
           return newFraction(gcd(P["n"], this["n"]) * gcd(P["d"], this["d"]), P["d"] * this["d"]);
         },
         /**
@@ -472,8 +472,8 @@
          *
          * Ex: new Fraction(5,8).lcm(3,7) => 15
          */
-        "lcm": function(a, b) {
-          parse(a, b);
+        "lcm": function(a2, b) {
+          parse(a2, b);
           if (P["n"] === C_ZERO && this["n"] === C_ZERO) {
             return newFraction(C_ZERO, C_ONE);
           }
@@ -492,8 +492,8 @@
          *
          * Ex: new Fraction(-1,2).pow(-3) => -8
          */
-        "pow": function(a, b) {
-          parse(a, b);
+        "pow": function(a2, b) {
+          parse(a2, b);
           if (P["d"] === C_ONE) {
             if (P["s"] < C_ZERO) {
               return newFraction((this["s"] * this["d"]) ** P["n"], this["n"] ** P["n"]);
@@ -536,8 +536,8 @@
          *
          * Ex: new Fraction(27, 8).log(9, 4) => 3/2
          */
-        "log": function(a, b) {
-          parse(a, b);
+        "log": function(a2, b) {
+          parse(a2, b);
           if (this["s"] <= C_ZERO || P["s"] <= C_ZERO) return null;
           const allPrimes = {};
           const baseFactors = factorize(P["n"]);
@@ -588,8 +588,8 @@
          *
          * Ex: new Fraction(19.6).equals([98, 5]);
          **/
-        "equals": function(a, b) {
-          parse(a, b);
+        "equals": function(a2, b) {
+          parse(a2, b);
           return this["s"] * this["n"] * P["d"] === P["s"] * P["n"] * this["d"];
         },
         /**
@@ -597,8 +597,8 @@
          *
          * Ex: new Fraction(19.6).lt([98, 5]);
          **/
-        "lt": function(a, b) {
-          parse(a, b);
+        "lt": function(a2, b) {
+          parse(a2, b);
           return this["s"] * this["n"] * P["d"] < P["s"] * P["n"] * this["d"];
         },
         /**
@@ -606,8 +606,8 @@
          *
          * Ex: new Fraction(19.6).lt([98, 5]);
          **/
-        "lte": function(a, b) {
-          parse(a, b);
+        "lte": function(a2, b) {
+          parse(a2, b);
           return this["s"] * this["n"] * P["d"] <= P["s"] * P["n"] * this["d"];
         },
         /**
@@ -615,8 +615,8 @@
          *
          * Ex: new Fraction(19.6).lt([98, 5]);
          **/
-        "gt": function(a, b) {
-          parse(a, b);
+        "gt": function(a2, b) {
+          parse(a2, b);
           return this["s"] * this["n"] * P["d"] > P["s"] * P["n"] * this["d"];
         },
         /**
@@ -624,8 +624,8 @@
          *
          * Ex: new Fraction(19.6).lt([98, 5]);
          **/
-        "gte": function(a, b) {
-          parse(a, b);
+        "gte": function(a2, b) {
+          parse(a2, b);
           return this["s"] * this["n"] * P["d"] >= P["s"] * P["n"] * this["d"];
         },
         /**
@@ -636,8 +636,8 @@
          *
          * Ex: new Fraction(19.6).compare([98, 5]);
          **/
-        "compare": function(a, b) {
-          parse(a, b);
+        "compare": function(a2, b) {
+          parse(a2, b);
           let t = this["s"] * this["n"] * P["d"] - P["s"] * P["n"] * this["d"];
           return (C_ZERO < t) - (t < C_ZERO);
         },
@@ -682,8 +682,8 @@
           *
           * Ex: new Fraction('0.9').roundTo("1/8") => 7 / 8
           **/
-        "roundTo": function(a, b) {
-          parse(a, b);
+        "roundTo": function(a2, b) {
+          parse(a2, b);
           const n2 = this["n"] * P["d"];
           const d = this["d"] * P["n"];
           const r2 = n2 % d;
@@ -698,8 +698,8 @@
          *
          * Ex: new Fraction(19.6).divisible(1.5);
          */
-        "divisible": function(a, b) {
-          parse(a, b);
+        "divisible": function(a2, b) {
+          parse(a2, b);
           return !(!(P["n"] * this["d"]) || this["n"] * P["d"] % (P["n"] * this["d"]));
         },
         /**
@@ -804,15 +804,15 @@
          * Ex: new Fraction("7/8").toContinued() => [0,1,7]
          */
         "toContinued": function() {
-          let a = this["n"];
+          let a2 = this["n"];
           let b = this["d"];
           let res = [];
           do {
-            res.push(trunc(a / b));
-            let t = a % b;
-            a = b;
+            res.push(trunc(a2 / b));
+            let t = a2 % b;
+            a2 = b;
             b = t;
-          } while (a !== C_ONE);
+          } while (a2 !== C_ONE);
           return res;
         },
         "simplify": function(eps) {
@@ -899,19 +899,19 @@
     }
     throw new Error(`cannot parse as fractional: "${numOrString}"`);
   }
-  function uniq(a) {
+  function uniq(a2) {
     var seen = {};
-    return a.filter(function(item) {
+    return a2.filter(function(item) {
       return seen.hasOwn(item) ? false : seen[item] = true;
     });
   }
-  function uniqsort(a) {
-    return a.sort().filter(function(item, pos, ary) {
+  function uniqsort(a2) {
+    return a2.sort().filter(function(item, pos, ary) {
       return !pos || item != ary[pos - 1];
     });
   }
-  function uniqsortr(a) {
-    return a.sort((x3, y2) => x3.compare(y2)).filter(function(item, pos, ary) {
+  function uniqsortr(a2) {
+    return a2.sort((x3, y2) => x3.compare(y2)).filter(function(item, pos, ary) {
       return !pos || item.ne(ary[pos - 1]);
     });
   }
@@ -1036,7 +1036,7 @@
         return pc + oct2;
       };
       _mod = (n2, m3) => (n2 % m3 + m3) % m3;
-      averageArray = (arr) => arr.reduce((a, b) => a + b) / arr.length;
+      averageArray = (arr) => arr.reduce((a2, b) => a2 + b) / arr.length;
       getSoundIndex = (n2, numSounds) => {
         return _mod(Math.round(nanFallback(n2 ?? 0, 0)), numSounds);
       };
@@ -1089,8 +1089,8 @@
       compose = (...funcs) => pipe(...funcs.reverse());
       removeUndefineds = (xs) => xs.filter((x3) => x3 != void 0);
       flatten = (arr) => [].concat(...arr);
-      id = (a) => a;
-      constant = (a, b) => a;
+      id = (a2) => a2;
+      constant = (a2, b) => a2;
       listRange = (min, max) => Array.from({ length: max - min + 1 }, (_, i3) => i3 + min);
       fractionalArgs = (fn) => mapArgs(fn, parseFractional);
       splitAt = function(index5, value2) {
@@ -1511,8 +1511,8 @@
           return `${this.whole == void 0 ? "~" : this.whole.show()}: ${stringifyValues(this.value, compact3)}`;
         }
         combineContext(b) {
-          const a = this;
-          return { ...a.context, ...b.context, locations: (a.context.locations || []).concat(b.context.locations || []) };
+          const a2 = this;
+          return { ...a2.context, ...b.context, locations: (a2.context.locations || []).concat(b.context.locations || []) };
         }
         setContext(context) {
           return new _Hap(this.whole, this.part, this.value, context);
@@ -1556,20 +1556,20 @@
   });
 
   // build/engine-src/strudel/packages/core/value.mjs
-  function unionWithObj(a, b, func2) {
+  function unionWithObj(a2, b, func2) {
     if (b?.value !== void 0 && Object.keys(b).length === 1) {
       logger(`[warn]: Can't do arithmetic on control pattern.`);
-      return a;
+      return a2;
     }
-    const common = Object.keys(a).filter((k) => Object.keys(b).includes(k));
-    return Object.assign({}, a, b, Object.fromEntries(common.map((k) => [k, func2(a[k], b[k])])));
+    const common = Object.keys(a2).filter((k) => Object.keys(b).includes(k));
+    return Object.assign({}, a2, b, Object.fromEntries(common.map((k) => [k, func2(a2[k], b[k])])));
   }
   var mul, map;
   var init_value = __esm({
     "build/engine-src/strudel/packages/core/value.mjs"() {
       init_util();
       init_logger();
-      mul = curry((a, b) => a * b);
+      mul = curry((a2, b) => a2 * b);
       map = curry((f, anyFunctor) => anyFunctor.map(f));
     }
   });
@@ -1729,17 +1729,17 @@
   function _nonArrayObject(x3) {
     return !Array.isArray(x3) && typeof x3 === "object" && !isFraction(x3);
   }
-  function _composeOp(a, b, func2) {
-    if (_nonArrayObject(a) || _nonArrayObject(b)) {
-      if (!_nonArrayObject(a)) {
-        a = { value: a };
+  function _composeOp(a2, b, func2) {
+    if (_nonArrayObject(a2) || _nonArrayObject(b)) {
+      if (!_nonArrayObject(a2)) {
+        a2 = { value: a2 };
       }
       if (!_nonArrayObject(b)) {
         b = { value: b };
       }
-      return unionWithObj(a, b, func2);
+      return unionWithObj(a2, b, func2);
     }
-    return func2(a, b);
+    return func2(a2, b);
   }
   function pure(value2) {
     function query(state) {
@@ -1918,7 +1918,7 @@
       if (x3.length == 1) {
         return _sequenceCount(x3[0]);
       }
-      return [fastcat(...x3.map((a) => _sequenceCount(a)[0])), x3.length];
+      return [fastcat(...x3.map((a2) => _sequenceCount(a2)[0])), x3.length];
     }
     return [reify(x3), 1];
   }
@@ -2004,9 +2004,9 @@
     return register(name3, func2, patternify, preserveSteps, join);
   }
   function _retime(timedHaps) {
-    const occupied_perc = timedHaps.filter((t, pat) => pat.hasSteps).reduce((a, b) => a.add(b), fraction_default(0));
+    const occupied_perc = timedHaps.filter((t, pat) => pat.hasSteps).reduce((a2, b) => a2.add(b), fraction_default(0));
     const occupied_steps = removeUndefineds(timedHaps.map((t, pat) => pat._steps)).reduce(
-      (a, b) => a.add(b),
+      (a2, b) => a2.add(b),
       fraction_default(0)
     );
     const total_steps = occupied_perc.eq(0) ? void 0 : occupied_steps.div(occupied_perc);
@@ -2038,7 +2038,7 @@
     return new hap_default(hap_p.whole, subspan, hap_p.value, hap_p.context);
   }
   function _polymeterListSteps(steps4, ...args) {
-    const seqs = args.map((a) => _sequenceCount(a));
+    const seqs = args.map((a2) => _sequenceCount(a2));
     if (seqs.length == 0) {
       return silence;
     }
@@ -2081,14 +2081,14 @@
     const findsteps = (x3) => Array.isArray(x3) ? x3 : [x3._steps ?? 1, x3];
     timepats = timepats.map(findsteps);
     if (timepats.find((x3) => x3[0] === void 0)) {
-      const times = timepats.map((a) => a[0]).filter((x3) => x3 !== void 0);
+      const times = timepats.map((a2) => a2[0]).filter((x3) => x3 !== void 0);
       if (times.length === 0) {
         return fastcat(...timepats.map((x3) => x3[1]));
       }
       if (times.length === timepats.length) {
         return nothing;
       }
-      const avg = times.reduce((a, b) => a.add(b), fraction_default(0)).div(times.length);
+      const avg = times.reduce((a2, b) => a2.add(b), fraction_default(0)).div(times.length);
       for (let timepat of timepats) {
         if (timepat[0] === void 0) {
           timepat[0] = avg;
@@ -2099,7 +2099,7 @@
       const result2 = reify(timepats[0][1]);
       return result2.withSteps((_) => timepats[0][0]);
     }
-    const total = timepats.map((a) => a[0]).reduce((a, b) => a.add(b), fraction_default(0));
+    const total = timepats.map((a2) => a2[0]).reduce((a2, b) => a2.add(b), fraction_default(0));
     let begin2 = fraction_default(0);
     const pats = [];
     for (const [time4, pat] of timepats) {
@@ -2115,14 +2115,14 @@
     return result;
   }
   function stepalt(...groups) {
-    groups = groups.map((a) => Array.isArray(a) ? a.map(reify) : [reify(a)]);
+    groups = groups.map((a2) => Array.isArray(a2) ? a2.map(reify) : [reify(a2)]);
     const cycles = lcm(...groups.map((x3) => fraction_default(x3.length)));
     let result = [];
     for (let cycle = 0; cycle < cycles; ++cycle) {
       result.push(...groups.map((x3) => x3.length == 0 ? silence : x3[cycle % x3.length]));
     }
     result = result.filter((x3) => x3.hasSteps && x3._steps > 0);
-    const steps4 = result.reduce((a, b) => a.add(b._steps), fraction_default(0));
+    const steps4 = result.reduce((a2, b) => a2.add(b._steps), fraction_default(0));
     result = stepcat(...result);
     result._steps = steps4;
     return result;
@@ -2333,29 +2333,29 @@
         bindWhole(choose_whole, func2) {
           const pat_val = this;
           const query = function(state) {
-            const withWhole = function(a, b) {
+            const withWhole = function(a2, b) {
               return new hap_default(
-                choose_whole(a.whole, b.whole),
+                choose_whole(a2.whole, b.whole),
                 b.part,
                 b.value,
-                Object.assign({}, a.context, b.context, {
-                  locations: (a.context.locations || []).concat(b.context.locations || [])
+                Object.assign({}, a2.context, b.context, {
+                  locations: (a2.context.locations || []).concat(b.context.locations || [])
                 })
               );
             };
-            const match = function(a) {
-              return func2(a.value).query(state.setSpan(a.part)).map((b) => withWhole(a, b));
+            const match = function(a2) {
+              return func2(a2.value).query(state.setSpan(a2.part)).map((b) => withWhole(a2, b));
             };
-            return flatten(pat_val.query(state).map((a) => match(a)));
+            return flatten(pat_val.query(state).map((a2) => match(a2)));
           };
           return new _Pattern(query);
         }
         bind(func2) {
-          const whole_func = function(a, b) {
-            if (a == void 0 || b == void 0) {
+          const whole_func = function(a2, b) {
+            if (a2 == void 0 || b == void 0) {
               return void 0;
             }
-            return a.intersection_e(b);
+            return a2.intersection_e(b);
           };
           return this.bindWhole(whole_func, func2);
         }
@@ -2363,7 +2363,7 @@
           return this.bind(id);
         }
         outerBind(func2) {
-          return this.bindWhole((a) => a, func2).setSteps(this._steps);
+          return this.bindWhole((a2) => a2, func2).setSteps(this._steps);
         }
         outerJoin() {
           return this.outerBind(id);
@@ -2706,23 +2706,23 @@
             const result = [];
             for (var i3 = 0; i3 < haps.length; ++i3) {
               var searching = true;
-              var a = haps[i3];
+              var a2 = haps[i3];
               while (searching) {
                 const a_value = JSON.stringify(haps[i3].value);
                 var found = false;
                 for (var j = i3 + 1; j < haps.length; j++) {
                   const b = haps[j];
-                  if (a.whole.equals(b.whole)) {
-                    if (a.part.begin.eq(b.part.end)) {
+                  if (a2.whole.equals(b.whole)) {
+                    if (a2.part.begin.eq(b.part.end)) {
                       if (a_value === JSON.stringify(b.value)) {
-                        a = new hap_default(a.whole, new timespan_default(b.part.begin, a.part.end), a.value);
+                        a2 = new hap_default(a2.whole, new timespan_default(b.part.begin, a2.part.end), a2.value);
                         haps.splice(j, 1);
                         found = true;
                         break;
                       }
-                    } else if (b.part.begin.eq(a.part.end)) {
+                    } else if (b.part.begin.eq(a2.part.end)) {
                       if (a_value == JSON.stringify(b.value)) {
-                        a = new hap_default(a.whole, new timespan_default(a.part.begin, b.part.end), a.value);
+                        a2 = new hap_default(a2.whole, new timespan_default(a2.part.begin, b.part.end), a2.value);
                         haps.splice(j, 1);
                         found = true;
                         break;
@@ -2732,7 +2732,7 @@
                 }
                 searching = found;
               }
-              result.push(a);
+              result.push(a2);
             }
             return result;
           });
@@ -2781,7 +2781,7 @@
         sortHapsByPart() {
           return this.withHaps(
             (haps) => haps.sort(
-              (a, b) => a.part.begin.sub(b.part.begin).or(a.part.end.sub(b.part.end)).or(a.whole.begin.sub(b.whole.begin).or(a.whole.end.sub(b.whole.end)))
+              (a2, b) => a2.part.begin.sub(b.part.begin).or(a2.part.end.sub(b.part.end)).or(a2.whole.begin.sub(b.whole.begin).or(a2.whole.end.sub(b.whole.end)))
             )
           );
         }
@@ -2805,24 +2805,24 @@
         }
         _opSqueeze(other, func2) {
           const otherPat = reify(other);
-          return this.fmap((a) => otherPat.fmap((b) => func2(a)(b))).squeezeJoin();
+          return this.fmap((a2) => otherPat.fmap((b) => func2(a2)(b))).squeezeJoin();
         }
         _opSqueezeOut(other, func2) {
           const thisPat = this;
           const otherPat = reify(other);
-          return otherPat.fmap((a) => thisPat.fmap((b) => func2(b)(a))).squeezeJoin();
+          return otherPat.fmap((a2) => thisPat.fmap((b) => func2(b)(a2))).squeezeJoin();
         }
         _opReset(other, func2) {
           const otherPat = reify(other);
-          return otherPat.fmap((b) => this.fmap((a) => func2(a)(b))).resetJoin();
+          return otherPat.fmap((b) => this.fmap((a2) => func2(a2)(b))).resetJoin();
         }
         _opRestart(other, func2) {
           const otherPat = reify(other);
-          return otherPat.fmap((b) => this.fmap((a) => func2(a)(b))).restartJoin();
+          return otherPat.fmap((b) => this.fmap((a2) => func2(a2)(b))).restartJoin();
         }
         _opPoly(other, func2) {
           const otherPat = reify(other);
-          return this.fmap((b) => otherPat.fmap((a) => func2(a)(b))).polyJoin();
+          return this.fmap((b) => otherPat.fmap((a2) => func2(a2)(b))).polyJoin();
         }
         //////////////////////////////////////////////////////////////////////
         // End-user methods.
@@ -2983,7 +2983,7 @@
           return this.unjoin(pieces, func2).innerJoin();
         }
       };
-      congruent = (a, b) => a.spanEquals(b);
+      congruent = (a2, b) => a2.spanEquals(b);
       Pattern.prototype.collect = function() {
         return this.withHaps(
           (haps) => groupHapsBy(congruent, haps).map((_haps) => new hap_default(_haps[0].whole, _haps[0].part, _haps, {}))
@@ -3022,7 +3022,7 @@
          * // it overrides the "sine" declared earlier
          * note("c a f e").s("sine").set(s("triangle"))
          */
-        set: [(a, b) => b],
+        set: [(a2, b) => b],
         /**
          * When called on a pattern `a`, with a input pattern `b` (`a.keep(b)`),
          * combines `a` and `b` such that anything defined in `a`,
@@ -3047,8 +3047,8 @@
          * // while "s", not defined, will be set to "piano"
          * note("c a f e").keep(note("e f a c").s("piano"))
          */
-        keep: [(a) => a],
-        keepif: [(a, b) => b ? a : void 0],
+        keep: [(a2) => a2],
+        keepif: [(a2, b) => b ? a2 : void 0],
         // numerical functions
         /**
          *
@@ -3067,7 +3067,7 @@
          * // Behind the scenes, the notes are converted to midi numbers:
          * // note("48 52 55".add("<0 5 7 0>"))
          */
-        add: [numeralArgs((a, b) => a + b)],
+        add: [numeralArgs((a2, b) => a2 + b)],
         // support string concatenation
         /**
          *
@@ -3079,7 +3079,7 @@
          * n("0 2 4".sub("<0 1 2 3>")).scale("C4:minor")
          * // See add for more information.
          */
-        sub: [numeralArgs((a, b) => a - b)],
+        sub: [numeralArgs((a2, b) => a2 - b)],
         /**
          *
          * Multiplies each number by the given factor.
@@ -3089,7 +3089,7 @@
          * @example
          * "<1 1.5 [1.66, <2 2.33>]>*4".mul(150).freq()
          */
-        mul: [numeralArgs((a, b) => a * b)],
+        mul: [numeralArgs((a2, b) => a2 * b)],
         /**
          *
          * Divides each number by the given factor.
@@ -3097,7 +3097,7 @@
          * @memberof Pattern
          * @tags math
          */
-        div: [numeralArgs((a, b) => a / b)],
+        div: [numeralArgs((a2, b) => a2 / b)],
         /**
          *
          * Divides each number by the given factor and returns the remainder
@@ -3121,7 +3121,7 @@
          * @memberof Pattern
          * @tags math
          */
-        band: [numeralArgs((a, b) => a & b)],
+        band: [numeralArgs((a2, b) => a2 & b)],
         /**
          *
          * Performs a bitwise `or` on each number and the given factor
@@ -3129,7 +3129,7 @@
          * @memberof Pattern
          * @tags math
          */
-        bor: [numeralArgs((a, b) => a | b)],
+        bor: [numeralArgs((a2, b) => a2 | b)],
         /**
          *
          * Performs a bitwise `xor` on each number and the given factor
@@ -3137,7 +3137,7 @@
          * @memberof Pattern
          * @tags math
          */
-        bxor: [numeralArgs((a, b) => a ^ b)],
+        bxor: [numeralArgs((a2, b) => a2 ^ b)],
         /**
          *
          * Performs a bitwise `left shift` on each number by the given factor
@@ -3145,7 +3145,7 @@
          * @memberof Pattern
          * @tags math
          */
-        blshift: [numeralArgs((a, b) => a << b)],
+        blshift: [numeralArgs((a2, b) => a2 << b)],
         /**
          *
          * Performs a bitwise `right shift` on each number by the given factor
@@ -3153,7 +3153,7 @@
          * @memberof Pattern
          * @tags math
          */
-        brshift: [numeralArgs((a, b) => a >> b)],
+        brshift: [numeralArgs((a2, b) => a2 >> b)],
         // TODO - force numerical comparison if both look like numbers?
         /**
          * performs a < b
@@ -3164,7 +3164,7 @@
          * @param {any} b
          * @returns Pattern with boolean value(s)
          */
-        lt: [(a, b) => a < b],
+        lt: [(a2, b) => a2 < b],
         /**
          * performs a > b
          * @name gt
@@ -3174,7 +3174,7 @@
          * @param {any} b
          * @returns Pattern with boolean value(s)
          */
-        gt: [(a, b) => a > b],
+        gt: [(a2, b) => a2 > b],
         /**
          * performs a <= b
          * @name lte
@@ -3184,7 +3184,7 @@
          * @param {any} b
          * @returns Pattern with boolean value(s)
          */
-        lte: [(a, b) => a <= b],
+        lte: [(a2, b) => a2 <= b],
         /**
          * performs a >= b
          * @name gte
@@ -3194,7 +3194,7 @@
          * @param {any} b
          * @returns Pattern with boolean value(s)
          */
-        gte: [(a, b) => a >= b],
+        gte: [(a2, b) => a2 >= b],
         /**
          * performs a == b
          * @name eq
@@ -3204,7 +3204,7 @@
          * @param {any} b
          * @returns Pattern with boolean value(s)
          */
-        eq: [(a, b) => a == b],
+        eq: [(a2, b) => a2 == b],
         /**
          * performs a === b (strictly equal)
          * @name eqt
@@ -3214,7 +3214,7 @@
          * @param {any} b
          * @returns Pattern with boolean value(s)
          */
-        eqt: [(a, b) => a === b],
+        eqt: [(a2, b) => a2 === b],
         /**
          * performs a != b
          * @name ne
@@ -3224,7 +3224,7 @@
          * @param {any} b
          * @returns Pattern with boolean value(s)
          */
-        ne: [(a, b) => a != b],
+        ne: [(a2, b) => a2 != b],
         /**
          * performs a !== b (strictly not equal)
          * @name net
@@ -3234,7 +3234,7 @@
          * @param {any} b
          * @returns Pattern with boolean value(s)
          */
-        net: [(a, b) => a !== b],
+        net: [(a2, b) => a2 !== b],
         /**
          * performs a && b
          * @name and
@@ -3244,7 +3244,7 @@
          * @param {any} b
          * @returns Pattern with boolean value(s)
          */
-        and: [(a, b) => a && b],
+        and: [(a2, b) => a2 && b],
         /**
          * performs a || b
          * @name or
@@ -3254,9 +3254,9 @@
          * @param {any} b
          * @returns Pattern with boolean value(s)
          */
-        or: [(a, b) => a || b],
+        or: [(a2, b) => a2 || b],
         //  bitwise ops
-        func: [(a, b) => b(a)]
+        func: [(a2, b) => b(a2)]
       };
       _setupAlignments = () => {
         for (const [what, [op, preprocess]] of Object.entries(COMPOSERS)) {
@@ -3281,10 +3281,10 @@
                   }
                   var result;
                   if (what === "keepif") {
-                    result = howpat["_op" + how](other, (a) => (b) => op(a, b));
+                    result = howpat["_op" + how](other, (a2) => (b) => op(a2, b));
                     result = result.removeUndefineds();
                   } else {
-                    result = howpat["_op" + how](other, (a) => (b) => _composeOp(a, b, op));
+                    result = howpat["_op" + how](other, (a2) => (b) => _composeOp(a2, b, op));
                   }
                   return result;
                 };
@@ -3343,41 +3343,41 @@
       gap = (steps4) => new Pattern(() => [], steps4);
       silence = gap(1);
       nothing = gap(0);
-      mask = curry((a, b) => reify(b).mask(a));
-      struct = curry((a, b) => reify(b).struct(a));
-      superimpose = curry((a, b) => reify(b).superimpose(...a));
-      withValue = curry((a, b) => reify(b).withValue(a));
-      bind = curry((a, b) => reify(b).bind(a));
-      innerBind = curry((a, b) => reify(b).innerBind(a));
-      outerBind = curry((a, b) => reify(b).outerBind(a));
-      squeezeBind = curry((a, b) => reify(b).squeezeBind(a));
-      stepBind = curry((a, b) => reify(b).stepBind(a));
-      polyBind = curry((a, b) => reify(b).polyBind(a));
-      set = curry((a, b) => reify(b).set(a));
-      keep = curry((a, b) => reify(b).keep(a));
-      keepif = curry((a, b) => reify(b).keepif(a));
-      add = curry((a, b) => reify(b).add(a));
-      sub = curry((a, b) => reify(b).sub(a));
-      mul2 = curry((a, b) => reify(b).mul(a));
-      div = curry((a, b) => reify(b).div(a));
-      mod = curry((a, b) => reify(b).mod(a));
-      pow = curry((a, b) => reify(b).pow(a));
-      band = curry((a, b) => reify(b).band(a));
-      bor = curry((a, b) => reify(b).bor(a));
-      bxor = curry((a, b) => reify(b).bxor(a));
-      blshift = curry((a, b) => reify(b).blshift(a));
-      brshift = curry((a, b) => reify(b).brshift(a));
-      lt = curry((a, b) => reify(b).lt(a));
-      gt = curry((a, b) => reify(b).gt(a));
-      lte = curry((a, b) => reify(b).lte(a));
-      gte = curry((a, b) => reify(b).gte(a));
-      eq = curry((a, b) => reify(b).eq(a));
-      eqt = curry((a, b) => reify(b).eqt(a));
-      ne = curry((a, b) => reify(b).ne(a));
-      net = curry((a, b) => reify(b).net(a));
-      and = curry((a, b) => reify(b).and(a));
-      or = curry((a, b) => reify(b).or(a));
-      func = curry((a, b) => reify(b).func(a));
+      mask = curry((a2, b) => reify(b).mask(a2));
+      struct = curry((a2, b) => reify(b).struct(a2));
+      superimpose = curry((a2, b) => reify(b).superimpose(...a2));
+      withValue = curry((a2, b) => reify(b).withValue(a2));
+      bind = curry((a2, b) => reify(b).bind(a2));
+      innerBind = curry((a2, b) => reify(b).innerBind(a2));
+      outerBind = curry((a2, b) => reify(b).outerBind(a2));
+      squeezeBind = curry((a2, b) => reify(b).squeezeBind(a2));
+      stepBind = curry((a2, b) => reify(b).stepBind(a2));
+      polyBind = curry((a2, b) => reify(b).polyBind(a2));
+      set = curry((a2, b) => reify(b).set(a2));
+      keep = curry((a2, b) => reify(b).keep(a2));
+      keepif = curry((a2, b) => reify(b).keepif(a2));
+      add = curry((a2, b) => reify(b).add(a2));
+      sub = curry((a2, b) => reify(b).sub(a2));
+      mul2 = curry((a2, b) => reify(b).mul(a2));
+      div = curry((a2, b) => reify(b).div(a2));
+      mod = curry((a2, b) => reify(b).mod(a2));
+      pow = curry((a2, b) => reify(b).pow(a2));
+      band = curry((a2, b) => reify(b).band(a2));
+      bor = curry((a2, b) => reify(b).bor(a2));
+      bxor = curry((a2, b) => reify(b).bxor(a2));
+      blshift = curry((a2, b) => reify(b).blshift(a2));
+      brshift = curry((a2, b) => reify(b).brshift(a2));
+      lt = curry((a2, b) => reify(b).lt(a2));
+      gt = curry((a2, b) => reify(b).gt(a2));
+      lte = curry((a2, b) => reify(b).lte(a2));
+      gte = curry((a2, b) => reify(b).gte(a2));
+      eq = curry((a2, b) => reify(b).eq(a2));
+      eqt = curry((a2, b) => reify(b).eqt(a2));
+      ne = curry((a2, b) => reify(b).ne(a2));
+      net = curry((a2, b) => reify(b).net(a2));
+      and = curry((a2, b) => reify(b).and(a2));
+      or = curry((a2, b) => reify(b).or(a2));
+      func = curry((a2, b) => reify(b).func(a2));
       round = register("round", function(pat) {
         return pat.asNumber().fmap((v2) => Math.round(v2));
       });
@@ -3535,16 +3535,16 @@
         const steps4 = __steps ? pat._steps?.mulmaybe(d) : void 0;
         return pat.withQuerySpan((span) => span.withCycle((t) => t.mul(d).add(s2))).withHapSpan((span) => span.withCycle((t) => t.sub(s2).div(d))).splitQueries().setSteps(steps4);
       });
-      ({ zoomArc, zoomarc } = register(["zoomArc", "zoomarc"], function(a, pat) {
-        return pat.zoom(a.begin, a.end);
+      ({ zoomArc, zoomarc } = register(["zoomArc", "zoomarc"], function(a2, pat) {
+        return pat.zoom(a2.begin, a2.end);
       }));
       bite = register(
         "bite",
         (npat, ipat, pat) => {
           return ipat.fmap((i3) => (n2) => {
-            const a = fraction_default(i3).div(n2).mod(1);
-            const b = a.add(fraction_default(1).div(n2));
-            return pat.zoom(a, b);
+            const a2 = fraction_default(i3).div(n2).mod(1);
+            const b = a2.add(fraction_default(1).div(n2));
+            return pat.zoom(a2, b);
           }).appLeft(npat).squeezeJoin();
         },
         false
@@ -3553,7 +3553,7 @@
         ["isobite", "cyclestruct", "cycleStruct"],
         (structure, pat) => {
           const structPat = new Pattern((state) => {
-            const haps_cycle = structure.withQuerySpan((span) => span.begin.wholeCycle()).query(state).filter((hap) => hap.value != 0).sort((a, b) => a.whole.begin - b.whole.begin).map((hap, i3) => hap.withValue((_) => i3));
+            const haps_cycle = structure.withQuerySpan((span) => span.begin.wholeCycle()).query(state).filter((hap) => hap.value != 0).sort((a2, b) => a2.whole.begin - b.whole.begin).map((hap, i3) => hap.withValue((_) => i3));
             const haps = [];
             for (const hap of haps_cycle) {
               const new_part = state.span.intersection(hap.part);
@@ -3799,8 +3799,8 @@
         ["ribbon", "rib"],
         (offset3, cycles, pat) => pat.early(offset3).restart(pure(1).slow(cycles))
       ));
-      hsla = register("hsla", (h3, s2, l, a, pat) => {
-        return pat.color(`hsla(${h3}turn,${s2 * 100}%,${l * 100}%,${a})`);
+      hsla = register("hsla", (h3, s2, l, a2, pat) => {
+        return pat.color(`hsla(${h3}turn,${s2 * 100}%,${l * 100}%,${a2})`);
       });
       hsl = register("hsl", (h3, s2, l, pat) => {
         return pat.color(`hsl(${h3}turn,${s2 * 100}%,${l * 100}%)`);
@@ -3812,9 +3812,9 @@
       filterWhen = register("filterWhen", (test, pat) => pat.filter((h3) => test(h3.whole.begin)));
       within = register(
         "within",
-        (a, b, fn, pat) => stack(
-          fn(pat.filterWhen((t) => t.cyclePos() >= a && t.cyclePos() <= b)),
-          pat.filterWhen((t) => t.cyclePos() < a || t.cyclePos() > b)
+        (a2, b, fn, pat) => stack(
+          fn(pat.filterWhen((t) => t.cyclePos() >= a2 && t.cyclePos() <= b)),
+          pat.filterWhen((t) => t.cyclePos() < a2 || t.cyclePos() > b)
         )
       );
       Pattern.prototype.stepJoin = function() {
@@ -3936,7 +3936,7 @@
           }
           const list2 = pat.shrinklist(amount);
           const result = stepcat(...list2);
-          result._steps = list2.reduce((a, b) => a.add(b._steps), fraction_default(0));
+          result._steps = list2.reduce((a2, b) => a2.add(b._steps), fraction_default(0));
           return result;
         },
         true,
@@ -3952,7 +3952,7 @@
           const list2 = pat.shrinklist(fraction_default(0).sub(amount));
           list2.reverse();
           const result = stepcat(...list2);
-          result._steps = list2.reduce((a, b) => a.add(b._steps), fraction_default(0));
+          result._steps = list2.reduce((a2, b) => a2.add(b._steps), fraction_default(0));
           return result;
         },
         true,
@@ -4006,12 +4006,12 @@
       chop = register("chop", function(n2, pat) {
         const slices = Array.from({ length: n2 }, (x3, i3) => i3);
         const slice_objects = slices.map((i3) => ({ begin: i3 / n2, end: (i3 + 1) / n2 }));
-        const merge = function(a, b) {
-          if ("begin" in a && "end" in a && a.begin !== void 0 && a.end !== void 0) {
-            const d = a.end - a.begin;
-            b = { begin: a.begin + b.begin * d, end: a.begin + b.end * d };
+        const merge = function(a2, b) {
+          if ("begin" in a2 && "end" in a2 && a2.begin !== void 0 && a2.end !== void 0) {
+            const d = a2.end - a2.begin;
+            b = { begin: a2.begin + b.begin * d, end: a2.begin + b.end * d };
           }
-          return Object.assign({}, a, b);
+          return Object.assign({}, a2, b);
         };
         const func2 = function(o) {
           return sequence(slice_objects.map((slice_o) => merge(o, slice_o)));
@@ -4097,13 +4097,13 @@
       }));
       ref = (accessor) => pure(1).withValue(() => reify(accessor())).innerJoin();
       fadeGain = (p) => p < 0.5 ? 1 : 1 - (p - 0.5) / 0.5;
-      xfade = (a, pos, b) => {
+      xfade = (a2, pos, b) => {
         pos = reify(pos);
-        a = reify(a);
+        a2 = reify(a2);
         b = reify(b);
         let gaina = pos.fmap((v2) => ({ gain: fadeGain(v2) }));
         let gainb = pos.fmap((v2) => ({ gain: fadeGain(1 - v2) }));
-        return stack(a.mul(gaina), b.mul(gainb));
+        return stack(a2.mul(gaina), b.mul(gainb));
       };
       Pattern.prototype.xfade = function(pos, b) {
         return xfade(this, pos, b);
@@ -4821,11 +4821,11 @@
       let theseAliases = [...aliases];
       let theseNames = [...names10];
       if (i3 === 1) {
-        const aliases1 = theseAliases.map((a) => `${a}1`);
+        const aliases1 = theseAliases.map((a2) => `${a2}1`);
         const names1 = theseNames.map((n2) => `${n2}1`);
         theseAliases = theseAliases.concat(aliases1).concat(names1);
       } else {
-        theseAliases = theseAliases.map((a) => `${a}${i3}`);
+        theseAliases = theseAliases.map((a2) => `${a2}${i3}`);
         theseNames = theseNames.map((n2) => `${n2}${i3}`);
       }
       const subBag = registerControl(theseNames, ...theseAliases);
@@ -5402,7 +5402,7 @@
         const [_xs, __xs] = splitAt(offs, xs);
         return [
           [offs, ons - offs],
-          [zipWith((a, b) => a.concat(b), _xs, ys), __xs]
+          [zipWith((a2, b) => a2.concat(b), _xs, ys), __xs]
         ];
       };
       right = function(n2, x3) {
@@ -5411,7 +5411,7 @@
         const [_ys, __ys] = splitAt(ons, ys);
         const result = [
           [ons, offs - ons],
-          [zipWith((a, b) => a.concat(b), xs, _ys), __ys]
+          [zipWith((a2, b) => a2.concat(b), xs, _ys), __ys]
         ];
         return result;
       };
@@ -5594,11 +5594,11 @@
                 var cpsChanged = false;
                 do {
                   cpsChanged = false;
-                  const haps = this.pattern.queryArc(begin2, end2, { _cps: this.cps, cyclist: "cyclist" }).filter((hap) => hap.hasOnset()).sort((a, b) => {
-                    const aBegin = a.whole.begin;
+                  const haps = this.pattern.queryArc(begin2, end2, { _cps: this.cps, cyclist: "cyclist" }).filter((hap) => hap.hasOnset()).sort((a2, b) => {
+                    const aBegin = a2.whole.begin;
                     const bBegin = b.whole.begin;
                     if (aBegin.eq(bBegin)) {
-                      if (a.value.cps !== void 0) {
+                      if (a2.value.cps !== void 0) {
                         return b.value.cps !== void 0 ? 0 : -1;
                       }
                       if (b.value.cps !== void 0) {
@@ -6192,7 +6192,7 @@
     let ta = Math.floor(t);
     let tb = ta + 1;
     const smootherStep = (x3) => 6 * x3 ** 5 - 15 * x3 ** 4 + 10 * x3 ** 3;
-    const interp = (x3) => (a) => (b) => a + smootherStep(x3) * (b - a);
+    const interp = (x3) => (a2) => (b) => a2 + smootherStep(x3) * (b - a2);
     const ra = getRandsAtTime(ta, 1, seed2);
     const rb = getRandsAtTime(tb, 1, seed2);
     const v2 = interp(t - ta)(ra)(rb);
@@ -6205,8 +6205,8 @@
     const height2 = getRandsAtTime(nextRidgeStartIndex, 1, seed2);
     const nextRidgeTopPoint = prevRidgeBottomPoint + height2;
     const currentPercent = (t - prevRidgeStartIndex) / (nextRidgeStartIndex - prevRidgeStartIndex);
-    const interp = (a, b, t2) => {
-      return a + t2 * (b - a);
+    const interp = (a2, b, t2) => {
+      return a2 + t2 * (b - a2);
     };
     return interp(prevRidgeBottomPoint, nextRidgeTopPoint, currentPercent) / 2;
   }
@@ -6294,8 +6294,8 @@
         return out;
       };
       __xorwise = (x3) => {
-        const a = x3 << 13 ^ x3;
-        const b = a >> 17 ^ a;
+        const a2 = x3 << 13 ^ x3;
+        const b = a2 >> 17 ^ a2;
         return b << 5 ^ b;
       };
       __frac = (x3) => x3 - Math.trunc(x3);
@@ -6348,7 +6348,7 @@
         return signal((t, controls) => {
           let rands = getRandsAtTime(t.floor().add(0.5), n2, controls.randSeed);
           if (!Array.isArray(rands)) rands = [rands];
-          const nums = rands.map((n3, i4) => [n3, i4]).sort((a, b) => (a[0] > b[0]) - (a[0] < b[0])).map((x3) => x3[1]);
+          const nums = rands.map((n3, i4) => [n3, i4]).sort((a2, b) => (a2[0] > b[0]) - (a2[0] < b[0])).map((x3) => x3[1]);
           const i3 = _mod(t.cyclePos().mul(n2).floor(), n2);
           return nums[i3];
         })._segment(n2);
@@ -6429,7 +6429,7 @@
       berlin = signal((t, controls) => _berlin(t, controls.randSeed));
       degradeByWith = register("degradeByWith", (withPat, x3, pat) => {
         if (!isPattern(withPat)) withPat = pure(withPat);
-        return pat.fmap((a) => (_) => a).appLeft(withPat.filterValues((v2) => v2 > x3));
+        return pat.fmap((a2) => (_) => a2).appLeft(withPat.filterValues((v2) => v2 > x3));
       });
       degradeBy = register(
         "degradeBy",
@@ -7815,8 +7815,8 @@ Please check with "npm ls @strudel/core".`
     for (let i3 = 0; i3 < oct2.length; i3++) {
       o += oct2.charAt(i3) === "," ? -1 : 1;
     }
-    const a = acc[0] === "_" ? acc.replace(/_/g, "b") : acc[0] === "^" ? acc.replace(/\^/g, "#") : "";
-    return letter.charCodeAt(0) > 96 ? letter.toUpperCase() + a + (o + 1) : letter + a + o;
+    const a2 = acc[0] === "_" ? acc.replace(/_/g, "b") : acc[0] === "^" ? acc.replace(/\^/g, "#") : "";
+    return letter.charCodeAt(0) > 96 ? letter.toUpperCase() + a2 + (o + 1) : letter + a2 + o;
   }
   function scientificToAbcNotation(str) {
     const n2 = note2(str);
@@ -7824,10 +7824,10 @@ Please check with "npm ls @strudel/core".`
       return "";
     }
     const { letter, acc, oct: oct2 } = n2;
-    const a = acc[0] === "b" ? acc.replace(/b/g, "_") : acc.replace(/#/g, "^");
+    const a2 = acc[0] === "b" ? acc.replace(/b/g, "_") : acc.replace(/#/g, "^");
     const l = oct2 > 4 ? letter.toLowerCase() : letter;
     const o = oct2 === 5 ? "" : oct2 > 4 ? fillStr3("'", oct2 - 5) : fillStr3(",", 4 - oct2);
-    return a + l + o;
+    return a2 + l + o;
   }
   function transpose2(note22, interval3) {
     return scientificToAbcNotation(transpose(abcToScientificNotation(note22), interval3));
@@ -7864,14 +7864,14 @@ Please check with "npm ls @strudel/core".`
     sortedUniqNoteNames: () => sortedUniqNoteNames
   });
   function ascR(b, n2) {
-    const a = [];
-    for (; n2--; a[n2] = n2 + b) ;
-    return a;
+    const a2 = [];
+    for (; n2--; a2[n2] = n2 + b) ;
+    return a2;
   }
   function descR(b, n2) {
-    const a = [];
-    for (; n2--; a[n2] = b - n2) ;
-    return a;
+    const a2 = [];
+    for (; n2--; a2[n2] = b - n2) ;
+    return a2;
   }
   function range3(from, to) {
     return from < to ? ascR(from, to - from + 1) : descR(from, from - to + 1);
@@ -7886,10 +7886,10 @@ Please check with "npm ls @strudel/core".`
   }
   function sortedNoteNames(notes3) {
     const valid = notes3.map((n2) => note2(n2)).filter((n2) => !n2.empty);
-    return valid.sort((a, b) => a.height - b.height).map((n2) => n2.name);
+    return valid.sort((a2, b) => a2.height - b.height).map((n2) => n2.name);
   }
   function sortedUniqNoteNames(arr) {
-    return sortedNoteNames(arr).filter((n2, i3, a) => i3 === 0 || n2 !== a[i3 - 1]);
+    return sortedNoteNames(arr).filter((n2, i3, a2) => i3 === 0 || n2 !== a2[i3 - 1]);
   }
   function shuffle2(arr, rnd = Math.random) {
     let i3;
@@ -7925,14 +7925,14 @@ Please check with "npm ls @strudel/core".`
 
   // build/engine-src/strudel/node_modules/.pnpm/@tonaljs+collection@4.9.0/node_modules/@tonaljs/collection/dist/index.mjs
   function ascR2(b, n2) {
-    const a = [];
-    for (; n2--; a[n2] = n2 + b) ;
-    return a;
+    const a2 = [];
+    for (; n2--; a2[n2] = n2 + b) ;
+    return a2;
   }
   function descR2(b, n2) {
-    const a = [];
-    for (; n2--; a[n2] = b - n2) ;
-    return a;
+    const a2 = [];
+    for (; n2--; a2[n2] = b - n2) ;
+    return a2;
   }
   function range4(from, to) {
     return from < to ? ascR2(from, to - from + 1) : descR2(from, from - to + 1);
@@ -8313,7 +8313,7 @@ Please check with "npm ls @strudel/core".`
       data_default.forEach(
         ([ivls, fullName, names22]) => add2(ivls.split(" "), names22.split(" "), fullName)
       );
-      dictionary2.sort((a, b) => a.setNum - b.setNum);
+      dictionary2.sort((a2, b) => a2.setNum - b.setNum);
     }
   });
 
@@ -8324,7 +8324,7 @@ Please check with "npm ls @strudel/core".`
       return [];
     }
     const found = findMatches(notes3, 1, options);
-    return found.filter((chord3) => chord3.weight).sort((a, b) => b.weight - a.weight).map((chord3) => chord3.name);
+    return found.filter((chord3) => chord3.weight).sort((a2, b) => b.weight - a2.weight).map((chord3) => chord3.name);
   }
   function hasAnyThirdAndPerfectFifthAndAnySeventh(chordType2) {
     const chromaNumber = parseInt(chordType2.chroma, 2);
@@ -8896,7 +8896,7 @@ Please check with "npm ls @strudel/core".`
       data_default2.forEach(
         ([ivls, fullName, names22]) => add3(ivls.split(" "), names22.split(" "), fullName)
       );
-      dictionary3.sort((a, b) => a.setNum - b.setNum);
+      dictionary3.sort((a2, b) => a2.setNum - b.setNum);
       chord_type_default = {
         names,
         symbols,
@@ -9368,8 +9368,8 @@ Please check with "npm ls @strudel/core".`
     return coordToInterval2([nFifths + fifths, nOcts, dir]).name;
   }
   function combinator(fn) {
-    return (a, b) => {
-      const coordA = interval2(a).coord;
+    return (a2, b) => {
+      const coordA = interval2(a2).coord;
       const coordB = interval2(b).coord;
       if (coordA && coordB) {
         const coord = fn(coordA, coordB);
@@ -9390,9 +9390,9 @@ Please check with "npm ls @strudel/core".`
       IN = [1, 2, 2, 3, 3, 4, 5, 5, 6, 6, 7, 7];
       IQ = "P m M m M P d P m M m M".split(" ");
       distance4 = distance;
-      add6 = combinator((a, b) => [a[0] + b[0], a[1] + b[1]]);
+      add6 = combinator((a2, b) => [a2[0] + b[0], a2[1] + b[1]]);
       addTo = (interval3) => (other) => add6(interval3, other);
-      substract = combinator((a, b) => [a[0] - b[0], a[1] - b[1]]);
+      substract = combinator((a2, b) => [a2[0] - b[0], a2[1] - b[1]]);
       interval_default = {
         names: names4,
         get: get6,
@@ -9451,7 +9451,7 @@ Please check with "npm ls @strudel/core".`
     }, []);
   }
   function pcsetFromMidi(midi3) {
-    return midi3.map(chroma3).sort((a, b) => a - b).filter((n2, i3, a) => i3 === 0 || n2 !== a[i3 - 1]);
+    return midi3.map(chroma3).sort((a2, b) => a2 - b).filter((n2, i3, a2) => i3 === 0 || n2 !== a2[i3 - 1]);
   }
   function pcset2(notes3) {
     return Array.isArray(notes3) ? pcsetFromMidi(notes3) : pcsetFromChroma(notes3);
@@ -9540,7 +9540,7 @@ Please check with "npm ls @strudel/core".`
   }
   function sortedUniqNames(notes3) {
     return sortedNames(notes3, ascending).filter(
-      (n2, i3, a) => i3 === 0 || n2 !== a[i3 - 1]
+      (n2, i3, a2) => i3 === 0 || n2 !== a2[i3 - 1]
     );
   }
   function enharmonic(noteName, destName) {
@@ -9591,8 +9591,8 @@ Please check with "npm ls @strudel/core".`
       transposeFrom = (note4) => (interval3) => transpose5(note4, interval3);
       trFrom = transposeFrom;
       trFifths = transposeFifths2;
-      ascending = (a, b) => a.height - b.height;
-      descending = (a, b) => b.height - a.height;
+      ascending = (a2, b) => a2.height - b.height;
+      descending = (a2, b) => b.height - a2.height;
       simplify2 = (noteName) => {
         const note4 = get7(noteName);
         if (note4.empty) {
@@ -9890,8 +9890,8 @@ Please check with "npm ls @strudel/core".`
     return coordToInterval([nFifths + fifths, nOcts, dir]).name;
   }
   function combinator2(fn) {
-    return (a, b) => {
-      const coordA = interval(a).coord;
+    return (a2, b) => {
+      const coordA = interval(a2).coord;
       const coordB = interval(b).coord;
       if (coordA && coordB) {
         const coord = fn(coordA, coordB);
@@ -9906,8 +9906,8 @@ Please check with "npm ls @strudel/core".`
       init_dist2();
       get9 = interval;
       IQ2 = "P m M m M P d P m M m M".split(" ");
-      add7 = combinator2((a, b) => [a[0] + b[0], a[1] + b[1]]);
-      subtract = combinator2((a, b) => [a[0] - b[0], a[1] - b[1]]);
+      add7 = combinator2((a2, b) => [a2[0] + b[0], a2[1] + b[1]]);
+      subtract = combinator2((a2, b) => [a2[0] - b[0], a2[1] - b[1]]);
     }
   });
 
@@ -10287,7 +10287,7 @@ Please check with "npm ls @strudel/core".`
     return list2.length === 1 ? [list2[0], denominator] : [list2, denominator];
   }
   function build([up, down]) {
-    const upper = Array.isArray(up) ? up.reduce((a, b) => a + b, 0) : up;
+    const upper = Array.isArray(up) ? up.reduce((a2, b) => a2 + b, 0) : up;
     const lower = down;
     if (upper === 0 || lower === 0) {
       return NONE;
@@ -10721,8 +10721,8 @@ Please check with "npm ls @strudel/core".`
   });
 
   // build/engine-src/strudel/packages/superdough/clockbridge.mjs
-  function expDecay(a, b, decay2, dt2) {
-    return b + (a - b) * Math.exp(-decay2 * dt2);
+  function expDecay(a2, b, decay2, dt2) {
+    return b + (a2 - b) * Math.exp(-decay2 * dt2);
   }
   var ClockBridge;
   var init_clockbridge = __esm({
@@ -10985,8 +10985,8 @@ Please check with "npm ls @strudel/core".`
       getSoundIndex2 = (n2, numSounds) => {
         return _mod2(Math.round(nanFallback2(n2, 0)), numSounds);
       };
-      pickAndRename = (source2, map3) => {
-        return Object.fromEntries(Object.entries(map3).map(([newKey, oldKey]) => [newKey, source2[oldKey]]));
+      pickAndRename = (source2, map4) => {
+        return Object.fromEntries(Object.entries(map4).map(([newKey, oldKey]) => [newKey, source2[oldKey]]));
       };
       getBaseURL = (url) => {
         try {
@@ -11402,12 +11402,12 @@ Please check with "npm ls @strudel/core".`
         const envmin = curve2 === "exponential" ? 1e-3 : 1e-3;
         const releaseMin = 0.01;
         const envmax = 1;
-        const [a, d, s2, r2] = params;
-        if (a == null && d == null && s2 == null && r2 == null) {
+        const [a2, d, s2, r2] = params;
+        if (a2 == null && d == null && s2 == null && r2 == null) {
           return defaultValues ?? [envmin, envmin, envmax, releaseMin];
         }
-        const sustain2 = s2 != null ? s2 : a != null && d == null || a == null && d == null ? envmax : envmin;
-        return [Math.max(a ?? 0, envmin), Math.max(d ?? 0, envmin), Math.min(sustain2, envmax), Math.max(r2 ?? 0, releaseMin)];
+        const sustain2 = s2 != null ? s2 : a2 != null && d == null || a2 == null && d == null ? envmax : envmin;
+        return [Math.max(a2 ?? 0, envmin), Math.max(d ?? 0, envmin), Math.min(sustain2, envmax), Math.max(r2 ?? 0, releaseMin)];
       };
       wetfade = (d) => d < 0.5 ? 1 : 1 - (d - 0.5) / 0.5;
       curves = ["linear", "exponential"];
@@ -14629,13 +14629,13 @@ registerProcessor('${name3}', MyProcessor);
       const wavBuffer = audioBufferToWav(renderedBuffer);
       const blob = new Blob([wavBuffer], { type: "audio/wav" });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
+      const a2 = document.createElement("a");
+      a2.href = url;
       downloadName = downloadName ? `${downloadName}.wav` : `${(/* @__PURE__ */ new Date()).toISOString()}.wav`;
-      a.download = `${downloadName}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      a2.download = `${downloadName}`;
+      document.body.appendChild(a2);
+      a2.click();
+      document.body.removeChild(a2);
       URL.revokeObjectURL(url);
     }).finally(async () => {
       setAudioContext(null);
@@ -14677,7 +14677,7 @@ registerProcessor('${name3}', MyProcessor);
     return renderPromise;
   }
   async function scheduleHapsChunk(pattern2, cps2, begin2, chunkStart, chunkEnd) {
-    let haps = pattern2.queryArc(chunkStart, chunkEnd, { _cps: cps2 }).sort((a, b) => a.whole.begin.valueOf() - b.whole.begin.valueOf());
+    let haps = pattern2.queryArc(chunkStart, chunkEnd, { _cps: cps2 }).sort((a2, b) => a2.whole.begin.valueOf() - b.whole.begin.valueOf());
     for (const hap of haps) {
       if (hap.hasOnset()) {
         try {
@@ -15025,7 +15025,7 @@ registerProcessor('${name3}', MyProcessor);
       valueExtent = maxMidi - minMidi + 1;
     }
     foldValues = values.sort(
-      (a, b) => typeof a === "number" && typeof b === "number" ? a - b : typeof a === "number" ? 1 : String(a).localeCompare(String(b))
+      (a2, b) => typeof a2 === "number" && typeof b === "number" ? a2 - b : typeof a2 === "number" ? 1 : String(a2).localeCompare(String(b))
     );
     barThickness = fold2 ? valueAxis / foldValues.length : valueAxis / valueExtent;
     ctx.fillStyle = background;
@@ -15415,7 +15415,7 @@ registerProcessor('${name3}', MyProcessor);
     ctx.strokeStyle = color2;
     ctx.globalAlpha = 1;
     if (connectdots && shape2.length) {
-      shape2 = shape2.sort((a, b) => a[2] - b[2]);
+      shape2 = shape2.sort((a2, b) => a2[2] - b[2]);
       ctx.beginPath();
       ctx.moveTo(shape2[0][0], shape2[0][1]);
       shape2.forEach(([x3, y2, _, color3, alpha]) => {
@@ -17478,22 +17478,22 @@ registerProcessor('${name3}', MyProcessor);
         }, this);
       };
       SourceMapGenerator.prototype.toJSON = function SourceMapGenerator_toJSON() {
-        var map3 = {
+        var map4 = {
           version: this._version,
           sources: this._sources.toArray(),
           names: this._names.toArray(),
           mappings: this._serializeMappings()
         };
         if (this._file != null) {
-          map3.file = this._file;
+          map4.file = this._file;
         }
         if (this._sourceRoot != null) {
-          map3.sourceRoot = this._sourceRoot;
+          map4.sourceRoot = this._sourceRoot;
         }
         if (this._sourcesContents) {
-          map3.sourcesContent = this._generateSourcesContent(map3.sources, map3.sourceRoot);
+          map4.sourcesContent = this._generateSourcesContent(map4.sources, map4.sourceRoot);
         }
-        return map3;
+        return map4;
       };
       SourceMapGenerator.prototype.toString = function SourceMapGenerator_toString() {
         return JSON.stringify(this.toJSON());
@@ -18386,7 +18386,7 @@ registerProcessor('${name3}', MyProcessor);
           line: 1,
           column: 0
         };
-        var map3 = new SourceMapGenerator(aArgs);
+        var map4 = new SourceMapGenerator(aArgs);
         var sourceMappingActive = false;
         var lastOriginalSource = null;
         var lastOriginalLine = null;
@@ -18396,7 +18396,7 @@ registerProcessor('${name3}', MyProcessor);
           generated.code += chunk2;
           if (original.source !== null && original.line !== null && original.column !== null) {
             if (lastOriginalSource !== original.source || lastOriginalLine !== original.line || lastOriginalColumn !== original.column || lastOriginalName !== original.name) {
-              map3.addMapping({
+              map4.addMapping({
                 source: original.source,
                 original: {
                   line: original.line,
@@ -18415,7 +18415,7 @@ registerProcessor('${name3}', MyProcessor);
             lastOriginalName = original.name;
             sourceMappingActive = true;
           } else if (sourceMappingActive) {
-            map3.addMapping({
+            map4.addMapping({
               generated: {
                 line: generated.line,
                 column: generated.column
@@ -18432,7 +18432,7 @@ registerProcessor('${name3}', MyProcessor);
                 lastOriginalSource = null;
                 sourceMappingActive = false;
               } else if (sourceMappingActive) {
-                map3.addMapping({
+                map4.addMapping({
                   source: original.source,
                   original: {
                     line: original.line,
@@ -18451,9 +18451,9 @@ registerProcessor('${name3}', MyProcessor);
           }
         });
         this.walkSourceContents(function(sourceFile, sourceContent) {
-          map3.setSourceContent(sourceFile, sourceContent);
+          map4.setSourceContent(sourceFile, sourceContent);
         });
-        return { code: generated.code, map: map3 };
+        return { code: generated.code, map: map4 };
       };
       exports.SourceNode = SourceNode;
     }
@@ -24700,8 +24700,8 @@ registerProcessor('${name3}', MyProcessor);
                 n3.enumerable = n3.enumerable || false, n3.configurable = true, "value" in n3 && (n3.writable = true), Object.defineProperty(e2, n3.key, n3);
               }
             }
-            function a(e2) {
-              return (a = Object.setPrototypeOf ? Object.getPrototypeOf : function(e3) {
+            function a2(e2) {
+              return (a2 = Object.setPrototypeOf ? Object.getPrototypeOf : function(e3) {
                 return e3.__proto__ || Object.getPrototypeOf(e3);
               })(e2);
             }
@@ -24719,7 +24719,7 @@ registerProcessor('${name3}', MyProcessor);
                 var r4, n3, o2, i4, u2, c3;
                 return (function(e4, t3) {
                   if (!(e4 instanceof t3)) throw new TypeError("Cannot call a class as a function");
-                })(this, t2), n3 = this, r4 = !(o2 = a(t2).call(this, e3.id, e3.length, e3.buffer, e3.subChunks)) || "object" !== s2(o2) && "function" != typeof o2 ? l(n3) : o2, i4 = l(l(r4)), c3 = void 0, (u2 = "subChunks") in i4 ? Object.defineProperty(i4, u2, { value: c3, enumerable: true, configurable: true, writable: true }) : i4[u2] = c3, r4.subChunks = e3.subChunks.map(function(e4) {
+                })(this, t2), n3 = this, r4 = !(o2 = a2(t2).call(this, e3.id, e3.length, e3.buffer, e3.subChunks)) || "object" !== s2(o2) && "function" != typeof o2 ? l(n3) : o2, i4 = l(l(r4)), c3 = void 0, (u2 = "subChunks") in i4 ? Object.defineProperty(i4, u2, { value: c3, enumerable: true, configurable: true, writable: true }) : i4[u2] = c3, r4.subChunks = e3.subChunks.map(function(e4) {
                   return new t2(e4);
                 }), r4;
               }
@@ -24769,12 +24769,12 @@ registerProcessor('${name3}', MyProcessor);
             ), i3 = r2(
               /*! ~/constants */
               "./src/constants.ts"
-            ), s2 = [o.GeneratorType.StartAddrsOffset, o.GeneratorType.EndAddrsOffset, o.GeneratorType.StartLoopAddrsOffset, o.GeneratorType.EndLoopAddrsOffset, o.GeneratorType.StartAddrsCoarseOffset, o.GeneratorType.EndAddrsCoarseOffset, o.GeneratorType.StartLoopAddrsCoarseOffset, o.GeneratorType.KeyNum, o.GeneratorType.Velocity, o.GeneratorType.EndLoopAddrsCoarseOffset, o.GeneratorType.SampleModes, o.GeneratorType.ExclusiveClass, o.GeneratorType.OverridingRootKey], u = [o.GeneratorType.Unused1, o.GeneratorType.Unused2, o.GeneratorType.Unused3, o.GeneratorType.Unused4, o.GeneratorType.Reserved1, o.GeneratorType.Reserved2, o.GeneratorType.Reserved3], a = [o.GeneratorType.KeyRange, o.GeneratorType.VelRange], c2 = function(e2, t2) {
+            ), s2 = [o.GeneratorType.StartAddrsOffset, o.GeneratorType.EndAddrsOffset, o.GeneratorType.StartLoopAddrsOffset, o.GeneratorType.EndLoopAddrsOffset, o.GeneratorType.StartAddrsCoarseOffset, o.GeneratorType.EndAddrsCoarseOffset, o.GeneratorType.StartLoopAddrsCoarseOffset, o.GeneratorType.KeyNum, o.GeneratorType.Velocity, o.GeneratorType.EndLoopAddrsCoarseOffset, o.GeneratorType.SampleModes, o.GeneratorType.ExclusiveClass, o.GeneratorType.OverridingRootKey], u = [o.GeneratorType.Unused1, o.GeneratorType.Unused2, o.GeneratorType.Unused3, o.GeneratorType.Unused4, o.GeneratorType.Reserved1, o.GeneratorType.Reserved2, o.GeneratorType.Reserved3], a2 = [o.GeneratorType.KeyRange, o.GeneratorType.VelRange], c2 = function(e2, t2) {
               if (e2.id !== t2) throw new n2.ParseError("Unexpected chunk ID", "'".concat(t2, "'"), "'".concat(e2.id, "'"));
               if (e2.length % i3.SF_GENERATOR_SIZE) throw new n2.ParseError("Invalid size for the '".concat(t2, "' sub-chunk"));
               return e2.iterate(function(e3) {
                 var r3 = e3.getInt16();
-                return o.GeneratorType[r3] ? "pgen" === t2 && s2.includes(r3) ? null : "igen" === t2 && u.includes(r3) ? null : a.includes(r3) ? { id: r3, range: { lo: e3.getByte(), hi: e3.getByte() } } : { id: r3, value: e3.getInt16BE() } : null;
+                return o.GeneratorType[r3] ? "pgen" === t2 && s2.includes(r3) ? null : "igen" === t2 && u.includes(r3) ? null : a2.includes(r3) ? { id: r3, range: { lo: e3.getByte(), hi: e3.getByte() } } : { id: r3, value: e3.getInt16BE() } : null;
               });
             };
           }
@@ -24821,14 +24821,14 @@ registerProcessor('${name3}', MyProcessor);
             r2.d(t, "getModulators", function() {
               return u.getModulators;
             });
-            var a = r2(
+            var a2 = r2(
               /*! ./zones */
               "./src/chunks/zones.ts"
             );
             r2.d(t, "getZones", function() {
-              return a.getZones;
+              return a2.getZones;
             }), r2.d(t, "getItemsInZone", function() {
-              return a.getItemsInZone;
+              return a2.getItemsInZone;
             });
           }
         ), "./src/chunks/instruments/headers.ts": (
@@ -25007,7 +25007,7 @@ registerProcessor('${name3}', MyProcessor);
             }, u = function(e2, t2, r3, n3, o2, s3) {
               for (var u2 = [], l2 = 0; l2 < e2.length; l2++) {
                 for (var f = e2[l2], d = e2[l2 + 1], p = f.bagIndex, h3 = d ? d.bagIndex : t2.length, y2 = [], v2 = void 0, g = p; g < h3; g++) {
-                  var E = a(g, t2, r3), m3 = c2(g, t2, n3), b = m3[i3.GeneratorType.KeyRange] && m3[i3.GeneratorType.KeyRange].range, S2 = m3[s3];
+                  var E = a2(g, t2, r3), m3 = c2(g, t2, n3), b = m3[i3.GeneratorType.KeyRange] && m3[i3.GeneratorType.KeyRange].range, S2 = m3[s3];
                   if (S2) {
                     var T2 = o2[S2.value];
                     T2 && y2.push({ keyRange: b, modulators: E, generators: m3, reference: T2 });
@@ -25016,7 +25016,7 @@ registerProcessor('${name3}', MyProcessor);
                 u2.push({ header: f, globalZone: v2, zones: y2 });
               }
               return u2;
-            }, a = function(e2, t2, r3) {
+            }, a2 = function(e2, t2, r3) {
               var n3 = t2[e2], o2 = t2[e2 + 1], i4 = n3.modulatorIndex, s3 = o2 ? o2.modulatorIndex : t2.length;
               return l(i4, s3, r3);
             }, c2 = function(e2, t2, r3) {
@@ -25048,13 +25048,13 @@ registerProcessor('${name3}', MyProcessor);
             }), r2.d(t, "SF_GENERATOR_SIZE", function() {
               return u;
             }), r2.d(t, "SF_INSTRUMENT_HEADER_SIZE", function() {
-              return a;
+              return a2;
             }), r2.d(t, "SF_SAMPLE_HEADER_SIZE", function() {
               return c2;
             }), r2.d(t, "DEFAULT_SAMPLE_RATE", function() {
               return l;
             });
-            var n2 = 4, o = 38, i3 = 4, s2 = 10, u = 4, a = 22, c2 = 46, l = 22050;
+            var n2 = 4, o = 38, i3 = 4, s2 = 10, u = 4, a2 = 22, c2 = 46, l = 22050;
           }
         ), "./src/index.ts": (
           /*!**********************!*\
@@ -25243,7 +25243,7 @@ registerProcessor('${name3}', MyProcessor);
                   t2.set(e3, n3);
                 }
                 function n3() {
-                  return s2(e3, arguments, a(this).constructor);
+                  return s2(e3, arguments, a2(this).constructor);
                 }
                 return n3.prototype = Object.create(e3.prototype, { constructor: { value: n3, enumerable: false, writable: true, configurable: true } }), u(n3, e3);
               })(e2);
@@ -25271,8 +25271,8 @@ registerProcessor('${name3}', MyProcessor);
                 return e3.__proto__ = t3, e3;
               })(e2, t2);
             }
-            function a(e2) {
-              return (a = Object.setPrototypeOf ? Object.getPrototypeOf : function(e3) {
+            function a2(e2) {
+              return (a2 = Object.setPrototypeOf ? Object.getPrototypeOf : function(e3) {
                 return e3.__proto__ || Object.getPrototypeOf(e3);
               })(e2);
             }
@@ -25283,7 +25283,7 @@ registerProcessor('${name3}', MyProcessor);
               function t2(e3, r3, n3) {
                 return (function(e4, t3) {
                   if (!(e4 instanceof t3)) throw new TypeError("Cannot call a class as a function");
-                })(this, t2), o(this, a(t2).call(this, "".concat(e3).concat(r3 && n3 ? ", expected ".concat(r3, ", received ").concat(n3) : "")));
+                })(this, t2), o(this, a2(t2).call(this, "".concat(e3).concat(r3 && n3 ? ", expected ".concat(r3, ", received ").concat(n3) : "")));
               }
               return (function(e3, t3) {
                 if ("function" != typeof t3 && null !== t3) throw new TypeError("Super expression must either be null or a function");
@@ -25303,7 +25303,7 @@ registerProcessor('${name3}', MyProcessor);
             }), r2.d(t, "getChunk", function() {
               return u;
             }), r2.d(t, "getChunkLength", function() {
-              return a;
+              return a2;
             }), r2.d(t, "getSubChunks", function() {
               return c2;
             }), r2.d(t, "getChunkId", function() {
@@ -25326,9 +25326,9 @@ registerProcessor('${name3}', MyProcessor);
               var o2 = e2.subarray(8), s3 = c2(o2.subarray(4));
               return new i3.RIFFChunk(t2, o2.length, o2, s3);
             }, u = function(e2, t2) {
-              var r3 = l(e2, t2), n3 = a(e2, t2 + 4), o2 = [];
+              var r3 = l(e2, t2), n3 = a2(e2, t2 + 4), o2 = [];
               return "RIFF" !== r3 && "LIST" !== r3 || (o2 = c2(e2.subarray(t2 + 12))), new i3.RIFFChunk(r3, n3, e2.subarray(t2 + 8), o2);
-            }, a = function(e2, t2) {
+            }, a2 = function(e2, t2) {
               return ((e2 = e2.subarray(t2, t2 + 4))[0] | e2[1] << 8 | e2[2] << 16 | e2[3] << 24) >>> 0;
             }, c2 = function(e2) {
               for (var t2 = [], r3 = 0; r3 <= e2.length - 8; ) {
@@ -25426,7 +25426,7 @@ registerProcessor('${name3}', MyProcessor);
               /*! ./utils */
               "./src/utils/index.ts"
             );
-            function a(e2) {
+            function a2(e2) {
               for (var t2 = 1; t2 < arguments.length; t2++) {
                 var r3 = null != arguments[t2] ? arguments[t2] : {}, n3 = Object.keys(r3);
                 "function" == typeof Object.getOwnPropertySymbols && (n3 = n3.concat(Object.getOwnPropertySymbols(r3).filter(function(e3) {
@@ -25477,7 +25477,7 @@ registerProcessor('${name3}', MyProcessor);
                           return t2.isKeyInRange(r5, e4);
                         });
                         if (c3) {
-                          var l2 = c3.sample, f2 = a({}, s3.generators, c3.generators), d2 = a({}, s3.modulators, c3.modulators);
+                          var l2 = c3.sample, f2 = a2({}, s3.generators, c3.generators), d2 = a2({}, s3.modulators, c3.modulators);
                           return { keyNumber: e4, preset: i4, instrument: u2, sample: l2, generators: f2, modulators: d2 };
                         }
                       }
@@ -25592,13 +25592,13 @@ registerProcessor('${name3}', MyProcessor);
                 return u[e2];
               });
             })(o);
-            var a = r2(
+            var a2 = r2(
               /*! ./metaData */
               "./src/types/metaData.ts"
             );
-            for (var o in a) ["GeneratorType", "DEFAULT_GENERATOR_VALUES", "default"].indexOf(o) < 0 && (function(e2) {
+            for (var o in a2) ["GeneratorType", "DEFAULT_GENERATOR_VALUES", "default"].indexOf(o) < 0 && (function(e2) {
               r2.d(t, e2, function() {
-                return a[e2];
+                return a2[e2];
               });
             })(o);
             var c2 = r2(
@@ -25694,11 +25694,11 @@ registerProcessor('${name3}', MyProcessor);
             }), r2.d(t, "Controller", function() {
               return u;
             }), r2.d(t, "TransformType", function() {
-              return a;
+              return a2;
             }), r2.d(t, "DEFAULT_INSTRUMENT_MODULATORS", function() {
               return l;
             });
-            var n2, o, i3, s2, u, a, c2 = r2(
+            var n2, o, i3, s2, u, a2, c2 = r2(
               /*! ./generator */
               "./src/types/generator.ts"
             );
@@ -25714,8 +25714,8 @@ registerProcessor('${name3}', MyProcessor);
               e2[e2.NoController = 0] = "NoController", e2[e2.NoteOnVelocity = 2] = "NoteOnVelocity", e2[e2.NoteOnKeyNumber = 3] = "NoteOnKeyNumber", e2[e2.PolyPressure = 10] = "PolyPressure", e2[e2.ChannelPressure = 13] = "ChannelPressure", e2[e2.PitchWheel = 14] = "PitchWheel", e2[e2.PitchWheelSensitivity = 16] = "PitchWheelSensitivity", e2[e2.Link = 127] = "Link";
             })(u || (u = {})), (function(e2) {
               e2[e2.Linear = 0] = "Linear", e2[e2.Absolute = 2] = "Absolute";
-            })(a || (a = {}));
-            var l = [{ id: c2.GeneratorType.InitialAttenuation, source: { type: n2.Concave, polarity: o.Unipolar, direction: i3.Decreasing, palette: s2.GeneralController, index: u.NoteOnVelocity }, value: 960, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.InitialFilterFc, source: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Decreasing, palette: s2.GeneralController, index: u.NoteOnVelocity }, value: -2400, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.VibLFOToPitch, source: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.ChannelPressure }, value: 50, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.VibLFOToPitch, source: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.MidiController, index: 1 }, value: 50, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.InitialAttenuation, source: { type: n2.Concave, polarity: o.Unipolar, direction: i3.Decreasing, palette: s2.MidiController, index: 7 }, value: 960, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.InitialAttenuation, source: { type: n2.Linear, polarity: o.Bipolar, direction: i3.Increasing, palette: s2.MidiController, index: 10 }, value: 1e3, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.InitialAttenuation, source: { type: n2.Concave, polarity: o.Unipolar, direction: i3.Decreasing, palette: s2.MidiController, index: 11 }, value: 960, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.ReverbEffectsSend, source: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.MidiController, index: 91 }, value: 200, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.ChorusEffectsSend, source: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.MidiController, index: 93 }, value: 200, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a.Linear }, { id: c2.GeneratorType.CoarseTune, source: { type: n2.Linear, polarity: o.Bipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.PitchWheel }, value: 12700, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.PitchWheelSensitivity }, transform: a.Linear }];
+            })(a2 || (a2 = {}));
+            var l = [{ id: c2.GeneratorType.InitialAttenuation, source: { type: n2.Concave, polarity: o.Unipolar, direction: i3.Decreasing, palette: s2.GeneralController, index: u.NoteOnVelocity }, value: 960, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a2.Linear }, { id: c2.GeneratorType.InitialFilterFc, source: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Decreasing, palette: s2.GeneralController, index: u.NoteOnVelocity }, value: -2400, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a2.Linear }, { id: c2.GeneratorType.VibLFOToPitch, source: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.ChannelPressure }, value: 50, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a2.Linear }, { id: c2.GeneratorType.VibLFOToPitch, source: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.MidiController, index: 1 }, value: 50, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a2.Linear }, { id: c2.GeneratorType.InitialAttenuation, source: { type: n2.Concave, polarity: o.Unipolar, direction: i3.Decreasing, palette: s2.MidiController, index: 7 }, value: 960, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a2.Linear }, { id: c2.GeneratorType.InitialAttenuation, source: { type: n2.Linear, polarity: o.Bipolar, direction: i3.Increasing, palette: s2.MidiController, index: 10 }, value: 1e3, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a2.Linear }, { id: c2.GeneratorType.InitialAttenuation, source: { type: n2.Concave, polarity: o.Unipolar, direction: i3.Decreasing, palette: s2.MidiController, index: 11 }, value: 960, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a2.Linear }, { id: c2.GeneratorType.ReverbEffectsSend, source: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.MidiController, index: 91 }, value: 200, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a2.Linear }, { id: c2.GeneratorType.ChorusEffectsSend, source: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.MidiController, index: 93 }, value: 200, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.NoController }, transform: a2.Linear }, { id: c2.GeneratorType.CoarseTune, source: { type: n2.Linear, polarity: o.Bipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.PitchWheel }, value: 12700, valueSource: { type: n2.Linear, polarity: o.Unipolar, direction: i3.Increasing, palette: s2.GeneralController, index: u.PitchWheelSensitivity }, transform: a2.Linear }];
           }
         ), "./src/types/preset.ts": (
           /*!*****************************!*\
@@ -25825,7 +25825,7 @@ registerProcessor('${name3}', MyProcessor);
     const {
       midi: r2,
       start: s2,
-      velocity: a = 0.3,
+      velocity: a2 = 0.3,
       startLoop: c2,
       endLoop: i3,
       sampleRate: l,
@@ -25853,17 +25853,17 @@ registerProcessor('${name3}', MyProcessor);
     S2 > j && v2 === 1 ? (t.loopStart = j / l, t.loopEnd = S2 / l, t.loop = true) : v2 === 3 && console.warn("unimplemented sampleMode 3 (play till end on note off)"), Object.keys(Z).filter(
       (V) => !["name", "instrument", "keyRange", "sampleID", "end"].includes(V)
     ).length;
-    const k = e.createGain(), H = [
+    const k = e.createGain(), H2 = [
       o,
       0,
-      a,
+      a2,
       m2(b),
       m2(A),
       m2(O),
       m2(N),
       F >= 960 ? 0 : 1 - Q(F),
       m2(L3)
-    ], U = k.gain.dahdsr(...H), R = e.createStereoPanner();
+    ], U = k.gain.dahdsr(...H2), R = e.createStereoPanner();
     return R.pan.value = P2 / 1e3, k.connect(R), t.connect(k), R.connect(e.destination), t.start(o), (V = e.currentTime) => {
       t.stop(V + m2(L3)), U(V);
     };
@@ -25872,10 +25872,10 @@ registerProcessor('${name3}', MyProcessor);
     const { header: o, data: r2 } = t, s2 = new Float32Array(r2.length);
     for (let l = 0; l < r2.length; l++)
       s2[l] = r2[l] / 32768;
-    const a = e.createBuffer(1, s2.length, o.sampleRate);
-    a.getChannelData(0).set(s2);
+    const a2 = e.createBuffer(1, s2.length, o.sampleRate);
+    a2.getChannelData(0).set(s2);
     const i3 = e.createBufferSource();
-    return i3.buffer = a, n2 = { ...o, ...n2 }, X(e, i3, n2);
+    return i3.buffer = a2, n2 = { ...o, ...n2 }, X(e, i3, n2);
   }
   var import_soundfont2, m2, Q, G, T, re, D, J, W, C, x2, ce;
   var init_sfumato = __esm({
@@ -25887,10 +25887,10 @@ registerProcessor('${name3}', MyProcessor);
         const n2 = Math.pow(10, t);
         return Math.round(e * n2) / n2;
       };
-      typeof AudioParam < "u" && (AudioParam.prototype.dahdsr = function(e, t, n2, o, r2, s2, a, c2, i3) {
-        r2 = Math.max(G(r2, 4), 1e-3), a = Math.max(G(a, 4), 1e-3), i3 = G(i3, 4), t = Math.max(t, 1e-3);
+      typeof AudioParam < "u" && (AudioParam.prototype.dahdsr = function(e, t, n2, o, r2, s2, a2, c2, i3) {
+        r2 = Math.max(G(r2, 4), 1e-3), a2 = Math.max(G(a2, 4), 1e-3), i3 = G(i3, 4), t = Math.max(t, 1e-3);
         let l = e;
-        return this.setValueAtTime(t, l), this.setValueAtTime(t, l += o), this.exponentialRampToValueAtTime(n2, l += r2), this.setValueAtTime(n2, l += s2), this.exponentialRampToValueAtTime(Math.max(c2 * n2, 1e-3), l += a), (d, u) => {
+        return this.setValueAtTime(t, l), this.setValueAtTime(t, l += o), this.exponentialRampToValueAtTime(n2, l += r2), this.setValueAtTime(n2, l += s2), this.exponentialRampToValueAtTime(Math.max(c2 * n2, 1e-3), l += a2), (d, u) => {
           this.cancelAndHoldAtTime(d);
           const f = Math.max(u != null ? u : t, 1e-3);
           this.exponentialRampToValueAtTime(f, d + i3);
@@ -25967,19 +25967,19 @@ registerProcessor('${name3}', MyProcessor);
         const s2 = import_soundfont2.DEFAULT_GENERATOR_VALUES[e];
         if (typeof s2 != "number")
           throw new Error(`no default value found for generator with index ${e}`);
-        const a = t.generators[e], c2 = (g = (h3 = n2.globalZone) == null ? void 0 : h3.generators) == null ? void 0 : g[e], i3 = (y2 = o == null ? void 0 : o.generators) == null ? void 0 : y2[e], l = (b = (E = r2.globalZone) == null ? void 0 : E.generators) == null ? void 0 : b[e], d = a && "value" in a ? a.value : void 0, u = c2 && "value" in c2 ? c2.value : void 0, f = i3 && "value" in i3 ? i3.value : void 0, v2 = l && "value" in l ? l.value : void 0, p = (A = d != null ? d : u) != null ? A : s2, M2 = (O = f != null ? f : v2) != null ? O : 0;
+        const a2 = t.generators[e], c2 = (g = (h3 = n2.globalZone) == null ? void 0 : h3.generators) == null ? void 0 : g[e], i3 = (y2 = o == null ? void 0 : o.generators) == null ? void 0 : y2[e], l = (b = (E = r2.globalZone) == null ? void 0 : E.generators) == null ? void 0 : b[e], d = a2 && "value" in a2 ? a2.value : void 0, u = c2 && "value" in c2 ? c2.value : void 0, f = i3 && "value" in i3 ? i3.value : void 0, v2 = l && "value" in l ? l.value : void 0, p = (A = d != null ? d : u) != null ? A : s2, M2 = (O = f != null ? f : v2) != null ? O : 0;
         return p + M2;
       };
       J = (e) => import_soundfont2.DEFAULT_GENERATOR_VALUES[e] !== void 0;
       W = (e, t, n2) => {
-        var o, r2, s2, a;
+        var o, r2, s2, a2;
         return Object.fromEntries(
           Array.from(
             new Set(
               [
                 Object.keys((r2 = (o = n2.globalZone) == null ? void 0 : o.generators) != null ? r2 : {}),
                 Object.keys(t.generators),
-                Object.keys((a = (s2 = t.instrument.globalZone) == null ? void 0 : s2.generators) != null ? a : {}),
+                Object.keys((a2 = (s2 = t.instrument.globalZone) == null ? void 0 : s2.generators) != null ? a2 : {}),
                 Object.keys(e.generators)
               ].flat()
             )
@@ -25996,14 +25996,14 @@ registerProcessor('${name3}', MyProcessor);
       })).flat();
       ce = (e, t, n2, o = e.currentTime) => {
         const s2 = x2(t, n2).map(
-          (a) => Y(e, a.sample, {
-            ...a.mergedGenerators,
+          (a2) => Y(e, a2.sample, {
+            ...a2.mergedGenerators,
             midi: n2,
             time: o
           })
         );
-        return (a = e.currentTime) => {
-          s2.forEach((c2) => c2(a));
+        return (a2 = e.currentTime) => {
+          s2.forEach((c2) => c2(a2));
         };
       };
     }
@@ -26055,6 +26055,2865 @@ registerProcessor('${name3}', MyProcessor);
       init_list();
       init_sfumato();
       init_sfumato2();
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/output.js
+  var Output, output_default;
+  var init_output = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/output.js"() {
+      Output = function({ regl: regl2, precision, label: label2 = "", width, height: height2 }) {
+        this.regl = regl2;
+        this.precision = precision;
+        this.label = label2;
+        this.positionBuffer = this.regl.buffer([
+          [-2, 0],
+          [0, -2],
+          [2, 2]
+        ]);
+        this.draw = () => {
+        };
+        this.init();
+        this.pingPongIndex = 0;
+        this.fbos = Array(2).fill().map(() => this.regl.framebuffer({
+          color: this.regl.texture({
+            mag: "nearest",
+            width,
+            height: height2,
+            format: "rgba"
+          }),
+          depthStencil: false
+        }));
+      };
+      Output.prototype.resize = function(width, height2) {
+        this.fbos.forEach((fbo) => {
+          fbo.resize(width, height2);
+        });
+      };
+      Output.prototype.getCurrent = function() {
+        return this.fbos[this.pingPongIndex];
+      };
+      Output.prototype.getTexture = function() {
+        var index5 = this.pingPongIndex ? 0 : 1;
+        return this.fbos[index5];
+      };
+      Output.prototype.init = function() {
+        this.transformIndex = 0;
+        this.fragHeader = `
+  precision ${this.precision} float;
+
+  uniform float time;
+  varying vec2 uv;
+  `;
+        this.fragBody = ``;
+        this.vert = `
+  precision ${this.precision} float;
+  attribute vec2 position;
+  varying vec2 uv;
+
+  void main () {
+    uv = position;
+    gl_Position = vec4(2.0 * position - 1.0, 0, 1);
+  }`;
+        this.attributes = {
+          position: this.positionBuffer
+        };
+        this.uniforms = {
+          time: this.regl.prop("time"),
+          resolution: this.regl.prop("resolution")
+        };
+        this.frag = `
+       ${this.fragHeader}
+
+      void main () {
+        vec4 c = vec4(0, 0, 0, 0);
+        vec2 st = uv;
+        ${this.fragBody}
+        gl_FragColor = c;
+      }
+  `;
+        return this;
+      };
+      Output.prototype.render = function(passes) {
+        let pass = passes[0];
+        var self = this;
+        var uniforms = Object.assign(pass.uniforms, {
+          prevBuffer: () => {
+            return self.fbos[self.pingPongIndex];
+          }
+        });
+        self.draw = self.regl({
+          frag: pass.frag,
+          vert: self.vert,
+          attributes: self.attributes,
+          uniforms,
+          count: 3,
+          framebuffer: () => {
+            self.pingPongIndex = self.pingPongIndex ? 0 : 1;
+            return self.fbos[self.pingPongIndex];
+          }
+        });
+      };
+      Output.prototype.tick = function(props) {
+        this.draw(props);
+      };
+      output_default = Output;
+    }
+  });
+
+  // stub:raf-loop
+  var raf_loop_default;
+  var init_raf_loop = __esm({
+    "stub:raf-loop"() {
+      raf_loop_default = () => {
+        throw new Error("raf-loop is not available");
+      };
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/webcam.js
+  function webcam_default(deviceId) {
+    return navigator.mediaDevices.enumerateDevices().then((devices) => devices.filter((devices2) => devices2.kind === "videoinput")).then((cameras) => {
+      let constraints = { audio: false, video: true };
+      if (cameras[deviceId]) {
+        constraints["video"] = {
+          deviceId: { exact: cameras[deviceId].deviceId }
+        };
+      }
+      return window.navigator.mediaDevices.getUserMedia(constraints);
+    }).then((stream) => {
+      const video = document.createElement("video");
+      video.setAttribute("autoplay", "");
+      video.setAttribute("muted", "");
+      video.setAttribute("playsinline", "");
+      video.srcObject = stream;
+      return new Promise((resolve, reject) => {
+        video.addEventListener("loadedmetadata", () => {
+          video.play().then(() => resolve({ video }));
+        });
+      });
+    }).catch(console.log.bind(console));
+  }
+  var init_webcam = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/webcam.js"() {
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/screenmedia.js
+  function screenmedia_default(options) {
+    return new Promise(function(resolve, reject) {
+      navigator.mediaDevices.getDisplayMedia(options).then((stream) => {
+        const video = document.createElement("video");
+        video.srcObject = stream;
+        video.addEventListener("loadedmetadata", () => {
+          video.play();
+          resolve({ video });
+        });
+      }).catch((err) => reject(err));
+    });
+  }
+  var init_screenmedia = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/screenmedia.js"() {
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/hydra-source.js
+  var HydraSource, hydra_source_default;
+  var init_hydra_source = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/hydra-source.js"() {
+      init_webcam();
+      init_screenmedia();
+      HydraSource = class {
+        constructor({ regl: regl2, width, height: height2, pb, label: label2 = "" }) {
+          this.label = label2;
+          this.regl = regl2;
+          this.src = null;
+          this.dynamic = true;
+          this.width = width;
+          this.height = height2;
+          this.tex = this.regl.texture({
+            //  shape: [width, height]
+            shape: [1, 1]
+          });
+          this.pb = pb;
+        }
+        init(opts, params) {
+          if ("src" in opts) {
+            this.src = opts.src;
+            this.tex = this.regl.texture({ data: this.src, ...params });
+          }
+          if ("dynamic" in opts) this.dynamic = opts.dynamic;
+        }
+        initCam(index5, params) {
+          const self = this;
+          webcam_default(index5).then((response) => {
+            self.src = response.video;
+            self.dynamic = true;
+            self.tex = self.regl.texture({ data: self.src, ...params });
+          }).catch((err) => console.log("could not get camera", err));
+        }
+        initVideo(url = "", params) {
+          const vid = document.createElement("video");
+          vid.crossOrigin = "anonymous";
+          vid.autoplay = true;
+          vid.loop = true;
+          vid.muted = true;
+          const onload = vid.addEventListener("loadeddata", () => {
+            this.src = vid;
+            vid.play();
+            this.tex = this.regl.texture({ data: this.src, ...params });
+            this.dynamic = true;
+          });
+          vid.src = url;
+        }
+        initImage(url = "", params) {
+          const img = document.createElement("img");
+          img.crossOrigin = "anonymous";
+          img.src = url;
+          img.onload = () => {
+            this.src = img;
+            this.dynamic = false;
+            this.tex = this.regl.texture({ data: this.src, ...params });
+          };
+        }
+        initStream(streamName, params) {
+          let self = this;
+          if (streamName && this.pb) {
+            this.pb.initSource(streamName);
+            this.pb.on("got video", function(nick, video) {
+              if (nick === streamName) {
+                self.src = video;
+                self.dynamic = true;
+                self.tex = self.regl.texture({ data: self.src, ...params });
+              }
+            });
+          }
+        }
+        // index only relevant in atom-hydra + desktop apps
+        initScreen(index5 = 0, params) {
+          const self = this;
+          screenmedia_default().then(function(response) {
+            self.src = response.video;
+            self.tex = self.regl.texture({ data: self.src, ...params });
+            self.dynamic = true;
+          }).catch((err) => console.log("could not get screen", err));
+        }
+        resize(width, height2) {
+          this.width = width;
+          this.height = height2;
+        }
+        clear() {
+          if (this.src && this.src.srcObject) {
+            if (this.src.srcObject.getTracks) {
+              this.src.srcObject.getTracks().forEach((track) => track.stop());
+            }
+          }
+          this.src = null;
+          this.tex = this.regl.texture({ shape: [1, 1] });
+        }
+        tick(time4) {
+          if (this.src !== null && this.dynamic === true) {
+            if (this.src.videoWidth && this.src.videoWidth !== this.tex.width) {
+              console.log(
+                this.src.videoWidth,
+                this.src.videoHeight,
+                this.tex.width,
+                this.tex.height
+              );
+              this.tex.resize(this.src.videoWidth, this.src.videoHeight);
+            }
+            if (this.src.width && this.src.width !== this.tex.width) {
+              this.tex.resize(this.src.width, this.src.height);
+            }
+            this.tex.subimage(this.src);
+          }
+        }
+        getTexture() {
+          return this.tex;
+        }
+      };
+      hydra_source_default = HydraSource;
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/mouse-event.js
+  function mouseButtons(ev) {
+    if (typeof ev === "object") {
+      if ("buttons" in ev) {
+        return ev.buttons;
+      } else if ("which" in ev) {
+        var b = ev.which;
+        if (b === 2) {
+          return 4;
+        } else if (b === 3) {
+          return 2;
+        } else if (b > 0) {
+          return 1 << b - 1;
+        }
+      } else if ("button" in ev) {
+        var b = ev.button;
+        if (b === 1) {
+          return 4;
+        } else if (b === 2) {
+          return 2;
+        } else if (b >= 0) {
+          return 1 << b;
+        }
+      }
+    }
+    return 0;
+  }
+  function mouseElement(ev) {
+    return ev.target || ev.srcElement || window;
+  }
+  function mouseRelativeX(ev) {
+    if (typeof ev === "object") {
+      if ("pageX" in ev) {
+        return ev.pageX;
+      }
+    }
+    return 0;
+  }
+  function mouseRelativeY(ev) {
+    if (typeof ev === "object") {
+      if ("pageY" in ev) {
+        return ev.pageY;
+      }
+    }
+    return 0;
+  }
+  var mouse, mouse_event_default;
+  var init_mouse_event = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/mouse-event.js"() {
+      mouse = {};
+      mouse.buttons = mouseButtons;
+      mouse.element = mouseElement;
+      mouse.x = mouseRelativeX;
+      mouse.y = mouseRelativeY;
+      mouse_event_default = mouse;
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/mouse.js
+  function mouseListen(element, callback) {
+    if (!callback) {
+      callback = element;
+      element = window;
+    }
+    var buttonState = 0;
+    var x3 = 0;
+    var y2 = 0;
+    var mods = {
+      shift: false,
+      alt: false,
+      control: false,
+      meta: false
+    };
+    var attached = false;
+    function updateMods(ev) {
+      var changed = false;
+      if ("altKey" in ev) {
+        changed = changed || ev.altKey !== mods.alt;
+        mods.alt = !!ev.altKey;
+      }
+      if ("shiftKey" in ev) {
+        changed = changed || ev.shiftKey !== mods.shift;
+        mods.shift = !!ev.shiftKey;
+      }
+      if ("ctrlKey" in ev) {
+        changed = changed || ev.ctrlKey !== mods.control;
+        mods.control = !!ev.ctrlKey;
+      }
+      if ("metaKey" in ev) {
+        changed = changed || ev.metaKey !== mods.meta;
+        mods.meta = !!ev.metaKey;
+      }
+      return changed;
+    }
+    function handleEvent(nextButtons, ev) {
+      var nextX = mouse_event_default.x(ev);
+      var nextY = mouse_event_default.y(ev);
+      if ("buttons" in ev) {
+        nextButtons = ev.buttons | 0;
+      }
+      if (nextButtons !== buttonState || nextX !== x3 || nextY !== y2 || updateMods(ev)) {
+        buttonState = nextButtons | 0;
+        x3 = nextX || 0;
+        y2 = nextY || 0;
+        callback && callback(buttonState, x3, y2, mods);
+      }
+    }
+    function clearState(ev) {
+      handleEvent(0, ev);
+    }
+    function handleBlur() {
+      if (buttonState || x3 || y2 || mods.shift || mods.alt || mods.meta || mods.control) {
+        x3 = y2 = 0;
+        buttonState = 0;
+        mods.shift = mods.alt = mods.control = mods.meta = false;
+        callback && callback(0, 0, 0, mods);
+      }
+    }
+    function handleMods(ev) {
+      if (updateMods(ev)) {
+        callback && callback(buttonState, x3, y2, mods);
+      }
+    }
+    function handleMouseMove(ev) {
+      if (mouse_event_default.buttons(ev) === 0) {
+        handleEvent(0, ev);
+      } else {
+        handleEvent(buttonState, ev);
+      }
+    }
+    function handleMouseDown(ev) {
+      handleEvent(buttonState | mouse_event_default.buttons(ev), ev);
+    }
+    function handleMouseUp(ev) {
+      handleEvent(buttonState & ~mouse_event_default.buttons(ev), ev);
+    }
+    function attachListeners() {
+      if (attached) {
+        return;
+      }
+      attached = true;
+      element.addEventListener("mousemove", handleMouseMove);
+      element.addEventListener("mousedown", handleMouseDown);
+      element.addEventListener("mouseup", handleMouseUp);
+      element.addEventListener("mouseleave", clearState);
+      element.addEventListener("mouseenter", clearState);
+      element.addEventListener("mouseout", clearState);
+      element.addEventListener("mouseover", clearState);
+      element.addEventListener("blur", handleBlur);
+      element.addEventListener("keyup", handleMods);
+      element.addEventListener("keydown", handleMods);
+      element.addEventListener("keypress", handleMods);
+      if (element !== window) {
+        window.addEventListener("blur", handleBlur);
+        window.addEventListener("keyup", handleMods);
+        window.addEventListener("keydown", handleMods);
+        window.addEventListener("keypress", handleMods);
+      }
+    }
+    function detachListeners() {
+      if (!attached) {
+        return;
+      }
+      attached = false;
+      element.removeEventListener("mousemove", handleMouseMove);
+      element.removeEventListener("mousedown", handleMouseDown);
+      element.removeEventListener("mouseup", handleMouseUp);
+      element.removeEventListener("mouseleave", clearState);
+      element.removeEventListener("mouseenter", clearState);
+      element.removeEventListener("mouseout", clearState);
+      element.removeEventListener("mouseover", clearState);
+      element.removeEventListener("blur", handleBlur);
+      element.removeEventListener("keyup", handleMods);
+      element.removeEventListener("keydown", handleMods);
+      element.removeEventListener("keypress", handleMods);
+      if (element !== window) {
+        window.removeEventListener("blur", handleBlur);
+        window.removeEventListener("keyup", handleMods);
+        window.removeEventListener("keydown", handleMods);
+        window.removeEventListener("keypress", handleMods);
+      }
+    }
+    attachListeners();
+    var result = {
+      element
+    };
+    Object.defineProperties(result, {
+      enabled: {
+        get: function() {
+          return attached;
+        },
+        set: function(f) {
+          if (f) {
+            attachListeners();
+          } else {
+            detachListeners();
+          }
+        },
+        enumerable: true
+      },
+      buttons: {
+        get: function() {
+          return buttonState;
+        },
+        enumerable: true
+      },
+      x: {
+        get: function() {
+          return x3;
+        },
+        enumerable: true
+      },
+      y: {
+        get: function() {
+          return y2;
+        },
+        enumerable: true
+      },
+      mods: {
+        get: function() {
+          return mods;
+        },
+        enumerable: true
+      }
+    });
+    return result;
+  }
+  var mouse_default;
+  var init_mouse = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/mouse.js"() {
+      init_mouse_event();
+      mouse_default = mouseListen;
+    }
+  });
+
+  // stub:meyda
+  var meyda_default;
+  var init_meyda = __esm({
+    "stub:meyda"() {
+      meyda_default = () => {
+        throw new Error("meyda is not available");
+      };
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/audio.js
+  var audio_exports = {};
+  __export(audio_exports, {
+    default: () => audio_default
+  });
+  var Audio, audio_default;
+  var init_audio = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/audio.js"() {
+      init_meyda();
+      Audio = class {
+        constructor({
+          numBins = 4,
+          cutoff: cutoff2 = 2,
+          smooth = 0.4,
+          max = 15,
+          scale: scale4 = 10,
+          isDrawing = false,
+          parentEl = document.body
+        }) {
+          this.vol = 0;
+          this.scale = scale4;
+          this.max = max;
+          this.cutoff = cutoff2;
+          this.smooth = smooth;
+          this.setBins(numBins);
+          this.beat = {
+            holdFrames: 20,
+            threshold: 40,
+            _cutoff: 0,
+            // adaptive based on sound state
+            decay: 0.98,
+            _framesSinceBeat: 0
+            // keeps track of frames
+          };
+          this.onBeat = () => {
+          };
+          this.canvas = document.createElement("canvas");
+          this.canvas.width = 100;
+          this.canvas.height = 80;
+          this.canvas.style.width = "100px";
+          this.canvas.style.height = "80px";
+          this.canvas.style.position = "absolute";
+          this.canvas.style.right = "0px";
+          this.canvas.style.bottom = "0px";
+          parentEl.appendChild(this.canvas);
+          this.isDrawing = isDrawing;
+          this.ctx = this.canvas.getContext("2d");
+          this.ctx.fillStyle = "#DFFFFF";
+          this.ctx.strokeStyle = "#0ff";
+          this.ctx.lineWidth = 0.5;
+          if (window.navigator.mediaDevices) {
+            window.navigator.mediaDevices.getUserMedia({ video: false, audio: true }).then((stream) => {
+              this.stream = stream;
+              this.context = new AudioContext();
+              let audio_stream = this.context.createMediaStreamSource(stream);
+              this.meyda = meyda_default.createMeydaAnalyzer({
+                audioContext: this.context,
+                source: audio_stream,
+                featureExtractors: [
+                  "loudness"
+                  //  'perceptualSpread',
+                  //  'perceptualSharpness',
+                  //  'spectralCentroid'
+                ]
+              });
+            }).catch((err) => console.log("ERROR", err));
+          }
+        }
+        detectBeat(level) {
+          if (level > this.beat._cutoff && level > this.beat.threshold) {
+            this.onBeat();
+            this.beat._cutoff = level * 1.2;
+            this.beat._framesSinceBeat = 0;
+          } else {
+            if (this.beat._framesSinceBeat <= this.beat.holdFrames) {
+              this.beat._framesSinceBeat++;
+            } else {
+              this.beat._cutoff *= this.beat.decay;
+              this.beat._cutoff = Math.max(this.beat._cutoff, this.beat.threshold);
+            }
+          }
+        }
+        tick() {
+          if (this.meyda) {
+            var features2 = this.meyda.get();
+            if (features2 && features2 !== null) {
+              this.vol = features2.loudness.total;
+              this.detectBeat(this.vol);
+              const reducer = (accumulator, currentValue) => accumulator + currentValue;
+              let spacing = Math.floor(features2.loudness.specific.length / this.bins.length);
+              this.prevBins = this.bins.slice(0);
+              this.bins = this.bins.map((bin, index5) => {
+                return features2.loudness.specific.slice(index5 * spacing, (index5 + 1) * spacing).reduce(reducer);
+              }).map((bin, index5) => {
+                return bin * (1 - this.settings[index5].smooth) + this.prevBins[index5] * this.settings[index5].smooth;
+              });
+              this.fft = this.bins.map((bin, index5) => (
+                // Math.max(0, (bin - this.cutoff) / (this.max - this.cutoff))
+                Math.max(0, (bin - this.settings[index5].cutoff) / this.settings[index5].scale)
+              ));
+              if (this.isDrawing) this.draw();
+            }
+          }
+        }
+        setCutoff(cutoff2) {
+          this.cutoff = cutoff2;
+          this.settings = this.settings.map((el) => {
+            el.cutoff = cutoff2;
+            return el;
+          });
+        }
+        setSmooth(smooth) {
+          this.smooth = smooth;
+          this.settings = this.settings.map((el) => {
+            el.smooth = smooth;
+            return el;
+          });
+        }
+        setBins(numBins) {
+          this.bins = Array(numBins).fill(0);
+          this.prevBins = Array(numBins).fill(0);
+          this.fft = Array(numBins).fill(0);
+          this.settings = Array(numBins).fill(0).map(() => ({
+            cutoff: this.cutoff,
+            scale: this.scale,
+            smooth: this.smooth
+          }));
+          this.bins.forEach((bin, index5) => {
+            window["a" + index5] = (scale4 = 1, offset3 = 0) => () => a.fft[index5] * scale4 + offset3;
+          });
+        }
+        setScale(scale4) {
+          this.scale = scale4;
+          this.settings = this.settings.map((el) => {
+            el.scale = scale4;
+            return el;
+          });
+        }
+        setMax(max) {
+          this.max = max;
+          console.log("set max is deprecated");
+        }
+        hide() {
+          this.isDrawing = false;
+          this.canvas.style.display = "none";
+        }
+        show() {
+          this.isDrawing = true;
+          this.canvas.style.display = "block";
+        }
+        draw() {
+          this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+          var spacing = this.canvas.width / this.bins.length;
+          var scale4 = this.canvas.height / (this.max * 2);
+          this.bins.forEach((bin, index5) => {
+            var height2 = bin * scale4;
+            this.ctx.fillRect(index5 * spacing, this.canvas.height - height2, spacing, height2);
+            var y2 = this.canvas.height - scale4 * this.settings[index5].cutoff;
+            this.ctx.beginPath();
+            this.ctx.moveTo(index5 * spacing, y2);
+            this.ctx.lineTo((index5 + 1) * spacing, y2);
+            this.ctx.stroke();
+            var yMax = this.canvas.height - scale4 * (this.settings[index5].scale + this.settings[index5].cutoff);
+            this.ctx.beginPath();
+            this.ctx.moveTo(index5 * spacing, yMax);
+            this.ctx.lineTo((index5 + 1) * spacing, yMax);
+            this.ctx.stroke();
+          });
+        }
+      };
+      audio_default = Audio;
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/video-recorder.js
+  var VideoRecorder, video_recorder_default;
+  var init_video_recorder = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/video-recorder.js"() {
+      VideoRecorder = class {
+        constructor(stream) {
+          this.mediaSource = new MediaSource();
+          this.stream = stream;
+          this.output = document.createElement("video");
+          this.output.autoplay = true;
+          this.output.loop = true;
+          let self = this;
+          this.mediaSource.addEventListener("sourceopen", () => {
+            console.log("MediaSource opened");
+            self.sourceBuffer = self.mediaSource.addSourceBuffer('video/webm; codecs="vp8"');
+            console.log("Source buffer: ", sourceBuffer);
+          });
+        }
+        start() {
+          let options = { mimeType: "video/webm;codecs=vp9" };
+          this.recordedBlobs = [];
+          try {
+            this.mediaRecorder = new MediaRecorder(this.stream, options);
+          } catch (e0) {
+            console.log("Unable to create MediaRecorder with options Object: ", e0);
+            try {
+              options = { mimeType: "video/webm,codecs=vp9" };
+              this.mediaRecorder = new MediaRecorder(this.stream, options);
+            } catch (e1) {
+              console.log("Unable to create MediaRecorder with options Object: ", e1);
+              try {
+                options = "video/vp8";
+                this.mediaRecorder = new MediaRecorder(this.stream, options);
+              } catch (e2) {
+                alert("MediaRecorder is not supported by this browser.\n\nTry Firefox 29 or later, or Chrome 47 or later, with Enable experimental Web Platform features enabled from chrome://flags.");
+                console.error("Exception while creating MediaRecorder:", e2);
+                return;
+              }
+            }
+          }
+          console.log("Created MediaRecorder", this.mediaRecorder, "with options", options);
+          this.mediaRecorder.onstop = this._handleStop.bind(this);
+          this.mediaRecorder.ondataavailable = this._handleDataAvailable.bind(this);
+          this.mediaRecorder.start(100);
+          console.log("MediaRecorder started", this.mediaRecorder);
+        }
+        stop() {
+          this.mediaRecorder.stop();
+        }
+        _handleStop() {
+          const blob = new Blob(this.recordedBlobs, { type: this.mediaRecorder.mimeType });
+          const url = window.URL.createObjectURL(blob);
+          this.output.src = url;
+          const a2 = document.createElement("a");
+          a2.style.display = "none";
+          a2.href = url;
+          let d = /* @__PURE__ */ new Date();
+          a2.download = `hydra-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}-${d.getHours()}.${d.getMinutes()}.${d.getSeconds()}.webm`;
+          document.body.appendChild(a2);
+          a2.click();
+          setTimeout(() => {
+            document.body.removeChild(a2);
+            window.URL.revokeObjectURL(url);
+          }, 300);
+        }
+        _handleDataAvailable(event) {
+          if (event.data && event.data.size > 0) {
+            this.recordedBlobs.push(event.data);
+          }
+        }
+      };
+      video_recorder_default = VideoRecorder;
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/easing-functions.js
+  var easing_functions_default;
+  var init_easing_functions = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/easing-functions.js"() {
+      easing_functions_default = {
+        // no easing, no acceleration
+        linear: function(t) {
+          return t;
+        },
+        // accelerating from zero velocity
+        easeInQuad: function(t) {
+          return t * t;
+        },
+        // decelerating to zero velocity
+        easeOutQuad: function(t) {
+          return t * (2 - t);
+        },
+        // acceleration until halfway, then deceleration
+        easeInOutQuad: function(t) {
+          return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+        },
+        // accelerating from zero velocity
+        easeInCubic: function(t) {
+          return t * t * t;
+        },
+        // decelerating to zero velocity
+        easeOutCubic: function(t) {
+          return --t * t * t + 1;
+        },
+        // acceleration until halfway, then deceleration
+        easeInOutCubic: function(t) {
+          return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
+        },
+        // accelerating from zero velocity
+        easeInQuart: function(t) {
+          return t * t * t * t;
+        },
+        // decelerating to zero velocity
+        easeOutQuart: function(t) {
+          return 1 - --t * t * t * t;
+        },
+        // acceleration until halfway, then deceleration
+        easeInOutQuart: function(t) {
+          return t < 0.5 ? 8 * t * t * t * t : 1 - 8 * --t * t * t * t;
+        },
+        // accelerating from zero velocity
+        easeInQuint: function(t) {
+          return t * t * t * t * t;
+        },
+        // decelerating to zero velocity
+        easeOutQuint: function(t) {
+          return 1 + --t * t * t * t * t;
+        },
+        // acceleration until halfway, then deceleration
+        easeInOutQuint: function(t) {
+          return t < 0.5 ? 16 * t * t * t * t * t : 1 + 16 * --t * t * t * t * t;
+        },
+        // sin shape
+        sin: function(t) {
+          return (1 + Math.sin(Math.PI * t - Math.PI / 2)) / 2;
+        }
+      };
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/array-utils.js
+  var map3, array_utils_default;
+  var init_array_utils = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/array-utils.js"() {
+      init_easing_functions();
+      map3 = (num3, in_min, in_max, out_min, out_max) => {
+        return (num3 - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+      };
+      array_utils_default = {
+        init: () => {
+          Array.prototype.fast = function(speed2 = 1) {
+            this._speed = speed2;
+            return this;
+          };
+          Array.prototype.smooth = function(smooth = 1) {
+            this._smooth = smooth;
+            return this;
+          };
+          Array.prototype.ease = function(ease = "linear") {
+            if (typeof ease == "function") {
+              this._smooth = 1;
+              this._ease = ease;
+            } else if (easing_functions_default[ease]) {
+              this._smooth = 1;
+              this._ease = easing_functions_default[ease];
+            }
+            return this;
+          };
+          Array.prototype.offset = function(offset3 = 0.5) {
+            this._offset = offset3 % 1;
+            return this;
+          };
+          Array.prototype.fit = function(low = 0, high = 1) {
+            let lowest = Math.min(...this);
+            let highest = Math.max(...this);
+            var newArr = this.map((num3) => map3(num3, lowest, highest, low, high));
+            newArr._speed = this._speed;
+            newArr._smooth = this._smooth;
+            newArr._ease = this._ease;
+            return newArr;
+          };
+        },
+        getValue: (arr = []) => ({ time: time4, bpm }) => {
+          let speed2 = arr._speed ? arr._speed : 1;
+          let smooth = arr._smooth ? arr._smooth : 0;
+          let index5 = time4 * speed2 * (bpm / 60) + (arr._offset || 0);
+          if (smooth !== 0) {
+            let ease = arr._ease ? arr._ease : easing_functions_default["linear"];
+            let _index = index5 - smooth / 2;
+            let currValue = arr[Math.floor(_index % arr.length)];
+            let nextValue = arr[Math.floor((_index + 1) % arr.length)];
+            let t = Math.min(_index % 1 / smooth, 1);
+            return ease(t) * (nextValue - currValue) + currValue;
+          } else {
+            const val2 = arr[Math.floor(index5 % arr.length)];
+            return arr[Math.floor(index5 % arr.length)];
+          }
+        }
+      };
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/sandbox.js
+  var sandbox_default;
+  var init_sandbox = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/lib/sandbox.js"() {
+      sandbox_default = (parent) => {
+        var initialCode = ``;
+        var sandbox = createSandbox(initialCode);
+        var addToContext = (name3, object) => {
+          initialCode += `
+      var ${name3} = ${object}
+    `;
+          sandbox = createSandbox(initialCode);
+        };
+        return {
+          addToContext,
+          eval: (code) => sandbox.eval(code)
+        };
+        function createSandbox(initial) {
+          globalThis.eval(initial);
+          var localEval = function(code) {
+            globalThis.eval(code);
+          };
+          return {
+            eval: localEval
+          };
+        }
+      };
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/eval-sandbox.js
+  var EvalSandbox, eval_sandbox_default;
+  var init_eval_sandbox = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/eval-sandbox.js"() {
+      init_sandbox();
+      init_array_utils();
+      EvalSandbox = class {
+        constructor(parent, makeGlobal, userProps = []) {
+          this.makeGlobal = makeGlobal;
+          this.sandbox = sandbox_default(parent);
+          this.parent = parent;
+          var properties = Object.keys(parent);
+          properties.forEach((property) => this.add(property));
+          this.userProps = userProps;
+        }
+        add(name3) {
+          if (this.makeGlobal) window[name3] = this.parent[name3];
+        }
+        // sets on window as well as synth object if global (not needed for objects, which can be set directly)
+        set(property, value2) {
+          if (this.makeGlobal) {
+            window[property] = value2;
+          }
+          this.parent[property] = value2;
+        }
+        tick() {
+          if (this.makeGlobal) {
+            this.userProps.forEach((property) => {
+              this.parent[property] = window[property];
+            });
+          } else {
+          }
+        }
+        eval(code) {
+          this.sandbox.eval(code);
+        }
+      };
+      eval_sandbox_default = EvalSandbox;
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/format-arguments.js
+  function formatArguments(transform, startIndex, synthContext) {
+    const defaultArgs = transform.transform.inputs;
+    const userArgs = transform.userArgs;
+    const { generators } = transform.synth;
+    const { src: src2 } = generators;
+    return defaultArgs.map((input, index5) => {
+      const typedArg = {
+        value: input.default,
+        type: input.type,
+        //
+        isUniform: false,
+        name: input.name,
+        vecLen: 0
+        //  generateGlsl: null // function for creating glsl
+      };
+      if (typedArg.type === "float") typedArg.value = ensure_decimal_dot(input.default);
+      if (input.type.startsWith("vec")) {
+        try {
+          typedArg.vecLen = Number.parseInt(input.type.substr(3));
+        } catch (e) {
+          console.log(`Error determining length of vector input type ${input.type} (${input.name})`);
+        }
+      }
+      if (userArgs.length > index5) {
+        typedArg.value = userArgs[index5];
+        if (typeof userArgs[index5] === "function") {
+          typedArg.value = (context, props, batchId) => {
+            try {
+              const val2 = userArgs[index5](props);
+              if (typeof val2 === "number") {
+                return val2;
+              } else {
+                console.warn("function does not return a number", userArgs[index5]);
+              }
+              return input.default;
+            } catch (e) {
+              console.warn("ERROR", e);
+              return input.default;
+            }
+          };
+          typedArg.isUniform = true;
+        } else if (userArgs[index5].constructor === Array) {
+          typedArg.value = (context, props, batchId) => array_utils_default.getValue(userArgs[index5])(props);
+          typedArg.isUniform = true;
+        }
+      }
+      if (startIndex < 0) {
+      } else {
+        if (typedArg.value && typedArg.value.transforms) {
+          const final_transform = typedArg.value.transforms[typedArg.value.transforms.length - 1];
+          if (final_transform.transform.glsl_return_type !== input.type) {
+            const defaults = DEFAULT_CONVERSIONS[input.type];
+            if (typeof defaults !== "undefined") {
+              const default_def = defaults[final_transform.transform.glsl_return_type];
+              if (typeof default_def !== "undefined") {
+                const { name: name3, args } = default_def;
+                typedArg.value = typedArg.value[name3](...args);
+              }
+            }
+          }
+          typedArg.isUniform = false;
+        } else if (typedArg.type === "float" && typeof typedArg.value === "number") {
+          typedArg.value = ensure_decimal_dot(typedArg.value);
+        } else if (typedArg.type.startsWith("vec") && typeof typedArg.value === "object" && Array.isArray(typedArg.value)) {
+          typedArg.isUniform = false;
+          typedArg.value = `${typedArg.type}(${typedArg.value.map(ensure_decimal_dot).join(", ")})`;
+        } else if (input.type === "sampler2D") {
+          var x3 = typedArg.value;
+          typedArg.value = () => x3.getTexture();
+          typedArg.isUniform = true;
+        } else {
+          if (typedArg.value.getTexture && input.type === "vec4") {
+            var x1 = typedArg.value;
+            typedArg.value = src2(x1);
+            typedArg.isUniform = false;
+          }
+        }
+        if (typedArg.isUniform) {
+          typedArg.name += startIndex;
+        }
+      }
+      return typedArg;
+    });
+  }
+  var DEFAULT_CONVERSIONS, ensure_decimal_dot;
+  var init_format_arguments = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/format-arguments.js"() {
+      init_array_utils();
+      DEFAULT_CONVERSIONS = {
+        float: {
+          "vec4": { name: "sum", args: [[1, 1, 1, 1]] },
+          "vec2": { name: "sum", args: [[1, 1]] }
+        }
+      };
+      ensure_decimal_dot = (val2) => {
+        val2 = val2.toString();
+        if (val2.indexOf(".") < 0) {
+          val2 += ".";
+        }
+        return val2;
+      };
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/generate-glsl.js
+  function generate_glsl_default(transforms) {
+    var shaderParams = {
+      uniforms: [],
+      // list of uniforms used in shader
+      glslFunctions: [],
+      // list of functions used in shader
+      fragColor: ""
+    };
+    var gen = generateGlsl(transforms, shaderParams)("st");
+    shaderParams.fragColor = gen;
+    let uniforms = {};
+    shaderParams.uniforms.forEach((uniform) => uniforms[uniform.name] = uniform);
+    shaderParams.uniforms = Object.values(uniforms);
+    return shaderParams;
+  }
+  function generateGlsl(transforms, shaderParams) {
+    var fragColor = () => "";
+    transforms.forEach((transform) => {
+      var inputs = formatArguments(transform, shaderParams.uniforms.length);
+      inputs.forEach((input) => {
+        if (input.isUniform) shaderParams.uniforms.push(input);
+      });
+      if (!contains(transform, shaderParams.glslFunctions)) shaderParams.glslFunctions.push(transform);
+      var f0 = fragColor;
+      if (transform.transform.type === "src") {
+        fragColor = (uv) => `${shaderString(uv, transform.name, inputs, shaderParams)}`;
+      } else if (transform.transform.type === "coord") {
+        fragColor = (uv) => `${f0(`${shaderString(uv, transform.name, inputs, shaderParams)}`)}`;
+      } else if (transform.transform.type === "color") {
+        fragColor = (uv) => `${shaderString(`${f0(uv)}`, transform.name, inputs, shaderParams)}`;
+      } else if (transform.transform.type === "combine") {
+        var f1 = inputs[0].value && inputs[0].value.transforms ? (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` : inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value;
+        fragColor = (uv) => `${shaderString(`${f0(uv)}, ${f1(uv)}`, transform.name, inputs.slice(1), shaderParams)}`;
+      } else if (transform.transform.type === "combineCoord") {
+        var f1 = inputs[0].value && inputs[0].value.transforms ? (uv) => `${generateGlsl(inputs[0].value.transforms, shaderParams)(uv)}` : inputs[0].isUniform ? () => inputs[0].name : () => inputs[0].value;
+        fragColor = (uv) => `${f0(`${shaderString(`${uv}, ${f1(uv)}`, transform.name, inputs.slice(1), shaderParams)}`)}`;
+      }
+    });
+    return fragColor;
+  }
+  function shaderString(uv, method, inputs, shaderParams) {
+    const str = inputs.map((input) => {
+      if (input.isUniform) {
+        return input.name;
+      } else if (input.value && input.value.transforms) {
+        return `${generateGlsl(input.value.transforms, shaderParams)("st")}`;
+      }
+      return input.value;
+    }).reduce((p, c2) => `${p}, ${c2}`, "");
+    return `${method}(${uv}${str})`;
+  }
+  function contains(object, arr) {
+    for (var i3 = 0; i3 < arr.length; i3++) {
+      if (object.name == arr[i3].name) return true;
+    }
+    return false;
+  }
+  var init_generate_glsl = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/generate-glsl.js"() {
+      init_format_arguments();
+      init_array_utils();
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/glsl/utility-functions.js
+  var utility_functions_default;
+  var init_utility_functions = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/glsl/utility-functions.js"() {
+      utility_functions_default = {
+        _luminance: {
+          type: "util",
+          glsl: `float _luminance(vec3 rgb){
+      const vec3 W = vec3(0.2125, 0.7154, 0.0721);
+      return dot(rgb, W);
+    }`
+        },
+        _noise: {
+          type: "util",
+          glsl: `
+    //	Simplex 3D Noise
+    //	by Ian McEwan, Ashima Arts
+    vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
+  vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
+
+  float _noise(vec3 v){
+    const vec2  C = vec2(1.0/6.0, 1.0/3.0) ;
+    const vec4  D = vec4(0.0, 0.5, 1.0, 2.0);
+
+  // First corner
+    vec3 i  = floor(v + dot(v, C.yyy) );
+    vec3 x0 =   v - i + dot(i, C.xxx) ;
+
+  // Other corners
+    vec3 g = step(x0.yzx, x0.xyz);
+    vec3 l = 1.0 - g;
+    vec3 i1 = min( g.xyz, l.zxy );
+    vec3 i2 = max( g.xyz, l.zxy );
+
+    //  x0 = x0 - 0. + 0.0 * C
+    vec3 x1 = x0 - i1 + 1.0 * C.xxx;
+    vec3 x2 = x0 - i2 + 2.0 * C.xxx;
+    vec3 x3 = x0 - 1. + 3.0 * C.xxx;
+
+  // Permutations
+    i = mod(i, 289.0 );
+    vec4 p = permute( permute( permute(
+               i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
+             + i.y + vec4(0.0, i1.y, i2.y, 1.0 ))
+             + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+
+  // Gradients
+  // ( N*N points uniformly over a square, mapped onto an octahedron.)
+    float n_ = 1.0/7.0; // N=7
+    vec3  ns = n_ * D.wyz - D.xzx;
+
+    vec4 j = p - 49.0 * floor(p * ns.z *ns.z);  //  mod(p,N*N)
+
+    vec4 x_ = floor(j * ns.z);
+    vec4 y_ = floor(j - 7.0 * x_ );    // mod(j,N)
+
+    vec4 x = x_ *ns.x + ns.yyyy;
+    vec4 y = y_ *ns.x + ns.yyyy;
+    vec4 h = 1.0 - abs(x) - abs(y);
+
+    vec4 b0 = vec4( x.xy, y.xy );
+    vec4 b1 = vec4( x.zw, y.zw );
+
+    vec4 s0 = floor(b0)*2.0 + 1.0;
+    vec4 s1 = floor(b1)*2.0 + 1.0;
+    vec4 sh = -step(h, vec4(0.0));
+
+    vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+    vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+
+    vec3 p0 = vec3(a0.xy,h.x);
+    vec3 p1 = vec3(a0.zw,h.y);
+    vec3 p2 = vec3(a1.xy,h.z);
+    vec3 p3 = vec3(a1.zw,h.w);
+
+  //Normalise gradients
+    vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
+    p0 *= norm.x;
+    p1 *= norm.y;
+    p2 *= norm.z;
+    p3 *= norm.w;
+
+  // Mix final noise value
+    vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+    m = m * m;
+    return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1),
+                                  dot(p2,x2), dot(p3,x3) ) );
+  }
+    `
+        },
+        _rgbToHsv: {
+          type: "util",
+          glsl: `vec3 _rgbToHsv(vec3 c){
+            vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+            vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+            vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+
+            float d = q.x - min(q.w, q.y);
+            float e = 1.0e-10;
+            return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+        }`
+        },
+        _hsvToRgb: {
+          type: "util",
+          glsl: `vec3 _hsvToRgb(vec3 c){
+        vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+        vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+        return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+    }`
+        }
+      };
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/glsl-source.js
+  var GlslSource, glsl_source_default;
+  var init_glsl_source = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/glsl-source.js"() {
+      init_generate_glsl();
+      init_utility_functions();
+      GlslSource = function(obj) {
+        this.transforms = [];
+        this.transforms.push(obj);
+        this.defaultOutput = obj.defaultOutput;
+        this.synth = obj.synth;
+        this.type = "GlslSource";
+        this.defaultUniforms = obj.defaultUniforms;
+        return this;
+      };
+      GlslSource.prototype.addTransform = function(obj) {
+        this.transforms.push(obj);
+      };
+      GlslSource.prototype.out = function(_output) {
+        var output = _output || this.defaultOutput;
+        var glsl = this.glsl(output);
+        this.synth.currentFunctions = [];
+        if (output) try {
+          output.render(glsl);
+        } catch (error) {
+          console.log("shader could not compile", error);
+        }
+      };
+      GlslSource.prototype.glsl = function() {
+        var self = this;
+        var passes = [];
+        var transforms = [];
+        this.transforms.forEach((transform) => {
+          if (transform.transform.type === "renderpass") {
+            console.warn("no support for renderpass");
+          } else {
+            transforms.push(transform);
+          }
+        });
+        if (transforms.length > 0) passes.push(this.compile(transforms));
+        return passes;
+      };
+      GlslSource.prototype.compile = function(transforms) {
+        var shaderInfo = generate_glsl_default(transforms, this.synth);
+        var uniforms = {};
+        shaderInfo.uniforms.forEach((uniform) => {
+          uniforms[uniform.name] = uniform.value;
+        });
+        var frag = `
+  precision ${this.defaultOutput.precision} float;
+  ${Object.values(shaderInfo.uniforms).map((uniform) => {
+          let type = uniform.type;
+          switch (uniform.type) {
+            case "texture":
+              type = "sampler2D";
+              break;
+          }
+          return `
+      uniform ${type} ${uniform.name};`;
+        }).join("")}
+  uniform float time;
+  uniform vec2 resolution;
+  varying vec2 uv;
+  uniform sampler2D prevBuffer;
+
+  ${Object.values(utility_functions_default).map((transform) => {
+          return `
+            ${transform.glsl}
+          `;
+        }).join("")}
+
+  ${shaderInfo.glslFunctions.map((transform) => {
+          return `
+            ${transform.transform.glsl}
+          `;
+        }).join("")}
+
+  void main () {
+    vec4 c = vec4(1, 0, 0, 1);
+    vec2 st = gl_FragCoord.xy/resolution.xy;
+    gl_FragColor = ${shaderInfo.fragColor};
+  }
+  `;
+        return {
+          frag,
+          uniforms: Object.assign({}, this.defaultUniforms, uniforms)
+        };
+      };
+      glsl_source_default = GlslSource;
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/glsl/glsl-functions.js
+  var glsl_functions_default;
+  var init_glsl_functions = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/glsl/glsl-functions.js"() {
+      glsl_functions_default = () => [
+        {
+          name: "noise",
+          type: "src",
+          inputs: [
+            {
+              type: "float",
+              name: "scale",
+              default: 10
+            },
+            {
+              type: "float",
+              name: "offset",
+              default: 0.1
+            }
+          ],
+          glsl: `   return vec4(vec3(_noise(vec3(_st*scale, offset*time))), 1.0);`
+        },
+        {
+          name: "voronoi",
+          type: "src",
+          inputs: [
+            {
+              type: "float",
+              name: "scale",
+              default: 5
+            },
+            {
+              type: "float",
+              name: "speed",
+              default: 0.3
+            },
+            {
+              type: "float",
+              name: "blending",
+              default: 0.3
+            }
+          ],
+          glsl: `   vec3 color = vec3(.0);
+   // Scale
+   _st *= scale;
+   // Tile the space
+   vec2 i_st = floor(_st);
+   vec2 f_st = fract(_st);
+   float m_dist = 10.;  // minimun distance
+   vec2 m_point;        // minimum point
+   for (int j=-1; j<=1; j++ ) {
+   for (int i=-1; i<=1; i++ ) {
+   vec2 neighbor = vec2(float(i),float(j));
+   vec2 p = i_st + neighbor;
+   vec2 point = fract(sin(vec2(dot(p,vec2(127.1,311.7)),dot(p,vec2(269.5,183.3))))*43758.5453);
+   point = 0.5 + 0.5*sin(time*speed + 6.2831*point);
+   vec2 diff = neighbor + point - f_st;
+   float dist = length(diff);
+   if( dist < m_dist ) {
+   m_dist = dist;
+   m_point = point;
+   }
+   }
+   }
+   // Assign a color using the closest point position
+   color += dot(m_point,vec2(.3,.6));
+   color *= 1.0 - blending*m_dist;
+   return vec4(color, 1.0);`
+        },
+        {
+          name: "osc",
+          type: "src",
+          inputs: [
+            {
+              type: "float",
+              name: "frequency",
+              default: 60
+            },
+            {
+              type: "float",
+              name: "sync",
+              default: 0.1
+            },
+            {
+              type: "float",
+              name: "offset",
+              default: 0
+            }
+          ],
+          glsl: `   vec2 st = _st;
+   float r = sin((st.x-offset/frequency+time*sync)*frequency)*0.5  + 0.5;
+   float g = sin((st.x+time*sync)*frequency)*0.5 + 0.5;
+   float b = sin((st.x+offset/frequency+time*sync)*frequency)*0.5  + 0.5;
+   return vec4(r, g, b, 1.0);`
+        },
+        {
+          name: "shape",
+          type: "src",
+          inputs: [
+            {
+              type: "float",
+              name: "sides",
+              default: 3
+            },
+            {
+              type: "float",
+              name: "radius",
+              default: 0.3
+            },
+            {
+              type: "float",
+              name: "smoothing",
+              default: 0.01
+            }
+          ],
+          glsl: `   vec2 st = _st * 2. - 1.;
+   // Angle and radius from the current pixel
+   float a = atan(st.x,st.y)+3.1416;
+   float r = (2.*3.1416)/sides;
+   float d = cos(floor(.5+a/r)*r-a)*length(st);
+   return vec4(vec3(1.0-smoothstep(radius,radius + smoothing + 0.0000001,d)), 1.0);`
+        },
+        {
+          name: "gradient",
+          type: "src",
+          inputs: [
+            {
+              type: "float",
+              name: "speed",
+              default: 0
+            }
+          ],
+          glsl: `   return vec4(_st, sin(time*speed), 1.0);`
+        },
+        {
+          name: "src",
+          type: "src",
+          inputs: [
+            {
+              type: "sampler2D",
+              name: "tex",
+              default: NaN
+            }
+          ],
+          glsl: `   //  vec2 uv = gl_FragCoord.xy/vec2(1280., 720.);
+   return texture2D(tex, fract(_st));`
+        },
+        {
+          name: "solid",
+          type: "src",
+          inputs: [
+            {
+              type: "float",
+              name: "r",
+              default: 0
+            },
+            {
+              type: "float",
+              name: "g",
+              default: 0
+            },
+            {
+              type: "float",
+              name: "b",
+              default: 0
+            },
+            {
+              type: "float",
+              name: "a",
+              default: 1
+            }
+          ],
+          glsl: `   return vec4(r, g, b, a);`
+        },
+        {
+          name: "rotate",
+          type: "coord",
+          inputs: [
+            {
+              type: "float",
+              name: "angle",
+              default: 10
+            },
+            {
+              type: "float",
+              name: "speed",
+              default: 0
+            }
+          ],
+          glsl: `   vec2 xy = _st - vec2(0.5);
+   float ang = angle + speed *time;
+   xy = mat2(cos(ang),-sin(ang), sin(ang),cos(ang))*xy;
+   xy += 0.5;
+   return xy;`
+        },
+        {
+          name: "scale",
+          type: "coord",
+          inputs: [
+            {
+              type: "float",
+              name: "amount",
+              default: 1.5
+            },
+            {
+              type: "float",
+              name: "xMult",
+              default: 1
+            },
+            {
+              type: "float",
+              name: "yMult",
+              default: 1
+            },
+            {
+              type: "float",
+              name: "offsetX",
+              default: 0.5
+            },
+            {
+              type: "float",
+              name: "offsetY",
+              default: 0.5
+            }
+          ],
+          glsl: `   vec2 xy = _st - vec2(offsetX, offsetY);
+   xy*=(1.0/vec2(amount*xMult, amount*yMult));
+   xy+=vec2(offsetX, offsetY);
+   return xy;
+   `
+        },
+        {
+          name: "pixelate",
+          type: "coord",
+          inputs: [
+            {
+              type: "float",
+              name: "pixelX",
+              default: 20
+            },
+            {
+              type: "float",
+              name: "pixelY",
+              default: 20
+            }
+          ],
+          glsl: `   vec2 xy = vec2(pixelX, pixelY);
+   return (floor(_st * xy) + 0.5)/xy;`
+        },
+        {
+          name: "posterize",
+          type: "color",
+          inputs: [
+            {
+              type: "float",
+              name: "bins",
+              default: 3
+            },
+            {
+              type: "float",
+              name: "gamma",
+              default: 0.6
+            }
+          ],
+          glsl: `   vec4 c2 = pow(_c0, vec4(gamma));
+   c2 *= vec4(bins);
+   c2 = floor(c2);
+   c2/= vec4(bins);
+   c2 = pow(c2, vec4(1.0/gamma));
+   return vec4(c2.xyz, _c0.a);`
+        },
+        {
+          name: "shift",
+          type: "color",
+          inputs: [
+            {
+              type: "float",
+              name: "r",
+              default: 0.5
+            },
+            {
+              type: "float",
+              name: "g",
+              default: 0
+            },
+            {
+              type: "float",
+              name: "b",
+              default: 0
+            },
+            {
+              type: "float",
+              name: "a",
+              default: 0
+            }
+          ],
+          glsl: `   vec4 c2 = vec4(_c0);
+   c2.r = fract(c2.r + r);
+   c2.g = fract(c2.g + g);
+   c2.b = fract(c2.b + b);
+   c2.a = fract(c2.a + a);
+   return vec4(c2.rgba);`
+        },
+        {
+          name: "repeat",
+          type: "coord",
+          inputs: [
+            {
+              type: "float",
+              name: "repeatX",
+              default: 3
+            },
+            {
+              type: "float",
+              name: "repeatY",
+              default: 3
+            },
+            {
+              type: "float",
+              name: "offsetX",
+              default: 0
+            },
+            {
+              type: "float",
+              name: "offsetY",
+              default: 0
+            }
+          ],
+          glsl: `   vec2 st = _st * vec2(repeatX, repeatY);
+   st.x += step(1., mod(st.y,2.0)) * offsetX;
+   st.y += step(1., mod(st.x,2.0)) * offsetY;
+   return fract(st);`
+        },
+        {
+          name: "modulateRepeat",
+          type: "combineCoord",
+          inputs: [
+            {
+              type: "float",
+              name: "repeatX",
+              default: 3
+            },
+            {
+              type: "float",
+              name: "repeatY",
+              default: 3
+            },
+            {
+              type: "float",
+              name: "offsetX",
+              default: 0.5
+            },
+            {
+              type: "float",
+              name: "offsetY",
+              default: 0.5
+            }
+          ],
+          glsl: `   vec2 st = _st * vec2(repeatX, repeatY);
+   st.x += step(1., mod(st.y,2.0)) + _c0.r * offsetX;
+   st.y += step(1., mod(st.x,2.0)) + _c0.g * offsetY;
+   return fract(st);`
+        },
+        {
+          name: "repeatX",
+          type: "coord",
+          inputs: [
+            {
+              type: "float",
+              name: "reps",
+              default: 3
+            },
+            {
+              type: "float",
+              name: "offset",
+              default: 0
+            }
+          ],
+          glsl: `   vec2 st = _st * vec2(reps, 1.0);
+   //  float f =  mod(_st.y,2.0);
+   st.y += step(1., mod(st.x,2.0))* offset;
+   return fract(st);`
+        },
+        {
+          name: "modulateRepeatX",
+          type: "combineCoord",
+          inputs: [
+            {
+              type: "float",
+              name: "reps",
+              default: 3
+            },
+            {
+              type: "float",
+              name: "offset",
+              default: 0.5
+            }
+          ],
+          glsl: `   vec2 st = _st * vec2(reps, 1.0);
+   //  float f =  mod(_st.y,2.0);
+   st.y += step(1., mod(st.x,2.0)) + _c0.r * offset;
+   return fract(st);`
+        },
+        {
+          name: "repeatY",
+          type: "coord",
+          inputs: [
+            {
+              type: "float",
+              name: "reps",
+              default: 3
+            },
+            {
+              type: "float",
+              name: "offset",
+              default: 0
+            }
+          ],
+          glsl: `   vec2 st = _st * vec2(1.0, reps);
+   //  float f =  mod(_st.y,2.0);
+   st.x += step(1., mod(st.y,2.0))* offset;
+   return fract(st);`
+        },
+        {
+          name: "modulateRepeatY",
+          type: "combineCoord",
+          inputs: [
+            {
+              type: "float",
+              name: "reps",
+              default: 3
+            },
+            {
+              type: "float",
+              name: "offset",
+              default: 0.5
+            }
+          ],
+          glsl: `   vec2 st = _st * vec2(reps, 1.0);
+   //  float f =  mod(_st.y,2.0);
+   st.x += step(1., mod(st.y,2.0)) + _c0.r * offset;
+   return fract(st);`
+        },
+        {
+          name: "kaleid",
+          type: "coord",
+          inputs: [
+            {
+              type: "float",
+              name: "nSides",
+              default: 4
+            }
+          ],
+          glsl: `   vec2 st = _st;
+   st -= 0.5;
+   float r = length(st);
+   float a = atan(st.y, st.x);
+   float pi = 2.*3.1416;
+   a = mod(a,pi/nSides);
+   a = abs(a-pi/nSides/2.);
+   return r*vec2(cos(a), sin(a));`
+        },
+        {
+          name: "modulateKaleid",
+          type: "combineCoord",
+          inputs: [
+            {
+              type: "float",
+              name: "nSides",
+              default: 4
+            }
+          ],
+          glsl: `   vec2 st = _st - 0.5;
+   float r = length(st);
+   float a = atan(st.y, st.x);
+   float pi = 2.*3.1416;
+   a = mod(a,pi/nSides);
+   a = abs(a-pi/nSides/2.);
+   return (_c0.r+r)*vec2(cos(a), sin(a));`
+        },
+        {
+          name: "scroll",
+          type: "coord",
+          inputs: [
+            {
+              type: "float",
+              name: "scrollX",
+              default: 0.5
+            },
+            {
+              type: "float",
+              name: "scrollY",
+              default: 0.5
+            },
+            {
+              type: "float",
+              name: "speedX",
+              default: 0
+            },
+            {
+              type: "float",
+              name: "speedY",
+              default: 0
+            }
+          ],
+          glsl: `
+   _st.x += scrollX + time*speedX;
+   _st.y += scrollY + time*speedY;
+   return fract(_st);`
+        },
+        {
+          name: "scrollX",
+          type: "coord",
+          inputs: [
+            {
+              type: "float",
+              name: "scrollX",
+              default: 0.5
+            },
+            {
+              type: "float",
+              name: "speed",
+              default: 0
+            }
+          ],
+          glsl: `   _st.x += scrollX + time*speed;
+   return fract(_st);`
+        },
+        {
+          name: "modulateScrollX",
+          type: "combineCoord",
+          inputs: [
+            {
+              type: "float",
+              name: "scrollX",
+              default: 0.5
+            },
+            {
+              type: "float",
+              name: "speed",
+              default: 0
+            }
+          ],
+          glsl: `   _st.x += _c0.r*scrollX + time*speed;
+   return fract(_st);`
+        },
+        {
+          name: "scrollY",
+          type: "coord",
+          inputs: [
+            {
+              type: "float",
+              name: "scrollY",
+              default: 0.5
+            },
+            {
+              type: "float",
+              name: "speed",
+              default: 0
+            }
+          ],
+          glsl: `   _st.y += scrollY + time*speed;
+   return fract(_st);`
+        },
+        {
+          name: "modulateScrollY",
+          type: "combineCoord",
+          inputs: [
+            {
+              type: "float",
+              name: "scrollY",
+              default: 0.5
+            },
+            {
+              type: "float",
+              name: "speed",
+              default: 0
+            }
+          ],
+          glsl: `   _st.y += _c0.r*scrollY + time*speed;
+   return fract(_st);`
+        },
+        {
+          name: "add",
+          type: "combine",
+          inputs: [
+            {
+              type: "float",
+              name: "amount",
+              default: 1
+            }
+          ],
+          glsl: `   return (_c0+_c1)*amount + _c0*(1.0-amount);`
+        },
+        {
+          name: "sub",
+          type: "combine",
+          inputs: [
+            {
+              type: "float",
+              name: "amount",
+              default: 1
+            }
+          ],
+          glsl: `   return (_c0-_c1)*amount + _c0*(1.0-amount);`
+        },
+        {
+          name: "layer",
+          type: "combine",
+          inputs: [],
+          glsl: `   return vec4(mix(_c0.rgb, _c1.rgb, _c1.a), clamp(_c0.a + _c1.a, 0.0, 1.0));`
+        },
+        {
+          name: "blend",
+          type: "combine",
+          inputs: [
+            {
+              type: "float",
+              name: "amount",
+              default: 0.5
+            }
+          ],
+          glsl: `   return _c0*(1.0-amount)+_c1*amount;`
+        },
+        {
+          name: "mult",
+          type: "combine",
+          inputs: [
+            {
+              type: "float",
+              name: "amount",
+              default: 1
+            }
+          ],
+          glsl: `   return _c0*(1.0-amount)+(_c0*_c1)*amount;`
+        },
+        {
+          name: "diff",
+          type: "combine",
+          inputs: [],
+          glsl: `   return vec4(abs(_c0.rgb-_c1.rgb), max(_c0.a, _c1.a));`
+        },
+        {
+          name: "modulate",
+          type: "combineCoord",
+          inputs: [
+            {
+              type: "float",
+              name: "amount",
+              default: 0.1
+            }
+          ],
+          glsl: `   //  return fract(st+(_c0.xy-0.5)*amount);
+   return _st + _c0.xy*amount;`
+        },
+        {
+          name: "modulateScale",
+          type: "combineCoord",
+          inputs: [
+            {
+              type: "float",
+              name: "multiple",
+              default: 1
+            },
+            {
+              type: "float",
+              name: "offset",
+              default: 1
+            }
+          ],
+          glsl: `   vec2 xy = _st - vec2(0.5);
+   xy*=(1.0/vec2(offset + multiple*_c0.r, offset + multiple*_c0.g));
+   xy+=vec2(0.5);
+   return xy;`
+        },
+        {
+          name: "modulatePixelate",
+          type: "combineCoord",
+          inputs: [
+            {
+              type: "float",
+              name: "multiple",
+              default: 10
+            },
+            {
+              type: "float",
+              name: "offset",
+              default: 3
+            }
+          ],
+          glsl: `   vec2 xy = vec2(offset + _c0.x*multiple, offset + _c0.y*multiple);
+   return (floor(_st * xy) + 0.5)/xy;`
+        },
+        {
+          name: "modulateRotate",
+          type: "combineCoord",
+          inputs: [
+            {
+              type: "float",
+              name: "multiple",
+              default: 1
+            },
+            {
+              type: "float",
+              name: "offset",
+              default: 0
+            }
+          ],
+          glsl: `   vec2 xy = _st - vec2(0.5);
+   float angle = offset + _c0.x * multiple;
+   xy = mat2(cos(angle),-sin(angle), sin(angle),cos(angle))*xy;
+   xy += 0.5;
+   return xy;`
+        },
+        {
+          name: "modulateHue",
+          type: "combineCoord",
+          inputs: [
+            {
+              type: "float",
+              name: "amount",
+              default: 1
+            }
+          ],
+          glsl: `   return _st + (vec2(_c0.g - _c0.r, _c0.b - _c0.g) * amount * 1.0/resolution);`
+        },
+        {
+          name: "invert",
+          type: "color",
+          inputs: [
+            {
+              type: "float",
+              name: "amount",
+              default: 1
+            }
+          ],
+          glsl: `   return vec4((1.0-_c0.rgb)*amount + _c0.rgb*(1.0-amount), _c0.a);`
+        },
+        {
+          name: "contrast",
+          type: "color",
+          inputs: [
+            {
+              type: "float",
+              name: "amount",
+              default: 1.6
+            }
+          ],
+          glsl: `   vec4 c = (_c0-vec4(0.5))*vec4(amount) + vec4(0.5);
+   return vec4(c.rgb, _c0.a);`
+        },
+        {
+          name: "brightness",
+          type: "color",
+          inputs: [
+            {
+              type: "float",
+              name: "amount",
+              default: 0.4
+            }
+          ],
+          glsl: `   return vec4(_c0.rgb + vec3(amount), _c0.a);`
+        },
+        {
+          name: "mask",
+          type: "combine",
+          inputs: [],
+          glsl: `   float a = _luminance(_c1.rgb);
+  return vec4(_c0.rgb*a, a*_c0.a);`
+        },
+        {
+          name: "luma",
+          type: "color",
+          inputs: [
+            {
+              type: "float",
+              name: "threshold",
+              default: 0.5
+            },
+            {
+              type: "float",
+              name: "tolerance",
+              default: 0.1
+            }
+          ],
+          glsl: `   float a = smoothstep(threshold-(tolerance+0.0000001), threshold+(tolerance+0.0000001), _luminance(_c0.rgb));
+   return vec4(_c0.rgb*a, a);`
+        },
+        {
+          name: "thresh",
+          type: "color",
+          inputs: [
+            {
+              type: "float",
+              name: "threshold",
+              default: 0.5
+            },
+            {
+              type: "float",
+              name: "tolerance",
+              default: 0.04
+            }
+          ],
+          glsl: `   return vec4(vec3(smoothstep(threshold-(tolerance+0.0000001), threshold+(tolerance+0.0000001), _luminance(_c0.rgb))), _c0.a);`
+        },
+        {
+          name: "color",
+          type: "color",
+          inputs: [
+            {
+              type: "float",
+              name: "r",
+              default: 1
+            },
+            {
+              type: "float",
+              name: "g",
+              default: 1
+            },
+            {
+              type: "float",
+              name: "b",
+              default: 1
+            },
+            {
+              type: "float",
+              name: "a",
+              default: 1
+            }
+          ],
+          glsl: `   vec4 c = vec4(r, g, b, a);
+   vec4 pos = step(0.0, c); // detect whether negative
+   // if > 0, return r * _c0
+   // if < 0 return (1.0-r) * _c0
+   return vec4(mix((1.0-_c0)*abs(c), c*_c0, pos));`
+        },
+        {
+          name: "saturate",
+          type: "color",
+          inputs: [
+            {
+              type: "float",
+              name: "amount",
+              default: 2
+            }
+          ],
+          glsl: `   const vec3 W = vec3(0.2125, 0.7154, 0.0721);
+   vec3 intensity = vec3(dot(_c0.rgb, W));
+   return vec4(mix(intensity, _c0.rgb, amount), _c0.a);`
+        },
+        {
+          name: "hue",
+          type: "color",
+          inputs: [
+            {
+              type: "float",
+              name: "hue",
+              default: 0.4
+            }
+          ],
+          glsl: `   vec3 c = _rgbToHsv(_c0.rgb);
+   c.r += hue;
+   //  c.r = fract(c.r);
+   return vec4(_hsvToRgb(c), _c0.a);`
+        },
+        {
+          name: "colorama",
+          type: "color",
+          inputs: [
+            {
+              type: "float",
+              name: "amount",
+              default: 5e-3
+            }
+          ],
+          glsl: `   vec3 c = _rgbToHsv(_c0.rgb);
+   c += vec3(amount);
+   c = _hsvToRgb(c);
+   c = fract(c);
+   return vec4(c, _c0.a);`
+        },
+        {
+          name: "prev",
+          type: "src",
+          inputs: [],
+          glsl: `   return texture2D(prevBuffer, fract(_st));`
+        },
+        {
+          name: "sum",
+          type: "color",
+          inputs: [
+            {
+              type: "vec4",
+              name: "scale",
+              default: 1
+            }
+          ],
+          glsl: `   vec4 v = _c0 * s;
+   return v.r + v.g + v.b + v.a;
+   }
+   float sum(vec2 _st, vec4 s) { // vec4 is not a typo, because argument type is not overloaded
+   vec2 v = _st.xy * s.xy;
+   return v.x + v.y;`
+        },
+        {
+          name: "r",
+          type: "color",
+          inputs: [
+            {
+              type: "float",
+              name: "scale",
+              default: 1
+            },
+            {
+              type: "float",
+              name: "offset",
+              default: 0
+            }
+          ],
+          glsl: `   return vec4(_c0.r * scale + offset);`
+        },
+        {
+          name: "g",
+          type: "color",
+          inputs: [
+            {
+              type: "float",
+              name: "scale",
+              default: 1
+            },
+            {
+              type: "float",
+              name: "offset",
+              default: 0
+            }
+          ],
+          glsl: `   return vec4(_c0.g * scale + offset);`
+        },
+        {
+          name: "b",
+          type: "color",
+          inputs: [
+            {
+              type: "float",
+              name: "scale",
+              default: 1
+            },
+            {
+              type: "float",
+              name: "offset",
+              default: 0
+            }
+          ],
+          glsl: `   return vec4(_c0.b * scale + offset);`
+        },
+        {
+          name: "a",
+          type: "color",
+          inputs: [
+            {
+              type: "float",
+              name: "scale",
+              default: 1
+            },
+            {
+              type: "float",
+              name: "offset",
+              default: 0
+            }
+          ],
+          glsl: `   return vec4(_c0.a * scale + offset);`
+        }
+      ];
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/generator-factory.js
+  function processGlsl(obj) {
+    let t = typeLookup[obj.type];
+    if (t) {
+      let baseArgs = t.args.map((arg) => arg).join(", ");
+      let customArgs = obj.inputs.map((input) => `${input.type} ${input.name}`).join(", ");
+      let args = `${baseArgs}${customArgs.length > 0 ? ", " + customArgs : ""}`;
+      let glslFunction = `
+  ${t.returnType} ${obj.name}(${args}) {
+      ${obj.glsl}
+  }
+`;
+      if (obj.type === "combine" || obj.type === "combineCoord") obj.inputs.unshift({
+        name: "color",
+        type: "vec4"
+      });
+      return Object.assign({}, obj, { glsl: glslFunction });
+    } else {
+      console.warn(`type ${obj.type} not recognized`, obj);
+    }
+  }
+  var GeneratorFactory, typeLookup, generator_factory_default;
+  var init_generator_factory = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/generator-factory.js"() {
+      init_glsl_source();
+      init_glsl_functions();
+      GeneratorFactory = class {
+        constructor({
+          defaultUniforms,
+          defaultOutput,
+          extendTransforms = [],
+          changeListener = (() => {
+          })
+        } = {}) {
+          this.defaultOutput = defaultOutput;
+          this.defaultUniforms = defaultUniforms;
+          this.changeListener = changeListener;
+          this.extendTransforms = extendTransforms;
+          this.generators = {};
+          this.init();
+        }
+        init() {
+          const functions = glsl_functions_default();
+          this.glslTransforms = {};
+          this.generators = Object.entries(this.generators).reduce((prev, [method, transform]) => {
+            this.changeListener({ type: "remove", synth: this, method });
+            return prev;
+          }, {});
+          this.sourceClass = /* @__PURE__ */ (() => {
+            return class extends glsl_source_default {
+            };
+          })();
+          if (Array.isArray(this.extendTransforms)) {
+            functions.concat(this.extendTransforms);
+          } else if (typeof this.extendTransforms === "object" && this.extendTransforms.type) {
+            functions.push(this.extendTransforms);
+          }
+          return functions.map((transform) => this.setFunction(transform));
+        }
+        _addMethod(method, transform) {
+          const self = this;
+          this.glslTransforms[method] = transform;
+          if (transform.type === "src") {
+            const func2 = (...args) => new this.sourceClass({
+              name: method,
+              transform,
+              userArgs: args,
+              defaultOutput: this.defaultOutput,
+              defaultUniforms: this.defaultUniforms,
+              synth: self
+            });
+            this.generators[method] = func2;
+            this.changeListener({ type: "add", synth: this, method });
+            return func2;
+          } else {
+            this.sourceClass.prototype[method] = function(...args) {
+              this.transforms.push({ name: method, transform, userArgs: args, synth: self });
+              return this;
+            };
+          }
+          return void 0;
+        }
+        setFunction(obj) {
+          var processedGlsl = processGlsl(obj);
+          if (processedGlsl) this._addMethod(obj.name, processedGlsl);
+        }
+      };
+      typeLookup = {
+        "src": {
+          returnType: "vec4",
+          args: ["vec2 _st"]
+        },
+        "coord": {
+          returnType: "vec2",
+          args: ["vec2 _st"]
+        },
+        "color": {
+          returnType: "vec4",
+          args: ["vec4 _c0"]
+        },
+        "combine": {
+          returnType: "vec4",
+          args: ["vec4 _c0", "vec4 _c1"]
+        },
+        "combineCoord": {
+          returnType: "vec2",
+          args: ["vec2 _st", "vec4 _c0"]
+        }
+      };
+      generator_factory_default = GeneratorFactory;
+    }
+  });
+
+  // stub:regl
+  var regl_default;
+  var init_regl = __esm({
+    "stub:regl"() {
+      regl_default = () => {
+        throw new Error("regl is not available");
+      };
+    }
+  });
+
+  // build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/hydra-synth.js
+  var hydra_synth_exports = {};
+  __export(hydra_synth_exports, {
+    default: () => hydra_synth_default
+  });
+  var Mouse, HydraRenderer, hydra_synth_default;
+  var init_hydra_synth = __esm({
+    "build/engine-src/strudel/node_modules/.pnpm/hydra-synth@1.3.29_rollup@4.32.0/node_modules/hydra-synth/src/hydra-synth.js"() {
+      init_output();
+      init_raf_loop();
+      init_hydra_source();
+      init_mouse();
+      init_audio();
+      init_video_recorder();
+      init_array_utils();
+      init_eval_sandbox();
+      init_generator_factory();
+      init_regl();
+      Mouse = mouse_default();
+      HydraRenderer = class {
+        constructor({
+          pb = null,
+          width = 1280,
+          height: height2 = 720,
+          numSources = 4,
+          numOutputs = 4,
+          makeGlobal = true,
+          autoLoop = true,
+          detectAudio = true,
+          enableStreamCapture = true,
+          canvas,
+          precision,
+          extendTransforms = {}
+          // add your own functions on init
+        } = {}) {
+          array_utils_default.init();
+          this.pb = pb;
+          this.width = width;
+          this.height = height2;
+          this.renderAll = false;
+          this.detectAudio = detectAudio;
+          this._initCanvas(canvas);
+          this.synth = {
+            time: 0,
+            bpm: 30,
+            width: this.width,
+            height: this.height,
+            fps: void 0,
+            stats: {
+              fps: 0
+            },
+            speed: 1,
+            mouse: Mouse,
+            render: this._render.bind(this),
+            setResolution: this.setResolution.bind(this),
+            update: (dt2) => {
+            },
+            // user defined update function
+            hush: this.hush.bind(this),
+            tick: this.tick.bind(this)
+          };
+          if (makeGlobal) window.loadScript = this.loadScript;
+          this.timeSinceLastUpdate = 0;
+          this._time = 0;
+          let precisionOptions = ["lowp", "mediump", "highp"];
+          if (precision && precisionOptions.includes(precision.toLowerCase())) {
+            this.precision = precision.toLowerCase();
+          } else {
+            let isIOS = (/iPad|iPhone|iPod/.test(navigator.platform) || navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) && !window.MSStream;
+            this.precision = isIOS ? "highp" : "mediump";
+          }
+          this.extendTransforms = extendTransforms;
+          this.saveFrame = false;
+          this.captureStream = null;
+          this.generator = void 0;
+          this._initRegl();
+          this._initOutputs(numOutputs);
+          this._initSources(numSources);
+          this._generateGlslTransforms();
+          this.synth.screencap = () => {
+            this.saveFrame = true;
+          };
+          if (enableStreamCapture) {
+            try {
+              this.captureStream = this.canvas.captureStream(25);
+              this.synth.vidRecorder = new video_recorder_default(this.captureStream);
+            } catch (e) {
+              console.warn("[hydra-synth warning]\nnew MediaSource() is not currently supported on iOS.");
+              console.error(e);
+            }
+          }
+          if (detectAudio) this._initAudio();
+          if (autoLoop) raf_loop_default(this.tick.bind(this)).start();
+          this.sandbox = new eval_sandbox_default(this.synth, makeGlobal, ["speed", "update", "bpm", "fps"]);
+        }
+        eval(code) {
+          this.sandbox.eval(code);
+        }
+        getScreenImage(callback) {
+          this.imageCallback = callback;
+          this.saveFrame = true;
+        }
+        hush() {
+          this.s.forEach((source2) => {
+            source2.clear();
+          });
+          this.o.forEach((output) => {
+            this.synth.solid(0, 0, 0, 0).out(output);
+          });
+          this.synth.render(this.o[0]);
+          this.sandbox.set("update", (dt2) => {
+          });
+        }
+        loadScript(url = "") {
+          const p = new Promise((res, rej) => {
+            var script = document.createElement("script");
+            script.onload = function() {
+              console.log(`loaded script ${url}`);
+              res();
+            };
+            script.onerror = (err) => {
+              console.log(`error loading script ${url}`, "log-error");
+              res();
+            };
+            script.src = url;
+            document.head.appendChild(script);
+          });
+          return p;
+        }
+        setResolution(width, height2) {
+          this.canvas.width = width;
+          this.canvas.height = height2;
+          this.width = width;
+          this.height = height2;
+          this.sandbox.set("width", width);
+          this.sandbox.set("height", height2);
+          console.log(this.width);
+          this.o.forEach((output) => {
+            output.resize(width, height2);
+          });
+          this.s.forEach((source2) => {
+            source2.resize(width, height2);
+          });
+          this.regl._refresh();
+          console.log(this.canvas.width);
+        }
+        canvasToImage(callback) {
+          const a2 = document.createElement("a");
+          a2.style.display = "none";
+          let d = /* @__PURE__ */ new Date();
+          a2.download = `hydra-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}-${d.getHours()}.${d.getMinutes()}.${d.getSeconds()}.png`;
+          document.body.appendChild(a2);
+          var self = this;
+          this.canvas.toBlob((blob) => {
+            if (self.imageCallback) {
+              self.imageCallback(blob);
+              delete self.imageCallback;
+            } else {
+              a2.href = URL.createObjectURL(blob);
+              console.log(a2.href);
+              a2.click();
+            }
+          }, "image/png");
+          setTimeout(() => {
+            document.body.removeChild(a2);
+            window.URL.revokeObjectURL(a2.href);
+          }, 300);
+        }
+        _initAudio() {
+          const that = this;
+          this.synth.a = new audio_default({
+            numBins: 4,
+            parentEl: this.canvas.parentNode
+            // changeListener: ({audio}) => {
+            //   that.a = audio.bins.map((_, index) =>
+            //     (scale = 1, offset = 0) => () => (audio.fft[index] * scale + offset)
+            //   )
+            //
+            //   if (that.makeGlobal) {
+            //     that.a.forEach((a, index) => {
+            //       const aname = `a${index}`
+            //       window[aname] = a
+            //     })
+            //   }
+            // }
+          });
+        }
+        // create main output canvas and add to screen
+        _initCanvas(canvas) {
+          if (canvas) {
+            this.canvas = canvas;
+            this.width = canvas.width;
+            this.height = canvas.height;
+          } else {
+            this.canvas = document.createElement("canvas");
+            this.canvas.width = this.width;
+            this.canvas.height = this.height;
+            this.canvas.style.width = "100%";
+            this.canvas.style.height = "100%";
+            this.canvas.style.imageRendering = "pixelated";
+            document.body.appendChild(this.canvas);
+          }
+        }
+        _initRegl() {
+          this.regl = regl_default({
+            //  profile: true,
+            canvas: this.canvas,
+            pixelRatio: 1
+            //,
+            // extensions: [
+            //   'oes_texture_half_float',
+            //   'oes_texture_half_float_linear'
+            // ],
+            // optionalExtensions: [
+            //   'oes_texture_float',
+            //   'oes_texture_float_linear'
+            //]
+          });
+          this.regl.clear({
+            color: [0, 0, 0, 1]
+          });
+          this.renderAll = this.regl({
+            frag: `
+      precision ${this.precision} float;
+      varying vec2 uv;
+      uniform sampler2D tex0;
+      uniform sampler2D tex1;
+      uniform sampler2D tex2;
+      uniform sampler2D tex3;
+
+      void main () {
+        vec2 st = vec2(1.0 - uv.x, uv.y);
+        st*= vec2(2);
+        vec2 q = floor(st).xy*(vec2(2.0, 1.0));
+        int quad = int(q.x) + int(q.y);
+        st.x += step(1., mod(st.y,2.0));
+        st.y += step(1., mod(st.x,2.0));
+        st = fract(st);
+        if(quad==0){
+          gl_FragColor = texture2D(tex0, st);
+        } else if(quad==1){
+          gl_FragColor = texture2D(tex1, st);
+        } else if (quad==2){
+          gl_FragColor = texture2D(tex2, st);
+        } else {
+          gl_FragColor = texture2D(tex3, st);
+        }
+
+      }
+      `,
+            vert: `
+      precision ${this.precision} float;
+      attribute vec2 position;
+      varying vec2 uv;
+
+      void main () {
+        uv = position;
+        gl_Position = vec4(1.0 - 2.0 * position, 0, 1);
+      }`,
+            attributes: {
+              position: [
+                [-2, 0],
+                [0, -2],
+                [2, 2]
+              ]
+            },
+            uniforms: {
+              tex0: this.regl.prop("tex0"),
+              tex1: this.regl.prop("tex1"),
+              tex2: this.regl.prop("tex2"),
+              tex3: this.regl.prop("tex3")
+            },
+            count: 3,
+            depth: { enable: false }
+          });
+          this.renderFbo = this.regl({
+            frag: `
+      precision ${this.precision} float;
+      varying vec2 uv;
+      uniform vec2 resolution;
+      uniform sampler2D tex0;
+
+      void main () {
+        gl_FragColor = texture2D(tex0, vec2(1.0 - uv.x, uv.y));
+      }
+      `,
+            vert: `
+      precision ${this.precision} float;
+      attribute vec2 position;
+      varying vec2 uv;
+
+      void main () {
+        uv = position;
+        gl_Position = vec4(1.0 - 2.0 * position, 0, 1);
+      }`,
+            attributes: {
+              position: [
+                [-2, 0],
+                [0, -2],
+                [2, 2]
+              ]
+            },
+            uniforms: {
+              tex0: this.regl.prop("tex0"),
+              resolution: this.regl.prop("resolution")
+            },
+            count: 3,
+            depth: { enable: false }
+          });
+        }
+        _initOutputs(numOutputs) {
+          const self = this;
+          this.o = Array(numOutputs).fill().map((el, index5) => {
+            var o = new output_default({
+              regl: this.regl,
+              width: this.width,
+              height: this.height,
+              precision: this.precision,
+              label: `o${index5}`
+            });
+            o.id = index5;
+            self.synth["o" + index5] = o;
+            return o;
+          });
+          this.output = this.o[0];
+        }
+        _initSources(numSources) {
+          this.s = [];
+          for (var i3 = 0; i3 < numSources; i3++) {
+            this.createSource(i3);
+          }
+        }
+        createSource(i3) {
+          let s2 = new hydra_source_default({ regl: this.regl, pb: this.pb, width: this.width, height: this.height, label: `s${i3}` });
+          this.synth["s" + this.s.length] = s2;
+          this.s.push(s2);
+          return s2;
+        }
+        _generateGlslTransforms() {
+          var self = this;
+          this.generator = new generator_factory_default({
+            defaultOutput: this.o[0],
+            defaultUniforms: this.o[0].uniforms,
+            extendTransforms: this.extendTransforms,
+            changeListener: ({ type, method, synth: synth2 }) => {
+              if (type === "add") {
+                self.synth[method] = synth2.generators[method];
+                if (self.sandbox) self.sandbox.add(method);
+              } else if (type === "remove") {
+              }
+            }
+          });
+          this.synth.setFunction = this.generator.setFunction.bind(this.generator);
+        }
+        _render(output) {
+          if (output) {
+            this.output = output;
+            this.isRenderingAll = false;
+          } else {
+            this.isRenderingAll = true;
+          }
+        }
+        // dt in ms
+        tick(dt2, uniforms) {
+          this.sandbox.tick();
+          if (this.detectAudio === true) this.synth.a.tick();
+          this.sandbox.set("time", this.synth.time += dt2 * 1e-3 * this.synth.speed);
+          this.timeSinceLastUpdate += dt2;
+          if (!this.synth.fps || this.timeSinceLastUpdate >= 1e3 / this.synth.fps) {
+            this.synth.stats.fps = Math.ceil(1e3 / this.timeSinceLastUpdate);
+            if (this.synth.update) {
+              try {
+                this.synth.update(this.timeSinceLastUpdate);
+              } catch (e) {
+                console.log(e);
+              }
+            }
+            for (let i3 = 0; i3 < this.s.length; i3++) {
+              this.s[i3].tick(this.synth.time);
+            }
+            for (let i3 = 0; i3 < this.o.length; i3++) {
+              this.o[i3].tick({
+                time: this.synth.time,
+                mouse: this.synth.mouse,
+                bpm: this.synth.bpm,
+                resolution: [this.canvas.width, this.canvas.height]
+              });
+            }
+            if (this.isRenderingAll) {
+              this.renderAll({
+                tex0: this.o[0].getCurrent(),
+                tex1: this.o[1].getCurrent(),
+                tex2: this.o[2].getCurrent(),
+                tex3: this.o[3].getCurrent(),
+                resolution: [this.canvas.width, this.canvas.height]
+              });
+            } else {
+              this.renderFbo({
+                tex0: this.output.getCurrent(),
+                resolution: [this.canvas.width, this.canvas.height]
+              });
+            }
+            this.timeSinceLastUpdate = 0;
+          }
+          if (this.saveFrame === true) {
+            this.canvasToImage();
+            this.saveFrame = false;
+          }
+        }
+      };
+      hydra_synth_default = HydraRenderer;
     }
   });
 
@@ -26339,19 +29198,19 @@ registerProcessor('${name3}', MyProcessor);
       s2.arguments_.stepsPerCycle = stepsPerCycle;
       return s2;
     };
-    var peg$f6 = function(a) {
-      return a;
+    var peg$f6 = function(a2) {
+      return a2;
     };
     var peg$f7 = function(s2) {
       s2.arguments_.alignment = "polymeter_slowcat";
       return s2;
     };
-    var peg$f8 = function(a) {
-      return (x3) => x3.options_["weight"] = (x3.options_["weight"] ?? 1) + (a ?? 2) - 1;
+    var peg$f8 = function(a2) {
+      return (x3) => x3.options_["weight"] = (x3.options_["weight"] ?? 1) + (a2 ?? 2) - 1;
     };
-    var peg$f9 = function(a) {
+    var peg$f9 = function(a2) {
       return (x3) => {
-        const reps = (x3.options_["reps"] ?? 1) + (a ?? 2) - 1;
+        const reps = (x3.options_["reps"] ?? 1) + (a2 ?? 2) - 1;
         x3.options_["reps"] = reps;
         x3.options_["ops"] = x3.options_["ops"].filter((x4) => x4.type_ !== "replicate");
         x3.options_["ops"].push({ type_: "replicate", arguments_: { amount: reps } });
@@ -26361,14 +29220,14 @@ registerProcessor('${name3}', MyProcessor);
     var peg$f10 = function(p, s2, r2) {
       return (x3) => x3.options_["ops"].push({ type_: "bjorklund", arguments_: { pulse: p, step: s2, rotation: r2 } });
     };
-    var peg$f11 = function(a) {
-      return (x3) => x3.options_["ops"].push({ type_: "stretch", arguments_: { amount: a, type: "slow" } });
+    var peg$f11 = function(a2) {
+      return (x3) => x3.options_["ops"].push({ type_: "stretch", arguments_: { amount: a2, type: "slow" } });
     };
-    var peg$f12 = function(a) {
-      return (x3) => x3.options_["ops"].push({ type_: "stretch", arguments_: { amount: a, type: "fast" } });
+    var peg$f12 = function(a2) {
+      return (x3) => x3.options_["ops"].push({ type_: "stretch", arguments_: { amount: a2, type: "fast" } });
     };
-    var peg$f13 = function(a) {
-      return (x3) => x3.options_["ops"].push({ type_: "degradeBy", arguments_: { amount: a, seed: seed2++ } });
+    var peg$f13 = function(a2) {
+      return (x3) => x3.options_["ops"].push({ type_: "degradeBy", arguments_: { amount: a2, seed: seed2++ } });
     };
     var peg$f14 = function(s2) {
       return (x3) => x3.options_["ops"].push({ type_: "tail", arguments_: { element: s2 } });
@@ -26417,17 +29276,17 @@ registerProcessor('${name3}', MyProcessor);
     var peg$f26 = function(p, s2, r2) {
       return { name: "bjorklund", args: { pulse: p, step: parseInt(s2) } };
     };
-    var peg$f27 = function(a) {
-      return { name: "stretch", args: { amount: a } };
+    var peg$f27 = function(a2) {
+      return { name: "stretch", args: { amount: a2 } };
     };
-    var peg$f28 = function(a) {
-      return { name: "shift", args: { amount: "-" + a } };
+    var peg$f28 = function(a2) {
+      return { name: "shift", args: { amount: "-" + a2 } };
     };
-    var peg$f29 = function(a) {
-      return { name: "shift", args: { amount: a } };
+    var peg$f29 = function(a2) {
+      return { name: "shift", args: { amount: a2 } };
     };
-    var peg$f30 = function(a) {
-      return { name: "stretch", args: { amount: "1/" + a } };
+    var peg$f30 = function(a2) {
+      return { name: "stretch", args: { amount: "1/" + a2 } };
     };
     var peg$f31 = function(s2) {
       return { name: "scale", args: { scale: s2.join("") } };
@@ -28520,7 +31379,7 @@ registerProcessor('${name3}', MyProcessor);
           }
           case "tail": {
             const friend = enter(op.arguments_.element);
-            pat = pat.fmap((a) => (b) => Array.isArray(a) ? [...a, b] : [a, b]).appLeft(friend);
+            pat = pat.fmap((a2) => (b) => Array.isArray(a2) ? [...a2, b] : [a2, b]).appLeft(friend);
             break;
           }
           case "range": {
@@ -28530,7 +31389,7 @@ registerProcessor('${name3}', MyProcessor);
               { length: Math.abs(stop2 - start) / step + 1 },
               (value2, index5) => start < stop2 ? start + index5 * step : start - index5 * step
             );
-            let range5 = (apat, bpat) => apat.squeezeBind((a) => bpat.bind((b) => fastcat(...arrayRange(a, b))));
+            let range5 = (apat, bpat) => apat.squeezeBind((a2) => bpat.bind((b) => fastcat(...arrayRange(a2, b))));
             pat = range5(pat, friend);
             break;
           }
@@ -36519,7 +39378,7 @@ registerProcessor('${name3}', MyProcessor);
     if (!targets.length) {
       return { template: genExprSource(templateExpr), patternExprs: [] };
     }
-    targets.sort((a, b) => getPatternNodeOrder(a.node) - getPatternNodeOrder(b.node));
+    targets.sort((a2, b) => getPatternNodeOrder(a2.node) - getPatternNodeOrder(b.node));
     const patternExprs = targets.map(({ patternExpr }) => cloneNode(patternExpr));
     let currentExpr = templateExpr;
     targets.forEach(({ node }, index5) => {
@@ -36892,8 +39751,13 @@ registerProcessor('${name3}', MyProcessor);
   }
   registerTranspilerPlugin(widgetTranspilerPlugins);
 
+  // build/engine-src/strudel/packages/hydra/hydra.mjs
+  init_draw2();
+  init_core();
+  var H = (p) => () => reify(p).queryArc(getTime(), getTime())[0].value;
+
   // js/host.mjs
-  var ready = evalScope(core_exports, edo_exports, tonal_exports, mini_exports, xen_exports, webaudio_exports);
+  var ready = evalScope(core_exports, edo_exports, tonal_exports, mini_exports, xen_exports, webaudio_exports, { H, initHydra });
   var evalError;
   var seconds2 = 0;
   var { evaluate: evaluate2, scheduler, setCps } = repl({
@@ -37031,22 +39895,28 @@ registerProcessor('${name3}', MyProcessor);
       "num/20.wav"
     ]
   };
-  var byOnset = (a, b) => time3(a.whole.begin) - time3(b.whole.begin) || (b.value.cps !== void 0) - (a.value.cps !== void 0);
+  var byOnset = (a2, b) => time3(a2.whole.begin) - time3(b.whole.begin) || (b.value.cps !== void 0) - (a2.value.cps !== void 0);
   var rt = { epoch: -1, from: 0, cps: 0, tempos: [], late: false };
   var api = globalThis.__patchisserie = {
     async evaluate(code, id2 = 0) {
       await ready;
       evalError = void 0;
       const before = scheduler.pattern;
+      const hydraBefore = strudelGlobals !== void 0;
+      restoreStrudel();
+      hydraCalled = false;
+      said.clear();
       try {
         await evaluate2(code, false);
       } catch (err) {
         evalError = err;
       }
       if (!evalError) {
+        if (!hydraCalled) api.hydraHush();
         [previous, previousId, patternId] = [before, patternId, id2];
         return { ok: true };
       }
+      if (hydraBefore && !strudelGlobals) installHydra();
       const line = evalError.loc?.line ?? Number(/^\[mini\] parse error at line (\d+)/.exec(evalError.message)?.[1]);
       return line ? { ok: false, error: evalError.message, line } : { ok: false, error: evalError.message };
     },
@@ -37099,7 +39969,7 @@ registerProcessor('${name3}', MyProcessor);
      * external: the CLOCK input drives the cycle, cps is the PLL's estimate. rendered: the render thread's frame.
      * Every scheduled hap's mini-notation locations go to rackHighlight() with the frames it plays.
      */
-    tick(frame, cycle, cps2, epoch2, playing, external, sr, lookahead2, rendered = -Infinity, reset2 = false) {
+    tick(frame, cycle, cps2, epoch2, playing, external2, sr, lookahead2, rendered = -Infinity, reset2 = false) {
       seconds2 = frame / sr;
       if (epoch2 !== rt.epoch) {
         Object.assign(rt, { epoch: epoch2, from: reset2 ? 0 : cycle, cps: Math.fround(cps2), tempos: [], late: reset2 });
@@ -37114,7 +39984,7 @@ registerProcessor('${name3}', MyProcessor);
       const tempo = (at3, value2) => {
         rt.cps = Math.fround(value2);
         api.rackEvent(Tempo, at3, at3, 0, 0, -1, "", rt.cps);
-        if (!external) rt.tempos.push({ cycle: at3, cps: rt.cps });
+        if (!external2) rt.tempos.push({ cycle: at3, cps: rt.cps });
       };
       const eps = 1e-9;
       const first = (f, c2, k, b) => Math.max(f, Math.ceil(f + (b - eps - c2) / k * sr));
@@ -37166,6 +40036,40 @@ registerProcessor('${name3}', MyProcessor);
     },
     /** superdough's orbits and buses back to their initial state; their nodes become garbage. */
     resetAudio: () => resetGlobalEffects(),
+    /**
+     * Icing's frame (src/engine.cpp, once per UI frame): Hydra's tick() at `time` (s, Icing's clock) while Filo plays
+     * `cycle` at `cps`, with Meyda's loudness of the AUDIO input (24 Bark bands, total). Returns null (no Hydra, or
+     * its fps skipped this frame) or [display (-1: render() all four, 0-3: render(oN)), time, width, height, then per
+     * output: its program id (0: none), n, its n uniform values].
+     */
+    hydraFrame(time4, cycle, cps2, specific, total) {
+      if (!hydra) return null;
+      frameCycle = cycle;
+      features = { loudness: { specific, total } };
+      hydra.sandbox.set("bpm", cps2 * 240);
+      const dt2 = frameTime === void 0 ? 0 : Math.max(0, time4 - frameTime) * 1e3;
+      frameTime = time4;
+      ticked = false;
+      once(() => hydra.tick(dt2));
+      if (!ticked) return null;
+      const out = [hydra.isRenderingAll ? -1 : hydra.output.id ?? 0, hydra.synth.time, hydra.canvas.width];
+      out.push(hydra.canvas.height);
+      for (const o of hydra.o) out.push(o.program, o.values.length, ...o.values);
+      return out;
+    },
+    /** Hydra's hush(): every output black, update() a no-op (Filo's STOP, an evaluate without initHydra()). */
+    hydraHush() {
+      if (hydra && visible) once(() => hydra.hush());
+      visible = false;
+    },
+    /** Where Output's shaders go (output, GLSL ES source, uniform names, which of them are samplers); returns the
+     * program's id. The engine replaces it. */
+    hydraProgram(output, frag, uniforms, samplers) {
+      hydraPrograms.push({ id: ++programs, output, frag, uniforms, samplers });
+      return programs;
+    },
+    /** Drains the programs collected by the default hydraProgram. */
+    hydraPrograms: () => hydraPrograms.splice(0),
     // Test seam: the upstream tune regression stringifies haps with hap.show() like Strudel's own test.
     get pattern() {
       return scheduler.pattern;
@@ -37180,4 +40084,136 @@ registerProcessor('${name3}', MyProcessor);
       return { ...value2, pan: (value2.pan || 1) * pan2 };
     });
   };
+  var hydraReady;
+  var hydra;
+  var strudelGlobals;
+  var hydraCalled = false;
+  var visible = false;
+  var features = null;
+  var [frameTime, frameCycle, ticked] = [void 0, 0, false];
+  var hydraPrograms = [];
+  var programs = 0;
+  scheduler.now = () => frameCycle;
+  var Output2 = class _Output {
+    constructor(id2) {
+      Object.assign(this, { id: id2, label: `o${id2}`, precision: "mediump", uniforms: {}, program: 0, fns: [], values: [] });
+    }
+    /** GlslSource.out(): this output's new shader. Its uniforms are functions, evaluated by tick() per frame. */
+    render([pass]) {
+      const names10 = Object.keys(pass.uniforms);
+      this.fns = Object.values(pass.uniforms);
+      const samplers = names10.map((n2) => pass.frag.includes(`uniform sampler2D ${n2};`));
+      this.program = api.hydraProgram(this.id, pass.frag, names10, samplers);
+      visible = true;
+    }
+    tick(props) {
+      this.values = this.fns.map((f) => {
+        const v2 = f({}, props);
+        return typeof v2 === "number" ? v2 : v2 instanceof _Output ? v2.id : -1;
+      });
+      ticked = true;
+    }
+    resize() {
+    }
+    getCurrent() {
+      return this;
+    }
+    getTexture() {
+      return this;
+    }
+  };
+  var regl = { texture: () => ({}), _refresh: () => {
+  } };
+  var external = ["init", "initCam", "initImage", "initVideo", "initScreen", "initStream"];
+  async function createHydra() {
+    const [{ default: HydraRenderer2 }, { default: Audio2 }] = await Promise.all([
+      Promise.resolve().then(() => (init_hydra_synth(), hydra_synth_exports)),
+      Promise.resolve().then(() => (init_audio(), audio_exports))
+    ]);
+    class Hydra2 extends HydraRenderer2 {
+      _initRegl() {
+        this.regl = regl;
+        this.renderAll = this.renderFbo = () => {
+        };
+      }
+      _initOutputs(n2) {
+        this.o = Array.from({ length: n2 }, (_, i3) => this.synth[`o${i3}`] = new Output2(i3));
+        this.output = this.o[0];
+      }
+      // ponytail: Audio without its constructor (a canvas, the microphone): its defaults copied, as of hydra-synth 1.3.29.
+      _initAudio() {
+        this.synth.a = Object.assign(Object.create(Audio2.prototype), {
+          vol: 0,
+          scale: 10,
+          max: 15,
+          cutoff: 2,
+          smooth: 0.4,
+          isDrawing: false,
+          beat: { holdFrames: 20, threshold: 40, _cutoff: 0, decay: 0.98, _framesSinceBeat: 0 },
+          onBeat: () => {
+          },
+          meyda: { get: () => features },
+          show() {
+          },
+          // no analyser overlay in Icing
+          hide() {
+          },
+          draw() {
+          }
+        });
+        this.synth.a.setBins(4);
+      }
+    }
+    const h3 = new Hydra2({
+      canvas: { width: 1280, height: 720 },
+      precision: "mediump",
+      // blanked for GLSL 1.20 anyway; given, hydra-synth doesn't probe navigator.platform
+      makeGlobal: false,
+      // installHydra()
+      autoLoop: false,
+      // Icing's frames tick it
+      enableStreamCapture: false
+    });
+    h3.s.forEach((s2, i3) => {
+      for (const m3 of external)
+        s2[m3] = () => {
+          throw new Error(`s${i3}.${m3}(): Hydra's external sources are not available in Icing`);
+        };
+    });
+    return h3;
+  }
+  async function initHydra() {
+    hydraCalled = true;
+    hydra = await (hydraReady ??= createHydra());
+    installHydra();
+    return hydra;
+  }
+  function installHydra() {
+    strudelGlobals ??= new Map(Object.keys(hydra.synth).map((n2) => [n2, Object.getOwnPropertyDescriptor(globalThis, n2)]));
+    hydra.sandbox.makeGlobal = true;
+    for (const n2 of strudelGlobals.keys()) globalThis[n2] = hydra.synth[n2];
+  }
+  function restoreStrudel() {
+    if (!strudelGlobals) return;
+    hydra.sandbox.tick();
+    hydra.sandbox.makeGlobal = false;
+    for (const [n2, d] of strudelGlobals) d ? Object.defineProperty(globalThis, n2, d) : delete globalThis[n2];
+    strudelGlobals = void 0;
+  }
+  var said = /* @__PURE__ */ new Set();
+  function once(fn) {
+    const plain = Object.fromEntries(["log", "warn", "error"].map((k) => [k, console[k].plain ?? console[k]]));
+    for (const [k, f] of Object.entries(plain)) {
+      const quiet = (...a2) => {
+        const line = a2.map(String).join(" ");
+        if (said.size < 100 && !said.has(line)) said.add(line), f(...a2);
+      };
+      console[k] = Object.assign(quiet, { plain: f });
+    }
+    try {
+      fn();
+    } finally {
+      Object.assign(console, plain);
+    }
+  }
 })();
