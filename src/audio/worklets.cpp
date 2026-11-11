@@ -8,7 +8,11 @@
 
 // The native ports repeat the JS processors operation for operation (test_worklets.cpp compares samples): no fused
 // multiply-adds that JS arithmetic would not do. (Rack's -funsafe-math-optimizations builds trade that exactness away.)
+// ponytail: GCC has no such pragma; its x64 builds have no FMA to contract into (-march=nehalem, tests: baseline
+// x86-64). A GCC build for an FMA target needs -ffp-contract=off for this file.
+#ifdef __clang__
 #pragma STDC FP_CONTRACT OFF
+#endif
 
 namespace audio {
 

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <memory>
 #include <mutex>
@@ -24,6 +25,8 @@ namespace {
 // frames, not wall time), and still the JS thread falls behind its lookahead at times, so some events go missing
 // (superdough skips what is past). There every event that sounds must still be exact, while counts and intervals are
 // only reported: race detection is the point of that build.
+// The same on CI runners (env CI): their shared VMs stall the JS thread past its lookahead at times (seen on lin-x64
+// and mac-x64), so some events go missing there too.
 #ifndef __has_feature
 #define __has_feature(x) 0
 #endif
@@ -32,7 +35,7 @@ constexpr double kPace = 0.5;
 constexpr bool kTimed = false;
 #else
 constexpr double kPace = 1;
-constexpr bool kTimed = true;
+const bool kTimed = !std::getenv("CI");
 #endif
 #define TIMED_CHECK(expr) (kTimed ? CHECK(expr) : (expr) ? (void)0 : (void)std::printf("  (timing) %s\n", #expr))
 

@@ -135,8 +135,13 @@ struct Filo : Module {
 		outputs[R_OUTPUT].setVoltage(5.f * r);
 		for (int id : {VOCT_OUTPUT, GATE_OUTPUT, VEL_OUTPUT})
 			outputs[id].setChannels(out.channels);
+		// GCC 12+ false positive in Rack's Port::setChannels() for a constant 16: its loop that clears the channels
+		// above never runs then (a port has at most 16).
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
 		outputs[TRIG_OUTPUT].setChannels(16);
 		outputs[CC_OUTPUT].setChannels(16);
+#pragma GCC diagnostic pop
 		for (int c = 0; c < 16; c++) {
 			outputs[VOCT_OUTPUT].setVoltage(out.voct[c], c);
 			outputs[GATE_OUTPUT].setVoltage(out.gate[c], c);
