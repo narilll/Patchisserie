@@ -52,5 +52,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - run: sudo apt-get install -y clang-format
-      - run: clang-format --dry-run -Werror $(git ls-files 'src/*.cpp' 'src/*.hpp' 'test/*.cpp' 'test/*.hpp')
+      # PyPI wheel instead of apt: pinned to the local major (21), and no Ubuntu mirror outages.
+      - run: pipx run clang-format==21.1.8 --dry-run -Werror $(git ls-files 'src/*.cpp' 'src/*.hpp' 'test/*.cpp' 'test/*.hpp')
