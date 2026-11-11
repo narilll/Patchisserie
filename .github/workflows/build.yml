@@ -32,7 +32,7 @@ jobs:
           # VCV Rack manual, "Building" / Windows; vim for xxd, curl for the SDK.
           install: >-
             git wget make tar unzip zip mingw-w64-x86_64-gcc mingw-w64-x86_64-gdb mingw-w64-x86_64-cmake
-            autoconf automake libtool mingw-w64-x86_64-jq python zstd mingw-w64-x86_64-pkgconf vim curl
+            autoconf automake libtool jq python zstd mingw-w64-x86_64-pkgconf vim curl
       - name: Rack SDK
         run: curl -fsSL -o sdk.zip https://vcvrack.com/downloads/Rack-SDK-latest-${{ matrix.platform }}.zip && unzip -q sdk.zip -d "$HOME"
       - run: make -j3 RACK_DIR="$HOME/Rack-SDK"
