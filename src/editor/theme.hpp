@@ -84,12 +84,14 @@ struct Cell {
 };
 
 /** One cell as Orca JS styles it (client.js makeStyle), by orca-c's mark flags; `reading` is the raw glyph under the
-cursor. (ponytail: Orca JS's "locals" dots near the cursor are skipped.) */
-inline Cell cellStyle(char c, uint8_t mark, bool selected, bool cursor, bool marker, char reading, bool paused) {
+cursor; `dots` draws the dim dot an empty cell would hide. (ponytail: Orca JS's "locals" dots near the cursor are
+skipped.) */
+inline Cell cellStyle(char c, uint8_t mark, bool selected, bool cursor, bool marker, char reading, bool paused,
+					  bool dots = false) {
 	bool lock = mark & lattice::kLock, port = mark & (lattice::kInput | lattice::kOutput | lattice::kHasteInput);
 	char glyph = c;
 	if (c == '.')
-		glyph = cursor ? (paused ? '~' : '@') : marker ? '+' : selected || port || lock ? '.' : 0;
+		glyph = cursor ? (paused ? '~' : '@') : marker ? '+' : selected || port || lock || dots ? '.' : 0;
 	if (selected)
 		return {glyph, kFInv, kBInv};
 	if (c != '.' && c == reading && !lock)

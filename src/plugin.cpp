@@ -653,6 +653,7 @@ struct Lattice : Module {
 	bool windowOpen = false;
 	editor::Theme theme = editor::kPresets[0].theme; // the grid's colours (UI thread), saved in the patch
 	std::string themeName = editor::kPresets[0].name;
+	bool showDots = true; // empty cells show a dim dot (UI thread), saved in the patch
 
 	dsp::SchmittTrigger playIn, stopIn, clockIn, resetIn;
 	dsp::BooleanTrigger playButton, stopButton; // Lattice has nothing to evaluate: both buttons are transport
@@ -735,20 +736,20 @@ struct Lattice : Module {
 		json_t* themeJ = json_object();
 		for (int i = 0; i < editor::kSlots; i++)
 			json_object_set_new(themeJ, editor::kSlotNames[i], json_string(editor::hex(theme.c[i]).c_str()));
-		return json_pack("{s:s, s:f, s:i, s:i, s:i, s:i, s:b, s:o, s:b, s:o, s:s}", "grid", machine.text().c_str(),
+		return json_pack("{s:s, s:f, s:i, s:i, s:i, s:i, s:b, s:o, s:b, s:o, s:s, s:b}", "grid", machine.text().c_str(),
 						 "bpm", (double)bpm, "voices", voices, "polyMode", polyMode, "clkDivision", clkDivision, "ppc",
 						 ppc, "autoPlay", autoPlay, "window", geometryJson(window), "windowOpen", windowOpen, "theme",
-						 themeJ, "themeName", themeName.c_str());
+						 themeJ, "themeName", themeName.c_str(), "showDots", showDots);
 	}
 
 	void dataFromJson(json_t* root) override {
 		const char* grid = nullptr;
 		double tempo = bpm;
-		int play = autoPlay, open = windowOpen;
+		int play = autoPlay, open = windowOpen, dots = showDots;
 		json_t* windowJ = nullptr;
-		json_unpack(root, "{s?s, s?F, s?i, s?i, s?i, s?i, s?b, s?o, s?b}", "grid", &grid, "bpm", &tempo, "voices",
+		json_unpack(root, "{s?s, s?F, s?i, s?i, s?i, s?i, s?b, s?o, s?b, s?b}", "grid", &grid, "bpm", &tempo, "voices",
 					&voices, "polyMode", &polyMode, "clkDivision", &clkDivision, "ppc", &ppc, "autoPlay", &play,
-					"window", &windowJ, "windowOpen", &open);
+					"window", &windowJ, "windowOpen", &open, "showDots", &dots);
 		// Patch data is a real boundary.
 		bpm = clamp((float)tempo, 20.f, 300.f);
 		voices = clamp(voices, 1, 16);
@@ -760,6 +761,7 @@ struct Lattice : Module {
 		autoPlay = play;
 		geometryFromJson(windowJ, window);
 		windowOpen = open;
+		showDots = dots;
 		json_t* themeJ = json_object_get(root, "theme");
 		editor::Theme t;
 		bool ok = json_is_object(themeJ);
@@ -816,7 +818,8 @@ struct GridSizeField : ui::TextField {
 struct LatticeWidget : ModuleWidget {
 	std::unique_ptr<lattice::Machine> previewMachine; // the module browser's grid, in place of the module's
 	editor::GridEdit preview;
-	std::unique_ptr<editor::Window> gridWindow; // null: the module browser's preview
+	std::unique_ptr<editor::Window> gridWindow;                // null: the module browser's preview
+	editor::GridView *panelView = nullptr, *bigView = nullptr; // (owned by the widget tree and the window)
 	bool fullscreenDown = false;
 
 	LatticeWidget(Lattice* module) {
@@ -833,6 +836,7 @@ struct LatticeWidget : ModuleWidget {
 		view->machine = module ? &module->machine : nullptr;
 		view->bpm = module ? &module->bpm : nullptr;
 		view->theme = module ? &module->theme : nullptr;
+		panelView = view;
 		addChild(view);
 		auto* text = createWidget<PanelText>(Vec());
 		text->box.size = box.size;
@@ -866,6 +870,7 @@ struct LatticeWidget : ModuleWidget {
 			big->machine = &module->machine;
 			big->bpm = &module->bpm;
 			big->theme = &module->theme;
+			bigView = big;
 			big->fontSize = 16;
 			big->fit = true;
 			gridWindow.reset(new editor::Window(big, module->window, module->windowOpen));
@@ -882,6 +887,10 @@ struct LatticeWidget : ModuleWidget {
 	void step() override {
 		ModuleWidget::step();
 		hydra::collectWindows();
+		if (module) {
+			bool dots = static_cast<Lattice*>(module)->showDots;
+			panelView->dots = bigView->dots = dots;
+		}
 		// The FULL button (Rack holds a momentary press for a frame at least).
 		bool down = module && module->params[Lattice::FULLSCREEN_PARAM].getValue() > 0.f;
 		if (down && !fullscreenDown)
@@ -953,6 +962,7 @@ struct LatticeWidget : ModuleWidget {
 			field->resize = [=](int w, int h) { undoable(m, "resize Lattice grid", [=] { m->edit.resize(w, h); }); };
 			sub->addChild(field);
 		}));
+		menu->addChild(createBoolPtrMenuItem("Show empty cells", "", &m->showDots));
 		menu->addChild(createSubmenuItem("Theme", m->themeName, [=](Menu* sub) {
 			bool known = false;
 			for (const editor::Preset& p : editor::kPresets) {

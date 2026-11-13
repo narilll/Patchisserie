@@ -124,7 +124,7 @@ The status line under the grid shows, from left to right, whether Lattice is pla
 
 The colours follow the style of Orca's own app, so that the grid stays readable at a glance. The exact colours depend on the theme, which is described below. The roles are the same in every theme.
 
-- Empty cells show nothing. A dot only appears where it carries information, which is in the selected block, on the ports of an operator and on locked cells.
+- Empty cells show a dim dot, as in the terminal version of Orca. If you turn off **Show empty cells** in the module's menu, empty cells show nothing, as in Orca's desktop app. A dot then only appears where it carries information, which is in the selected block, on the ports of an operator and on locked cells.
 - An operator, such as `D`, `C` or `T`, is drawn as a coloured block with its letter on it.
 - The inputs of an operator, which are the cells it reads, are drawn in a bright colour. Inputs that Orca marks as a "haste" input, those that are read straight away, use a second colour.
 - The output of an operator, the cell it writes to, is drawn as a block in a light colour.
@@ -237,6 +237,7 @@ Right click the module to open its menu. After the usual Rack entries, Lattice a
 - **CLOCK input: pulses per beat** is a submenu with the same numbers. It tells Lattice how many pulses of an external clock make a beat. The default is 4, one frame per pulse. Use 24 for a clock at 24 PPQN.
 - **Auto-play** is a checkbox. When it is on, Lattice starts playing from frame 0 when the module is added or the patch opens. It is on by default.
 - **Grid size** is a submenu that sets how big the grid is. It offers 38×12 (panel), 57×25 (default), 64×32, 96×48, 128×64 and 256×256. A check mark shows the current size. Making the grid smaller cuts off whatever lies outside the new size, and making it larger adds empty cells. The top left corner stays where it was. You can undo a size change with Rack's own undo. The same submenu has the entry **Custom size (W x H, Enter)**, which is a label above a text field. Type the width, the letter `x` and the height without spaces, for example `80x40`, and press Enter. Writing `80 x 40` is rejected. Both numbers can range from 1 to 256, and numbers outside that range are brought into it. Anything that does not read as two numbers separated by `x` is ignored.
+- **Show empty cells** is a checkbox. When it is on, empty cells show a dim dot. When it is off, they show nothing, and a dot only appears where it carries information (see [How cells are coloured](#how-cells-are-coloured)). It is on by default, and it applies to the panel and the grid window.
 - **Theme** is a submenu that shows the name of the current theme. It lists the three presets, **Patchisserie** (the default), **Orca** and **Orca light**, with a check mark at the current one. A theme you loaded yourself appears as a line with its name followed by "(loaded)". The submenu ends with **Load theme (.svg)...**.
 - **Load theme (.svg)...** opens a file dialog for a theme file from Hundred Rabbits. You can download these from [github.com/hundredrabbits/Themes](https://github.com/hundredrabbits/Themes). A theme is an `.svg` file with nine coloured elements, named `background`, `f_high`, `f_med`, `f_low`, `f_inv`, `b_high`, `b_med`, `b_low` and `b_inv`, each with a `fill` colour. If any of the nine is missing, Lattice shows a message saying that the file is not a theme, and nothing changes. The loaded theme takes its name from the file name, and it is saved in the patch.
 - **Load .orca file...** opens a file dialog for a `.orca` file, which is a plain text file with one row of the grid on each line, and replaces the whole grid with it. The grid takes the size of the file, up to 256 by 256. Rows of different lengths are padded with dots, and any character that is not a visible one becomes a dot. Rack's undo can take it back.
@@ -252,6 +253,7 @@ When you save a patch, Lattice stores:
 - the CLK and CLOCK pulses per beat,
 - the Auto-play setting,
 - the position and size of the grid window, and whether it is open or fullscreen,
+- the Show empty cells setting,
 - the theme, as its name and its nine colours.
 
 Lattice does not store the cursor and selection, the undo history, the current frame or whether it is playing, or the held CC values. After you open a patch, Lattice starts from frame 0 if Auto-play is on, and stays stopped if it is off. You can also use **Save .orca file...** to keep a grid outside of a patch.

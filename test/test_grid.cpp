@@ -431,4 +431,15 @@ TEST(theme_cell_style) {
 	CHECK(is(style('.', 0, true), '.', kFInv, kBInv));                         // selected
 	CHECK(is(style('.', 0, true, true), '@', kFInv, kBInv));                   // the cursor, playing
 	CHECK(is(style('.', 0, true, true, false, '.', true), '~', kFInv, kBInv)); // stopped
+	// dots: only an invisible '.' changes
+	auto dotted = [](char c, uint8_t mark = 0, bool selected = false, bool cursor = false, bool marker = false) {
+		return cellStyle(c, mark, selected, cursor, marker, 'x', false, true);
+	};
+	CHECK(is(dotted('.'), '.', kFLow, -1));
+	CHECK(is(dotted('.', 0, false, false, true), '+', kFLow, -1));
+	CHECK(is(dotted('.', kLock), '.', kFMed, -1));
+	CHECK(is(dotted('.', kInput), '.', kBHigh, -1));
+	CHECK(is(dotted('.', 0, true), '.', kFInv, kBInv));
+	CHECK(is(dotted('.', 0, true, true), '@', kFInv, kBInv));
+	CHECK(is(dotted('a'), 'a', kFLow, -1));
 }

@@ -106,6 +106,7 @@ struct GridView : rack::widget::Widget {
 	/** The editor window this is in, as View::host. */
 	Window* host = nullptr;
 	const Theme* theme = nullptr; // the module's; null: kPresets[0] (the module browser's preview)
+	bool dots = true;             // empty cells show a dim dot (Lattice's "Show empty cells")
 
 	void step() override;
 	void draw(const DrawArgs& args) override;

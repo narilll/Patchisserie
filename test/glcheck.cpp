@@ -347,7 +347,7 @@ std::string gridWindow(GLFWwindow* rack) {
 				}
 			return (double)n / all;
 		};
-		// The fitted cells: the first 12 columns of row 1 (the arpeggio's "...2C4"; empty dots are not drawn), the "+"
+		// The fitted cells: the first 12 columns of row 1 (the arpeggio's "...2C4", empty dots drawn), the "+"
 		// marker at column 48, row 24 (so all 57x25 are in), and right of the 57 columns.
 		rack::math::Vec cell = view->cellSize();
 		constexpr float kPad = 4; // editor/view.cpp's

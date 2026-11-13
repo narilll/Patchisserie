@@ -967,7 +967,7 @@ void GridView::paint(NVGcontext* vg) {
 			bool selected = focus && i >= s.x && i < s.x + s.w && j >= s.y && j < s.y + s.h;
 			bool cursor = focus && i == edit->x && j == edit->y;
 			Cell cell = cellStyle(g.at(i, j), edit->marks[(size_t)j * g.w + i], selected, cursor,
-								  i % 8 == 0 && j % 8 == 0, reading, paused); // (Orca's grid markers)
+								  i % 8 == 0 && j % 8 == 0, reading, paused, dots); // (Orca's grid markers)
 			if (cell.bg >= 0) {
 				nvgBeginPath(vg);
 				nvgRect(vg, X(i), Y(j), charW_, lh);
