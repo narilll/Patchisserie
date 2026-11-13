@@ -11,7 +11,7 @@ const entries = text
   .map((e) => e.replace(/^\s*Compiled into the plugin binary\n/, ''));
 
 test('ENGINE_LICENSES names the known bundled packages and the compiled-in code', () => {
-  for (const name of ['hydra-synth@', 'fraction.js@', '@strudel/core@', 'quickjs-ng', 'dr_libs'])
+  for (const name of ['hydra-synth@', 'fraction.js@', '@strudel/core@', 'quickjs-ng', 'dr_libs', 'orca-c'])
     assert.ok(text.includes(name), `${name} missing`);
 });
 

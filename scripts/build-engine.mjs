@@ -121,5 +121,7 @@ quickjs-ng (vendor/quickjs-ng) \u2014 MIT
 
 ${vendor('vendor/quickjs-ng/LICENSE')}${sep}dr_libs (vendor/dr_libs: dr_wav, dr_mp3, dr_flac) \u2014 public domain or MIT-0
 
-${vendor('vendor/dr_libs/LICENSE')}`,
+${vendor('vendor/dr_libs/LICENSE')}${sep}orca-c (vendor/orca-c: the Orca VM, sim.c and vmio.c) \u2014 MIT
+
+${vendor('vendor/orca-c/LICENSE.md')}`,
 );

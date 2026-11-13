@@ -1,9 +1,12 @@
 # Patchisserie
 
-VCV Rack 2 plugin that runs [Strudel](https://strudel.cc) live coding and [Hydra](https://hydra.ojack.xyz) visuals natively inside Rack.
+VCV Rack 2 plugin that runs [Strudel](https://strudel.cc) and [Orca](https://100r.co/site/orca.html) live coding and
+[Hydra](https://hydra.ojack.xyz) visuals natively inside Rack.
 
 - **Filo**: Strudel editor + engine. Audio out (L/R), CV/gate/trig/CC from `.midi()` patterns, clock/reset.
 - **Icing**: Hydra visuals expander for Filo, with audio input for `a.fft`.
+- **Lattice**: Orca's grid (on the orca-c VM). V/OCT, gate, velocity, triggers, CC and clock from the grid's MIDI
+  operators; clock/reset.
 
 Status: early development.
 
@@ -100,6 +103,41 @@ $: s("bd*4")
   position is saved in the patch. Closing the window hides it.
 - What Icing doesn't do: see [Not supported](#not-supported).
 
+## Lattice (Orca)
+
+Lattice runs [Orca](https://100r.co/site/orca.html) through [orca-c](https://github.com/hundredrabbits/Orca-c)'s VM,
+unmodified, on Rack's audio thread: each frame runs on the sample it starts, so an external clock is followed exactly.
+The grid is on the panel (click it to type) and, with FULL, in a window of its own, like Filo's editor.
+
+| Key (Ctrl on Windows/Linux) | |
+|---|---|
+| arrows | move the cursor (the selection keeps its size) |
+| Shift+arrows | grow / shrink the selection |
+| Cmd+arrows | jump 8 cells |
+| Alt+arrows | drag the selected block |
+| a glyph | write it at the cursor; the cursor stays (Cmd+I: insert mode, it moves right) |
+| Backspace, Delete | erase the selection |
+| Cmd+C / X / V | copy / cut / paste a block (pasted at the selection's top left) |
+| Cmd+Z, Cmd+Shift+Z | undo, redo |
+| Cmd+A, Esc | select all, collapse the selection |
+| Space | pause / resume: the frame stays, as in Orca |
+| Cmd+Enter, PLAY button | play from frame 0 |
+| Cmd+. , STOP button | stop: gates down |
+| FULL button | the grid window (also in Lattice's menu); F11 there: fullscreen |
+
+Outputs, from the grid's MIDI operators:
+- **V/OCT, GATE, VEL**: notes of `:` and `%`, numbered as Orca JS does (`:03C` is MIDI 60 = 0 V); velocity 0-10 V;
+  the gate lasts the note's length in frames. Polyphony (menu) is MPE by default: Orca channel 0-F is poly channel
+  1-16, as on TRIG and CC; Rotate, Reuse and Reset as in Filo. A `%` note releases its channel's previous `%` note.
+- **TRIG**: 1 ms on channel c+1 for every note on Orca channel c (drums: a channel per instrument).
+- **CC**: `!` knob 0-F drives CC channel 1-16, its value 0-z as 0-10 V, held.
+- `?` pitch bend: ±2 semitones on the V/OCT of the voices playing that channel's notes; STOP and RESET centre it.
+- **CLK**: pulses per beat (menu, default 4: every frame). **RESET**: on play and reset.
+
+A beat is 4 frames, as in Orca: BPM in the menu (20-300). With a cable in CLOCK the clock drives the frames (pulses
+per beat in the menu: 4, one frame per pulse, by default; 24 for 24 PPQN); RESET goes back to frame 0. The menu also
+has grid sizes (up to 256×256), Load / Save .orca; the grid itself is saved in the patch.
+
 ## Not supported
 
 Strudel and Hydra run unmodified, so most code from strudel.cc and hydra.ojack.xyz runs as is. What doesn't (the
@@ -142,6 +180,14 @@ visuals, outputs, inputs and sources below that Rack lacks are ignored with one 
   work.
 - The canvas is 1280×720 unless `setResolution()` changes it (strudel.cc uses the window size).
 
+**Lattice (Orca)**
+- orca-c is a C port of Orca, not the JS app: `$` (commands to the app) isn't an operator there, the glyph is inert.
+- `;` (UDP) and `=` (OSC) send nothing: there's nothing in Rack to send them to.
+- What orca-c's MIDI events lose against Orca JS: channel `.` is channel 0 and channels above F are F; velocity `.`
+  is full (127; Orca JS: `f`, 119); length `.` and `0` are both one frame.
+- `R` is deterministic (seed 1, the cell's position and the frame), Orca JS's is random.
+- No MIDI input or MIDI clock, no BPM keys or commander (`:` prompt), no themes.
+
 ## Build
 
 ```sh
@@ -153,18 +199,19 @@ make test-js    # engine tests: host, Hydra, upstream tune snapshots in Node and
 make render     # offline audio renders (build/render/*.wav, after scripts/fetch-test-samples);
                 # node --test test/render.test.mjs compares them with Chrome
 make tsan       # graph, worklet, engine and download threading tests under ThreadSanitizer
-make glcheck    # Icing's shaders and passes, Filo's editor window, on this machine's GL driver (not in `make test`:
+make glcheck    # Icing's shaders and passes, Filo's editor window, Lattice's grid window, on this machine's GL driver (not in `make test`:
                 # needs a display; RACK_SYSTEM_DIR: Rack's install, for its fonts)
-make bench      # CPU per graph voice and per worklet processor (release build)
+make bench      # CPU per graph voice, per worklet processor and per Lattice frame (release build)
 make render-bench   # the render set 20x + all patterns stacked: CPU (gate G4), leaks and RSS (G2)
 scripts/update-engine [ref]   # re-pin Strudel (default: main) and with it hydra-synth, rebuild res/engine.js, run test-js;
                 # stops on audio package changes until --ack-superdough <sha>
+git -C vendor/orca-c pull && make test   # update Lattice's orca-c (vendored unmodified)
 make install    # into your Rack user folder
 ```
 
 ## License
 
 AGPL-3.0-or-later (see `LICENSE`). Bundles Strudel (AGPL-3.0-or-later), hydra-synth (AGPL-3.0; without its regl,
-raf-loop and Meyda dependencies), quickjs-ng (MIT) and dr_libs (public domain / MIT-0). Exact upstream versions are recorded in `res/ENGINE_VERSIONS`.
+raf-loop and Meyda dependencies), quickjs-ng (MIT), dr_libs (public domain / MIT-0) and orca-c (MIT). Exact upstream versions are recorded in `res/ENGINE_VERSIONS`.
 The panel text and the editor use IBM Plex (Mono Regular and SemiBold, Sans Condensed SemiBold; @ibm/plex-mono 2.5.0 and @ibm/plex-sans-condensed 2.0.0 from https://github.com/IBM/plex/releases), SIL Open Font License 1.1: `res/fonts/OFL.txt`.
 The license texts of all bundled npm packages and of the vendored C code ship in `res/ENGINE_LICENSES`, generated by `scripts/build-engine.mjs`.
