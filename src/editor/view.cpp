@@ -785,6 +785,18 @@ bool isOperator(char c) {
 void GridView::step() {
 	Widget::step();
 	edit->refresh();
+	float ratio = charRatio_ > 0 ? charRatio_ : 0.6f, font = fontSize;
+	if (fit) {
+		const lattice::Grid& g = edit->grid;
+		font = 6;
+		for (float s = 2 * fontSize; s >= 6; s--)
+			if (g.w * s * ratio <= box.size.x - 2 * kPad && g.h * std::round(s * 1.3f) <= gridH() - 2 * kPad) {
+				font = s;
+				break;
+			}
+	}
+	if (font != cellFont_)
+		cellFont_ = font, charW_ = font * ratio;
 	if (edit->x != seenX_ || edit->y != seenY_) // moved, or the other view did: the origin stays in sight
 		follow();
 	seenX_ = edit->x, seenY_ = edit->y;
@@ -840,7 +852,11 @@ void GridView::paint(NVGcontext* vg) {
 	nvgSave(vg);
 	nvgIntersectScissor(vg, 0, 0, w, gh);
 	nvgFontFaceId(vg, font);
-	nvgFontSize(vg, fontSize);
+	if (charRatio_ <= 0) { // at a large size: the ratio isn't rounded by the glyph grid
+		nvgFontSize(vg, 100);
+		charRatio_ = nvgTextBounds(vg, 0, 0, "0000000000", nullptr, nullptr) / 1000;
+	}
+	nvgFontSize(vg, cellFont_);
 	nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 	charW_ = nvgTextBounds(vg, 0, 0, "0000000000", nullptr, nullptr) / 10;
 	auto X = [&](int i) { return kPad + i * charW_ - scroll_.x; };

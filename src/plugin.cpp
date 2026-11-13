@@ -764,6 +764,21 @@ struct BpmSlider : ui::Slider {
 	~BpmSlider() override { delete quantity; }
 };
 
+/** The Grid size menu's "WxH" field: Enter resizes the grid and closes the menu; anything else does nothing. */
+struct GridSizeField : ui::TextField {
+	std::function<void(int, int)> resize;
+	GridSizeField() { box.size.x = 120; }
+	void onAction(const ActionEvent& e) override {
+		int w, h;
+		if (std::sscanf(text.c_str(), "%dx%d", &w, &h) != 2)
+			return;
+		resize(w, h);
+		if (auto* overlay = getAncestorOfType<ui::MenuOverlay>())
+			overlay->requestDelete();
+		e.consume(this);
+	}
+};
+
 struct LatticeWidget : ModuleWidget {
 	std::unique_ptr<lattice::Machine> previewMachine; // the module browser's grid, in place of the module's
 	editor::GridEdit preview;
@@ -816,6 +831,7 @@ struct LatticeWidget : ModuleWidget {
 			big->machine = &module->machine;
 			big->bpm = &module->bpm;
 			big->fontSize = 16;
+			big->fit = true;
 			gridWindow.reset(new editor::Window(big, module->window, module->windowOpen));
 			big->host = gridWindow.get();
 		}
@@ -888,12 +904,18 @@ struct LatticeWidget : ModuleWidget {
 				int w, h;
 				const char* note;
 			};
-			for (Preset p : {Preset{lattice::kDefaultWidth, lattice::kDefaultHeight, " (panel)"}, Preset{64, 32, ""},
-							 Preset{96, 48, ""}, Preset{128, 64, ""}, Preset{256, 256, ""}})
+			for (Preset p :
+				 {Preset{38, 12, " (panel)"}, Preset{lattice::kDefaultWidth, lattice::kDefaultHeight, " (default)"},
+				  Preset{64, 32, ""}, Preset{96, 48, ""}, Preset{128, 64, ""}, Preset{256, 256, ""}})
 				sub->addChild(createCheckMenuItem(
 					std::to_string(p.w) + "×" + std::to_string(p.h) + p.note, "",
 					[=] { return m->machine.width() == p.w && m->machine.height() == p.h; },
 					[=] { undoable(m, "resize Lattice grid", [=] { m->edit.resize(p.w, p.h); }); }));
+			sub->addChild(createMenuLabel("Custom size (W x H, Enter)"));
+			auto* field = new GridSizeField;
+			field->setText(std::to_string(m->machine.width()) + "x" + std::to_string(m->machine.height()));
+			field->resize = [=](int w, int h) { undoable(m, "resize Lattice grid", [=] { m->edit.resize(w, h); }); };
+			sub->addChild(field);
 		}));
 		menu->addChild(createMenuItem("Load .orca file...", "", [=] {
 			osdialog_filters* filters = osdialog_filters_parse("Orca:orca");

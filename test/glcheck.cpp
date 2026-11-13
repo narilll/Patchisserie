@@ -299,6 +299,7 @@ std::string gridWindow(GLFWwindow* rack) {
 	view->edit = &edit;
 	view->machine = &machine;
 	view->fontSize = 16;
+	view->fit = true;
 	hydra::WindowGeometry g;
 	bool open = true;
 	editor::Window w(view, g, open);
@@ -333,16 +334,21 @@ std::string gridWindow(GLFWwindow* rack) {
 				}
 			return (double)n / all;
 		};
-		// The first 12 columns of row 1 (the arpeggio's "...2C4" and its dots), and right of the 38 columns (9.6 px
-		// each at 16 px).
-		float lh = std::round(16 * 1.3f);
-		double text = drawn(0, 4, 12 * 9.6f + 4, 4 + lh), none = drawn(380, 4, 600, 4 + 12 * lh);
-		std::printf("  %dx%d px (%s): row 1 %.1f %% drawn, empty part %.1f %%\n", fw, fh,
-					"build/glcheck-out/lattice.png", 100 * text, 100 * none);
-		why = error         ? "GL error " + std::to_string(error)
-			  : text < 0.05 ? "no grid"
-			  : none > 0    ? "not the background"
-							: "";
+		// The fitted cells: the first 12 columns of row 1 (the arpeggio's "...2C4" and its dots), the "+" marker at
+		// column 48, row 24 (so all 57x25 are in), and right of the 57 columns.
+		rack::math::Vec cell = view->cellSize();
+		constexpr float kPad = 4; // editor/view.cpp's
+		double text = drawn(0, kPad, kPad + 12 * cell.x, kPad + cell.y),
+			   marker = drawn(kPad + 48 * cell.x, kPad + 24 * cell.y, kPad + 49 * cell.x, kPad + 25 * cell.y),
+			   none = drawn(kPad + lattice::kDefaultWidth * cell.x + 2, kPad, w.root->box.size.x,
+							kPad + lattice::kDefaultHeight * cell.y);
+		std::printf("  %dx%d px (%s), cells %.1fx%.0f: row 1 %.1f %% drawn, marker %.1f %%, empty part %.1f %%\n", fw,
+					fh, "build/glcheck-out/lattice.png", cell.x, cell.y, 100 * text, 100 * marker, 100 * none);
+		why = error           ? "GL error " + std::to_string(error)
+			  : text < 0.05   ? "no grid"
+			  : marker < 0.01 ? "the grid doesn't fit the window"
+			  : none > 0      ? "not the background"
+							  : "";
 	}
 	w.destroy();
 	hydra::collectWindows();

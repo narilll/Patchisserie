@@ -107,7 +107,9 @@ $: s("bd*4")
 
 Lattice runs [Orca](https://100r.co/site/orca.html) through [orca-c](https://github.com/hundredrabbits/Orca-c)'s VM,
 unmodified, on Rack's audio thread: each frame runs on the sample it starts, so an external clock is followed exactly.
-The grid is on the panel (click it to type) and, with FULL, in a window of its own, like Filo's editor.
+The grid is on the panel (click it to type) and, with FULL, in a window of its own, like Filo's editor. It is 57×25 by
+default (orca-c's): the panel shows part of it and the arrows or the wheel scroll; the window scales the cells so the
+whole grid shows (down to 6 px, then it scrolls).
 
 | Key (Ctrl on Windows/Linux) | |
 |---|---|
@@ -136,7 +138,7 @@ Outputs, from the grid's MIDI operators:
 
 A beat is 4 frames, as in Orca: BPM in the menu (20-300). With a cable in CLOCK the clock drives the frames (pulses
 per beat in the menu: 4, one frame per pulse, by default; 24 for 24 PPQN); RESET goes back to frame 0. The menu also
-has grid sizes (up to 256×256), Load / Save .orca; the grid itself is saved in the patch.
+has grid sizes (presets, or a custom W x H up to 256×256), Load / Save .orca; the grid itself is saved in the patch.
 
 ## Not supported
 

@@ -16,9 +16,10 @@ namespace lattice {
 // ponytail: copied values; test_lattice pins them through orca_run. Include gbuffer.h if orca-c ever gets a C++ guard.
 enum MarkFlag : uint8_t { kInput = 1, kOutput = 2, kHasteInput = 4, kLock = 8, kSleep = 16 };
 
-// What the panel's view shows at 12 px: 38 columns of Plex Mono (7.2 px) in 95.6 mm minus the pads, 12 lines of 16 px
-// above the status line in 76 mm (test/glcheck.cpp's panel case measures it).
-constexpr int kDefaultWidth = 38, kDefaultHeight = 12;
+// orca-c's default when its TUI can't measure the terminal (vendor/orca-c/tui_main.c). The panel shows 38x12 of it at
+// 12 px (Plex Mono 7.2 px in 95.6 mm minus the pads, 16 px lines above the status line in 76 mm; test/glcheck.cpp's
+// panel case measures it) and scrolls; the window fits it all.
+constexpr int kDefaultWidth = 57, kDefaultHeight = 25;
 constexpr int kMaxSize = 256; // ponytail: grid ceiling per side (memory + one frame's CPU on the audio thread)
 
 struct Rect {

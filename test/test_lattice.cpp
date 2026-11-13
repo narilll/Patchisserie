@@ -587,7 +587,7 @@ TEST(lattice_write) {
 
 TEST(lattice_default_grid_plays) {
 	Machine m;
-	CHECK(m.width() <= 38 && m.height() <= 12);
+	CHECK(m.width() == kDefaultWidth && m.height() == kDefaultHeight);
 	Rig r(kDefaultGrid);
 	r.play();
 	bool arp = false, kick = false;

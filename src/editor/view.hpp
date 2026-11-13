@@ -82,6 +82,10 @@ struct GridView : rack::widget::Widget {
 	lattice::Machine* machine = nullptr; // null: the module browser's preview (no transport keys)
 	const float* bpm = nullptr;          // the module's setting, for the status line
 	float fontSize = 12;
+	/** The window's view: the cells take the largest whole-px font in [6, 2 x fontSize] at which the whole grid shows
+	above the status line. (ponytail: below 6 px it scrolls; 256x256 needs fullscreen and scrolling.) The panel (false):
+	cells use fontSize and scroll. */
+	bool fit = false;
 	/** The editor window this is in, as View::host. */
 	Window* host = nullptr;
 
@@ -94,14 +98,18 @@ struct GridView : rack::widget::Widget {
 	void onHoverScroll(const HoverScrollEvent& e) override;
 	void onSelectKey(const SelectKeyEvent& e) override;
 	void onSelectText(const SelectTextEvent& e) override;
+	/** A cell's size, px (glcheck). */
+	rack::math::Vec cellSize() const { return {charW_, lineH()}; }
 
   private:
 	rack::math::Vec scroll_; // px of the grid scrolled out at the top / left
 	float charW_ = 7.2f;     // measured when drawn
+	float cellFont_ = 12;    // the cells' font px: fontSize, or fitted
+	float charRatio_ = 0;    // char advance / font px; 0: not measured yet
 	int seenX_ = -1, seenY_ = -1;
 	bool dragging_ = false;
 
-	float lineH() const { return std::round(fontSize * 1.3f); }
+	float lineH() const { return std::round(cellFont_ * 1.3f); }
 	float statusH() const { return std::round(fontSize * 1.6f); }
 	float gridH() const { return box.size.y - statusH(); }
 	void paint(NVGcontext* vg);
