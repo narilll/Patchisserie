@@ -545,9 +545,11 @@ void resetWhilePlaying(bool external) {
 	// (c) As soon as both can: within the ring (1024 frames), a tick (20 ms), the 10 ms margin and the query.
 	std::printf("  RESET -> cycle 0: %lld frames (%.1f ms)\n", (long long)(first - zero), 1e3 * (first - zero) / r->sr);
 	TIMED_CHECK(first - zero <= 1024 + 960 + 480 + 480);
-	// (d) The later beats exactly on the new timeline: cycle c on zero + c / cps * sr.
+	// (d) The later beats exactly on the new timeline: cycle c on zero + c / cps * sr. (d) and (e) are timed: a JS
+	// thread starved past the old beat (80 ms) renders that beat before it sees the reset, and an underflow's silent
+	// frame inside a kick reads as a second onset; both seen on CI runners with ~12000 frames of underflow.
 	for (int64_t g : gates)
-		CHECK(g == first || (g - zero) % 24000 == 0);
+		TIMED_CHECK(g == first || (g - zero) % 24000 == 0);
 	TIMED_CHECK(gates.size() >= 5);
 	r->aligned(zero + 12000, r->frame() - 4800); // from cycle 0.125 on
 	// (e) Old-timeline kicks: only what was rendered when the JS handled the reset (its render position is first -
@@ -558,7 +560,7 @@ void resetWhilePlaying(bool external) {
 			old.push_back(k);
 	for (int64_t k : old) {
 		std::printf("  old kick at %+lld\n", (long long)(k - zero));
-		CHECK(k < first - 480 + 128);
+		TIMED_CHECK(k < first - 480 + 128);
 	}
 	TIMED_CHECK(old.empty()); // the beat 80 ms after the edge was cancelled
 }
