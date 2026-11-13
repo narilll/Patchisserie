@@ -121,6 +121,32 @@ TEST(grid_erase_copy_cut) {
 	CHECK(f.g.copy() == "x");
 }
 
+TEST(grid_comment_toggles_the_edges) {
+	Fix f;
+	const std::string orig = f.rows();
+	f.g.place(0, 0);
+	f.g.scale(4, 2); // 5 x 3
+	f.g.comment();
+	CHECK(f.rows() == "#bcd#f\n#hij#l\n#nop#r\nstuvwx\n");
+	CHECK(at(f.g, 0, 0, 4, 2));
+	f.g.comment(); // top-left is '#': uncomment
+	CHECK(f.rows() == ".bcd.f\n.hij.l\n.nop.r\nstuvwx\n");
+	f.g.undo();
+	CHECK(f.rows() == "#bcd#f\n#hij#l\n#nop#r\nstuvwx\n");
+	f.g.undo();
+	CHECK(f.rows() == orig);
+	f.g.redo();
+	CHECK(f.rows() == "#bcd#f\n#hij#l\n#nop#r\nstuvwx\n");
+}
+
+TEST(grid_comment_one_wide) {
+	Fix f;
+	f.g.place(2, 1);
+	f.g.scale(0, 1);
+	f.g.comment();
+	CHECK(f.rows() == "abcdef\ngh#jkl\nmn#pqr\nstuvwx\n");
+}
+
 TEST(grid_paste) {
 	Fix f;
 	f.g.place(1, 1);

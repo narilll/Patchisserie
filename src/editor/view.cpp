@@ -1167,7 +1167,10 @@ void GridView::onSelectKey(const SelectKeyEvent& e) {
 	else if (e.isKeyCommand(GLFW_KEY_Y, RACK_MOD_CTRL))
 		edit->redo();
 #endif
-	else if (e.isKeyCommand(GLFW_KEY_A, RACK_MOD_CTRL))
+	else if (m == RACK_MOD_CTRL && (e.key == GLFW_KEY_SLASH || e.key == GLFW_KEY_KP_DIVIDE || e.keyName == "/")) {
+		if (press) // by key name too: '/' is elsewhere (or Shift+7) on other layouts
+			edit->comment();
+	} else if (e.isKeyCommand(GLFW_KEY_A, RACK_MOD_CTRL))
 		edit->selectAll();
 	else if (e.isKeyCommand(GLFW_KEY_I, RACK_MOD_CTRL)) {
 		if (press)

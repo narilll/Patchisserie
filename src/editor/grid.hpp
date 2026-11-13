@@ -80,6 +80,17 @@ struct GridEdit {
 		lattice::Rect r = selection();
 		commit({put(r, std::string((size_t)r.w * r.h, '.'))});
 	}
+	/** Cmd/Ctrl+/ (Orca JS's comment()): `#` on the left and right edge of each selected row, or `.` if the top-left
+	cell is `#`. A 1-wide selection writes one cell (Orca JS writes a second one outside it). */
+	void comment() {
+		lattice::Rect r = selection();
+		char c = grid.at(r.x, r.y) == '#' ? '.' : '#';
+		std::string g;
+		for (int j = r.y; j < r.y + r.h; j++)
+			for (int i = r.x; i < r.x + r.w; i++)
+				g += i == r.x || i == r.x + r.w - 1 ? c : grid.at(i, j);
+		commit({put(r, g)});
+	}
 	std::string copy() const {
 		lattice::Rect r = selection();
 		std::string s;
