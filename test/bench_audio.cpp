@@ -1,6 +1,7 @@
 // Rough CPU benchmark (make bench): 64 voices of saw -> biquad -> gain -> panner plus one 2 s stereo convolver reverb,
 // then one voice of every res/worklets.js processor (QuickJS, and the native ports), each in an OfflineAudioContext
-// like superdough would set it up. Prints microseconds per 128-frame quantum; asserts nothing.
+// like superdough would set it up. Prints microseconds per 128-frame quantum; asserts nothing. Then Lattice: one orca
+// frame of a dense grid, microseconds.
 #include <chrono>
 #include <cstdio>
 #include <memory>
@@ -8,6 +9,7 @@
 
 #include "audio/nodes.hpp"
 #include "js_rig.hpp"
+#include "lattice.hpp"
 
 using namespace audio;
 
@@ -122,6 +124,34 @@ static double run(bool sweep, bool reverb) {
 	return us / (quanta - 1);
 }
 
+// Lattice: an external clock edge on every sample is one frame per sample (4 pulses per beat), so the time per
+// process() call is the frame (orca_run + event mapping) plus a sample's few ns.
+static double benchLattice(int w, int h, int frames) {
+	// Busy tile of 14x6, every operator class but the movers (they pile up and go quiet).
+	const char* tile[6] = {"2C8.1D4.R4Z.A3", "..3M2.0I7.U3.9", ":03C.%25..*.F1",
+						   "A5.L4.O00.K3.Q", "T4abcd.V3x.Y.H", "J.....B2.*.:15"};
+	std::string g;
+	for (int y = 0; y < h; y++)
+		for (int x = 0; x < w; x++)
+			g += tile[y % 6][x % 14];
+	lattice::Machine m;
+	m.resize(w, h);
+	m.write({0, 0, w, h}, g);
+	m.setPulsesPerBeat(4);
+	lattice::Machine::Inputs in;
+	in.clockConnected = in.clockEdge = true;
+	lattice::Machine::Outputs out;
+	m.request(lattice::Machine::Transport::Play);
+	for (int i = 0; i < 200; i++) // the reset guard, then the grid settles
+		m.process(in, out);
+	int64_t f0 = m.frame();
+	auto t0 = std::chrono::steady_clock::now();
+	for (int i = 0; i < frames; i++)
+		m.process(in, out);
+	double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
+	return us / (double)(m.frame() - f0);
+}
+
 int main() {
 	const double budget = 1e6 * kQuantum / 48000;
 	std::printf("budget per quantum at 48 kHz: %.1f us\n", budget);
@@ -131,6 +161,8 @@ int main() {
 			std::printf("64 voices%s%s: %.1f us/quantum (%.1f%% of one core)\n", sweep ? " + filter sweep" : "",
 						reverb ? " + 2 s reverb" : "", us, 100 * us / budget);
 		}
+	std::printf("Lattice 64x32: %.1f us per orca frame\n", benchLattice(64, 32, 4000));
+	std::printf("Lattice 256x256: %.1f us per orca frame\n", benchLattice(256, 256, 300));
 	std::printf("one voice per worklet processor at 48 kHz (effects: minus their sawtooth input):\n");
 	for (bool native : {false, true}) {
 		JsRig r(native);

@@ -37,7 +37,7 @@ TEST_FLAGS := -std=c++17 -g -O1 -Wall -Wextra -Isrc -Itest -I$(RACK_DIR)/include
 # Web Audio graph + QuickJS binding, Filo's engine and downloads: linked into the tests; dep/include for simde (pulled in
 # by Rack's dsp/ringbuffer.hpp) and ghc::filesystem.
 ENGINE_SOURCES := src/engine.cpp src/fetch.cpp
-TEST_SOURCES += $(AUDIO_SOURCES) $(ENGINE_SOURCES)
+TEST_SOURCES += $(AUDIO_SOURCES) $(ENGINE_SOURCES) src/lattice.cpp
 TEST_FLAGS += -I$(RACK_DIR)/dep/include
 # MinGW: M_PI needs _USE_MATH_DEFINES and Rack's simd needs SSE 4.2 (SIMDe's fallback clashes with the intrinsics
 # <windows.h> declares), as in Rack's compile.mk; no sanitizer runtimes: tests run without them.
@@ -76,22 +76,22 @@ test: build/test/run
 
 # Graph, worklet, engine and download tests (command/event queues, the worklet runtime on the render thread vs the JS
 # thread, Filo's JS / render / audio threads, the download worker) under ThreadSanitizer.
-TSAN_TESTS := test/main.cpp test/test_graph.cpp test/test_worklets.cpp test/test_engine.cpp test/test_fetch.cpp
-build/test/run-tsan: $(TSAN_TESTS) $(wildcard test/*.hpp) $(AUDIO_SOURCES) $(ENGINE_SOURCES) $(call host_objects,tsan) $(wildcard src/*.hpp src/audio/*.hpp)
+TSAN_TESTS := test/main.cpp test/test_graph.cpp test/test_worklets.cpp test/test_engine.cpp test/test_fetch.cpp test/test_lattice.cpp
+build/test/run-tsan: $(TSAN_TESTS) $(wildcard test/*.hpp) $(AUDIO_SOURCES) $(ENGINE_SOURCES) src/lattice.cpp $(call host_objects,tsan) $(wildcard src/*.hpp src/audio/*.hpp)
 	@mkdir -p $(@D)
-	$(CXX) $(TEST_FLAGS) -fsanitize=thread -o $@ $(TSAN_TESTS) $(AUDIO_SOURCES) $(ENGINE_SOURCES) $(call host_objects,tsan)
+	$(CXX) $(TEST_FLAGS) -fsanitize=thread -o $@ $(TSAN_TESTS) $(AUDIO_SOURCES) $(ENGINE_SOURCES) src/lattice.cpp $(call host_objects,tsan)
 
 tsan: build/test/run-tsan
 	build/test/run-tsan
 
-# CPU benchmarks with plugin-like optimization, no sanitizers: graph nodes and every worklet processor per voice
-# (bench, prints only), the whole render set + all patterns stacked (render-bench, plan G2/G4: fails on a leak or
-# a render thread above 25 % of one core).
+# CPU benchmarks with plugin-like optimization, no sanitizers: graph nodes, every worklet processor per voice and
+# Lattice's orca frame (bench, prints only), the whole render set + all patterns stacked (render-bench, plan G2/G4:
+# fails on a leak or a render thread above 25 % of one core).
 RELEASE_FLAGS := -std=c++17 -O3 -funsafe-math-optimizations -Wall -Wextra -Isrc -Itest -I$(RACK_DIR)/include -I$(RACK_DIR)/dep/include \
 	-isystem $(QJS_DIR) -isystem vendor/dr_libs -isystem $(ORCA_DIR)
-build/test/bench: test/bench_audio.cpp $(AUDIO_SOURCES) $(call host_objects,release) $(wildcard src/audio/*.hpp)
+build/test/bench: test/bench_audio.cpp $(AUDIO_SOURCES) src/lattice.cpp $(call host_objects,release) $(wildcard src/*.hpp src/audio/*.hpp)
 	@mkdir -p $(@D)
-	$(CXX) $(RELEASE_FLAGS) -o $@ test/bench_audio.cpp $(AUDIO_SOURCES) $(call host_objects,release)
+	$(CXX) $(RELEASE_FLAGS) -o $@ test/bench_audio.cpp $(AUDIO_SOURCES) src/lattice.cpp $(call host_objects,release)
 
 bench: build/test/bench
 	build/test/bench
