@@ -551,7 +551,8 @@ void resetWhilePlaying(bool external) {
 	for (int64_t g : gates)
 		TIMED_CHECK(g == first || (g - zero) % 24000 == 0);
 	TIMED_CHECK(gates.size() >= 5);
-	r->aligned(zero + 12000, r->frame() - 4800); // from cycle 0.125 on
+	if (kTimed || r->engine->missingFrames == missing) // an underflow's silent frames split a kick in two (CI)
+		r->aligned(zero + 12000, r->frame() - 4800);   // from cycle 0.125 on
 	// (e) Old-timeline kicks: only what was rendered when the JS handled the reset (its render position is first -
 	// 480; a source may start within the quantum being rendered then).
 	std::vector<int64_t> old;
