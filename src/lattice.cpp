@@ -250,6 +250,7 @@ void Machine::process(const Inputs& in, Outputs& out) {
 		clock_.step(in.clockConnected, in.clockEdge, true);
 		silence();
 		nextFrame_ = 0, lastAt_ = -1;
+		frame_.store(-1, std::memory_order_relaxed); // the paused marks and the status line show the next frame
 	} else {
 		clock_.step(in.clockConnected, in.clockEdge, false);
 	}
@@ -266,7 +267,8 @@ void Machine::process(const Inputs& in, Outputs& out) {
 		}
 	}
 	out.clk = clock_.started() && clockOut_.clk(lastAt_, at);
-	lastAt_ = at;
+	if (clock_.started()) // stopped: hold it (-1 after a reset), so Resume pulses only at a real frame boundary
+		lastAt_ = at;
 	for (int v = 0; v < 16; v++) {
 		out.voct[v] = voices_.pitchV(v) + bend_[voiceChan_[v]];
 		out.gate[v] = voices_.gate(v) ? 10.f : 0.f;
@@ -277,7 +279,8 @@ void Machine::process(const Inputs& in, Outputs& out) {
 	voices_.tick();
 	bool started = clock_.started();
 	if (playing_.exchange(started, std::memory_order_relaxed) != started)
-		version_.fetch_add(1, std::memory_order_relaxed); // the UI swaps between the frame's and the paused marks
+		// release: the UI that sees the version sees playing_ too; it swaps between the frame's and the paused marks
+		version_.fetch_add(1, std::memory_order_release);
 }
 
 // ---- UI thread
@@ -344,7 +347,7 @@ bool Machine::snapshot(Grid& g, std::vector<uint8_t>& marks) {
 	g.cells.resize(n);
 	marks.resize(n);
 	lock();
-	uint32_t version = version_.load(std::memory_order_relaxed);
+	uint32_t version = version_.load(std::memory_order_acquire); // pairs with process()'s playing_ bump
 	bool changed = version != seen_;
 	if (changed) {
 		std::memcpy(g.cells.data(), cells_.data(), n);

@@ -108,7 +108,13 @@ class CycleClock {
   public:
 	void setSampleRate(float sr) { sr_ = sr, anchor(); }
 	void setCps(double cps) { cps_ = cps, anchor(); } // internal tempo; remembered while external
-	void setPulsesPerCycle(int ppc) { ppc_ = std::max(1, ppc); }
+	void setPulsesPerCycle(int ppc) {
+		ppc = std::max(1, ppc);
+		if (ppc == ppc_) // called every sample
+			return;
+		// pulses_ counts in the old unit: re-count the cycle in the new one, the estimate restarts.
+		ppc_ = ppc, pulses_ = (int64_t)std::floor(cycle_ * ppc), np_ = 0, hasLast_ = false;
+	}
 	double cycle() const { return cycle_; }
 	double cps() const { return ext_ ? (np_ ? cpsEst_ : 0.0) : cps_; }
 	bool started() const { return running_; }

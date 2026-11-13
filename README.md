@@ -121,7 +121,7 @@ The grid is on the panel (click it to type) and, with FULL, in a window of its o
 | Cmd+Z, Cmd+Shift+Z | undo, redo |
 | Cmd+A, Esc | select all, collapse the selection |
 | Space | pause / resume: the frame stays, as in Orca |
-| Cmd+Enter, PLAY button | play from frame 0 |
+| Cmd+Enter, PLAY button | play from frame 0 (when stopped) |
 | Cmd+. , STOP button | stop: gates down |
 | FULL button | the grid window (also in Lattice's menu); F11 there: fullscreen |
 

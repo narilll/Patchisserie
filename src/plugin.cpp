@@ -643,7 +643,7 @@ struct Lattice : Module {
 
 	Lattice() {
 		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
-		configButton(PLAY_PARAM, "Play from frame 0 (Cmd/Ctrl+Enter; Space in the grid: pause/resume)");
+		configButton(PLAY_PARAM, "Play from frame 0 when stopped (Cmd/Ctrl+Enter; Space in the grid: pause/resume)");
 		configButton(STOP_PARAM, "Stop (gates down)");
 		configButton(FULLSCREEN_PARAM, "Grid window (F11 there: fullscreen)");
 		configInput(PLAY_INPUT, "Play trigger (from frame 0)");
@@ -765,7 +765,6 @@ struct BpmSlider : ui::Slider {
 };
 
 struct LatticeWidget : ModuleWidget {
-	editor::GridView* view;                           // the panel's grid
 	std::unique_ptr<lattice::Machine> previewMachine; // the module browser's grid, in place of the module's
 	editor::GridEdit preview;
 	std::unique_ptr<editor::Window> gridWindow; // null: the module browser's preview
@@ -779,7 +778,7 @@ struct LatticeWidget : ModuleWidget {
 			preview.machine = previewMachine.get();
 			preview.refresh();
 		}
-		view = createWidget<editor::GridView>(mm2px(kEditorMm.pos));
+		auto* view = createWidget<editor::GridView>(mm2px(kEditorMm.pos));
 		view->box.size = mm2px(kEditorMm.size);
 		view->edit = module ? &module->edit : &preview;
 		view->machine = module ? &module->machine : nullptr;
@@ -841,6 +840,19 @@ struct LatticeWidget : ModuleWidget {
 			gridWindow->update(APP->window->win, "Lattice — " + std::to_string(module->id));
 	}
 
+	// Grid size and Load wipe cells the grid's own undo can't restore: Rack's undo history takes the whole module
+	// (Lattice::dataFromJson reloads the grid).
+	static void undoable(Lattice* m, const char* name, const std::function<void()>& change) {
+		json_t* oldJ = m->toJson();
+		change();
+		auto* h = new history::ModuleChange;
+		h->name = name;
+		h->moduleId = m->id;
+		h->oldModuleJ = oldJ;
+		h->newModuleJ = m->toJson();
+		APP->history->push(h);
+	}
+
 	void appendContextMenu(Menu* menu) override {
 		Lattice* m = static_cast<Lattice*>(module);
 		menu->addChild(new MenuSeparator);
@@ -881,7 +893,7 @@ struct LatticeWidget : ModuleWidget {
 				sub->addChild(createCheckMenuItem(
 					std::to_string(p.w) + "×" + std::to_string(p.h) + p.note, "",
 					[=] { return m->machine.width() == p.w && m->machine.height() == p.h; },
-					[=] { m->edit.resize(p.w, p.h); }));
+					[=] { undoable(m, "resize Lattice grid", [=] { m->edit.resize(p.w, p.h); }); }));
 		}));
 		menu->addChild(createMenuItem("Load .orca file...", "", [=] {
 			osdialog_filters* filters = osdialog_filters_parse("Orca:orca");
@@ -893,7 +905,7 @@ struct LatticeWidget : ModuleWidget {
 			std::free(path);
 			try {
 				std::vector<uint8_t> data = system::readFile(file);
-				m->edit.load(std::string(data.begin(), data.end()));
+				undoable(m, "load .orca", [&] { m->edit.load(std::string(data.begin(), data.end())); });
 			} catch (const std::exception& e) {
 				WARN("Lattice: can't read %s: %s", file.c_str(), e.what());
 			}

@@ -206,6 +206,32 @@ TEST(lattice_frames_external_clock) {
 	CHECK((at == std::vector<int64_t>{0, 300, 600, 900}));
 }
 
+TEST(lattice_frames_ppc_change_while_playing) {
+	// A pulse every 100 samples. PPC 4 -> 24: frames go on (a frame per 6 pulses); 24 -> 4: no burst of frames.
+	Rig r(".");
+	r.m.setPulsesPerBeat(4);
+	r.play();
+	int i = 0;
+	auto pulses = [&](int n) { // n pulses, as the samples between them
+		for (int k = 0; k < n * 100; k++, i++) {
+			r.in.clockConnected = true;
+			r.in.clockEdge = i % 100 == 0;
+			r.step();
+		}
+	};
+	pulses(40);
+	r.m.setPulsesPerBeat(24);
+	int64_t f = r.m.frame();
+	pulses(6 + 3);
+	CHECK(r.m.frame() > f);
+	pulses(24);
+	CHECK(r.m.frame() >= f + 4);
+	r.m.setPulsesPerBeat(4);
+	f = r.m.frame();
+	pulses(12);
+	CHECK(r.m.frame() >= f + 10 && r.m.frame() <= f + 14);
+}
+
 TEST(lattice_frames_slowing_clock_never_early) {
 	Rig r(".");
 	r.m.setPulsesPerBeat(4);
@@ -423,6 +449,21 @@ TEST(lattice_stop_brings_gates_down) {
 	CHECK(r.out.gate[0] == 0.f);
 }
 
+TEST(lattice_reset_while_stopped_rewinds_frame) {
+	Rig r(".");
+	r.play();
+	r.run(7000);
+	CHECK(r.m.frame() == 1);
+	r.m.request(Machine::Transport::Stop);
+	r.step();
+	r.in.resetEdge = true;
+	r.step();
+	CHECK(r.m.frame() == -1 && !r.m.playing());
+	r.m.request(Machine::Transport::Resume);
+	r.step();
+	CHECK(r.m.frame() == 0);
+}
+
 TEST(lattice_reset_input) {
 	Rig r(note("03C.z"));
 	r.play();
@@ -444,6 +485,35 @@ TEST(lattice_clk_output) {
 	for (int i = 0; i < 12001; i++)
 		r.step(), n += r.out.clk;
 	CHECK(n == 3);
+}
+
+TEST(lattice_clk_output_resume) {
+	// Resume of a fresh machine pulses on frame 0; Resume mid-frame after a Stop doesn't pulse again.
+	Rig r(".");
+	r.m.setClockDivision(4);
+	r.m.request(Machine::Transport::Resume);
+	r.step();
+	CHECK(r.m.frame() == 0 && r.out.clk);
+	r.run(100);
+	r.m.request(Machine::Transport::Stop);
+	r.step();
+	r.run(50);
+	r.m.request(Machine::Transport::Resume);
+	int n = 0;
+	for (int i = 0; i < 5000; i++)
+		r.step(), n += r.out.clk;
+	CHECK(n == 0);
+	r.run(1000);
+	CHECK(r.m.frame() == 1);
+	// RESET while stopped, then Resume: frame 0 pulses although the stopped samples ran in between.
+	r.m.request(Machine::Transport::Stop);
+	r.step();
+	r.in.resetEdge = true;
+	r.step();
+	r.run(10);
+	r.m.request(Machine::Transport::Resume);
+	r.step();
+	CHECK(r.m.frame() == 0 && r.out.clk);
 }
 
 TEST(lattice_no_allocation_on_the_audio_thread) {

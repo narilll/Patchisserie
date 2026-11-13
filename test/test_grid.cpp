@@ -226,6 +226,29 @@ TEST(grid_undo_cap) {
 	CHECK(f.g.grid.at(1, 0) == 'b');
 }
 
+TEST(grid_undo_byte_cap) {
+	// Pasting a full 256x256 grid holds 128 KB per step: far fewer than 1000 steps fit in kMaxUndoBytes.
+	Fix f("a\n");
+	f.g.resize(256, 256);
+	const int steps = 400;
+	for (int i = 0; i < steps; i++) {
+		std::string row(256, char('a' + i % 26));
+		std::string text;
+		for (int y = 0; y < 256; y++)
+			text += row + '\n';
+		f.g.place(0, 0);
+		f.g.paste(text);
+	}
+	int undone = 0; // consecutive steps differ at (0,0): each undo that has a step to undo changes it
+	for (int i = 0; i < steps; i++) {
+		char before = f.g.grid.at(0, 0);
+		f.g.undo();
+		undone += f.g.grid.at(0, 0) != before;
+	}
+	CHECK(undone > 10); // the newest steps work
+	CHECK((size_t)undone <= GridEdit::kMaxUndoBytes / (2 * 256 * 256) + 1);
+}
+
 TEST(grid_resize_load_clear_history) {
 	Fix f;
 	f.g.place(5, 3);

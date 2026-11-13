@@ -15,6 +15,7 @@ namespace editor {
 
 struct GridEdit {
 	static constexpr size_t kMaxUndo = 1000;
+	static constexpr size_t kMaxUndoBytes = 8 << 20; // a 256x256 erase holds 128 KB: the step cap alone allows 100+ MB
 
 	lattice::Machine* machine = nullptr;
 	lattice::Grid grid;               // the UI's snapshot: every edit refreshes it
@@ -144,10 +145,11 @@ struct GridEdit {
 			return;
 		Step st = std::move(undo_.back());
 		undo_.pop_back();
+		undoBytes_ -= bytes(st);
 		for (size_t i = st.size(); i-- > 0;)
 			machine->write(st[i].r, st[i].before);
 		jumpTo(st[0].r);
-		redo_.push_back(std::move(st));
+		redo_.push_back(std::move(st)); // not counted: it holds what undo_ held
 		refresh();
 	}
 	void redo() {
@@ -158,11 +160,13 @@ struct GridEdit {
 		for (const Diff& d : st)
 			machine->write(d.r, d.after);
 		jumpTo(st[0].r);
+		undoBytes_ += bytes(st);
 		undo_.push_back(std::move(st));
 		refresh();
 	}
 
-	// --- Not undoable (ponytail: clearing the history is cheaper than diffing whole grids)
+	// --- Not undoable here (ponytail: clearing the history is cheaper than diffing whole grids; the module's menu
+	// wraps these in Rack's undo history)
 	void resize(int w, int h) {
 		machine->resize(w, h);
 		reset();
@@ -185,7 +189,7 @@ struct GridEdit {
 		dy = std::clamp(y + dy, 0, std::max(grid.h, 1) - 1) - y;
 	}
 	void reset() {
-		undo_.clear(), redo_.clear();
+		undo_.clear(), redo_.clear(), undoBytes_ = 0;
 		refresh();
 	}
 	void jumpTo(lattice::Rect r) {
@@ -200,15 +204,26 @@ struct GridEdit {
 		std::string before = machine->write(r, glyphs);
 		return {r, std::move(before), std::move(glyphs)};
 	}
+	static size_t bytes(const Step& st) {
+		size_t n = 0;
+		for (const Diff& d : st)
+			n += d.before.size() + d.after.size();
+		return n;
+	}
 	void commit(Step st) {
+		undoBytes_ += bytes(st);
 		undo_.push_back(std::move(st));
-		if (undo_.size() > kMaxUndo)
-			undo_.erase(undo_.begin());
+		// ponytail: erase from the front is O(n) on <= 1000 steps; a deque if it is ever measured.
+		size_t drop = 0;
+		while (undo_.size() - drop > 1 && (undo_.size() - drop > kMaxUndo || undoBytes_ > kMaxUndoBytes))
+			undoBytes_ -= bytes(undo_[drop++]);
+		undo_.erase(undo_.begin(), undo_.begin() + drop);
 		redo_.clear();
 		refresh();
 	}
 
 	std::vector<Step> undo_, redo_;
+	size_t undoBytes_ = 0; // of undo_
 };
 
 } // namespace editor

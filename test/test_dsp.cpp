@@ -162,6 +162,30 @@ TEST(pll_jitter) {
 			CHECK(std::fabs(c.cps() / 0.5 - 1) < 0.02);
 	}
 }
+TEST(pll_ppc_change_recounts) {
+	// External clock, a pulse every 100 samples. Changing the pulses per cycle mid-play re-counts the cycle in the
+	// new unit: no stall (4 -> 24) and no jump forward (24 -> 4).
+	CycleClock c;
+	c.setSampleRate(48000);
+	c.setPulsesPerCycle(4);
+	c.start();
+	int i = 0;
+	auto pulses = [&](int n) {
+		for (int k = 0; k < n; k++, i++)
+			c.step(true, i % 100 == 0, false);
+	};
+	pulses(1000); // 10 pulses: cycle 2.25
+	double before = c.cycle();
+	c.setPulsesPerCycle(24);
+	CHECK(c.cycle() == before);
+	pulses(2400); // 24 pulses = 1 beat
+	CHECK_NEAR(c.cycle() - before, 1.0, 0.1);
+	before = c.cycle();
+	c.setPulsesPerCycle(4);
+	pulses(400); // 4 pulses = 1 beat
+	CHECK_NEAR(c.cycle() - before, 1.0, 0.1);
+}
+
 TEST(pll_early_pulse_jumps) {
 	CycleClock c;
 	c.setSampleRate(48000);
