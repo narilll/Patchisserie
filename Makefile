@@ -10,12 +10,15 @@ SOURCES += $(AUDIO_SOURCES)
 # Web Audio classes for QuickJS, embedded as a C array (Rack's xxd rule): src_audio_webaudio_js[].
 BINARIES += src/audio/webaudio.js
 
-# Vendor C (quickjs-ng, dr_libs implementations): no warnings, strict IEEE math, headers as system headers.
+# Vendor C (quickjs-ng, dr_libs implementations, orca-c's VM): no warnings, strict IEEE math, headers as system
+# headers. orca-c: only its VM (sim.c) and event list (vmio.c), unmodified; Lattice's glue is src/lattice.cpp.
 QJS_DIR := vendor/quickjs-ng
-VENDOR_SOURCES := $(addprefix $(QJS_DIR)/,quickjs.c libregexp.c libunicode.c dtoa.c) vendor/dr_libs.c
+ORCA_DIR := vendor/orca-c
+VENDOR_SOURCES := $(addprefix $(QJS_DIR)/,quickjs.c libregexp.c libunicode.c dtoa.c) vendor/dr_libs.c \
+	$(addprefix $(ORCA_DIR)/,sim.c vmio.c)
 VENDOR_FLAGS := -w -fno-unsafe-math-optimizations -funsigned-char -D_GNU_SOURCE
 SOURCES += $(VENDOR_SOURCES)
-FLAGS += -isystem $(QJS_DIR) -isystem vendor/dr_libs
+FLAGS += -isystem $(QJS_DIR) -isystem vendor/dr_libs -isystem $(ORCA_DIR)
 build/vendor/%.o: FLAGS += $(VENDOR_FLAGS)
 
 DISTRIBUTABLES += LICENSE res
@@ -29,7 +32,8 @@ endif
 
 # Host-built unit tests: pure logic only, no Rack UI, sanitizers on.
 TEST_SOURCES := $(wildcard test/test_*.cpp)
-TEST_FLAGS := -std=c++17 -g -O1 -Wall -Wextra -Isrc -Itest -I$(RACK_DIR)/include -isystem $(QJS_DIR) -isystem vendor/dr_libs
+TEST_FLAGS := -std=c++17 -g -O1 -Wall -Wextra -Isrc -Itest -I$(RACK_DIR)/include -isystem $(QJS_DIR) -isystem vendor/dr_libs \
+	-isystem $(ORCA_DIR)
 # Web Audio graph + QuickJS binding, Filo's engine and downloads: linked into the tests; dep/include for simde (pulled in
 # by Rack's dsp/ringbuffer.hpp) and ghc::filesystem.
 ENGINE_SOURCES := src/engine.cpp src/fetch.cpp
@@ -83,7 +87,8 @@ tsan: build/test/run-tsan
 # CPU benchmarks with plugin-like optimization, no sanitizers: graph nodes and every worklet processor per voice
 # (bench, prints only), the whole render set + all patterns stacked (render-bench, plan G2/G4: fails on a leak or
 # a render thread above 25 % of one core).
-RELEASE_FLAGS := -std=c++17 -O3 -funsafe-math-optimizations -Wall -Wextra -Isrc -Itest -I$(RACK_DIR)/include -I$(RACK_DIR)/dep/include -isystem $(QJS_DIR) -isystem vendor/dr_libs
+RELEASE_FLAGS := -std=c++17 -O3 -funsafe-math-optimizations -Wall -Wextra -Isrc -Itest -I$(RACK_DIR)/include -I$(RACK_DIR)/dep/include \
+	-isystem $(QJS_DIR) -isystem vendor/dr_libs -isystem $(ORCA_DIR)
 build/test/bench: test/bench_audio.cpp $(AUDIO_SOURCES) $(call host_objects,release) $(wildcard src/audio/*.hpp)
 	@mkdir -p $(@D)
 	$(CXX) $(RELEASE_FLAGS) -o $@ test/bench_audio.cpp $(AUDIO_SOURCES) $(call host_objects,release)

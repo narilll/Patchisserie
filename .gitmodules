@@ -4,3 +4,6 @@
 [submodule "vendor/dr_libs"]
 	path = vendor/dr_libs
 	url = https://github.com/mackron/dr_libs.git
+[submodule "vendor/orca-c"]
+	path = vendor/orca-c
+	url = https://github.com/hundredrabbits/Orca-c.git
