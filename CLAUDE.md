@@ -8,3 +8,4 @@
 - `test/docs.test.mjs` (part of `make test-js`) fails when a panel or menu label is missing from the manual. It checks names only. It does not check tooltips, slider labels, preset names or defaults, so keep those right by hand, and prose changes are on you.
 - Style: English, second person, full sentences, plain words. Define a term on first use. Write panel labels in CAPS as printed, menu items in **bold** exactly as shown, and keys as `Cmd/Ctrl+…`. Use tables only for reference lists. No telegraphic fragments or shorthand.
 - A task that changes user-visible behaviour is not done until the manual is updated and `make test-js` passes.
+- The manual is the only place for user-facing detail. The root `README.md` stays an overview with links into `docs/`, plus Build and License, so the two can't drift apart. Don't add keys, menus or limitations to it.
