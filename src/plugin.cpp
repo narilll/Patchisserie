@@ -82,6 +82,7 @@ struct Filo : Module {
 	bool added = false;
 	hydra::WindowGeometry window{100, 100, 960, 640}; // the editor window's (UI thread), saved in the patch
 	bool windowOpen = false;
+	std::string theme = "Patchisserie"; // the editor's colours (UI thread), saved in the patch
 
 	dsp::SchmittTrigger playIn, stopIn, clockIn, resetIn;
 	dsp::BooleanTrigger stopButton; // the PLAY button evaluates the code: FiloWidget::step(), on the UI thread
@@ -210,19 +211,21 @@ struct Filo : Module {
 	json_t* dataToJson() override {
 		filo::Engine::Map trig, cc;
 		engine->getMaps(trig, cc);
-		return json_pack("{s:s, s:i, s:i, s:i, s:i, s:b, s:o, s:o, s:o, s:o, s:b}", "code", doc.text().c_str(),
+		return json_pack("{s:s, s:i, s:i, s:i, s:i, s:b, s:o, s:o, s:o, s:o, s:b, s:s}", "code", doc.text().c_str(),
 						 "voices", voices, "polyMode", polyMode, "clkDivision", clkDivision, "ppc", ppc, "autoPlay",
 						 autoPlay, "trigMap", mapJson(trig), "ccMap", mapJson(cc), "midi", midiInput.toJson(), "window",
-						 geometryJson(window), "windowOpen", windowOpen);
+						 geometryJson(window), "windowOpen", windowOpen, "theme", theme.c_str());
 	}
 
 	void dataFromJson(json_t* root) override {
 		const char* code = nullptr;
+		const char* themeName = nullptr;
 		int play = autoPlay, open = windowOpen;
 		json_t *trig = nullptr, *cc = nullptr, *midiJ = nullptr, *windowJ = nullptr;
-		json_unpack(root, "{s?s, s?i, s?i, s?i, s?i, s?b, s?o, s?o, s?o, s?o, s?b}", "code", &code, "voices", &voices,
-					"polyMode", &polyMode, "clkDivision", &clkDivision, "ppc", &ppc, "autoPlay", &play, "trigMap",
-					&trig, "ccMap", &cc, "midi", &midiJ, "window", &windowJ, "windowOpen", &open);
+		json_unpack(root, "{s?s, s?i, s?i, s?i, s?i, s?b, s?o, s?o, s?o, s?o, s?b, s?s}", "code", &code, "voices",
+					&voices, "polyMode", &polyMode, "clkDivision", &clkDivision, "ppc", &ppc, "autoPlay", &play,
+					"trigMap", &trig, "ccMap", &cc, "midi", &midiJ, "window", &windowJ, "windowOpen", &open, "theme",
+					&themeName);
 		// Patch data is a real boundary.
 		voices = clamp(voices, 1, 16);
 		polyMode = clamp(polyMode, 0, (int)filo::VoiceAllocator::MPE);
@@ -233,6 +236,9 @@ struct Filo : Module {
 		autoPlay = play;
 		geometryFromJson(windowJ, window); // older patches have none
 		windowOpen = open;
+		// An unknown name (an older patch, a theme Strudel dropped): the default.
+		const std::vector<std::string>& names = editor::themeNames();
+		theme = themeName && std::find(names.begin(), names.end(), themeName) != names.end() ? themeName : names[0];
 		if (midiJ) // older patches have none
 			midiInput.fromJson(midiJ);
 		engine->setMaps(trig ? mapFrom(trig) : filo::Engine::Map(), cc ? mapFrom(cc) : filo::Engine::Map());
@@ -362,6 +368,11 @@ struct FiloWidget : ModuleWidget {
 	void step() override {
 		ModuleWidget::step();
 		hydra::collectWindows();
+		if (module) { // the menu's choice, in both editors at once
+			const editor::EditorTheme* t = &editor::themeNamed(static_cast<Filo*>(module)->theme);
+			view->theme = t;
+			static_cast<editor::View*>(editorWindow->view)->theme = t;
+		}
 		// The FULL button (Rack holds a momentary press for a frame at least).
 		bool down = module && module->params[Filo::FULLSCREEN_PARAM].getValue() > 0.f;
 		if (down && !fullscreenDown)
@@ -384,6 +395,11 @@ struct FiloWidget : ModuleWidget {
 		// Only flags here: menu actions run inside GLFW callbacks, step() applies them.
 		menu->addChild(createBoolPtrMenuItem("Editor window", "", &m->windowOpen));
 		menu->addChild(createBoolPtrMenuItem("Editor window fullscreen", "F11", &m->window.fullscreen));
+		menu->addChild(createSubmenuItem("Theme", m->theme, [=](Menu* sub) {
+			for (const std::string& name : editor::themeNames())
+				sub->addChild(
+					createCheckMenuItem(name, "", [=] { return m->theme == name; }, [=] { m->theme = name; }));
+		}));
 		menu->addChild(new MenuSeparator);
 		std::vector<std::string> counts, divisions;
 		for (int i = 1; i <= 16; i++)

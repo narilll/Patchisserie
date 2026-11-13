@@ -21,6 +21,21 @@ namespace editor {
 struct Tip;
 struct Window;
 
+/** The editor's colours: Patchisserie's own, or one of strudel.cc's themes (res/editor-themes.json, from
+scripts/build-themes.mjs). */
+struct EditorTheme {
+	NVGcolor background, text, plain, caret, selection, gutter, border, dim, row, playing, error;
+	NVGcolor comment, string, number, keyword, label, op, call;
+};
+
+/** The built-in theme, the default. */
+const EditorTheme& patchisserie();
+/** The theme names a menu offers: Patchisserie, then strudel.cc's in its order. Loads the themes on first use. */
+const std::vector<std::string>& themeNames();
+/** The theme of that name, Patchisserie for an unknown one (a name from a patch, say). Valid until the plugin unloads.
+ */
+const EditorTheme& themeNamed(const std::string& name);
+
 struct View : rack::widget::Widget {
 	Doc* doc = nullptr;
 	filo::Engine* engine = nullptr; // null: the module browser's preview
@@ -28,6 +43,7 @@ struct View : rack::widget::Widget {
 	/** The editor window this is in: its events, mouse, keys and fonts, drawn in draw(). Null: the panel's, in Rack's
 	window, drawn in layer 1, lit like Rack's displays. */
 	Window* host = nullptr;
+	const EditorTheme* theme = nullptr; // the module's; null: Patchisserie (the module browser's preview)
 
 	~View() override;
 	void step() override;

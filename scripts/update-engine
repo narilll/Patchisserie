@@ -97,6 +97,7 @@ git -C "$src" checkout -q --force --detach "$new"
 
 node "$root/scripts/build-engine.mjs"
 node "$root/scripts/build-docs.mjs"
+node "$root/scripts/build-themes.mjs"
 
 {
   echo "# Written by scripts/update-engine: res/engine.js is built from exactly these sources."

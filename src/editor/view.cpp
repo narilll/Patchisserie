@@ -1,6 +1,7 @@
 #include "editor/view.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -17,36 +18,129 @@ constexpr float kPad = 4;                                      // px around the 
 const char* const kFont = "res/fonts/IBMPlexMono-Regular.ttf"; // the plugin's (IBM Plex Mono, OFL)
 const char* const kUiFont = "res/fonts/DejaVuSans.ttf";        // Rack's UI font (APP->window->uiFont)
 
-// "Receptura" (res/Filo.svg): ink on the panel's black, cobalt for what plays.
-const NVGcolor kBackground = nvgRGB(0x1b, 0x1c, 0x1e);
-const NVGcolor kGutter = nvgRGB(0x23, 0x24, 0x27); // also the status line and the popups
-const NVGcolor kBorder = nvgRGB(0x3a, 0x3b, 0x3f);
-const NVGcolor kAccent = nvgRGB(0x8f, 0xa6, 0xff); // keywords, the cursor
-const NVGcolor kText = nvgRGB(0xee, 0xee, 0xe8);   // identifiers called, popup text
-const NVGcolor kPlain = nvgRGB(0xc6, 0xc7, 0xc2);  // punctuation, the current line number, messages
-const NVGcolor kDim = nvgRGB(0x76, 0x78, 0x7e);
-const NVGcolor kError = nvgRGB(0xff, 0x6b, 0x5b);
-const NVGcolor kSelection = nvgRGBA(0x8f, 0xa6, 0xff, 0x4d);
-const NVGcolor kPlaying = nvgRGBA(0x8f, 0xa6, 0xff, 0); // outline only
-const NVGcolor kPlayRow = nvgRGB(0x2f, 0x3a, 0x66);     // the popup's selected row
+} // namespace
 
-NVGcolor color(Token::Kind k) {
+// "Receptura" (res/Filo.svg): ink on the panel's black, cobalt for what plays.
+const EditorTheme& patchisserie() {
+	static const EditorTheme t = {
+		.background = nvgRGB(0x1b, 0x1c, 0x1e),
+		.text = nvgRGB(0xee, 0xee, 0xe8),  // identifiers called, popup text
+		.plain = nvgRGB(0xc6, 0xc7, 0xc2), // punctuation, the current line number, messages
+		.caret = nvgRGB(0x8f, 0xa6, 0xff),
+		.selection = nvgRGBA(0x8f, 0xa6, 0xff, 0x4d),
+		.gutter = nvgRGB(0x23, 0x24, 0x27), // also the status line and the popups
+		.border = nvgRGB(0x3a, 0x3b, 0x3f),
+		.dim = nvgRGB(0x76, 0x78, 0x7e),
+		.row = nvgRGB(0x2f, 0x3a, 0x66), // the popup's selected row
+		.playing = nvgRGB(0x8f, 0xa6, 0xff),
+		// ponytail: Strudel's themes have no error colour, so every theme shows this one. Per-theme if one clashes.
+		.error = nvgRGB(0xff, 0x6b, 0x5b),
+		.comment = nvgRGB(0x76, 0x78, 0x7e),
+		.string = nvgRGB(0xb8, 0xd9, 0x8a),
+		.number = nvgRGB(0xff, 0xb0, 0x7a),
+		.keyword = nvgRGB(0x8f, 0xa6, 0xff),
+		.label = nvgRGB(0x8f, 0xa6, 0xff),
+		.op = nvgRGB(0xc6, 0xc7, 0xc2),
+		.call = nvgRGB(0xee, 0xee, 0xe8),
+	};
+	return t;
+}
+
+namespace {
+
+/** "#rrggbbaa" (scripts/build-themes.mjs); false for anything else. */
+bool parseColor(json_t* j, NVGcolor& c) {
+	const char* s = json_string_value(j);
+	if (!s || std::strlen(s) != 9 || s[0] != '#' ||
+		!std::all_of(s + 1, s + 9, [](char ch) { return std::isxdigit((unsigned char)ch); }))
+		return false;
+	unsigned long v = std::strtoul(s + 1, nullptr, 16);
+	c = nvgRGBA(v >> 24 & 255, v >> 16 & 255, v >> 8 & 255, v & 255);
+	return true;
+}
+
+/** Patchisserie, then res/editor-themes.json's (scripts/build-themes.mjs, strudel.cc's in its order), shared by all
+Filos: loaded on first use; Patchisserie alone if it can't be read. */
+struct Themes {
+	std::vector<std::string> names;
+	std::vector<EditorTheme> themes;
+};
+
+const Themes& loadedThemes() {
+	static Themes all;
+	static bool loaded = false;
+	if (loaded)
+		return all;
+	loaded = true;
+	all.names.push_back("Patchisserie");
+	all.themes.push_back(patchisserie());
+	std::string path = asset::plugin(pluginInstance, "res/editor-themes.json");
+	json_error_t err;
+	json_t* root = json_load_file(path.c_str(), 0, &err);
+	size_t i;
+	json_t* e;
+	json_array_foreach(json_object_get(root, "themes"), i, e) {
+		const char* name = json_string_value(json_object_get(e, "name"));
+		json_t* c = json_object_get(e, "colours");
+		EditorTheme t = patchisserie();
+		bool ok =
+			name && parseColor(json_object_get(c, "background"), t.background) &&
+			parseColor(json_object_get(c, "text"), t.text) && parseColor(json_object_get(c, "caret"), t.caret) &&
+			parseColor(json_object_get(c, "selection"), t.selection) &&
+			parseColor(json_object_get(c, "gutter"), t.gutter) && parseColor(json_object_get(c, "dim"), t.dim) &&
+			parseColor(json_object_get(c, "playing"), t.playing) &&
+			parseColor(json_object_get(c, "comment"), t.comment) &&
+			parseColor(json_object_get(c, "string"), t.string) && parseColor(json_object_get(c, "number"), t.number) &&
+			parseColor(json_object_get(c, "keyword"), t.keyword) && parseColor(json_object_get(c, "label"), t.label) &&
+			parseColor(json_object_get(c, "operator"), t.op) && parseColor(json_object_get(c, "call"), t.call);
+		if (!ok) {
+			WARN("Filo: skipping editor theme %s in %s", name ? name : "?", path.c_str());
+			continue;
+		}
+		t.plain = t.text; // Strudel's themes have one text colour, one dim one and one selection one
+		t.border = t.dim;
+		t.row = t.selection;
+		all.names.push_back(name);
+		all.themes.push_back(t);
+	}
+	if (all.themes.size() == 1)
+		WARN("Filo: only the Patchisserie editor theme, %s: %s", path.c_str(), root ? "no themes" : err.text);
+	json_decref(root);
+	return all;
+}
+
+} // namespace
+
+const std::vector<std::string>& themeNames() {
+	return loadedThemes().names;
+}
+
+const EditorTheme& themeNamed(const std::string& name) {
+	const Themes& all = loadedThemes();
+	auto it = std::find(all.names.begin(), all.names.end(), name);
+	return all.themes[it == all.names.end() ? 0 : it - all.names.begin()];
+}
+
+namespace {
+
+NVGcolor color(const EditorTheme& ct, Token::Kind k) {
 	switch (k) {
 	case Token::Comment:
-		return kDim;
+		return ct.comment;
 	case Token::String:
-		return nvgRGB(0xb8, 0xd9, 0x8a);
+		return ct.string;
 	case Token::Number:
-		return nvgRGB(0xff, 0xb0, 0x7a);
+		return ct.number;
 	case Token::Keyword:
+		return ct.keyword;
 	case Token::Label:
-		return kAccent;
+		return ct.label;
 	case Token::Call:
-		return kText;
+		return ct.call;
 	case Token::Operator:
-		return kPlain;
+		return ct.op;
 	}
-	return kPlain;
+	return ct.plain;
 }
 
 #if defined ARCH_MAC
@@ -129,9 +223,10 @@ there, neither clipped by the module nor zoomed with the rack. Passive: its View
 struct Tip : widget::Widget {
 	std::vector<Match> items, details; // the popup's rows (none: hover docs), the entries described
 	int sel = 0, top = 0;
-	math::Vec at;    // the identifier's top left, scene px
-	float lineH = 0; // its line's height, scene px
-	int font = -1;   // its View's mono font
+	math::Vec at;                       // the identifier's top left, scene px
+	float lineH = 0;                    // its line's height, scene px
+	int font = -1;                      // its View's mono font
+	const EditorTheme* theme = nullptr; // its View's
 
 	void step() override {
 		if (parent) // the scene: the whole window
@@ -145,6 +240,7 @@ void Tip::draw(const DrawArgs& args) {
 	if (font < 0 || details.empty())
 		return;
 	NVGcontext* vg = args.vg;
+	const EditorTheme& ct = theme ? *theme : patchisserie();
 	nvgFontFaceId(vg, font);
 	nvgFontSize(vg, kTipFont);
 	nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
@@ -153,9 +249,9 @@ void Tip::draw(const DrawArgs& args) {
 	auto frame = [&](math::Rect r) {
 		nvgBeginPath(vg);
 		nvgRoundedRect(vg, r.pos.x, r.pos.y, r.size.x, r.size.y, 3);
-		nvgFillColor(vg, kGutter);
+		nvgFillColor(vg, ct.gutter);
 		nvgFill(vg);
-		nvgStrokeColor(vg, kBorder);
+		nvgStrokeColor(vg, ct.border);
 		nvgStrokeWidth(vg, 1);
 		nvgStroke(vg);
 	};
@@ -182,13 +278,13 @@ void Tip::draw(const DrawArgs& args) {
 			if (top + i == sel) {
 				nvgBeginPath(vg);
 				nvgRect(vg, list.pos.x + 1, y, list.size.x - 2, rh);
-				nvgFillColor(vg, kPlayRow);
+				nvgFillColor(vg, ct.row);
 				nvgFill(vg);
 			}
-			nvgFillColor(vg, kText);
+			nvgFillColor(vg, ct.text);
 			nvgText(vg, list.pos.x + kPad, y + rh / 2, m.label.c_str(), nullptr);
 			if (m.entry->hydra()) {
-				nvgFillColor(vg, kDim);
+				nvgFillColor(vg, ct.dim);
 				nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
 				nvgText(vg, list.getRight() - kPad - 2, y + rh / 2, "hydra", nullptr);
 				nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
@@ -198,7 +294,7 @@ void Tip::draw(const DrawArgs& args) {
 			float h = list.size.y - 2 * kPad;
 			nvgBeginPath(vg);
 			nvgRect(vg, list.getRight() - 3, list.pos.y + kPad + h * top / n, 2, h * rows / n);
-			nvgFillColor(vg, kDim);
+			nvgFillColor(vg, ct.dim);
 			nvgFill(vg);
 		}
 		nvgRestore(vg);
@@ -221,14 +317,14 @@ void Tip::draw(const DrawArgs& args) {
 		std::string sig = e.signature, others;
 		if (m.label != e.name && sig.compare(0, e.name.size(), e.name) == 0)
 			sig = m.label + sig.substr(e.name.size());
-		ls.push_back({sig, color(Token::Call), Plain});
+		ls.push_back({sig, ct.call, Plain});
 		std::vector<std::string> names = e.synonyms;
 		names.insert(names.begin(), e.name);
 		for (const std::string& n : names)
 			if (n != m.label)
 				others += (others.empty() ? "Synonyms: " : ", ") + n;
 		if (!others.empty())
-			ls.push_back({others, kDim, Plain});
+			ls.push_back({others, ct.dim, Plain});
 		std::string desc = e.description;
 		for (size_t p; (p = desc.find("\n\n")) != std::string::npos;) // paragraphs: no blank lines here
 			desc.erase(p, 1);
@@ -243,11 +339,11 @@ void Tip::draw(const DrawArgs& args) {
 					cut--;
 				t = t.substr(0, cut) + "...";
 			}
-			ls.push_back({t, kPlain, Text});
+			ls.push_back({t, ct.plain, Text});
 		}
 		for (size_t a = 0, k = 0; a < e.example.size(); k++) {
 			size_t b = std::min(e.example.find('\n', a), e.example.size());
-			ls.push_back({k < (size_t)kExampleLines ? e.example.substr(a, b - a) : "...", kPlain, Example});
+			ls.push_back({k < (size_t)kExampleLines ? e.example.substr(a, b - a) : "...", ct.plain, Example});
 			a = k < (size_t)kExampleLines ? b + 1 : e.example.size();
 		}
 		for (const Line& l : ls)
@@ -288,7 +384,7 @@ void Tip::draw(const DrawArgs& args) {
 			} else
 				for (size_t a = 0; a <= l.text.size();) { // `code` toggles at each backtick (not drawn)
 					size_t b = std::min(l.text.find('`', a), l.text.size());
-					nvgFillColor(vg, code ? kAccent : l.color);
+					nvgFillColor(vg, code ? ct.keyword : l.color);
 					if (b > a)
 						x = nvgText(vg, x, y + rh / 2, l.text.data() + a, l.text.data() + b);
 					if (b < l.text.size())
@@ -375,6 +471,7 @@ void View::showTip() {
 	}
 	tip_->show();
 	tip_->font = hostMonoFont(host);
+	tip_->theme = theme;
 	tip_->items = popup ? completion_.items : std::vector<Match>();
 	tip_->details = popup ? std::vector<Match>{completion_.items[completion_.sel]} : hover_;
 	tip_->sel = completion_.sel;
@@ -432,11 +529,12 @@ void View::paint(NVGcontext* vg) {
 	int font = hostMonoFont(host);
 	if (font < 0)
 		return;
+	const EditorTheme& ct = theme ? *theme : patchisserie();
 	const std::string& s = doc->text();
 	float lh = lineH(), th = textH(), w = box.size.x;
 	nvgBeginPath(vg); // the panel has no editor background of its own under this (the window clears to it)
 	nvgRect(vg, 0, 0, w, box.size.y);
-	nvgFillColor(vg, kBackground);
+	nvgFillColor(vg, ct.background);
 	nvgFill(vg);
 	nvgSave(vg);
 	nvgIntersectScissor(vg, 0, 0, w, th);
@@ -459,7 +557,7 @@ void View::paint(NVGcontext* vg) {
 			nvgFillColor(vg, c);
 			nvgFill(vg);
 			if (outline) {
-				nvgStrokeColor(vg, kAccent);
+				nvgStrokeColor(vg, ct.playing);
 				nvgStrokeWidth(vg, 1);
 				nvgStroke(vg);
 			}
@@ -471,17 +569,17 @@ void View::paint(NVGcontext* vg) {
 	if (errVisible) {
 		nvgBeginPath(vg);
 		nvgRect(vg, 0, Y(err), w, lh);
-		nvgFillColor(vg, nvgRGBA(0xff, 0x6b, 0x5b, 0x38));
+		nvgFillColor(vg, nvgTransRGBA(ct.error, 0x38));
 		nvgFill(vg);
 	}
 	if (doc->hasSelection())
-		mark(doc->selBegin(), doc->selEnd(), kSelection, false);
+		mark(doc->selBegin(), doc->selEnd(), ct.selection, false);
 	if (engine) {
 		engine->highlights(playing_);
 		for (const filo::Highlight& h : playing_) {
 			size_t b = 0, e = 0;
 			if (doc->locate(h.id, h.start, h.end, b, e))
-				mark(b, e, kPlaying, true);
+				mark(b, e, nvgRGBA(0, 0, 0, 0), true); // outline only
 		}
 	}
 
@@ -511,20 +609,20 @@ void View::paint(NVGcontext* vg) {
 				tok++;
 			bool in = tok != toks.end() && tok->begin <= p;
 			size_t q = std::min(le, in ? tok->end : tok != toks.end() ? tok->begin : le);
-			nvgFillColor(vg, in ? color(tok->kind) : kText);
+			nvgFillColor(vg, in ? color(ct, tok->kind) : ct.text);
 			col = run(p, q, col, y);
 			p = q;
 		}
 	}
 	if (errVisible && !error_.empty()) {
-		nvgFillColor(vg, kError);
+		nvgFillColor(vg, ct.error);
 		nvgText(vg, X(doc->column(doc->lineEnd(err)) + 2), Y(err) + lh / 2, error_.c_str(), nullptr);
 	}
 	if (hostEvents(host)->getSelectedWidget() == this) {
 		int l = doc->lineOf(doc->cursor());
 		nvgBeginPath(vg);
 		nvgRect(vg, X(doc->column(doc->cursor())) - 0.5f, Y(l) + 1, 1.5f, lh - 2);
-		nvgFillColor(vg, kAccent);
+		nvgFillColor(vg, ct.caret);
 		nvgFill(vg);
 	}
 
@@ -532,19 +630,19 @@ void View::paint(NVGcontext* vg) {
 	float gw = gutterW();
 	nvgBeginPath(vg);
 	nvgRect(vg, 0, 0, gw, th);
-	nvgFillColor(vg, kGutter);
+	nvgFillColor(vg, ct.gutter);
 	nvgFill(vg);
 	nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
 	int cur = doc->lineOf(doc->cursor());
 	for (int l = first; l <= last; l++) {
-		nvgFillColor(vg, l == err ? kError : l == cur ? kPlain : kDim);
+		nvgFillColor(vg, l == err ? ct.error : l == cur ? ct.plain : ct.dim);
 		std::string n = std::to_string(l + 1);
 		nvgText(vg, gw - kPad, Y(l) + lh / 2, n.c_str(), nullptr);
 	}
 	if (errVisible) {
 		nvgBeginPath(vg);
 		nvgRect(vg, 0, Y(err), 2, lh);
-		nvgFillColor(vg, kError);
+		nvgFillColor(vg, ct.error);
 		nvgFill(vg);
 	}
 	nvgRestore(vg);
@@ -555,11 +653,11 @@ void View::paint(NVGcontext* vg) {
 	nvgIntersectScissor(vg, 0, th, w, sh);
 	nvgBeginPath(vg);
 	nvgRect(vg, 0, th, w, sh);
-	nvgFillColor(vg, kGutter);
+	nvgFillColor(vg, ct.gutter);
 	nvgFill(vg);
 	nvgBeginPath(vg);
 	nvgRect(vg, kPad, th, w - 2 * kPad, 1);
-	nvgFillColor(vg, kDim);
+	nvgFillColor(vg, ct.dim);
 	nvgFill(vg);
 	nvgFontFaceId(vg, host ? host->ui : APP->window->uiFont->handle);
 	nvgFontSize(vg, std::round(fontSize * 0.9f));
@@ -567,13 +665,13 @@ void View::paint(NVGcontext* vg) {
 	if (engine) {
 		std::string under = "underflow " + std::to_string(engine->missingFrames.load());
 		nvgTextAlign(vg, NVG_ALIGN_RIGHT | NVG_ALIGN_MIDDLE);
-		nvgFillColor(vg, kDim);
+		nvgFillColor(vg, ct.dim);
 		nvgText(vg, w - kPad, th + sh / 2, under.c_str(), nullptr);
 		uw = nvgTextBounds(vg, 0, 0, under.c_str(), nullptr, nullptr) + 3 * kPad;
 	}
 	nvgIntersectScissor(vg, 0, th, w - uw, sh);
 	nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-	nvgFillColor(vg, error_.empty() ? kDim : kError);
+	nvgFillColor(vg, error_.empty() ? ct.dim : ct.error);
 	nvgText(vg, kPad, th + sh / 2, message_.c_str(), nullptr);
 	nvgRestore(vg);
 }
@@ -1184,7 +1282,10 @@ void Window::draw(int fbW, int fbH) {
 	mouseScale = w > 0 ? fbW / (w * ratio) : 1;
 	root->box.size = view->box.size = math::Vec(fbW, fbH).div(ratio);
 	root->step();
-	glClearColor(kBackground.r, kBackground.g, kBackground.b, 1);
+	// Filo's editor clears to its theme's background, Lattice's grid (which paints its own) to Patchisserie's.
+	const View* filo = dynamic_cast<const View*>(view);
+	const EditorTheme& ct = filo && filo->theme ? *filo->theme : patchisserie();
+	glClearColor(ct.background.r, ct.background.g, ct.background.b, 1);
 	glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	nvgBeginFrame(vg, root->box.size.x, root->box.size.y, ratio);
 	widget::Widget::DrawArgs args;

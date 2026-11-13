@@ -165,6 +165,14 @@ The FULL button opens the editor in a window of its own. So does the **Editor wi
 
 Press `F11` in the editor window to make it fullscreen on the monitor that it is on, and press `F11` again or `Esc` to leave fullscreen. The same switch is the menu item **Editor window fullscreen**. When the completion list is open, `Esc` closes the list first.
 
+### Themes
+
+The colours of the editor come from a theme. Filo offers **Patchisserie**, its own dark theme with cobalt keywords, and all the editor themes that strudel.cc offers, such as `dracula`, `githubLight` and `tokyoNight`. Right-click the panel, open **Theme** and choose one. The panel editor and the editor window change at once, and a check mark shows the theme in use.
+
+A theme sets the background, the text, the cursor, the selection, the line numbers and the colours of comments, strings, numbers, keywords and function names. It also sets the outline around the notes that are playing. Errors are red in every theme. The themes are taken from Strudel itself when the plugin is built, so they follow Strudel's updates and look as they do on strudel.cc.
+
+Each Filo has its own theme, and the choice is saved with the patch. A new Filo uses Patchisserie, and so does a patch whose theme is not in the list any more.
+
 ### Rack shortcuts that pass through
 
 Rack's file shortcuts work from both editors: `Cmd/Ctrl+S` saves the patch, `Cmd/Ctrl+Shift+S` saves it under a new name, and `Cmd/Ctrl+O` opens a patch. `Cmd/Ctrl+Q` quits and `Cmd/Ctrl+N` makes a new patch. In the editor window, they are passed on to Rack's main window. `Esc` also passes through whenever the completion list is closed. In the panel editor it leaves Rack's own fullscreen mode, and in the editor window it leaves the window's fullscreen mode. Every other key stays in the editor.
@@ -296,6 +304,7 @@ Right-click the Filo panel to open the module's menu. Below Rack's usual entries
 |---|---|---|
 | **Editor window** | A check mark that shows or hides the editor window. It does the same as the FULL button, except that you can also use it to close the window. | Off |
 | **Editor window fullscreen** | A check mark that switches the editor window to fullscreen. The shortcut `F11` is shown next to it. | Off |
+| **Theme** | A submenu with Patchisserie and the editor themes of strudel.cc. It sets the colours of the panel editor and of the editor window. See section 4. | Patchisserie |
 | **Voices** | A submenu from 1 to 16. It sets how many channels V/OCT, GATE and VEL carry. | 16 |
 | **Polyphony mode** | A submenu with Rotate, Reuse, Reset and MPE. It decides which voice a new note takes. See section 6. | Rotate |
 | **CLK output: pulses per cycle** | A submenu with 1, 2, 4, 8, 16, 24, 32, 48 and 96. It sets how many pulses per cycle the CLK output gives. | 16 |
@@ -323,6 +332,7 @@ Each Filo stores the following in the patch file.
 - The TRIG and CC channel maps.
 - The MIDI input choice, which is the driver, the device and the channel.
 - The editor window's position, size, fullscreen state and whether it is open.
+- The editor **Theme**.
 
 Not saved with the patch are:
 
@@ -331,7 +341,7 @@ Not saved with the patch are:
 - The latest values of CC messages that `midin()` has read.
 - The local samples folder, which belongs to the plugin and not to the patch (see section 7), and the cache of online samples.
 
-If you open a patch made by an older version that has no window settings, the defaults are used.
+If you open a patch made by an older version that has no window settings or no theme, the defaults are used.
 
 ## 9. Recipes
 
@@ -415,7 +425,7 @@ Strudel runs unmodified, so most code from strudel.cc runs as it is. Whatever Ra
 - **Network.** Samples, soundfonts and scripts load over https only, and `http://` addresses are upgraded to https. Addresses of your own computer or network, such as `localhost`, `.local`, LAN addresses and IP addresses, are refused. For this reason Strudel's local sample server (`@strudel/sampler`) does not work. Use Filo's local samples folder instead.
 - **Tempo with an external clock.** While a cable is connected to CLOCK, `setcps()` and `setcpm()` are ignored. The clock sets the tempo.
 - **Slow code.** QuickJS, the JavaScript engine inside Filo, is slower than the one in a web browser. If the code takes longer to evaluate than the look-ahead of about 120 milliseconds, the notes that were due in the meantime are dropped. Code that takes more than 5 seconds to evaluate is interrupted.
-- **strudel.cc's website.** Sharing links, the pattern library, the sounds and reference panels, settings, themes and the Vim and Emacs key bindings do not exist in Filo. The editor has no input method for composed text, and wide characters, such as Chinese, Japanese, Korean or emoji, take only one cell. The editor window does not load fallback fonts for these characters either, so they may show up blank there.
+- **strudel.cc's website.** Sharing links, the pattern library, the sounds and reference panels, settings and the Vim and Emacs key bindings do not exist in Filo. The editor has no input method for composed text, and wide characters, such as Chinese, Japanese, Korean or emoji, take only one cell. The editor window does not load fallback fonts for these characters either, so they may show up blank there.
 
 ## 11. Troubleshooting
 

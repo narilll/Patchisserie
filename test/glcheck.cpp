@@ -6,8 +6,10 @@
 // window (editor::Window): a second context sharing the first, its own NanoVG context and fonts, a frame read back.
 #include <rack.hpp>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <thread>
 
@@ -239,12 +241,19 @@ std::string compileLog(const std::string& es, bool& ok) {
 }
 
 /** Filo's editor window, as FiloWidget opens it: a frame of a Doc drawn by its own NanoVG context with its own fonts,
-read back before the swap. Text in the first line, the background where there is none. "" when it is so. */
-std::string editorWindow(GLFWwindow* rack) {
+read back before the swap, in the editor theme `theme`. Text in the first line, the theme's background where there is
+none. "" when it is so. */
+std::string editorWindow(GLFWwindow* rack, const std::string& theme) {
 	editor::Doc doc("$: s(\"bd sd\").bank(\"tr909\")\n");
 	hydra::WindowGeometry g;
 	bool open = true;
 	editor::Window w(doc, nullptr, g, open);
+	const std::vector<std::string>& names = editor::themeNames();
+	if (std::find(names.begin(), names.end(), theme) == names.end())
+		return "no editor theme " + theme + " (res/editor-themes.json)";
+	const editor::EditorTheme& colors = editor::themeNamed(theme);
+	static_cast<editor::View*>(w.view)->theme = &colors;
+	std::string png = "build/glcheck-out/editor" + (theme == names[0] ? "" : "-" + theme) + ".png";
 	w.update(rack, "glcheck: editor window"); // creates, shows and draws it
 	std::string why = !w.window.win            ? "no window"
 					  : !w.vg                  ? "no NanoVG context"
@@ -263,25 +272,29 @@ std::string editorWindow(GLFWwindow* rack) {
 		glReadPixels(0, 0, fw, fh, GL_RGBA, GL_UNSIGNED_BYTE, im.px.data());
 		GLenum error = glGetError();
 		glfwMakeContextCurrent(rack);
-		stbi_write_png("build/glcheck-out/editor.png", im.w, im.h, 4, im.at(0, im.h - 1), -4 * im.w);
+		stbi_write_png(png.c_str(), im.w, im.h, 4, im.at(0, im.h - 1), -4 * im.w);
 		// Share of the pixels in [x0, x1) x [y0, y1) (UI px from the top left) that aren't the background.
 		float px = fw / w.root->box.size.x;
+		int bg[3] = {(int)std::lround(colors.background.r * 255), (int)std::lround(colors.background.g * 255),
+					 (int)std::lround(colors.background.b * 255)};
 		auto drawn = [&](float x0, float y0, float x1, float y1) {
 			size_t n = 0, all = 0;
 			for (int y = (int)(im.h - y1 * px); y < (int)(im.h - y0 * px); y++)
 				for (int x = (int)(x0 * px); x < (int)(x1 * px); x++, all++) {
 					const uint8_t* p = im.at(x, y);
-					n += std::abs(p[0] - 0x2a) + std::abs(p[1] - 0x1f) + std::abs(p[2] - 0x17) > 48;
+					n += std::abs(p[0] - bg[0]) + std::abs(p[1] - bg[1]) + std::abs(p[2] - bg[2]) > 48;
 				}
 			return (double)n / all;
 		};
 		double text = drawn(0, 4, 300, 25), none = drawn(320, 100, 640, 300); // line 1; right of line 5 and on
-		std::printf("  %dx%d px (%s): line 1 %.1f %% drawn, empty part %.1f %%\n", fw, fh,
-					"build/glcheck-out/editor.png", 100 * text, 100 * none);
-		why = error         ? "GL error " + std::to_string(error)
-			  : text < 0.05 ? "no text"
-			  : none > 0    ? "not the background"
-							: "";
+		const uint8_t* p = im.at((int)(500 * px), (int)(im.h - 200 * px));    // empty: right of line 5 and on
+		bool exact = std::abs(p[0] - bg[0]) <= 2 && std::abs(p[1] - bg[1]) <= 2 && std::abs(p[2] - bg[2]) <= 2;
+		std::printf("  %dx%d px (%s, %s): line 1 %.1f %% drawn, empty part %.1f %%\n", fw, fh, theme.c_str(),
+					png.c_str(), 100 * text, 100 * none);
+		why = error                ? "GL error " + std::to_string(error)
+			  : text < 0.05        ? "no text"
+			  : none > 0 || !exact ? "not the background"
+								   : "";
 	}
 	w.destroy();
 	hydra::collectWindows();
@@ -498,7 +511,10 @@ int main() {
 		failures += !why.empty();
 	}
 	std::printf("editor window\n");
-	std::string why = editorWindow(win);
+	std::string why = editorWindow(win, "Patchisserie");
+	std::printf("  -> %s\n", why.empty() ? "ok" : ("FAIL " + why).c_str());
+	failures += !why.empty();
+	why = editorWindow(win, "githubLight"); // a light theme: #ffffff
 	std::printf("  -> %s\n", why.empty() ? "ok" : ("FAIL " + why).c_str());
 	failures += !why.empty();
 	std::printf("grid window\n");

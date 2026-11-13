@@ -1,0 +1,746 @@
+{
+ "strudel": "0cb6341299229f739b5090be93528bb4f170d855",
+ "themes": [
+  {
+   "name": "strudelTheme",
+   "colours": {
+    "background": "#222222ff",
+    "text": "#ffffffff",
+    "caret": "#ffcc00ff",
+    "selection": "#80cbc480",
+    "gutter": "#222222ff",
+    "dim": "#8a919966",
+    "playing": "#ffffffff",
+    "comment": "#7d8799ff",
+    "string": "#c3e88dff",
+    "number": "#c3e88dff",
+    "keyword": "#c792eaff",
+    "label": "#89ddffff",
+    "operator": "#89ddffff",
+    "call": "#c792eaff"
+   }
+  },
+  {
+   "name": "algoboy",
+   "colours": {
+    "background": "#0f0a0aff",
+    "text": "#6b4747ff",
+    "caret": "#996666ff",
+    "selection": "#996666ff",
+    "gutter": "#0f0a0aff",
+    "dim": "#996666ff",
+    "playing": "#6b4747ff",
+    "comment": "#3d2929ff",
+    "string": "#6b4747ff",
+    "number": "#6b4747ff",
+    "keyword": "#6b4747ff",
+    "label": "#996666ff",
+    "operator": "#6b4747ff",
+    "call": "#996666ff"
+   }
+  },
+  {
+   "name": "archBtw",
+   "colours": {
+    "background": "#000000ff",
+    "text": "#52d0faff",
+    "caret": "#52d0faff",
+    "selection": "#71d0fa66",
+    "gutter": "#000000ff",
+    "dim": "#71d0fa66",
+    "playing": "#52d0faff",
+    "comment": "#71d0fa66",
+    "string": "#52d0faff",
+    "number": "#52d0faff",
+    "keyword": "#52d0faff",
+    "label": "#52d0faff",
+    "operator": "#52d0faff",
+    "call": "#52d0faff"
+   }
+  },
+  {
+   "name": "androidstudio",
+   "colours": {
+    "background": "#282b2eff",
+    "text": "#a9b7c6ff",
+    "caret": "#00ff00ff",
+    "selection": "#4e5254ff",
+    "gutter": "#282b2eff",
+    "dim": "#cccccc50",
+    "playing": "#a9b7c6ff",
+    "comment": "#808080ff",
+    "string": "#6a8759ff",
+    "number": "#6897bbff",
+    "keyword": "#a9b7c6ff",
+    "label": "#a9b7c6ff",
+    "operator": "#a9b7c6ff",
+    "call": "#a9b7c6ff"
+   }
+  },
+  {
+   "name": "atomone",
+   "colours": {
+    "background": "#272c35ff",
+    "text": "#9d9b97ff",
+    "caret": "#797977ff",
+    "selection": "#3d4c64ff",
+    "gutter": "#272c35ff",
+    "dim": "#465063ff",
+    "playing": "#9d9b97ff",
+    "comment": "#54636dff",
+    "string": "#98c379ff",
+    "number": "#d19a66ff",
+    "keyword": "#c678ddff",
+    "label": "#abb2bfff",
+    "operator": "#9d9b97ff",
+    "call": "#61afefff"
+   }
+  },
+  {
+   "name": "aura",
+   "colours": {
+    "background": "#21202eff",
+    "text": "#edeceeff",
+    "caret": "#a277ffff",
+    "selection": "#5a51898f",
+    "gutter": "#21202eff",
+    "dim": "#edeceeff",
+    "playing": "#edeceeff",
+    "comment": "#6d6d6dff",
+    "string": "#61ffcaff",
+    "number": "#61ffcaff",
+    "keyword": "#a277ffff",
+    "label": "#ffca85ff",
+    "operator": "#a277ffff",
+    "call": "#ffca85ff"
+   }
+  },
+  {
+   "name": "bbedit",
+   "colours": {
+    "background": "#ffffffff",
+    "text": "#000000ff",
+    "caret": "#fbac52ff",
+    "selection": "#ffd420ff",
+    "gutter": "#f5f5f5ff",
+    "dim": "#4d4d4cff",
+    "playing": "#000000ff",
+    "comment": "#804000ff",
+    "string": "#ff0080ff",
+    "number": "#ff0080ff",
+    "keyword": "#0000ffff",
+    "label": "#0000ffff",
+    "operator": "#000000ff",
+    "call": "#0000a2ff"
+   }
+  },
+  {
+   "name": "blackscreen",
+   "colours": {
+    "background": "#000000ff",
+    "text": "#ffffffff",
+    "caret": "#ffffffff",
+    "selection": "#ffffff20",
+    "gutter": "#000000ff",
+    "dim": "#8a919966",
+    "playing": "#ffffffff",
+    "comment": "#ffffffff",
+    "string": "#ffffffff",
+    "number": "#ffffffff",
+    "keyword": "#ffffffff",
+    "label": "#ffffffff",
+    "operator": "#ffffffff",
+    "call": "#ffffffff"
+   }
+  },
+  {
+   "name": "bluescreen",
+   "colours": {
+    "background": "#051db5ff",
+    "text": "#ffffffff",
+    "caret": "#ffffffff",
+    "selection": "#80cbc480",
+    "gutter": "#051db5ff",
+    "dim": "#8a919966",
+    "playing": "#ffffffff",
+    "comment": "#ffffffff",
+    "string": "#ffffffff",
+    "number": "#ffffffff",
+    "keyword": "#ffffffff",
+    "label": "#ffffffff",
+    "operator": "#ffffffff",
+    "call": "#ffffffff"
+   }
+  },
+  {
+   "name": "bluescreenlight",
+   "colours": {
+    "background": "#4b82f7ff",
+    "text": "#ffffffff",
+    "caret": "#ffffffff",
+    "selection": "#ffffff4d",
+    "gutter": "#4b82f7ff",
+    "dim": "#ffffffff",
+    "playing": "#ffffffff",
+    "comment": "#ffffff4d",
+    "string": "#ffffffff",
+    "number": "#ffffffff",
+    "keyword": "#ffffffff",
+    "label": "#ffffffff",
+    "operator": "#ffffffff",
+    "call": "#ffffffff"
+   }
+  },
+  {
+   "name": "CutiePi",
+   "colours": {
+    "background": "#ffffffff",
+    "text": "#5c019aff",
+    "caret": "#797977ff",
+    "selection": "#fbeffcff",
+    "gutter": "#fee1ffff",
+    "dim": "#465063ff",
+    "playing": "#5c019aff",
+    "comment": "#97a1b7ff",
+    "string": "#9acd3fff",
+    "number": "#d19a66ff",
+    "keyword": "#5c019aff",
+    "label": "#f6a6fdff",
+    "operator": "#5c019aff",
+    "call": "#5c019aff"
+   }
+  },
+  {
+   "name": "darcula",
+   "colours": {
+    "background": "#242424ff",
+    "text": "#f8f8f2ff",
+    "caret": "#ffffffff",
+    "selection": "#ffffff1a",
+    "gutter": "#242424ff",
+    "dim": "#999999ff",
+    "playing": "#f8f8f2ff",
+    "comment": "#707070ff",
+    "string": "#6a8759ff",
+    "number": "#7a9ec2ff",
+    "keyword": "#cc7832ff",
+    "label": "#ccccccff",
+    "operator": "#ccccccff",
+    "call": "#ffc66dff"
+   }
+  },
+  {
+   "name": "dracula",
+   "colours": {
+    "background": "#282a36ff",
+    "text": "#f8f8f2ff",
+    "caret": "#f8f8f0ff",
+    "selection": "#ffffff1a",
+    "gutter": "#282a36ff",
+    "dim": "#6272a4ff",
+    "playing": "#f8f8f2ff",
+    "comment": "#6272a4ff",
+    "string": "#f1fa8cff",
+    "number": "#bd93f9ff",
+    "keyword": "#ff79c6ff",
+    "label": "#f8f8f2ff",
+    "operator": "#f8f8f2ff",
+    "call": "#50fa7bff"
+   }
+  },
+  {
+   "name": "duotoneDark",
+   "colours": {
+    "background": "#2a2734ff",
+    "text": "#6c6783ff",
+    "caret": "#ffad5cff",
+    "selection": "#9a86fdff",
+    "gutter": "#2a2734ff",
+    "dim": "#545167ff",
+    "playing": "#6c6783ff",
+    "comment": "#6c6783ff",
+    "string": "#ffb870ff",
+    "number": "#ffcc99ff",
+    "keyword": "#ffcc99ff",
+    "label": "#eeebffff",
+    "operator": "#6c6783ff",
+    "call": "#eeebffff"
+   }
+  },
+  {
+   "name": "eclipse",
+   "colours": {
+    "background": "#ffffffff",
+    "text": "#000000ff",
+    "caret": "#ffffffff",
+    "selection": "#d7d4f0ff",
+    "gutter": "#f7f7f7ff",
+    "dim": "#999999ff",
+    "playing": "#000000ff",
+    "comment": "#3f7f5fff",
+    "string": "#2a00ffff",
+    "number": "#116644ff",
+    "keyword": "#7f0055ff",
+    "label": "#7f0055ff",
+    "operator": "#000000ff",
+    "call": "#116644ff"
+   }
+  },
+  {
+   "name": "fruitDaw",
+   "colours": {
+    "background": "#545d62ff",
+    "text": "#a7d8b1ff",
+    "caret": "#a7d8b1ff",
+    "selection": "#2e3e4880",
+    "gutter": "#434c51ff",
+    "dim": "#ffffff40",
+    "playing": "#a7d8b1ff",
+    "comment": "#ffffff40",
+    "string": "#bae673ff",
+    "number": "#7ccefeff",
+    "keyword": "#fcb843ff",
+    "label": "#fcb843ff",
+    "operator": "#a7d8b1ff",
+    "call": "#ffffffff"
+   }
+  },
+  {
+   "name": "githubDark",
+   "colours": {
+    "background": "#0d1117ff",
+    "text": "#c9d1d9ff",
+    "caret": "#c9d1d9ff",
+    "selection": "#003d73ff",
+    "gutter": "#0d1117ff",
+    "dim": "#c9d1d980",
+    "playing": "#c9d1d9ff",
+    "comment": "#8b949eff",
+    "string": "#a5d6ffff",
+    "number": "#79c0ffff",
+    "keyword": "#ff7b72ff",
+    "label": "#d2a8ffff",
+    "operator": "#79c0ffff",
+    "call": "#d2a8ffff"
+   }
+  },
+  {
+   "name": "githubLight",
+   "colours": {
+    "background": "#ffffffff",
+    "text": "#24292eff",
+    "caret": "#24292eff",
+    "selection": "#bbdfffff",
+    "gutter": "#ffffffff",
+    "dim": "#6e7781ff",
+    "playing": "#24292eff",
+    "comment": "#6a737dff",
+    "string": "#032f62ff",
+    "number": "#005cc5ff",
+    "keyword": "#d73a49ff",
+    "label": "#d73a49ff",
+    "operator": "#005cc5ff",
+    "call": "#6f42c1ff"
+   }
+  },
+  {
+   "name": "greenText",
+   "colours": {
+    "background": "#000000ff",
+    "text": "#56bd2aff",
+    "caret": "#56bd2aff",
+    "selection": "#171717ff",
+    "gutter": "#000000ff",
+    "dim": "#54636dff",
+    "playing": "#56bd2aff",
+    "comment": "#54636dff",
+    "string": "#8ed675ff",
+    "number": "#8ed675ff",
+    "keyword": "#56bd2aff",
+    "label": "#56bd2aff",
+    "operator": "#56bd2aff",
+    "call": "#56bd2aff"
+   }
+  },
+  {
+   "name": "gruvboxDark",
+   "colours": {
+    "background": "#282828ff",
+    "text": "#ebdbb2ff",
+    "caret": "#ebdbb2ff",
+    "selection": "#b99d555c",
+    "gutter": "#282828ff",
+    "dim": "#7c6f64ff",
+    "playing": "#ebdbb2ff",
+    "comment": "#928374ff",
+    "string": "#ebdbb2ff",
+    "number": "#d3869bff",
+    "keyword": "#fb4934ff",
+    "label": "#ebdbb2ff",
+    "operator": "#ebdbb2ff",
+    "call": "#8ec07cff"
+   }
+  },
+  {
+   "name": "gruvboxLight",
+   "colours": {
+    "background": "#fbf1c7ff",
+    "text": "#3c3836ff",
+    "caret": "#af3a03ff",
+    "selection": "#bdae9391",
+    "gutter": "#ebdbb2ff",
+    "dim": "#665c54ff",
+    "playing": "#3c3836ff",
+    "comment": "#928374ff",
+    "string": "#3c3836ff",
+    "number": "#8f3f71ff",
+    "keyword": "#9d0006ff",
+    "label": "#3c3836ff",
+    "operator": "#9d0006ff",
+    "call": "#427b58ff"
+   }
+  },
+  {
+   "name": "sonicPink",
+   "colours": {
+    "background": "#000000ff",
+    "text": "#edededff",
+    "caret": "#edededff",
+    "selection": "#ffffff30",
+    "gutter": "#1e1e1eff",
+    "dim": "#ccccccff",
+    "playing": "#edededff",
+    "comment": "#54636dff",
+    "string": "#ff1493ff",
+    "number": "#4c83ffff",
+    "keyword": "#fbde2dff",
+    "label": "#edededff",
+    "operator": "#edededff",
+    "call": "#edededff"
+   }
+  },
+  {
+   "name": "materialDark",
+   "colours": {
+    "background": "#212121ff",
+    "text": "#bdbdbdff",
+    "caret": "#a0a4aeff",
+    "selection": "#d7d4f063",
+    "gutter": "#212121ff",
+    "dim": "#999999ff",
+    "playing": "#bdbdbdff",
+    "comment": "#707d8bff",
+    "string": "#99d066ff",
+    "number": "#f07178ff",
+    "keyword": "#cf6edfff",
+    "label": "#cf6edfff",
+    "operator": "#82aaffff",
+    "call": "#82aaffff"
+   }
+  },
+  {
+   "name": "materialLight",
+   "colours": {
+    "background": "#fafafaff",
+    "text": "#90a4aeff",
+    "caret": "#272727ff",
+    "selection": "#80cbc440",
+    "gutter": "#fafafaff",
+    "dim": "#90a4aeff",
+    "playing": "#90a4aeff",
+    "comment": "#90a4aeff",
+    "string": "#91b859ff",
+    "number": "#f76d47ff",
+    "keyword": "#39adb5ff",
+    "label": "#6182b8ff",
+    "operator": "#39adb5ff",
+    "call": "#6182b8ff"
+   }
+  },
+  {
+   "name": "monokai",
+   "colours": {
+    "background": "#272822ff",
+    "text": "#ffffffff",
+    "caret": "#ffffffff",
+    "selection": "#49483eff",
+    "gutter": "#272822ff",
+    "dim": "#ffffff70",
+    "playing": "#ffffffff",
+    "comment": "#8292a2ff",
+    "string": "#e6db74ff",
+    "number": "#ae81ffff",
+    "keyword": "#f92672ff",
+    "label": "#bababaff",
+    "operator": "#ffffffff",
+    "call": "#a6e22eff"
+   }
+  },
+  {
+   "name": "noctisLilac",
+   "colours": {
+    "background": "#f2f1f8ff",
+    "text": "#0c006bff",
+    "caret": "#5c49e9ff",
+    "selection": "#d5d1f2ff",
+    "gutter": "#f2f1f8ff",
+    "dim": "#0c006b70",
+    "playing": "#0c006bff",
+    "comment": "#9995b7ff",
+    "string": "#00b368ff",
+    "number": "#5842ffff",
+    "keyword": "#ff5792ff",
+    "label": "#00bdd6ff",
+    "operator": "#ff5792ff",
+    "call": "#fa8900ff"
+   }
+  },
+  {
+   "name": "nord",
+   "colours": {
+    "background": "#2e3440ff",
+    "text": "#ffffffff",
+    "caret": "#ffffffff",
+    "selection": "#00000073",
+    "gutter": "#2e3440ff",
+    "dim": "#4c566aff",
+    "playing": "#ffffffff",
+    "comment": "#4c566aff",
+    "string": "#a3be8cff",
+    "number": "#b48eadff",
+    "keyword": "#5e81acff",
+    "label": "#81a1c1ff",
+    "operator": "#a3be8cff",
+    "call": "#88c0d0ff"
+   }
+  },
+  {
+   "name": "redText",
+   "colours": {
+    "background": "#000000ff",
+    "text": "#bd312aff",
+    "caret": "#bd312aff",
+    "selection": "#171717ff",
+    "gutter": "#000000ff",
+    "dim": "#54636dff",
+    "playing": "#bd312aff",
+    "comment": "#54636dff",
+    "string": "#ff5356ff",
+    "number": "#ff5356ff",
+    "keyword": "#bd312aff",
+    "label": "#bd312aff",
+    "operator": "#bd312aff",
+    "call": "#bd312aff"
+   }
+  },
+  {
+   "name": "solarizedDark",
+   "colours": {
+    "background": "#002b36ff",
+    "text": "#839496ff",
+    "caret": "#d30102ff",
+    "selection": "#004454aa",
+    "gutter": "#002b36ff",
+    "dim": "#839496ff",
+    "playing": "#839496ff",
+    "comment": "#586e75ff",
+    "string": "#2aa198ff",
+    "number": "#d33682ff",
+    "keyword": "#859900ff",
+    "label": "#268bd2ff",
+    "operator": "#859900ff",
+    "call": "#268bd2ff"
+   }
+  },
+  {
+   "name": "solarizedLight",
+   "colours": {
+    "background": "#fdf6e3ff",
+    "text": "#657b83ff",
+    "caret": "#657b83ff",
+    "selection": "#eee8d5ff",
+    "gutter": "#fdf6e3ff",
+    "dim": "#657b83ff",
+    "playing": "#657b83ff",
+    "comment": "#93a1a1ff",
+    "string": "#2aa198ff",
+    "number": "#d33682ff",
+    "keyword": "#859900ff",
+    "label": "#268bd2ff",
+    "operator": "#859900ff",
+    "call": "#268bd2ff"
+   }
+  },
+  {
+   "name": "sublime",
+   "colours": {
+    "background": "#303841ff",
+    "text": "#ffffffff",
+    "caret": "#fbac52ff",
+    "selection": "#4c5964ff",
+    "gutter": "#303841ff",
+    "dim": "#ffffff70",
+    "playing": "#ffffffff",
+    "comment": "#a2a9b5ff",
+    "string": "#99c592ff",
+    "number": "#fbac52ff",
+    "keyword": "#b78fbaff",
+    "label": "#a2a9b5ff",
+    "operator": "#f47954ff",
+    "call": "#36b7b5ff"
+   }
+  },
+  {
+   "name": "teletext",
+   "colours": {
+    "background": "#000000ff",
+    "text": "#6edee4ff",
+    "caret": "#ff0000ff",
+    "selection": "#f8fc55ff",
+    "gutter": "#000000ff",
+    "dim": "#8a919966",
+    "playing": "#6edee4ff",
+    "comment": "#f8fc55ff",
+    "string": "#ffffffff",
+    "number": "#ffffffff",
+    "keyword": "#6edee4ff",
+    "label": "#ffffffff",
+    "operator": "#ffffffff",
+    "call": "#6edee4ff"
+   }
+  },
+  {
+   "name": "tokyoNight",
+   "colours": {
+    "background": "#1a1b26ff",
+    "text": "#f8fcf9ff",
+    "caret": "#c0caf5ff",
+    "selection": "#515c7e40",
+    "gutter": "#1a1b26ff",
+    "dim": "#787c99ff",
+    "playing": "#f8fcf9ff",
+    "comment": "#444b6aff",
+    "string": "#9ece6aff",
+    "number": "#ff9e64ff",
+    "keyword": "#bb9af7ff",
+    "label": "#7aa2f7ff",
+    "operator": "#bb9af7ff",
+    "call": "#7aa2f7ff"
+   }
+  },
+  {
+   "name": "tokyoNightDay",
+   "colours": {
+    "background": "#e1e2e7ff",
+    "text": "#3760bfff",
+    "caret": "#3760bfff",
+    "selection": "#99a7dfff",
+    "gutter": "#e1e2e7ff",
+    "dim": "#3760bfff",
+    "playing": "#3760bfff",
+    "comment": "#848cb5ff",
+    "string": "#587539ff",
+    "number": "#b15c00ff",
+    "keyword": "#007197ff",
+    "label": "#3760bfff",
+    "operator": "#007197ff",
+    "call": "#3760bfff"
+   }
+  },
+  {
+   "name": "tokyoNightStorm",
+   "colours": {
+    "background": "#24283bff",
+    "text": "#f9f2f9ff",
+    "caret": "#c0caf5ff",
+    "selection": "#6f7bb630",
+    "gutter": "#24283bff",
+    "dim": "#7982a9ff",
+    "playing": "#f9f2f9ff",
+    "comment": "#565f89ff",
+    "string": "#9ece6aff",
+    "number": "#ff9e64ff",
+    "keyword": "#bb9af7ff",
+    "label": "#7aa2f7ff",
+    "operator": "#bb9af7ff",
+    "call": "#7aa2f7ff"
+   }
+  },
+  {
+   "name": "vscodeDark",
+   "colours": {
+    "background": "#1e1e1eff",
+    "text": "#ffffffff",
+    "caret": "#c6c6c6ff",
+    "selection": "#6199ff2f",
+    "gutter": "#1e1e1eff",
+    "dim": "#838383ff",
+    "playing": "#ffffffff",
+    "comment": "#6a9955ff",
+    "string": "#ce9178ff",
+    "number": "#b5cea8ff",
+    "keyword": "#569cd6ff",
+    "label": "#9cdcfeff",
+    "operator": "#d4d4d4ff",
+    "call": "#dcdcaaff"
+   }
+  },
+  {
+   "name": "vscodeLight",
+   "colours": {
+    "background": "#ffffffff",
+    "text": "#383a42ff",
+    "caret": "#000000ff",
+    "selection": "#add6ffff",
+    "gutter": "#ffffffff",
+    "dim": "#237893ff",
+    "playing": "#383a42ff",
+    "comment": "#008000ff",
+    "string": "#a31515ff",
+    "number": "#098658ff",
+    "keyword": "#0000ffff",
+    "label": "#0070c1ff",
+    "operator": "#383a42ff",
+    "call": "#795e26ff"
+   }
+  },
+  {
+   "name": "whitescreen",
+   "colours": {
+    "background": "#ffffffff",
+    "text": "#000000ff",
+    "caret": "#000000ff",
+    "selection": "#80cbc480",
+    "gutter": "#ffffffff",
+    "dim": "#000000ff",
+    "playing": "#000000ff",
+    "comment": "#000000ff",
+    "string": "#000000ff",
+    "number": "#000000ff",
+    "keyword": "#000000ff",
+    "label": "#000000ff",
+    "operator": "#000000ff",
+    "call": "#000000ff"
+   }
+  },
+  {
+   "name": "xcodeLight",
+   "colours": {
+    "background": "#ffffffff",
+    "text": "#3d3d3dff",
+    "caret": "#3d3d3dff",
+    "selection": "#bbdfffff",
+    "gutter": "#ffffffff",
+    "dim": "#afafafff",
+    "playing": "#3d3d3dff",
+    "comment": "#707f8dff",
+    "string": "#d23423ff",
+    "number": "#3d3d3dff",
+    "keyword": "#aa0d91ff",
+    "label": "#aa0d91ff",
+    "operator": "#3d3d3dff",
+    "call": "#23575cff"
+   }
+  }
+ ]
+}
