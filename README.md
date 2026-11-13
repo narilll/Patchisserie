@@ -10,6 +10,10 @@ VCV Rack 2 plugin that runs [Strudel](https://strudel.cc) and [Orca](https://100
 
 Status: early development.
 
+## Documentation
+
+The user manual is in [`docs/`](docs/README.md): start with the [front page](docs/README.md), then read the manual for [Filo](docs/filo.md), [Icing](docs/icing.md) or [Lattice](docs/lattice.md).
+
 ## Filo's editor
 
 | Key (Ctrl on Windows/Linux) | |

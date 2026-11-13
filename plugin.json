@@ -8,25 +8,28 @@
   "authorEmail": "",
   "authorUrl": "",
   "pluginUrl": "https://github.com/narilll/Patchisserie",
-  "manualUrl": "https://github.com/narilll/Patchisserie#readme",
+  "manualUrl": "https://github.com/narilll/Patchisserie/blob/main/docs/README.md",
   "sourceUrl": "https://github.com/narilll/Patchisserie",
   "donateUrl": "",
   "changelogUrl": "",
   "modules": [
     {
       "slug": "Filo",
+      "manualUrl": "https://github.com/narilll/Patchisserie/blob/main/docs/filo.md",
       "name": "Filo",
       "description": "Strudel live coding: stereo audio, and CV, gates, triggers and CC from .midi() patterns",
       "tags": ["Sequencer", "Sampler", "Polyphonic", "Clock generator"]
     },
     {
       "slug": "Icing",
+      "manualUrl": "https://github.com/narilll/Patchisserie/blob/main/docs/icing.md",
       "name": "Icing",
       "description": "Hydra visuals for the Filo on its left: panel preview, output window, AUDIO input for a.fft",
       "tags": ["Visual", "Expander"]
     },
     {
       "slug": "Lattice",
+      "manualUrl": "https://github.com/narilll/Patchisserie/blob/main/docs/lattice.md",
       "name": "Lattice",
       "description": "Orca live coding (orca-c): a 2D grid sequencer as V/OCT, gates, triggers, CC and clock",
       "tags": ["Sequencer", "Polyphonic", "Clock generator"]
