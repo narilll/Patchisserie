@@ -243,16 +243,17 @@ struct Filo : Module {
 
 // Panel layout (mm), matching res/Filo.svg: the editor with its status line at the bottom.
 static const math::Rect kEditorMm = math::Rect(3, 12, 95.6, 76);
-static const NVGcolor kInk = nvgRGB(0x1b, 0x1c, 0x1e), kBlue = nvgRGB(0x2f, 0x4f, 0xd1); // the panels' text
+// The panels' text: on the aluminium, and on the dark output band in the aluminium's colour.
+static const NVGcolor kInk = nvgRGB(0, 0, 0), kPaper = nvgRGB(0xe6, 0xe6, 0xe0);
 
 // Row 1: three buttons then four inputs, evenly spaced.
 static float kRow1X(int i) {
 	return 10.3f + 13.5f * i;
 }
 
-/** The panel's text (res/fonts, IBM Plex): the band, the foot and the port labels. Sizes and spacing in mm. */
+/** The panel's text (res/fonts, IBM Plex): the name, the foot and the port labels. Sizes and spacing in mm. */
 struct PanelText : widget::Widget {
-	enum Face { Mono, MonoBold, Condensed };
+	enum Face { MonoBold, Condensed };
 	struct Item {
 		Vec pos; // px
 		std::string text;
@@ -268,35 +269,38 @@ struct PanelText : widget::Widget {
 		items.push_back({mm2px(mm), text, face, size, spacing, color, align | NVG_ALIGN_BASELINE});
 	}
 
-	/** A port's label, centred above it. */
+	/** A port's label, centred above it; an output's sits on the dark band. */
 	void label(Vec mm, const char* text, bool output = false) {
-		add(Vec(mm.x, mm.y - 5.3f), text, Condensed, 2.15f, 0.1f, output ? kBlue : kInk, NVG_ALIGN_CENTER);
+		add(Vec(mm.x, mm.y - 5.3f), text, MonoBold, 2.8f, 0, output ? kPaper : kInk, NVG_ALIGN_CENTER);
 	}
 
-	/** The top band and the foot: "N°01", the name, the HP, PATCHISSERIE. */
-	void band(const char* number, const char* name, const char* sub, float width) {
-		add(Vec(3.2f, 4.2f), number, MonoBold, 2.1f, 0, kBlue);
-		add(Vec(3.2f, 9.2f), name, MonoBold, 5.f, 0.4f, kInk);
-		add(Vec(width - 3.2f, 9.f), sub, Mono, 2.f, 0, nvgRGB(0x55, 0x57, 0x5c), NVG_ALIGN_RIGHT);
-		add(Vec(3.2f, 127.4f), "PATCHISSERIE", Condensed, 1.9f, 0.7f, kInk);
+	/** The module's name top left above the rule, PATCHISSERIE bottom left below the foot rule. */
+	void band(const char* name) {
+		add(Vec(3.2f, 8.8f), name, MonoBold, 6.f, 0.4f, kInk);
+		add(Vec(3.2f, 127.5f), "PATCHISSERIE", Condensed, 2.4f, 0.6f, kInk);
 	}
 
 	void draw(const DrawArgs& args) override {
-		static const char* const files[] = {"IBMPlexMono-Regular", "IBMPlexMono-SemiBold",
-											"IBMPlexSansCondensed-SemiBold"};
-		std::shared_ptr<window::Font> fonts[3];
-		for (int i = 0; i < 3; i++) // as Rack recommends: loaded on every draw (cached by the window)
+		static const char* const files[] = {"IBMPlexMono-SemiBold", "IBMPlexSansCondensed-SemiBold"};
+		std::shared_ptr<window::Font> fonts[2];
+		for (int i = 0; i < 2; i++) // as Rack recommends: loaded on every draw (cached by the window)
 			fonts[i] =
 				APP->window->loadFont(asset::plugin(pluginInstance, std::string("res/fonts/") + files[i] + ".ttf"));
+		// Drawn in screen pixels from a whole-pixel origin, so the glyphs land on the pixel grid instead of being
+		// resampled, which blurs small text when zoomed out. ponytail: assumes Rack's unrotated, uniform zoom.
+		float t[6];
+		nvgCurrentTransform(args.vg, t);
+		nvgResetTransform(args.vg);
 		for (const Item& it : items) {
 			if (!fonts[it.face])
 				continue;
 			nvgFontFaceId(args.vg, fonts[it.face]->handle);
-			nvgFontSize(args.vg, mm2px(it.size));
-			nvgTextLetterSpacing(args.vg, mm2px(it.spacing));
+			nvgFontSize(args.vg, mm2px(it.size) * t[0]);
+			nvgTextLetterSpacing(args.vg, mm2px(it.spacing) * t[0]);
 			nvgFillColor(args.vg, it.color);
 			nvgTextAlign(args.vg, it.align);
-			nvgText(args.vg, it.pos.x, it.pos.y, it.text.c_str(), nullptr);
+			nvgText(args.vg, std::round(t[0] * it.pos.x + t[4]), std::round(t[3] * it.pos.y + t[5]), it.text.c_str(),
+					nullptr);
 		}
 		nvgTextLetterSpacing(args.vg, 0);
 	}
@@ -319,7 +323,7 @@ struct FiloWidget : ModuleWidget {
 		auto* text = createWidget<PanelText>(Vec());
 		text->box.size = box.size;
 		addChild(text);
-		text->band("N°01", "FILO", "pâte filo · 20 HP", 101.6f);
+		text->band("FILO");
 		auto label = [&](float x, float y, const char* name, bool output = false) {
 			text->label(Vec(x, y), name, output);
 		};
@@ -492,8 +496,8 @@ struct IcingWidget : ModuleWidget {
 		addInput(createInputCentered<PJ301MPort>(mm2px(kAudioMm), module, Icing::AUDIO_INPUT));
 		auto* text = createWidget<PanelText>(Vec());
 		text->box.size = box.size;
-		text->band("N°02", "ICING", "glaçage · 30 HP", 152.4f);
-		text->add(Vec(kAudioMm.x, 112.6f), "AUDIO", PanelText::Condensed, 2.15f, 0.1f, kInk, NVG_ALIGN_CENTER);
+		text->band("ICING");
+		text->label(kAudioMm, "AUDIO");
 		addChild(text);
 		preview = new IcingPreview(this);
 		preview->box = math::Rect(mm2px(kPreviewMm.pos), mm2px(kPreviewMm.size));

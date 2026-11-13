@@ -11,6 +11,6 @@
   <line x1="3" y1="10.6" x2="98.6" y2="10.6" stroke="#1b1c1e" stroke-width="0.3"/>
   <rect x="3" y="12" width="95.6" height="76" rx="0.4" fill="#1b1c1e"/>
   <line x1="44.05" y1="92" x2="44.05" y2="106" stroke="#1b1c1e" stroke-width="0.25"/>
-  <rect x="2" y="112.5" width="97.6" height="11" rx="0.4" fill="#1b1c1e"/>
+  <rect x="2" y="108.2" width="97.6" height="15.3" rx="0.4" fill="#1b1c1e"/>
   <line x1="3" y1="124.6" x2="98.6" y2="124.6" stroke="#1b1c1e" stroke-width="0.2"/>
 </svg>
