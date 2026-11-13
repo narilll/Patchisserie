@@ -363,6 +363,32 @@ std::string gridWindow(GLFWwindow* rack) {
 			  : none > 0      ? "not the background"
 							  : "";
 	}
+	if (why.empty()) { // the operator guide: one more frame, its first row (the "A add" item) drawn
+		view->guide = true;
+		glfwMakeContextCurrent(w.window.win);
+		int fw, fh;
+		glfwGetFramebufferSize(w.window.win, &fw, &fh);
+		glViewport(0, 0, fw, fh);
+		w.draw(fw, fh);
+		Image im;
+		im.w = fw, im.h = fh;
+		im.px.resize(4 * (size_t)fw * fh);
+		glReadPixels(0, 0, fw, fh, GL_RGBA, GL_UNSIGNED_BYTE, im.px.data());
+		GLenum error = glGetError();
+		glfwMakeContextCurrent(rack);
+		stbi_write_png("build/glcheck-out/lattice-guide.png", im.w, im.h, 4, im.at(0, im.h - 1), -4 * im.w);
+		float px = fw / w.root->box.size.x;
+		rack::math::Vec cell = view->cellSize();
+		constexpr float kPad = 4; // editor/view.cpp's
+		size_t n = 0, all = 0;    // the guide's first item row, 2 cells in and 1 down, the glyph to the description
+		for (int y = (int)(im.h - (kPad + 2 * cell.y) * px); y < (int)(im.h - (kPad + cell.y) * px); y++)
+			for (int x = (int)((kPad + 2 * cell.x) * px); x < (int)((kPad + 12 * cell.x) * px); x++, all++) {
+				const uint8_t* p = im.at(x, y);
+				n += std::abs(p[0] - 0x1b) + std::abs(p[1] - 0x1c) + std::abs(p[2] - 0x1e) > 48;
+			}
+		std::printf("  guide: first item row %.1f %% drawn (build/glcheck-out/lattice-guide.png)\n", 100.0 * n / all);
+		why = error ? "GL error " + std::to_string(error) : n == 0 ? "no guide" : "";
+	}
 	w.destroy();
 	hydra::collectWindows();
 	return why;

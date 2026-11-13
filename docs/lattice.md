@@ -97,6 +97,7 @@ The cursor is the cell where the next character will be typed. It can also be a 
 | `Alt` + arrow keys | Drag the selected block, with its content, one cell. A block at the edge of the grid does not move. This is one undo step. |
 | Any key that types a visible character | Writes that character into the cell where the selection started. The cursor stays where it is. |
 | `Cmd/Ctrl+I` | Switches insert mode on or off. In insert mode, the cursor moves one cell to the right after each typed character. The status line shows INS. |
+| `Cmd/Ctrl+G` | Shows or hides the operator guide, a list of every operator drawn over the grid. The status line shows GUIDE while it is open. |
 | `Backspace` or `Delete` | Erases the whole selection, replacing every cell with a dot. |
 | `Cmd/Ctrl+C` | Copies the selection as text to the system clipboard. |
 | `Cmd/Ctrl+X` | Cuts the selection, copying it and then erasing it. |
@@ -104,7 +105,7 @@ The cursor is the cell where the next character will be typed. It can also be a 
 | `Cmd/Ctrl+Z` | Undoes the last edit. |
 | `Cmd/Ctrl+Shift+Z` | Redoes an undone edit. On Windows and Linux `Ctrl+Y` also redoes. |
 | `Cmd/Ctrl+A` | Selects the whole grid. |
-| `Esc` | Shrinks a selection back to a single cell. When nothing is selected, `Esc` leaves fullscreen in the window or in Rack. |
+| `Esc` | Closes the operator guide if it is open. Otherwise it shrinks a selection back to a single cell. When nothing is selected, `Esc` leaves fullscreen in the window or in Rack. |
 | `Space` | Stops Lattice if it is playing, exactly like the STOP button, or resumes it if it is stopped. The frame stays where it was, as in Orca. |
 | `Cmd/Ctrl+Enter` | Plays from frame 0, when Lattice is stopped. This is the same as the PLAY button. |
 | `Cmd/Ctrl+.` | Stops, with all gates down. This is the same as the STOP button. |
@@ -113,6 +114,8 @@ The cursor is the cell where the next character will be typed. It can also be a 
 | Click and drag | Selects the block from where you started to where you let go. |
 | Mouse wheel | Scrolls the grid. |
 | Right click | Opens the module's menu, as with any Rack module. |
+
+The operator guide lists every operator with the one-line description from orca-c, Orca's C version. The window has room for the descriptions. The panel is smaller, so there the guide shows only the operators' names. The guide does not change the grid under it, and you can keep typing while it is open. The operators `;` (UDP) and `=` (OSC) are greyed out, because Lattice ignores them.
 
 A few notes on these actions. You cannot type a space into a cell, because `Space` is the transport key, so a dot is the way to leave a cell empty. Typing writes only one cell, even if you have selected a block. Undo works for the edits you make in the grid, and it remembers up to 1000 steps. Changing the grid size or loading a file is a bigger change, and it clears the grid's own undo history. Rack's own undo (Edit, Undo) takes those two changes back instead.
 

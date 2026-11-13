@@ -928,6 +928,56 @@ void GridView::drawLayer(const DrawArgs& args, int layer) {
 	Widget::drawLayer(args, layer);
 }
 
+/** The operator guide over the grid, in view coordinates (Orca JS's drawGuide): glyph, a blank, then the description
+(or the name when that doesn't fit); an unsupported operator's text in f_med. Called inside paint()'s grid scissor, with
+the cell font set. */
+void GridView::paintGuide(NVGcontext* vg, const Theme& th) {
+	auto color = [&](int slot) { return nvgRGB(th.c[slot] >> 16, th.c[slot] >> 8 & 255, th.c[slot] & 255); };
+	int cols = (int)(box.size.x / charW_), rows = std::max(1, (int)((gridH() - kPad) / lineH())), n = 0,
+		longest[2] = {};
+	for (const OperatorInfo& o : kOperators) {
+		longest[0] = std::max(longest[0], (int)std::strlen(o.desc));
+		longest[1] = std::max(longest[1], (int)std::strlen(o.name));
+		n++;
+	}
+	// The first layout that fits: Orca JS's (descriptions, 32 wide, inset 2 and 1), names 12 wide, names with no inset
+	// (the panel's 38x12 holds 3 columns of 12 rows only that way). ponytail: else the last one, cut off at the edges.
+	struct Layout {
+		bool desc;
+		int colW, x0, y0;
+	};
+	const Layout layouts[] = {{true, 32, 2, 1}, {false, 12, 2, 1}, {false, 12, 0, 0}};
+	Layout l = layouts[2];
+	int per = rows;
+	for (const Layout& c : layouts) {
+		int r = std::max(1, rows - 2 * (c.x0 > 0)), k = (n + r - 1) / r;
+		if (c.x0 + (k - 1) * c.colW + 2 + longest[!c.desc] <= cols || &c == &layouts[2]) {
+			l = c;
+			per = r;
+			break;
+		}
+	}
+	for (int i = 0; i < n; i++) {
+		const OperatorInfo& o = kOperators[i];
+		float x = kPad + (l.x0 + i / per * l.colW) * charW_, y = kPad + (l.y0 + i % per) * lineH();
+		const char* text = l.desc ? o.desc : o.name;
+		int len = (int)std::strlen(text);
+		nvgBeginPath(vg);
+		nvgRect(vg, x, y, charW_, lineH());
+		nvgFillColor(vg, color(kBHigh));
+		nvgFill(vg);
+		nvgBeginPath(vg);
+		nvgRect(vg, x + 2 * charW_, y, len * charW_, lineH());
+		nvgFillColor(vg, color(kBg));
+		nvgFill(vg);
+		nvgFillColor(vg, color(kFLow));
+		nvgText(vg, x + charW_ / 2, y + lineH() / 2, &o.glyph, &o.glyph + 1);
+		nvgFillColor(vg, color(o.supported ? kFHigh : kFMed));
+		for (int c = 0; c < len; c++)
+			nvgText(vg, x + (2 + c + 0.5f) * charW_, y + lineH() / 2, text + c, text + c + 1);
+	}
+}
+
 void GridView::paint(NVGcontext* vg) {
 	int font = hostMonoFont(host);
 	if (font < 0)
@@ -986,6 +1036,8 @@ void GridView::paint(NVGcontext* vg) {
 		nvgStrokeWidth(vg, 1);
 		nvgStroke(vg);
 	}
+	if (guide)
+		paintGuide(vg, th);
 	nvgRestore(vg);
 
 	// Status line: transport, tempo, size, origin.
@@ -1013,6 +1065,8 @@ void GridView::paint(NVGcontext* vg) {
 		status += "   " + size + "   " + std::to_string(edit->x) + "," + std::to_string(edit->y);
 		if (edit->insert)
 			status += "   INS";
+		if (guide)
+			status += "   GUIDE";
 	}
 	nvgText(vg, kPad, gh + sh / 2, status.c_str(), nullptr);
 	nvgRestore(vg);
@@ -1068,7 +1122,10 @@ void GridView::onSelectKey(const SelectKeyEvent& e) {
 	if (e.isKeyCommand(GLFW_KEY_S, RACK_MOD_CTRL | GLFW_MOD_SHIFT))
 		return;
 	if (e.key == GLFW_KEY_ESCAPE) {
-		if (e.action == GLFW_PRESS && edit->collapse())
+		if (e.action == GLFW_PRESS && guide) {
+			guide = false;
+			e.consume(this);
+		} else if (e.action == GLFW_PRESS && edit->collapse())
 			e.consume(this);
 		return;
 	}
@@ -1115,6 +1172,9 @@ void GridView::onSelectKey(const SelectKeyEvent& e) {
 	else if (e.isKeyCommand(GLFW_KEY_I, RACK_MOD_CTRL)) {
 		if (press)
 			edit->insert = !edit->insert;
+	} else if (e.isKeyCommand(GLFW_KEY_G, RACK_MOD_CTRL)) {
+		if (press)
+			guide = !guide;
 	} else if (machine && press) {
 		if (e.isKeyCommand(GLFW_KEY_ENTER, RACK_MOD_CTRL) || e.isKeyCommand(GLFW_KEY_KP_ENTER, RACK_MOD_CTRL))
 			machine->request(Transport::Play);

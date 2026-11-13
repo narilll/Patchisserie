@@ -1,5 +1,9 @@
 // editor::GridEdit (src/editor/grid.hpp): cursor, edits, clipboard, drag and undo over a stopped lattice::Machine.
+#include <fstream>
+#include <regex>
+#include <sstream>
 #include <string>
+#include <vector>
 
 #include "check.hpp"
 #include "editor/grid.hpp"
@@ -442,4 +446,26 @@ TEST(theme_cell_style) {
 	CHECK(is(dotted('.', 0, true), '.', kFInv, kBInv));
 	CHECK(is(dotted('.', 0, true, true), '@', kFInv, kBInv));
 	CHECK(is(dotted('a'), 'a', kFLow, -1));
+}
+
+TEST(operator_guide_matches_orca_c) {
+	std::ifstream f("vendor/orca-c/tui_main.c"); // from the repo root, like make test
+	std::stringstream ss;
+	ss << f.rdbuf();
+	std::string src = ss.str();
+	size_t at = src.find("Guide_item items[]");
+	CHECK(at != std::string::npos);
+	size_t end = src.find("};", at);
+	std::string body = src.substr(at, end - at);
+	// {'X', "name", "desc"} entries, a commented-out one included, except the `// {'*', "self", ...}` line.
+	static const std::regex kItem("\\{'(.)', \"([^\"]*)\", \"([^\"]*)\"\\}");
+	std::vector<std::string> want;
+	for (std::sregex_iterator it(body.begin(), body.end(), kItem), e; it != e; ++it)
+		if ((*it)[2] != "self")
+			want.push_back((*it)[1].str() + "|" + (*it)[2].str() + "|" + (*it)[3].str());
+	std::vector<std::string> have;
+	for (const auto& o : editor::kOperators)
+		have.push_back(std::string(1, o.glyph) + "|" + o.name + "|" + o.desc);
+	CHECK(want.size() == 34);
+	CHECK(have == want);
 }

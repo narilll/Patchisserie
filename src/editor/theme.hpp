@@ -78,6 +78,52 @@ inline bool isOperator(char c) {
 	return (c >= 'A' && c <= 'Z') || (c && std::strchr("*#:%!?=;", c));
 }
 
+/** The operator guide's entries, in orca-c's order: copied from push_opers_guide_msg() in vendor/orca-c/tui_main.c
+(where `%` is commented out and `*` "self" is left out); test_grid pins it. `;` and `=` Lattice ignores. */
+struct OperatorInfo {
+	char glyph;
+	const char* name;
+	const char* desc;
+	bool supported;
+};
+
+inline const OperatorInfo kOperators[] = {
+	{'A', "add", "Outputs sum of inputs.", true},
+	{'B', "subtract", "Outputs difference of inputs.", true},
+	{'C', "clock", "Outputs modulo of frame.", true},
+	{'D', "delay", "Bangs on modulo of frame.", true},
+	{'E', "east", "Moves eastward, or bangs.", true},
+	{'F', "if", "Bangs if inputs are equal.", true},
+	{'G', "generator", "Writes operands with offset.", true},
+	{'H', "halt", "Halts southward operand.", true},
+	{'I', "increment", "Increments southward operand.", true},
+	{'J', "jumper", "Outputs northward operand.", true},
+	{'K', "konkat", "Reads multiple variables.", true},
+	{'L', "lesser", "Outputs smallest input.", true},
+	{'M', "multiply", "Outputs product of inputs.", true},
+	{'N', "north", "Moves Northward, or bangs.", true},
+	{'O', "read", "Reads operand with offset.", true},
+	{'P', "push", "Writes eastward operand.", true},
+	{'Q', "query", "Reads operands with offset.", true},
+	{'R', "random", "Outputs random value.", true},
+	{'S', "south", "Moves southward, or bangs.", true},
+	{'T', "track", "Reads eastward operand.", true},
+	{'U', "uclid", "Bangs on Euclidean rhythm.", true},
+	{'V', "variable", "Reads and writes variable.", true},
+	{'W', "west", "Moves westward, or bangs.", true},
+	{'X', "write", "Writes operand with offset.", true},
+	{'Y', "jymper", "Outputs westward operand.", true},
+	{'Z', "lerp", "Transitions operand to target.", true},
+	{'*', "bang", "Bangs neighboring operands.", true},
+	{'#', "comment", "Halts line.", true},
+	{':', "midi", "Sends MIDI note.", true},
+	{'!', "cc", "Sends MIDI control change.", true},
+	{'?', "pb", "Sends MIDI pitch bend.", true},
+	{'%', "mono", "Sends MIDI monophonic note.", true},
+	{'=', "osc", "Sends OSC message.", false},
+	{';', "udp", "Sends UDP message.", false},
+};
+
 struct Cell {
 	char glyph;    // 0: nothing drawn
 	int8_t fg, bg; // Slots; -1: none

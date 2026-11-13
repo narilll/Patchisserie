@@ -107,6 +107,7 @@ struct GridView : rack::widget::Widget {
 	Window* host = nullptr;
 	const Theme* theme = nullptr; // the module's; null: kPresets[0] (the module browser's preview)
 	bool dots = true;             // empty cells show a dim dot (Lattice's "Show empty cells")
+	bool guide = false;           // the operator guide is drawn over the grid (Cmd/Ctrl+G)
 
 	void step() override;
 	void draw(const DrawArgs& args) override;
@@ -132,6 +133,7 @@ struct GridView : rack::widget::Widget {
 	float statusH() const { return std::round(fontSize * 1.6f); }
 	float gridH() const { return box.size.y - statusH(); }
 	void paint(NVGcontext* vg);
+	void paintGuide(NVGcontext* vg, const Theme& th);
 	void cellAt(rack::math::Vec pos, int& cx, int& cy) const;
 	void follow();
 	void clampScroll();
