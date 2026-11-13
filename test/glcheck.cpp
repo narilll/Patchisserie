@@ -334,8 +334,8 @@ std::string gridWindow(GLFWwindow* rack) {
 				}
 			return (double)n / all;
 		};
-		// The fitted cells: the first 12 columns of row 1 (the arpeggio's "...2C4" and its dots), the "+" marker at
-		// column 48, row 24 (so all 57x25 are in), and right of the 57 columns.
+		// The fitted cells: the first 12 columns of row 1 (the arpeggio's "...2C4"; empty dots are not drawn), the "+"
+		// marker at column 48, row 24 (so all 57x25 are in), and right of the 57 columns.
 		rack::math::Vec cell = view->cellSize();
 		constexpr float kPad = 4; // editor/view.cpp's
 		double text = drawn(0, kPad, kPad + 12 * cell.x, kPad + cell.y),
@@ -345,7 +345,7 @@ std::string gridWindow(GLFWwindow* rack) {
 		std::printf("  %dx%d px (%s), cells %.1fx%.0f: row 1 %.1f %% drawn, marker %.1f %%, empty part %.1f %%\n", fw,
 					fh, "build/glcheck-out/lattice.png", cell.x, cell.y, 100 * text, 100 * marker, 100 * none);
 		why = error           ? "GL error " + std::to_string(error)
-			  : text < 0.05   ? "no grid"
+			  : text < 0.09   ? "no grid"
 			  : marker < 0.01 ? "the grid doesn't fit the window"
 			  : none > 0      ? "not the background"
 							  : "";

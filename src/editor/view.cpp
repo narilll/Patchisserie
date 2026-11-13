@@ -773,15 +773,6 @@ void View::onSelectText(const SelectTextEvent& e) {
 
 // --- GridView ---
 
-namespace {
-
-// Orca's operators: A-Z and these (orca-c: no `$`); '*' is the bang, drawn apart.
-bool isOperator(char c) {
-	return (c >= 'A' && c <= 'Z') || (c && std::strchr("*#:%!?=;", c));
-}
-
-} // namespace
-
 void GridView::step() {
 	Widget::step();
 	edit->refresh();
@@ -845,9 +836,11 @@ void GridView::paint(NVGcontext* vg) {
 		return;
 	const lattice::Grid& g = edit->grid;
 	float lh = lineH(), gh = gridH(), w = box.size.x;
+	const Theme& th = theme ? *theme : kPresets[0].theme;
+	auto color = [&](int slot) { return nvgRGB(th.c[slot] >> 16, th.c[slot] >> 8 & 255, th.c[slot] & 255); };
 	nvgBeginPath(vg); // as View: the panel has no editor background of its own under this
 	nvgRect(vg, 0, 0, w, box.size.y);
-	nvgFillColor(vg, kBackground);
+	nvgFillColor(vg, color(kBg));
 	nvgFill(vg);
 	nvgSave(vg);
 	nvgIntersectScissor(vg, 0, 0, w, gh);
@@ -867,46 +860,34 @@ void GridView::paint(NVGcontext* vg) {
 		c1 = std::min(g.w - 1, (int)((scroll_.x + w) / charW_));
 	int r0 = std::max(0, (int)std::floor((scroll_.y - kPad) / lh)),
 		r1 = std::min(g.h - 1, (int)((scroll_.y + gh) / lh));
+	bool focus = hostEvents(host)->getSelectedWidget() == this;
+	lattice::Rect s = edit->selection();
+	char reading = g.at(edit->x, edit->y);
+	bool paused = !machine || !machine->playing();
 	for (int j = r0; j <= r1; j++)
 		for (int i = c0; i <= c1; i++) {
-			char c = g.at(i, j);
-			uint8_t m = edit->marks[(size_t)j * g.w + i];
-			NVGcolor fg = kPlain;
-			const NVGcolor* box = nullptr;
-			if (c == '.') {
-				bool marker = i % 8 == 0 && j % 8 == 0; // Orca's grid markers
-				c = marker ? '+' : '.';
-				fg = marker ? kDim : nvgTransRGBA(kDim, 0x80);
-			} else if (m & lattice::kOutput) {
-				box = &kPlain, fg = kBackground;
-			} else if (c == '*') {
-				box = &kAccent, fg = kBackground;
-			} else if (!(m & lattice::kLock) && isOperator(c)) {
-				fg = kAccent;
-			} else if (m & (lattice::kInput | lattice::kHasteInput)) {
-				fg = kText;
-			} else if (m & lattice::kLock) {
-				fg = kDim;
-			}
-			if (box) {
+			bool selected = focus && i >= s.x && i < s.x + s.w && j >= s.y && j < s.y + s.h;
+			bool cursor = focus && i == edit->x && j == edit->y;
+			Cell cell = cellStyle(g.at(i, j), edit->marks[(size_t)j * g.w + i], selected, cursor,
+								  i % 8 == 0 && j % 8 == 0, reading, paused); // (Orca's grid markers)
+			if (cell.bg >= 0) {
 				nvgBeginPath(vg);
 				nvgRect(vg, X(i), Y(j), charW_, lh);
-				nvgFillColor(vg, *box);
+				nvgFillColor(vg, color(cell.bg));
 				nvgFill(vg);
 			}
-			nvgFillColor(vg, fg);
-			nvgText(vg, X(i) + charW_ / 2, Y(j) + lh / 2, &c, &c + 1);
+			if (cell.glyph) {
+				nvgFillColor(vg, color(cell.fg));
+				nvgText(vg, X(i) + charW_ / 2, Y(j) + lh / 2, &cell.glyph, &cell.glyph + 1);
+			}
 		}
-	lattice::Rect s = edit->selection();
-	nvgBeginPath(vg);
-	nvgRect(vg, X(s.x), Y(s.y), s.w * charW_, s.h * lh);
-	nvgFillColor(vg, kSelection);
-	nvgFill(vg);
-	nvgBeginPath(vg); // the origin
-	nvgRect(vg, X(edit->x) + 0.5f, Y(edit->y) + 0.5f, charW_ - 1, lh - 1);
-	nvgStrokeColor(vg, hostEvents(host)->getSelectedWidget() == this ? kAccent : nvgTransRGBA(kAccent, 0x70));
-	nvgStrokeWidth(vg, 1);
-	nvgStroke(vg);
+	if (!focus) { // where typing would go
+		nvgBeginPath(vg);
+		nvgRect(vg, X(s.x) + 0.5f, Y(s.y) + 0.5f, s.w * charW_ - 1, s.h * lh - 1);
+		nvgStrokeColor(vg, color(kBInv));
+		nvgStrokeWidth(vg, 1);
+		nvgStroke(vg);
+	}
 	nvgRestore(vg);
 
 	// Status line: transport, tempo, size, origin.
@@ -915,16 +896,16 @@ void GridView::paint(NVGcontext* vg) {
 	nvgIntersectScissor(vg, 0, gh, w, sh);
 	nvgBeginPath(vg);
 	nvgRect(vg, 0, gh, w, sh);
-	nvgFillColor(vg, kGutter);
+	nvgFillColor(vg, color(kBg));
 	nvgFill(vg);
 	nvgBeginPath(vg);
 	nvgRect(vg, kPad, gh, w - 2 * kPad, 1);
-	nvgFillColor(vg, kDim);
+	nvgFillColor(vg, color(kBLow));
 	nvgFill(vg);
 	nvgFontFaceId(vg, host ? host->ui : APP->window->uiFont->handle);
 	nvgFontSize(vg, std::round(fontSize * 0.9f));
 	nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
-	nvgFillColor(vg, kDim);
+	nvgFillColor(vg, color(machine && machine->playing() ? kBHigh : kFLow));
 	std::string size = std::to_string(g.w) + "×" + std::to_string(g.h), status = size;
 	if (machine) {
 		int64_t f = machine->frame();

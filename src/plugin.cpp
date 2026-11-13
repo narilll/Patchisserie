@@ -635,6 +635,8 @@ struct Lattice : Module {
 	bool autoPlay = true;
 	hydra::WindowGeometry window{100, 100, 960, 640}; // the grid window's (UI thread), saved in the patch
 	bool windowOpen = false;
+	editor::Theme theme = editor::kPresets[0].theme; // the grid's colours (UI thread), saved in the patch
+	std::string themeName = editor::kPresets[0].name;
 
 	dsp::SchmittTrigger playIn, stopIn, clockIn, resetIn;
 	dsp::BooleanTrigger playButton, stopButton; // Lattice has nothing to evaluate: both buttons are transport
@@ -714,9 +716,13 @@ struct Lattice : Module {
 	}
 
 	json_t* dataToJson() override {
-		return json_pack("{s:s, s:f, s:i, s:i, s:i, s:i, s:b, s:o, s:b}", "grid", machine.text().c_str(), "bpm",
-						 (double)bpm, "voices", voices, "polyMode", polyMode, "clkDivision", clkDivision, "ppc", ppc,
-						 "autoPlay", autoPlay, "window", geometryJson(window), "windowOpen", windowOpen);
+		json_t* themeJ = json_object();
+		for (int i = 0; i < editor::kSlots; i++)
+			json_object_set_new(themeJ, editor::kSlotNames[i], json_string(editor::hex(theme.c[i]).c_str()));
+		return json_pack("{s:s, s:f, s:i, s:i, s:i, s:i, s:b, s:o, s:b, s:o, s:s}", "grid", machine.text().c_str(),
+						 "bpm", (double)bpm, "voices", voices, "polyMode", polyMode, "clkDivision", clkDivision, "ppc",
+						 ppc, "autoPlay", autoPlay, "window", geometryJson(window), "windowOpen", windowOpen, "theme",
+						 themeJ, "themeName", themeName.c_str());
 	}
 
 	void dataFromJson(json_t* root) override {
@@ -738,6 +744,18 @@ struct Lattice : Module {
 		autoPlay = play;
 		geometryFromJson(windowJ, window);
 		windowOpen = open;
+		json_t* themeJ = json_object_get(root, "theme");
+		editor::Theme t;
+		bool ok = json_is_object(themeJ);
+		for (int i = 0; ok && i < editor::kSlots; i++) {
+			json_t* c = json_object_get(themeJ, editor::kSlotNames[i]);
+			ok = json_is_string(c) && editor::fromHex(json_string_value(c), t.c[i]);
+		}
+		if (ok) {
+			theme = t;
+			json_t* name = json_object_get(root, "themeName");
+			themeName = json_is_string(name) ? json_string_value(name) : "";
+		}
 		if (grid)
 			edit.load(grid);
 	}
@@ -798,6 +816,7 @@ struct LatticeWidget : ModuleWidget {
 		view->edit = module ? &module->edit : &preview;
 		view->machine = module ? &module->machine : nullptr;
 		view->bpm = module ? &module->bpm : nullptr;
+		view->theme = module ? &module->theme : nullptr;
 		addChild(view);
 		auto* text = createWidget<PanelText>(Vec());
 		text->box.size = box.size;
@@ -830,6 +849,7 @@ struct LatticeWidget : ModuleWidget {
 			big->edit = &module->edit;
 			big->machine = &module->machine;
 			big->bpm = &module->bpm;
+			big->theme = &module->theme;
 			big->fontSize = 16;
 			big->fit = true;
 			gridWindow.reset(new editor::Window(big, module->window, module->windowOpen));
@@ -916,6 +936,44 @@ struct LatticeWidget : ModuleWidget {
 			field->setText(std::to_string(m->machine.width()) + "x" + std::to_string(m->machine.height()));
 			field->resize = [=](int w, int h) { undoable(m, "resize Lattice grid", [=] { m->edit.resize(w, h); }); };
 			sub->addChild(field);
+		}));
+		menu->addChild(createSubmenuItem("Theme", m->themeName, [=](Menu* sub) {
+			bool known = false;
+			for (const editor::Preset& p : editor::kPresets) {
+				known |= m->theme == p.theme;
+				sub->addChild(createCheckMenuItem(
+					p.name, "", [=] { return m->theme == p.theme; },
+					[=] {
+						m->theme = p.theme;
+						m->themeName = p.name;
+					}));
+			}
+			if (!known)
+				sub->addChild(createMenuLabel(m->themeName + " (loaded)"));
+			sub->addChild(new MenuSeparator);
+			sub->addChild(createMenuItem("Load theme (.svg)...", "", [=] {
+				osdialog_filters* filters = osdialog_filters_parse("Hundred Rabbits theme:svg");
+				char* path = osdialog_file(OSDIALOG_OPEN, nullptr, nullptr, filters);
+				osdialog_filters_free(filters);
+				if (!path)
+					return;
+				std::string file = path;
+				std::free(path);
+				try {
+					std::vector<uint8_t> data = system::readFile(file);
+					editor::Theme t;
+					if (editor::parseTheme(std::string(data.begin(), data.end()), t)) {
+						m->theme = t;
+						m->themeName = system::getStem(file);
+					} else {
+						osdialog_message(
+							OSDIALOG_WARNING, OSDIALOG_OK,
+							"Not a theme: it needs the 9 Hundred Rabbits colours (background, f_high..b_inv).");
+					}
+				} catch (const std::exception& e) {
+					WARN("Lattice: can't read %s: %s", file.c_str(), e.what());
+				}
+			}));
 		}));
 		menu->addChild(createMenuItem("Load .orca file...", "", [=] {
 			osdialog_filters* filters = osdialog_filters_parse("Orca:orca");

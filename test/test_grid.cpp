@@ -3,6 +3,7 @@
 
 #include "check.hpp"
 #include "editor/grid.hpp"
+#include "editor/theme.hpp"
 
 using editor::GridEdit;
 
@@ -271,4 +272,163 @@ TEST(grid_resize_load_clear_history) {
 	CHECK(at(f.g, 1, 1, 0, 0));
 	f.g.redo();
 	CHECK(f.g.grid.at(1, 1) == 'd');
+}
+
+// --- editor/theme.hpp ---
+
+namespace {
+
+// github.com/hundredrabbits/Themes (MIT), verbatim: quote styles and extra ids differ.
+const std::string kApollo =
+	R"svg(<svg width="96px" height="64px" xmlns="http://www.w3.org/2000/svg" baseProfile="full" version="1.1">
+  <rect width='96' height='64'  id='background' fill='#29272b'></rect>
+  <!-- Foreground -->
+  <circle cx='24' cy='24' r='8' id='f_high' fill='#ffffff'></circle>
+  <circle cx='40' cy='24' r='8' id='f_med' fill='#e47464'></circle>
+  <circle cx='56' cy='24' r='8' id='f_low' fill='#66606b'></circle>
+  <circle cx='72' cy='24' r='8' id='f_inv' fill='#000000'></circle>
+  <!-- Background -->
+  <circle cx='24' cy='40' r='8' id='b_high' fill='#000000'></circle>
+  <circle cx='40' cy='40' r='8' id='b_med' fill='#201e21'></circle>
+  <circle cx='56' cy='40' r='8' id='b_low' fill='#322e33'></circle>
+  <circle cx='72' cy='40' r='8' id='b_inv' fill='#e47464'></circle>
+</svg>)svg";
+const std::string kSolarisedLight = R"svg(<svg width="96" height="64" xmlns="http://www.w3.org/2000/svg">
+ <g>
+  <title>background</title>
+  <rect fill="none" id="canvas_background" height="66" width="98" y="-1" x="-1"/>
+ </g>
+ <g>
+  <title>Layer 1</title>
+  <!-- Background -->
+  <rect fill="#eee8d5" id="background" height="64" width="96"/> <!-- Base 2 -->
+  <circle fill="#002b36" id="b_high" r="8" cy="24" cx="24"/>    <!-- Base 03 -->
+  <circle fill="#073642" id="b_med" r="8" cy="24" cx="40"/>     <!-- Base 02 -->
+  <circle fill="#fdf6e3" id="b_low" r="8" cy="24" cx="56"/>     <!-- Base 3 -->
+  <circle fill="#cb4b16" id="b_inv" r="8" cy="24" cx="72"/>     <!-- Orange (Compilment) -->
+  <!-- Foreground -->
+  <circle fill="#586e75" id="f_high" r="8" cy="40" cx="24"/>    <!-- Base 01-->
+  <circle fill="#6c71c4" id="f_med" r="8" cy="40" cx="40"/>     <!-- Violet (Analagous) -->
+  <circle fill="#93a1a1" id="f_low" r="8" cy="40" cx="56"/>     <!-- Base 1 -->
+  <circle fill="#fdf6e3" id="f_inv" r="8" cy="40" cx="72"/>     <!-- Base 3 -->
+  <!-- Tape -->
+  <desc id='tape_invert' fill='false'></desc>
+  <desc id='tape_unstarted' fill='#dc322f'></desc>
+  <desc id='tape_progressing' fill='#cb4b16'></desc>
+  <desc id='tape_submitted' fill='#b58900'></desc>
+  <desc id='tape_approved' fill='#268bd2'></desc>
+  <desc id='tape_done' fill='#2aa198'></desc>
+ </g>
+<!--
+base03:    #002b36  bg (dark)
+base02:    #073642
+base01:    #586e75  content
+base00:    #657b83
+base0:     #839496
+base1:     #93a1a1
+base2:     #eee8d5  bg (light)
+base3:     #fdf6e3
+yellow:    #b58900  split compliment
+orange:    #cb4b16  compliment
+red:       #dc322f  triad
+magenta:   #d33682  tetrad
+violet:    #6c71c4  analagous
+blue:      #268bd2  monotone
+cyan:      #2aa198  analagous
+green:     #859900  tetrad
+-->
+</svg>)svg";
+
+using editor::Cell;
+using editor::cellStyle;
+
+/** cellStyle with the common defaults: playing, no cursor under it, reading 'x'. */
+Cell style(char c, uint8_t mark = 0, bool selected = false, bool cursor = false, bool marker = false,
+		   char reading = 'x', bool paused = false) {
+	return cellStyle(c, mark, selected, cursor, marker, reading, paused);
+}
+
+bool is(Cell c, char glyph, int fg, int bg) {
+	return c.glyph == glyph && c.fg == fg && c.bg == bg;
+}
+
+} // namespace
+
+TEST(theme_from_hex) {
+	uint32_t v = 7;
+	CHECK(editor::fromHex("#abc", v) && v == 0xaabbcc);
+	CHECK(editor::fromHex("#AbCdEf", v) && v == 0xabcdef);
+	v = 7;
+	for (const char* bad : {"none", "rgb(1,2,3)", "#abcd", "abc", "#abcdeg", "", "#"})
+		CHECK(!editor::fromHex(bad, v));
+	CHECK(v == 7);
+	CHECK(editor::hex(0x00ff10) == "#00ff10");
+}
+
+TEST(theme_parse_files) {
+	editor::Theme t;
+	CHECK(editor::parseTheme(kApollo, t));
+	const uint32_t apollo[] = {0x29272b, 0xffffff, 0xe47464, 0x66606b, 0x000000,
+							   0x000000, 0x201e21, 0x322e33, 0xe47464};
+	for (int i = 0; i < editor::kSlots; i++)
+		CHECK(t.c[i] == apollo[i]);
+	CHECK(editor::parseTheme(kSolarisedLight, t));
+	const uint32_t solarised[] = {0xeee8d5, 0x586e75, 0x6c71c4, 0x93a1a1, 0xfdf6e3,
+								  0x002b36, 0x073642, 0xfdf6e3, 0xcb4b16};
+	for (int i = 0; i < editor::kSlots; i++)
+		CHECK(t.c[i] == solarised[i]);
+}
+
+TEST(theme_parse_rejects) {
+	editor::Theme t = editor::kPresets[1].theme;
+	size_t at = kApollo.find("<circle cx='72' cy='40'"); // b_inv's
+	std::string missing = kApollo;
+	missing.replace(at, kApollo.find('\n', at) - at, "");
+	CHECK(!editor::parseTheme(missing, t));
+	std::string none = kApollo;
+	none.replace(none.find("fill='#e47464'></circle>\n</svg>"), 14, "fill='none'");
+	CHECK(!editor::parseTheme(none, t));
+	std::string canvas = kSolarisedLight; // only canvas_background (fill none) left of the background
+	canvas.replace(canvas.find("id=\"background\""), 15, "id=\"other\"");
+	CHECK(!editor::parseTheme(canvas, t));
+	CHECK(t == editor::kPresets[1].theme);
+}
+
+TEST(theme_presets) {
+	CHECK(std::string(editor::kPresets[0].name) == "Patchisserie");
+	for (const editor::Preset& p : editor::kPresets)
+		for (int i = 0; i < editor::kSlots; i++) {
+			uint32_t v = 0;
+			CHECK(editor::fromHex(editor::hex(p.theme.c[i]), v) && v == p.theme.c[i]);
+		}
+}
+
+TEST(theme_cell_style) {
+	using namespace editor;
+	using lattice::kInput, lattice::kOutput, lattice::kHasteInput, lattice::kLock;
+	CHECK(is(style('a', kInput, true), 'a', kFInv, kBInv));               // selected beats everything,
+	CHECK(is(style('a', 0, true, false, false, 'a'), 'a', kFInv, kBInv)); // the reader,
+	CHECK(is(style('*', 0, true), '*', kFInv, kBInv));
+	CHECK(is(style('a', 0, false, false, false, 'a'), 'a', kBInv, -1)); // the reader,
+	CHECK(is(style('*', 0, false, false, false, '*'), '*', kBInv, -1)); // beats '*'
+	CHECK(is(style('a', 0, false, false, false, 'a', false), 'a', kBInv, -1));
+	CHECK(is(style('a', kLock, false, false, false, 'a'), 'a', kFMed, -1));    // but not locked
+	CHECK(is(style('.', 0, false, false, false, '.'), 0, kFLow, -1));          // nor a dot
+	CHECK(is(style('*', kOutput | kInput), '*', kBHigh, -1));                  // '*' beats the ports
+	CHECK(is(style('*', kLock), '*', kFMed, -1));                              // locked: not the bang
+	CHECK(is(style('a', kOutput | kHasteInput | kInput), 'a', kFLow, kBHigh)); // output beats haste
+	CHECK(is(style('a', kHasteInput | kInput), 'a', kBMed, -1));               // beats input
+	CHECK(is(style('a', kInput), 'a', kBHigh, -1));
+	CHECK(is(style('a', kInput | kLock), 'a', kBHigh, -1)); // ports beat the lock
+	CHECK(is(style('A'), 'A', kFLow, kBMed));               // an operator
+	CHECK(is(style('A', kLock), 'A', kFMed, -1));           // locked: plain lock
+	CHECK(is(style('a', kLock), 'a', kFMed, -1));
+	CHECK(is(style('a'), 'a', kFLow, -1));
+	CHECK(is(style('.'), 0, kFLow, -1));                                       // invisible
+	CHECK(is(style('.', 0, false, false, true), '+', kFLow, -1));              // a marker
+	CHECK(is(style('.', kLock), '.', kFMed, -1));                              // locked
+	CHECK(is(style('.', kInput), '.', kBHigh, -1));                            // a port
+	CHECK(is(style('.', 0, true), '.', kFInv, kBInv));                         // selected
+	CHECK(is(style('.', 0, true, true), '@', kFInv, kBInv));                   // the cursor, playing
+	CHECK(is(style('.', 0, true, true, false, '.', true), '~', kFInv, kBInv)); // stopped
 }

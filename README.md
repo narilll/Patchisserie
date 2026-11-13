@@ -127,6 +127,10 @@ whole grid shows (down to 6 px, then it scrolls).
 | Cmd+. , STOP button | stop: gates down |
 | FULL button | the grid window (also in Lattice's menu); F11 there: fullscreen |
 
+Theme: the menu's Theme submenu has Patchisserie, Orca and Orca light, or "Load theme (.svg)..." takes any theme from
+[Hundred Rabbits' Themes](https://github.com/hundredrabbits/Themes). Cells are styled as in Orca JS; the theme is saved
+in the patch. The Orca and Orca light presets and the theme format are Hundred Rabbits' (MIT).
+
 Outputs, from the grid's MIDI operators:
 - **V/OCT, GATE, VEL**: notes of `:` and `%`, numbered as Orca JS does (`:03C` is MIDI 60 = 0 V); velocity 0-10 V;
   the gate lasts the note's length in frames. Polyphony (menu) is MPE by default: Orca channel 0-F is poly channel

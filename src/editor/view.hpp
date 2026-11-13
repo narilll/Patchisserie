@@ -12,6 +12,7 @@
 #include "editor/doc.hpp"
 #include "editor/grid.hpp"
 #include "editor/keys.hpp"
+#include "editor/theme.hpp"
 #include "engine.hpp"
 #include "hydra.hpp"
 
@@ -88,6 +89,7 @@ struct GridView : rack::widget::Widget {
 	bool fit = false;
 	/** The editor window this is in, as View::host. */
 	Window* host = nullptr;
+	const Theme* theme = nullptr; // the module's; null: kPresets[0] (the module browser's preview)
 
 	void step() override;
 	void draw(const DrawArgs& args) override;
