@@ -10,6 +10,7 @@
 
 #include "editor/complete.hpp"
 #include "editor/doc.hpp"
+#include "editor/grid.hpp"
 #include "editor/keys.hpp"
 #include "engine.hpp"
 #include "hydra.hpp"
@@ -72,26 +73,63 @@ struct View : rack::widget::Widget {
 	bool completionKey(const SelectKeyEvent& e);
 	void hover(bool changed);
 	void showTip();
-	rack::widget::EventState* events() const; // its window's: selected, hovered
-	int mods() const;                         // its window's keys held
-	int monoFont() const;                     // the text's, in its window's NanoVG context
 };
 
-/** Filo's editor in an OS window of its own (hydra::Window, Icing's output window): a View of the module's Doc with
+/** Lattice's grid editor: a GridEdit drawn as Orca's cell grid with NanoVG, edited from the mouse and keyboard. One
+class for the panel and the window, like View: they share the module's GridEdit, each scrolls on its own. */
+struct GridView : rack::widget::Widget {
+	GridEdit* edit = nullptr;
+	lattice::Machine* machine = nullptr; // null: the module browser's preview (no transport keys)
+	const float* bpm = nullptr;          // the module's setting, for the status line
+	float fontSize = 12;
+	/** The editor window this is in, as View::host. */
+	Window* host = nullptr;
+
+	void step() override;
+	void draw(const DrawArgs& args) override;
+	void drawLayer(const DrawArgs& args, int layer) override;
+	void onButton(const ButtonEvent& e) override;
+	void onDragMove(const DragMoveEvent& e) override;
+	void onDragEnd(const DragEndEvent& e) override;
+	void onHoverScroll(const HoverScrollEvent& e) override;
+	void onSelectKey(const SelectKeyEvent& e) override;
+	void onSelectText(const SelectTextEvent& e) override;
+
+  private:
+	rack::math::Vec scroll_; // px of the grid scrolled out at the top / left
+	float charW_ = 7.2f;     // measured when drawn
+	int seenX_ = -1, seenY_ = -1;
+	bool dragging_ = false;
+
+	float lineH() const { return std::round(fontSize * 1.3f); }
+	float statusH() const { return std::round(fontSize * 1.6f); }
+	float gridH() const { return box.size.y - statusH(); }
+	void paint(NVGcontext* vg);
+	void cellAt(rack::math::Vec pos, int& cx, int& cy) const;
+	void follow();
+	void clampScroll();
+};
+
+/** An editor in an OS window of its own (hydra::Window, Icing's output window): Filo's View of the module's Doc, or
+Lattice's GridView, with
 the window's own events (its GLFW callbacks into an EventState, as Rack's window does), NanoVG context and fonts. FULL
 and the module's menu open it, its title bar closes (hides) it. UI thread. */
 struct Window {
 	hydra::Window window;
 	rack::widget::EventState events;
-	rack::widget::Widget* root; // the window's: the View, its Tip
-	View* view;
-	NVGcontext* vg = nullptr; // the window's context's (from its first frame on)
-	int mono = -1, ui = -1;   // its fonts, in vg
-	rack::math::Vec mouse;    // in the root's coordinates
-	float mouseScale = 1;     // window coordinates -> the root's (HiDPI), from the last frame
+	rack::widget::Widget* root; // the window's: the view, its Tip
+	rack::widget::Widget* view; // a View or a GridView
+	NVGcontext* vg = nullptr;   // the window's context's (from its first frame on)
+	int mono = -1, ui = -1;     // its fonts, in vg
+	rack::math::Vec mouse;      // in the root's coordinates
+	float mouseScale = 1;       // window coordinates -> the root's (HiDPI), from the last frame
 
-	/** The geometry and `open` (the module's, saved in the patch) say where and whether it is open. */
+	/** Filo's: a View of `doc`. The geometry and `open` (the module's, saved in the patch) say where and whether it is
+	open. */
 	Window(Doc& doc, filo::Engine* engine, hydra::WindowGeometry& g, bool& open);
+	/** Any view (Lattice's GridView, whose `host` the caller sets to this): owned by the window, which sizes it to its
+	framebuffer. */
+	Window(rack::widget::Widget* view, hydra::WindowGeometry& g, bool& open);
 	~Window();
 	/** Each Rack frame, outside GLFW callbacks (FiloWidget::step()): the window opened (titled `title`), hidden, moved
 	and drawn as the geometry and `open` say (its title bar, F11 and Esc write back into them). Leaves `rack`'s context

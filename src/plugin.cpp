@@ -1,9 +1,11 @@
 #include <osdialog.h>
 #include <rack.hpp>
 
+#include "editor/grid.hpp"
 #include "editor/view.hpp"
 #include "engine.hpp"
 #include "hydra.hpp"
+#include "lattice.hpp"
 
 using namespace rack;
 
@@ -608,9 +610,318 @@ void IcingPreview::drawLayer(const DrawArgs& args, int layer) {
 		icing->renderer.drawPreview(args.vg, 0, 0, box.size.x, box.size.y);
 }
 
+// --- Lattice: Orca on a grid ---
+
+struct Lattice : Module {
+	enum ParamId { PLAY_PARAM, STOP_PARAM, FULLSCREEN_PARAM, PARAMS_LEN };
+	enum InputId { PLAY_INPUT, STOP_INPUT, CLOCK_INPUT, RESET_INPUT, INPUTS_LEN };
+	enum OutputId {
+		VOCT_OUTPUT,
+		GATE_OUTPUT,
+		VEL_OUTPUT,
+		TRIG_OUTPUT,
+		CC_OUTPUT,
+		CLK_OUTPUT,
+		RESET_OUTPUT,
+		OUTPUTS_LEN
+	};
+	enum LightId { PLAY_LIGHT, LIGHTS_LEN };
+
+	lattice::Machine machine;
+	editor::GridEdit edit; // the grid's cursor and undo history (UI thread): the panel's and the window's
+	// Settings: set by the UI thread (menu, JSON), read by process(), like Filo's.
+	float bpm = 120;
+	int voices = 16, polyMode = filo::VoiceAllocator::MPE, clkDivision = 4, ppc = 4;
+	bool autoPlay = true;
+	hydra::WindowGeometry window{100, 100, 960, 640}; // the grid window's (UI thread), saved in the patch
+	bool windowOpen = false;
+
+	dsp::SchmittTrigger playIn, stopIn, clockIn, resetIn;
+	dsp::BooleanTrigger playButton, stopButton; // Lattice has nothing to evaluate: both buttons are transport
+	dsp::PulseGenerator trigPulse[16], clkPulse, resetPulse;
+	lattice::Machine::Outputs out{};
+
+	Lattice() {
+		config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
+		configButton(PLAY_PARAM, "Play from frame 0 (Cmd/Ctrl+Enter; Space in the grid: pause/resume)");
+		configButton(STOP_PARAM, "Stop (gates down)");
+		configButton(FULLSCREEN_PARAM, "Grid window (F11 there: fullscreen)");
+		configInput(PLAY_INPUT, "Play trigger (from frame 0)");
+		configInput(STOP_INPUT, "Stop trigger");
+		configInput(CLOCK_INPUT, "Clock (pulses per beat: menu)");
+		configInput(RESET_INPUT, "Reset to frame 0");
+		configOutput(VOCT_OUTPUT, "Pitch (1 V/oct; MPE: voice = Orca channel)");
+		configOutput(GATE_OUTPUT, "Gate");
+		configOutput(VEL_OUTPUT, "Velocity (0-10 V)");
+		configOutput(TRIG_OUTPUT, "Triggers by Orca channel");
+		configOutput(CC_OUTPUT, "CC by knob 0-F (0-10 V)");
+		configOutput(CLK_OUTPUT, "Clock (pulses per beat: menu)");
+		configOutput(RESET_OUTPUT, "Reset (on play and reset)");
+		edit.machine = &machine;
+		edit.refresh();
+	}
+
+	void onAdd(const AddEvent&) override {
+		if (autoPlay)
+			machine.request(lattice::Machine::Transport::Play);
+	}
+
+	void process(const ProcessArgs& args) override {
+		bool play = playIn.process(inputs[PLAY_INPUT].getVoltage(), 0.1f, 1.f); // all triggers see every sample
+		play |= playButton.process(params[PLAY_PARAM].getValue() > 0.f);
+		bool stop = stopButton.process(params[STOP_PARAM].getValue() > 0.f);
+		stop |= stopIn.process(inputs[STOP_INPUT].getVoltage(), 0.1f, 1.f);
+		if (play)
+			machine.request(lattice::Machine::Transport::Play);
+		if (stop)
+			machine.request(lattice::Machine::Transport::Stop);
+		machine.setSampleRate(args.sampleRate);
+		machine.setBpm(bpm);
+		machine.setPulsesPerBeat(ppc);
+		machine.setClockDivision(clkDivision);
+		machine.setVoices(voices);
+		machine.setPolyMode((filo::VoiceAllocator::Mode)polyMode);
+		lattice::Machine::Inputs in;
+		in.clockConnected = inputs[CLOCK_INPUT].isConnected();
+		in.clockEdge = clockIn.process(inputs[CLOCK_INPUT].getVoltage(), 0.1f, 1.f);
+		in.resetEdge = resetIn.process(inputs[RESET_INPUT].getVoltage(), 0.1f, 1.f);
+		machine.process(in, out);
+		lights[PLAY_LIGHT].setBrightness(machine.playing() ? 1.f : 0.f);
+		if (out.reset)
+			resetPulse.trigger(1e-3f);
+		for (int id : {VOCT_OUTPUT, GATE_OUTPUT, VEL_OUTPUT})
+			outputs[id].setChannels(out.channels);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+		// GCC 12+ false positive in Rack's Port::setChannels() for a constant 16: its loop that clears the channels
+		// above never runs then (a port has at most 16).
+		outputs[TRIG_OUTPUT].setChannels(16);
+		outputs[CC_OUTPUT].setChannels(16);
+#pragma GCC diagnostic pop
+		for (int c = 0; c < 16; c++) {
+			outputs[VOCT_OUTPUT].setVoltage(out.voct[c], c);
+			outputs[GATE_OUTPUT].setVoltage(out.gate[c], c);
+			outputs[VEL_OUTPUT].setVoltage(out.vel[c], c);
+			if (out.trig[c])
+				trigPulse[c].trigger(1e-3f);
+			outputs[TRIG_OUTPUT].setVoltage(trigPulse[c].process(args.sampleTime) ? 10.f : 0.f, c);
+			outputs[CC_OUTPUT].setVoltage(out.cc[c], c);
+		}
+		if (out.clk)
+			clkPulse.trigger(1e-3f);
+		outputs[CLK_OUTPUT].setVoltage(clkPulse.process(args.sampleTime) ? 10.f : 0.f);
+		outputs[RESET_OUTPUT].setVoltage(resetPulse.process(args.sampleTime) ? 10.f : 0.f);
+	}
+
+	json_t* dataToJson() override {
+		return json_pack("{s:s, s:f, s:i, s:i, s:i, s:i, s:b, s:o, s:b}", "grid", machine.text().c_str(), "bpm",
+						 (double)bpm, "voices", voices, "polyMode", polyMode, "clkDivision", clkDivision, "ppc", ppc,
+						 "autoPlay", autoPlay, "window", geometryJson(window), "windowOpen", windowOpen);
+	}
+
+	void dataFromJson(json_t* root) override {
+		const char* grid = nullptr;
+		double tempo = bpm;
+		int play = autoPlay, open = windowOpen;
+		json_t* windowJ = nullptr;
+		json_unpack(root, "{s?s, s?F, s?i, s?i, s?i, s?i, s?b, s?o, s?b}", "grid", &grid, "bpm", &tempo, "voices",
+					&voices, "polyMode", &polyMode, "clkDivision", &clkDivision, "ppc", &ppc, "autoPlay", &play,
+					"window", &windowJ, "windowOpen", &open);
+		// Patch data is a real boundary.
+		bpm = clamp((float)tempo, 20.f, 300.f);
+		voices = clamp(voices, 1, 16);
+		polyMode = clamp(polyMode, 0, (int)filo::VoiceAllocator::MPE);
+		if (std::find(kDivisions.begin(), kDivisions.end(), clkDivision) == kDivisions.end())
+			clkDivision = 4;
+		if (std::find(kDivisions.begin(), kDivisions.end(), ppc) == kDivisions.end())
+			ppc = 4;
+		autoPlay = play;
+		geometryFromJson(windowJ, window);
+		windowOpen = open;
+		if (grid)
+			edit.load(grid);
+	}
+};
+
+/** The BPM slider of the module's menu: Rack's ui::Slider over `module->bpm`; the slider owns the quantity. */
+struct BpmQuantity : Quantity {
+	float* bpm;
+	explicit BpmQuantity(float* bpm) : bpm(bpm) {}
+	void setValue(float v) override { *bpm = clamp(v, 20.f, 300.f); }
+	float getValue() override { return *bpm; }
+	float getMinValue() override { return 20.f; }
+	float getMaxValue() override { return 300.f; }
+	float getDefaultValue() override { return 120.f; }
+	std::string getLabel() override { return "BPM"; }
+	int getDisplayPrecision() override { return 0; }
+};
+
+struct BpmSlider : ui::Slider {
+	explicit BpmSlider(float* bpm) {
+		box.size.x = 200;
+		quantity = new BpmQuantity(bpm);
+	}
+	~BpmSlider() override { delete quantity; }
+};
+
+struct LatticeWidget : ModuleWidget {
+	editor::GridView* view;                           // the panel's grid
+	std::unique_ptr<lattice::Machine> previewMachine; // the module browser's grid, in place of the module's
+	editor::GridEdit preview;
+	std::unique_ptr<editor::Window> gridWindow; // null: the module browser's preview
+	bool fullscreenDown = false;
+
+	LatticeWidget(Lattice* module) {
+		setModule(module);
+		setPanel(createPanel(asset::plugin(pluginInstance, "res/Lattice.svg")));
+		if (!module) {
+			previewMachine.reset(new lattice::Machine);
+			preview.machine = previewMachine.get();
+			preview.refresh();
+		}
+		view = createWidget<editor::GridView>(mm2px(kEditorMm.pos));
+		view->box.size = mm2px(kEditorMm.size);
+		view->edit = module ? &module->edit : &preview;
+		view->machine = module ? &module->machine : nullptr;
+		view->bpm = module ? &module->bpm : nullptr;
+		addChild(view);
+		auto* text = createWidget<PanelText>(Vec());
+		text->box.size = box.size;
+		addChild(text);
+		text->band("LATTICE");
+		auto label = [&](float x, float y, const char* name, bool output = false) {
+			text->label(Vec(x, y), name, output);
+		};
+		const char* names[] = {"PLAY", "STOP", "FULL"};
+		for (int i = 0; i < Lattice::PARAMS_LEN; i++) {
+			Vec pos = mm2px(Vec(kRow1X(i), 100));
+			if (i == Lattice::PLAY_PARAM) // lit red while playing
+				addParam(createLightParamCentered<VCVLightBezel<RedLight>>(pos, module, i, Lattice::PLAY_LIGHT));
+			else
+				addParam(createParamCentered<VCVButton>(pos, module, i));
+			label(kRow1X(i), 100, names[i]);
+		}
+		const char* inputs[] = {"PLAY", "STOP", "CLOCK", "RESET"};
+		for (int i = 0; i < Lattice::INPUTS_LEN; i++) {
+			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(kRow1X(3 + i), 100)), module, i));
+			label(kRow1X(3 + i), 100, inputs[i]);
+		}
+		const char* outputs[] = {"V/OCT", "GATE", "VEL", "TRIG", "CC", "CLK", "RESET"};
+		for (int i = 0; i < Lattice::OUTPUTS_LEN; i++) {
+			addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(kRow1X(i), 117)), module, i));
+			label(kRow1X(i), 117, outputs[i], true);
+		}
+		if (module) { // (destroyed before the module, which holds its grid and geometry)
+			auto* big = new editor::GridView;
+			big->edit = &module->edit;
+			big->machine = &module->machine;
+			big->bpm = &module->bpm;
+			big->fontSize = 16;
+			gridWindow.reset(new editor::Window(big, module->window, module->windowOpen));
+			big->host = gridWindow.get();
+		}
+	}
+
+	void onContextDestroy(const ContextDestroyEvent& e) override {
+		if (gridWindow) // its context shares the dying one; the next step() opens a fresh one
+			gridWindow->destroy();
+		ModuleWidget::onContextDestroy(e);
+	}
+
+	void step() override {
+		ModuleWidget::step();
+		hydra::collectWindows();
+		// The FULL button (Rack holds a momentary press for a frame at least).
+		bool down = module && module->params[Lattice::FULLSCREEN_PARAM].getValue() > 0.f;
+		if (down && !fullscreenDown)
+			gridWindow->show();
+		fullscreenDown = down;
+		// Drawn here, not in draw(): draw() is skipped for off-screen modules.
+		if (gridWindow)
+			gridWindow->update(APP->window->win, "Lattice — " + std::to_string(module->id));
+	}
+
+	void appendContextMenu(Menu* menu) override {
+		Lattice* m = static_cast<Lattice*>(module);
+		menu->addChild(new MenuSeparator);
+		// Only flags here: menu actions run inside GLFW callbacks, step() applies them.
+		menu->addChild(createBoolPtrMenuItem("Grid window", "", &m->windowOpen));
+		menu->addChild(createBoolPtrMenuItem("Grid window fullscreen", "F11", &m->window.fullscreen));
+		menu->addChild(new MenuSeparator);
+		menu->addChild(new BpmSlider(&m->bpm));
+		std::vector<std::string> counts, divisions;
+		for (int i = 1; i <= 16; i++)
+			counts.push_back(std::to_string(i));
+		for (int d : kDivisions)
+			divisions.push_back(std::to_string(d));
+		auto index = [](int value) {
+			return (size_t)(std::find(kDivisions.begin(), kDivisions.end(), value) - kDivisions.begin());
+		};
+		menu->addChild(createIndexSubmenuItem(
+			"Voices", counts, [=] { return (size_t)m->voices - 1; }, [=](size_t i) { m->voices = (int)i + 1; }));
+		menu->addChild(createIndexSubmenuItem(
+			"Polyphony mode", {"Rotate", "Reuse", "Reset", "MPE"}, [=] { return (size_t)m->polyMode; },
+			[=](size_t i) { m->polyMode = (int)i; }));
+		menu->addChild(createIndexSubmenuItem(
+			"CLK output: pulses per beat", divisions, [=] { return index(m->clkDivision); },
+			[=](size_t i) { m->clkDivision = kDivisions[i]; }));
+		menu->addChild(createIndexSubmenuItem(
+			"CLOCK input: pulses per beat", divisions, [=] { return index(m->ppc); },
+			[=](size_t i) { m->ppc = kDivisions[i]; }));
+		menu->addChild(createBoolPtrMenuItem("Auto-play", "", &m->autoPlay));
+
+		menu->addChild(new MenuSeparator);
+		menu->addChild(createSubmenuItem("Grid size", "", [=](Menu* sub) {
+			struct Preset {
+				int w, h;
+				const char* note;
+			};
+			for (Preset p : {Preset{lattice::kDefaultWidth, lattice::kDefaultHeight, " (panel)"}, Preset{64, 32, ""},
+							 Preset{96, 48, ""}, Preset{128, 64, ""}, Preset{256, 256, ""}})
+				sub->addChild(createCheckMenuItem(
+					std::to_string(p.w) + "×" + std::to_string(p.h) + p.note, "",
+					[=] { return m->machine.width() == p.w && m->machine.height() == p.h; },
+					[=] { m->edit.resize(p.w, p.h); }));
+		}));
+		menu->addChild(createMenuItem("Load .orca file...", "", [=] {
+			osdialog_filters* filters = osdialog_filters_parse("Orca:orca");
+			char* path = osdialog_file(OSDIALOG_OPEN, nullptr, nullptr, filters);
+			osdialog_filters_free(filters);
+			if (!path)
+				return;
+			std::string file = path;
+			std::free(path);
+			try {
+				std::vector<uint8_t> data = system::readFile(file);
+				m->edit.load(std::string(data.begin(), data.end()));
+			} catch (const std::exception& e) {
+				WARN("Lattice: can't read %s: %s", file.c_str(), e.what());
+			}
+		}));
+		menu->addChild(createMenuItem("Save .orca file...", "", [=] {
+			osdialog_filters* filters = osdialog_filters_parse("Orca:orca");
+			char* path = osdialog_file(OSDIALOG_SAVE, nullptr, "lattice.orca", filters);
+			osdialog_filters_free(filters);
+			if (!path)
+				return;
+			std::string file = path;
+			std::free(path);
+			if (system::getExtension(file) != ".orca")
+				file += ".orca";
+			std::string text = m->machine.text();
+			try {
+				system::writeFile(file, std::vector<uint8_t>(text.begin(), text.end()));
+			} catch (const std::exception& e) {
+				WARN("Lattice: can't write %s: %s", file.c_str(), e.what());
+			}
+		}));
+	}
+};
+
 void init(Plugin* p) {
 	pluginInstance = p;
 	loadSettings();
 	p->addModel(modelFilo = createModel<Filo, FiloWidget>("Filo"));
 	p->addModel(createModel<Icing, IcingWidget>("Icing"));
+	p->addModel(createModel<Lattice, LatticeWidget>("Lattice"));
 }

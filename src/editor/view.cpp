@@ -93,6 +93,33 @@ const std::vector<Entry>& docs() {
 	return entries;
 }
 
+// The views' host helpers; `host` null is the panel, Rack's window.
+
+widget::EventState* hostEvents(Window* host) { // selected, hovered
+	return host ? &host->events : APP->event;
+}
+
+int hostMods(Window* host) { // the keys held
+	if (!host)
+		return APP->window->getMods();
+	// As Rack's Window::getMods(), from this window's keys.
+	GLFWwindow* w = host->window.win;
+	auto held = [&](int left, int right) {
+		return glfwGetKey(w, left) == GLFW_PRESS || glfwGetKey(w, right) == GLFW_PRESS;
+	};
+	return (held(GLFW_KEY_LEFT_SHIFT, GLFW_KEY_RIGHT_SHIFT) ? GLFW_MOD_SHIFT : 0) |
+		   (held(GLFW_KEY_LEFT_CONTROL, GLFW_KEY_RIGHT_CONTROL) ? GLFW_MOD_CONTROL : 0) |
+		   (held(GLFW_KEY_LEFT_ALT, GLFW_KEY_RIGHT_ALT) ? GLFW_MOD_ALT : 0) |
+		   (held(GLFW_KEY_LEFT_SUPER, GLFW_KEY_RIGHT_SUPER) ? GLFW_MOD_SUPER : 0);
+}
+
+int hostMonoFont(Window* host) { // the mono font, in its window's NanoVG context
+	if (host)
+		return host->mono;
+	std::shared_ptr<window::Font> font = APP->window->loadFont(asset::plugin(pluginInstance, kFont));
+	return font ? font->handle : -1;
+}
+
 } // namespace
 
 // --- Tip ---
@@ -104,7 +131,7 @@ struct Tip : widget::Widget {
 	int sel = 0, top = 0;
 	math::Vec at;    // the identifier's top left, scene px
 	float lineH = 0; // its line's height, scene px
-	int font = -1;   // its View's monoFont()
+	int font = -1;   // its View's mono font
 
 	void step() override {
 		if (parent) // the scene: the whole window
@@ -299,7 +326,7 @@ void View::step() {
 	}
 	if (changed || doc->cursor() != seenCursor_) // typed, moved, or the other view did: the cursor stays in sight
 		follow();
-	if (completion_.open && events()->getSelectedWidget() != this) // clicked elsewhere
+	if (completion_.open && hostEvents(host)->getSelectedWidget() != this) // clicked elsewhere
 		completion_.close();
 	else if (completion_.open && (changed || doc->cursor() != seenCursor_)) // undone, a patch loaded, ...
 		completion_.update(*doc, docs(), false);
@@ -314,7 +341,7 @@ void View::step() {
 void View::hover(bool changed) {
 	size_t b = 0, e = 0;
 	int line = (int)std::floor((hoverPos_.y - kPad + scroll_.y) / lineH());
-	bool over = events()->getHoveredWidget() == this && !dragging_ && hoverPos_.x >= gutterW() &&
+	bool over = hostEvents(host)->getHoveredWidget() == this && !dragging_ && hoverPos_.x >= gutterW() &&
 				hoverPos_.y < textH() && line >= 0 && line < doc->lineCount() &&
 				identAt(*doc, hit(hoverPos_, false), b, e);
 	if (!over || changed) {
@@ -347,38 +374,13 @@ void View::showTip() {
 		(host ? host->root : APP->scene)->addChild(tip_);
 	}
 	tip_->show();
-	tip_->font = monoFont();
+	tip_->font = hostMonoFont(host);
 	tip_->items = popup ? completion_.items : std::vector<Match>();
 	tip_->details = popup ? std::vector<Match>{completion_.items[completion_.sel]} : hover_;
 	tip_->sel = completion_.sel;
 	tip_->top = completion_.top;
 	tip_->at = getAbsoluteOffset(p);
 	tip_->lineH = lineH() * getAbsoluteZoom();
-}
-
-widget::EventState* View::events() const {
-	return host ? &host->events : APP->event;
-}
-
-int View::mods() const {
-	if (!host)
-		return APP->window->getMods();
-	// As Rack's Window::getMods(), from this window's keys.
-	GLFWwindow* w = host->window.win;
-	auto held = [&](int left, int right) {
-		return glfwGetKey(w, left) == GLFW_PRESS || glfwGetKey(w, right) == GLFW_PRESS;
-	};
-	return (held(GLFW_KEY_LEFT_SHIFT, GLFW_KEY_RIGHT_SHIFT) ? GLFW_MOD_SHIFT : 0) |
-		   (held(GLFW_KEY_LEFT_CONTROL, GLFW_KEY_RIGHT_CONTROL) ? GLFW_MOD_CONTROL : 0) |
-		   (held(GLFW_KEY_LEFT_ALT, GLFW_KEY_RIGHT_ALT) ? GLFW_MOD_ALT : 0) |
-		   (held(GLFW_KEY_LEFT_SUPER, GLFW_KEY_RIGHT_SUPER) ? GLFW_MOD_SUPER : 0);
-}
-
-int View::monoFont() const {
-	if (host)
-		return host->mono;
-	std::shared_ptr<window::Font> font = APP->window->loadFont(asset::plugin(pluginInstance, kFont));
-	return font ? font->handle : -1;
 }
 
 float View::gutterW() const {
@@ -427,7 +429,7 @@ void View::drawLayer(const DrawArgs& args, int layer) {
 }
 
 void View::paint(NVGcontext* vg) {
-	int font = monoFont();
+	int font = hostMonoFont(host);
 	if (font < 0)
 		return;
 	const std::string& s = doc->text();
@@ -518,7 +520,7 @@ void View::paint(NVGcontext* vg) {
 		nvgFillColor(vg, kError);
 		nvgText(vg, X(doc->column(doc->lineEnd(err)) + 2), Y(err) + lh / 2, error_.c_str(), nullptr);
 	}
-	if (events()->getSelectedWidget() == this) {
+	if (hostEvents(host)->getSelectedWidget() == this) {
 		int l = doc->lineOf(doc->cursor());
 		nvgBeginPath(vg);
 		nvgRect(vg, X(doc->column(doc->cursor())) - 0.5f, Y(l) + 1, 1.5f, lh - 2);
@@ -629,7 +631,7 @@ void View::onDragEnd(const DragEndEvent& e) {
 void View::onHoverScroll(const HoverScrollEvent& e) {
 	math::Vec d = e.scrollDelta;
 #if !defined ARCH_MAC // like Rack's ScrollWidget: Shift scrolls sideways (macOS does it already)
-	if (mods() & GLFW_MOD_SHIFT)
+	if (hostMods(host) & GLFW_MOD_SHIFT)
 		d = d.flip();
 #endif
 	scroll_ = scroll_.minus(d);
@@ -762,10 +764,276 @@ void View::onSelectKey(const SelectKeyEvent& e) {
 void View::onSelectText(const SelectTextEvent& e) {
 	if (e.codepoint < 32 || e.codepoint == 127)
 		return;
-	if (e.codepoint == ' ' && (mods() & RACK_MOD_MASK) == GLFW_MOD_CONTROL)
+	if (e.codepoint == ' ' && (hostMods(host) & RACK_MOD_MASK) == GLFW_MOD_CONTROL)
 		return e.consume(this); // Ctrl+Space opens the completions (Windows also sends the space)
 	doc->type(utf8(e.codepoint));
 	completion_.update(*doc, docs(), e.codepoint < 0x80 && isIdent((char)e.codepoint));
+	e.consume(this);
+}
+
+// --- GridView ---
+
+namespace {
+
+// Orca's operators: A-Z and these (orca-c: no `$`); '*' is the bang, drawn apart.
+bool isOperator(char c) {
+	return (c >= 'A' && c <= 'Z') || (c && std::strchr("*#:%!?=;", c));
+}
+
+} // namespace
+
+void GridView::step() {
+	Widget::step();
+	edit->refresh();
+	if (edit->x != seenX_ || edit->y != seenY_) // moved, or the other view did: the origin stays in sight
+		follow();
+	seenX_ = edit->x, seenY_ = edit->y;
+	clampScroll();
+}
+
+void GridView::cellAt(math::Vec pos, int& cx, int& cy) const {
+	cx = (int)std::floor((pos.x - kPad + scroll_.x) / charW_); // GridEdit clamps to the grid
+	cy = (int)std::floor((pos.y - kPad + scroll_.y) / lineH());
+}
+
+void GridView::follow() {
+	float left = edit->x * charW_, top = edit->y * lineH();
+	float w = box.size.x - 2 * kPad, h = gridH() - 2 * kPad;
+	if (left < scroll_.x)
+		scroll_.x = left;
+	else if (left + charW_ > scroll_.x + w)
+		scroll_.x = left + charW_ - w;
+	if (top < scroll_.y)
+		scroll_.y = top;
+	else if (top + lineH() > scroll_.y + h)
+		scroll_.y = top + lineH() - h;
+}
+
+void GridView::clampScroll() {
+	const lattice::Grid& g = edit->grid;
+	scroll_.x = math::clamp(scroll_.x, 0.f, std::max(0.f, g.w * charW_ - (box.size.x - 2 * kPad)));
+	scroll_.y = math::clamp(scroll_.y, 0.f, std::max(0.f, g.h * lineH() - (gridH() - 2 * kPad)));
+}
+
+void GridView::draw(const DrawArgs& args) {
+	if (host)
+		paint(args.vg);
+	Widget::draw(args);
+}
+
+void GridView::drawLayer(const DrawArgs& args, int layer) {
+	if (!host && layer == 1)
+		paint(args.vg);
+	Widget::drawLayer(args, layer);
+}
+
+void GridView::paint(NVGcontext* vg) {
+	int font = hostMonoFont(host);
+	if (font < 0)
+		return;
+	const lattice::Grid& g = edit->grid;
+	float lh = lineH(), gh = gridH(), w = box.size.x;
+	nvgBeginPath(vg); // as View: the panel has no editor background of its own under this
+	nvgRect(vg, 0, 0, w, box.size.y);
+	nvgFillColor(vg, kBackground);
+	nvgFill(vg);
+	nvgSave(vg);
+	nvgIntersectScissor(vg, 0, 0, w, gh);
+	nvgFontFaceId(vg, font);
+	nvgFontSize(vg, fontSize);
+	nvgTextAlign(vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+	charW_ = nvgTextBounds(vg, 0, 0, "0000000000", nullptr, nullptr) / 10;
+	auto X = [&](int i) { return kPad + i * charW_ - scroll_.x; };
+	auto Y = [&](int j) { return kPad + j * lh - scroll_.y; };
+	// Only the visible cells: the cost per frame doesn't grow with the grid. (ponytail: a nvgText per cell, a few
+	// thousand in a big window; a glyph atlas or text runs if that is ever measured slow.)
+	int c0 = std::max(0, (int)std::floor((scroll_.x - kPad) / charW_)),
+		c1 = std::min(g.w - 1, (int)((scroll_.x + w) / charW_));
+	int r0 = std::max(0, (int)std::floor((scroll_.y - kPad) / lh)),
+		r1 = std::min(g.h - 1, (int)((scroll_.y + gh) / lh));
+	for (int j = r0; j <= r1; j++)
+		for (int i = c0; i <= c1; i++) {
+			char c = g.at(i, j);
+			uint8_t m = edit->marks[(size_t)j * g.w + i];
+			NVGcolor fg = kPlain;
+			const NVGcolor* box = nullptr;
+			if (c == '.') {
+				bool marker = i % 8 == 0 && j % 8 == 0; // Orca's grid markers
+				c = marker ? '+' : '.';
+				fg = marker ? kDim : nvgTransRGBA(kDim, 0x80);
+			} else if (m & lattice::kOutput) {
+				box = &kPlain, fg = kBackground;
+			} else if (c == '*') {
+				box = &kAccent, fg = kBackground;
+			} else if (!(m & lattice::kLock) && isOperator(c)) {
+				fg = kAccent;
+			} else if (m & (lattice::kInput | lattice::kHasteInput)) {
+				fg = kText;
+			} else if (m & lattice::kLock) {
+				fg = kDim;
+			}
+			if (box) {
+				nvgBeginPath(vg);
+				nvgRect(vg, X(i), Y(j), charW_, lh);
+				nvgFillColor(vg, *box);
+				nvgFill(vg);
+			}
+			nvgFillColor(vg, fg);
+			nvgText(vg, X(i) + charW_ / 2, Y(j) + lh / 2, &c, &c + 1);
+		}
+	lattice::Rect s = edit->selection();
+	nvgBeginPath(vg);
+	nvgRect(vg, X(s.x), Y(s.y), s.w * charW_, s.h * lh);
+	nvgFillColor(vg, kSelection);
+	nvgFill(vg);
+	nvgBeginPath(vg); // the origin
+	nvgRect(vg, X(edit->x) + 0.5f, Y(edit->y) + 0.5f, charW_ - 1, lh - 1);
+	nvgStrokeColor(vg, hostEvents(host)->getSelectedWidget() == this ? kAccent : nvgTransRGBA(kAccent, 0x70));
+	nvgStrokeWidth(vg, 1);
+	nvgStroke(vg);
+	nvgRestore(vg);
+
+	// Status line: transport, tempo, size, origin.
+	float sh = statusH();
+	nvgSave(vg);
+	nvgIntersectScissor(vg, 0, gh, w, sh);
+	nvgBeginPath(vg);
+	nvgRect(vg, 0, gh, w, sh);
+	nvgFillColor(vg, kGutter);
+	nvgFill(vg);
+	nvgBeginPath(vg);
+	nvgRect(vg, kPad, gh, w - 2 * kPad, 1);
+	nvgFillColor(vg, kDim);
+	nvgFill(vg);
+	nvgFontFaceId(vg, host ? host->ui : APP->window->uiFont->handle);
+	nvgFontSize(vg, std::round(fontSize * 0.9f));
+	nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE);
+	nvgFillColor(vg, kDim);
+	std::string size = std::to_string(g.w) + "×" + std::to_string(g.h), status = size;
+	if (machine) {
+		int64_t f = machine->frame();
+		status = std::string(machine->playing() ? "▶ " : "■ ") + (f < 0 ? "-" : std::to_string(f));
+		if (bpm)
+			status += string::f("   %.0f BPM", *bpm);
+		status += "   " + size + "   " + std::to_string(edit->x) + "," + std::to_string(edit->y);
+		if (edit->insert)
+			status += "   INS";
+	}
+	nvgText(vg, kPad, gh + sh / 2, status.c_str(), nullptr);
+	nvgRestore(vg);
+}
+
+// --- Mouse ---
+
+void GridView::onButton(const ButtonEvent& e) {
+	if (e.button != GLFW_MOUSE_BUTTON_LEFT) // right: the module's menu
+		return;
+	if (e.action == GLFW_PRESS && e.pos.y < gridH()) { // (on the status line: only selects this)
+		int cx, cy;
+		cellAt(e.pos, cx, cy);
+		edit->place(cx, cy);
+		dragging_ = true;
+	}
+	e.consume(this); // selects this: the keys come here
+}
+
+void GridView::onDragMove(const DragMoveEvent& e) {
+	if (!dragging_ || e.mouseDelta.isZero())
+		return;
+	// Beyond the box too: the mouse in local coordinates.
+	math::Vec mouse = host ? host->mouse : APP->scene->getMousePos();
+	int cx, cy;
+	cellAt(mouse.minus(getAbsoluteOffset(math::Vec())).div(getAbsoluteZoom()), cx, cy);
+	edit->extendTo(cx, cy);
+}
+
+void GridView::onDragEnd(const DragEndEvent& e) {
+	dragging_ = false;
+}
+
+void GridView::onHoverScroll(const HoverScrollEvent& e) {
+	math::Vec d = e.scrollDelta;
+#if !defined ARCH_MAC // like Rack's ScrollWidget: Shift scrolls sideways (macOS does it already)
+	if (hostMods(host) & GLFW_MOD_SHIFT)
+		d = d.flip();
+#endif
+	scroll_ = scroll_.minus(d);
+	clampScroll();
+	e.consume(this); // Rack neither pans nor zooms
+}
+
+// --- Keyboard ---
+
+void GridView::onSelectKey(const SelectKeyEvent& e) {
+	// Rack's own: save, save as, quit, open, new. Esc: in the panel Rack leaves fullscreen, in the window the window
+	// does (routeKey()), unless it just collapsed a selection.
+	for (int key : {GLFW_KEY_S, GLFW_KEY_Q, GLFW_KEY_O, GLFW_KEY_N})
+		if (e.isKeyCommand(key, RACK_MOD_CTRL))
+			return;
+	if (e.isKeyCommand(GLFW_KEY_S, RACK_MOD_CTRL | GLFW_MOD_SHIFT))
+		return;
+	if (e.key == GLFW_KEY_ESCAPE) {
+		if (e.action == GLFW_PRESS && edit->collapse())
+			e.consume(this);
+		return;
+	}
+	// Everything else is the grid's, used or not: Rack's would act on the module under the mouse (Backspace
+	// deletes it, Cmd+Z undoes in the rack).
+	e.consume(this);
+	if (e.action != GLFW_PRESS && e.action != GLFW_REPEAT)
+		return;
+	int mods = e.mods & RACK_MOD_MASK, m = mods & ~GLFW_MOD_SHIFT;
+	bool press = e.action == GLFW_PRESS;
+	GLFWwindow* win = APP->window->win;
+	using Transport = lattice::Machine::Transport;
+
+	int dx = (e.key == GLFW_KEY_RIGHT) - (e.key == GLFW_KEY_LEFT),
+		dy = (e.key == GLFW_KEY_DOWN) - (e.key == GLFW_KEY_UP);
+	if (dx || dy) {
+		if (mods == 0)
+			edit->move(dx, dy);
+		else if (mods == GLFW_MOD_SHIFT)
+			edit->scale(dx, dy);
+		else if (mods == RACK_MOD_CTRL)
+			edit->move(8 * dx, 8 * dy);
+		else if (mods == GLFW_MOD_ALT)
+			edit->drag(dx, dy);
+	} else if ((e.key == GLFW_KEY_BACKSPACE || e.key == GLFW_KEY_DELETE) && m == 0)
+		edit->erase();
+	else if (e.isKeyCommand(GLFW_KEY_C, RACK_MOD_CTRL))
+		glfwSetClipboardString(win, edit->copy().c_str());
+	else if (e.isKeyCommand(GLFW_KEY_X, RACK_MOD_CTRL))
+		glfwSetClipboardString(win, edit->cut().c_str());
+	else if (e.isKeyCommand(GLFW_KEY_V, RACK_MOD_CTRL)) {
+		if (const char* clip = glfwGetClipboardString(win))
+			edit->paste(clip);
+	} else if (e.isKeyCommand(GLFW_KEY_Z, RACK_MOD_CTRL))
+		edit->undo();
+	else if (e.isKeyCommand(GLFW_KEY_Z, RACK_MOD_CTRL | GLFW_MOD_SHIFT))
+		edit->redo();
+#if !defined ARCH_MAC
+	else if (e.isKeyCommand(GLFW_KEY_Y, RACK_MOD_CTRL))
+		edit->redo();
+#endif
+	else if (e.isKeyCommand(GLFW_KEY_A, RACK_MOD_CTRL))
+		edit->selectAll();
+	else if (e.isKeyCommand(GLFW_KEY_I, RACK_MOD_CTRL)) {
+		if (press)
+			edit->insert = !edit->insert;
+	} else if (machine && press) {
+		if (e.isKeyCommand(GLFW_KEY_ENTER, RACK_MOD_CTRL) || e.isKeyCommand(GLFW_KEY_KP_ENTER, RACK_MOD_CTRL))
+			machine->request(Transport::Play);
+		else if (e.isKeyCommand(GLFW_KEY_PERIOD, RACK_MOD_CTRL))
+			machine->request(Transport::Stop);
+		else if (e.key == GLFW_KEY_SPACE && mods == 0) // Orca's Space: pause or resume, the frame stays
+			machine->request(machine->playing() ? Transport::Stop : Transport::Resume);
+	}
+}
+
+void GridView::onSelectText(const SelectTextEvent& e) {
+	if (e.codepoint < 33 || e.codepoint > 126) // (space is the transport key)
+		return;
+	edit->type((char)e.codepoint);
 	e.consume(this);
 }
 
@@ -800,13 +1068,25 @@ constexpr float kScroll = 50;
 
 } // namespace
 
-Window::Window(Doc& doc, filo::Engine* engine, hydra::WindowGeometry& g, bool& open) : g_(g), open_(open) {
+namespace {
+
+View* filoView(Doc& doc, filo::Engine* engine) {
+	View* v = new View;
+	v->doc = &doc;
+	v->engine = engine;
+	v->fontSize = 16;
+	return v;
+}
+
+} // namespace
+
+Window::Window(Doc& doc, filo::Engine* engine, hydra::WindowGeometry& g, bool& open)
+	: Window(filoView(doc, engine), g, open) {
+	static_cast<View*>(view)->host = this;
+}
+
+Window::Window(widget::Widget* view, hydra::WindowGeometry& g, bool& open) : view(view), g_(g), open_(open) {
 	root = new widget::Widget;
-	view = new View;
-	view->doc = &doc;
-	view->engine = engine;
-	view->host = this;
-	view->fontSize = 16;
 	root->addChild(view);
 	events.rootWidget = root;
 }
@@ -824,7 +1104,7 @@ void Window::update(GLFWwindow* rack, const std::string& title) {
 		return;
 	// A new GLFW window: its input into `events`, as Rack's window's into APP->event (its window/Window.cpp callbacks).
 	glfwSetWindowUserPointer(w, this);
-	glfwSetInputMode(w, GLFW_STICKY_KEYS, GLFW_FALSE); // View::mods() polls the keys held now
+	glfwSetInputMode(w, GLFW_STICKY_KEYS, GLFW_FALSE); // hostMods() polls the keys held now
 	glfwSetCursorPosCallback(w, [](GLFWwindow* win, double x, double y) {
 		if (Window* o = owner(win)) {
 			math::Vec pos = math::Vec(x, y).mult(o->mouseScale), delta = pos.minus(o->mouse);

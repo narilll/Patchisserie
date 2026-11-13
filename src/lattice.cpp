@@ -100,6 +100,7 @@ Machine::Machine() : events_(new Events), scratchEvents_(new Events) {
 	clockOut_.setDivision(4);
 	voices_.setMode(filo::VoiceAllocator::MPE);
 	Grid g = Grid::parse(kDefaultGrid);
+	g.resize(kDefaultWidth, kDefaultHeight);
 	install(g.w, g.h, std::move(g.cells), false);
 }
 

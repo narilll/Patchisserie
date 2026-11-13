@@ -16,6 +16,9 @@ namespace lattice {
 // ponytail: copied values; test_lattice pins them through orca_run. Include gbuffer.h if orca-c ever gets a C++ guard.
 enum MarkFlag : uint8_t { kInput = 1, kOutput = 2, kHasteInput = 4, kLock = 8, kSleep = 16 };
 
+// What the panel's view shows at 12 px: 38 columns of Plex Mono (7.2 px) in 95.6 mm minus the pads, 12 lines of 16 px
+// above the status line in 76 mm (test/glcheck.cpp's panel case measures it).
+constexpr int kDefaultWidth = 38, kDefaultHeight = 12;
 constexpr int kMaxSize = 256; // ponytail: grid ceiling per side (memory + one frame's CPU on the audio thread)
 
 struct Rect {
@@ -40,7 +43,8 @@ inline bool isGlyph(char c) {
 	return c >= 33 && c <= 126;
 }
 
-/** The default grid: plays an arpeggio on Orca channel 0 and a kick on channel 1. */
+/** The default grid (at its top left, padded to kDefaultWidth x kDefaultHeight): plays an arpeggio on Orca channel 0
+ * and a kick on channel 1. */
 extern const char* const kDefaultGrid;
 
 class Machine {

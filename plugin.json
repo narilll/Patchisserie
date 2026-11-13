@@ -24,6 +24,12 @@
       "name": "Icing",
       "description": "Hydra visuals for the Filo on its left: panel preview, output window, AUDIO input for a.fft",
       "tags": ["Visual", "Expander"]
+    },
+    {
+      "slug": "Lattice",
+      "name": "Lattice",
+      "description": "Orca live coding (orca-c): a 2D grid sequencer as V/OCT, gates, triggers, CC and clock",
+      "tags": ["Sequencer", "Polyphonic", "Clock generator"]
     }
   ]
 }

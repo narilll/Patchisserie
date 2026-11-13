@@ -15,6 +15,7 @@
 
 #include "editor/view.hpp"
 #include "engine.hpp"
+#include "lattice.hpp"
 
 rack::plugin::Plugin* pluginInstance = nullptr; // view.cpp's (plugin.cpp's in the plugin): no docs here
 
@@ -287,6 +288,67 @@ std::string editorWindow(GLFWwindow* rack) {
 	return why;
 }
 
+/** Lattice's grid window: a GridView over the default grid (stopped) in an editor::Window, a frame read back. Glyphs in
+the first row, the background in an empty part of the grid. "" when it is so. */
+std::string gridWindow(GLFWwindow* rack) {
+	lattice::Machine machine;
+	editor::GridEdit edit;
+	edit.machine = &machine;
+	edit.refresh();
+	auto* view = new editor::GridView; // owned by the window
+	view->edit = &edit;
+	view->machine = &machine;
+	view->fontSize = 16;
+	hydra::WindowGeometry g;
+	bool open = true;
+	editor::Window w(view, g, open);
+	view->host = &w;
+	w.update(rack, "glcheck: grid window");
+	std::string why = !w.window.win            ? "no window"
+					  : !w.vg                  ? "no NanoVG context"
+					  : w.mono < 0 || w.ui < 0 ? "fonts not loaded from " + rack::asset::system() +
+													 " (set RACK_SYSTEM_DIR to Rack's res/ folder's)"
+											   : "";
+	if (why.empty()) {
+		glfwMakeContextCurrent(w.window.win);
+		int fw, fh;
+		glfwGetFramebufferSize(w.window.win, &fw, &fh);
+		glViewport(0, 0, fw, fh);
+		w.draw(fw, fh);
+		Image im;
+		im.w = fw, im.h = fh;
+		im.px.resize(4 * (size_t)fw * fh);
+		glReadPixels(0, 0, fw, fh, GL_RGBA, GL_UNSIGNED_BYTE, im.px.data());
+		GLenum error = glGetError();
+		glfwMakeContextCurrent(rack);
+		stbi_write_png("build/glcheck-out/lattice.png", im.w, im.h, 4, im.at(0, im.h - 1), -4 * im.w);
+		// Share of the pixels in [x0, x1) x [y0, y1) (UI px from the top left) that aren't the background.
+		float px = fw / w.root->box.size.x;
+		auto drawn = [&](float x0, float y0, float x1, float y1) {
+			size_t n = 0, all = 0;
+			for (int y = (int)(im.h - y1 * px); y < (int)(im.h - y0 * px); y++)
+				for (int x = (int)(x0 * px); x < (int)(x1 * px); x++, all++) {
+					const uint8_t* p = im.at(x, y);
+					n += std::abs(p[0] - 0x1b) + std::abs(p[1] - 0x1c) + std::abs(p[2] - 0x1e) > 48;
+				}
+			return (double)n / all;
+		};
+		// The first 12 columns of row 1 (the arpeggio's "...2C4" and its dots), and right of the 38 columns (9.6 px
+		// each at 16 px).
+		float lh = std::round(16 * 1.3f);
+		double text = drawn(0, 4, 12 * 9.6f + 4, 4 + lh), none = drawn(380, 4, 600, 4 + 12 * lh);
+		std::printf("  %dx%d px (%s): row 1 %.1f %% drawn, empty part %.1f %%\n", fw, fh,
+					"build/glcheck-out/lattice.png", 100 * text, 100 * none);
+		why = error         ? "GL error " + std::to_string(error)
+			  : text < 0.05 ? "no grid"
+			  : none > 0    ? "not the background"
+							: "";
+	}
+	w.destroy();
+	hydra::collectWindows();
+	return why;
+}
+
 } // namespace
 
 int main() {
@@ -431,6 +493,10 @@ int main() {
 	}
 	std::printf("editor window\n");
 	std::string why = editorWindow(win);
+	std::printf("  -> %s\n", why.empty() ? "ok" : ("FAIL " + why).c_str());
+	failures += !why.empty();
+	std::printf("grid window\n");
+	why = gridWindow(win);
 	std::printf("  -> %s\n", why.empty() ? "ok" : ("FAIL " + why).c_str());
 	failures += !why.empty();
 	renderer.destroy();
