@@ -406,7 +406,8 @@ class Sequencer {
 			} while (n == 16);
 		}
 		out.clk = clock.started() && clockOut.clk(lastAt_, at);
-		lastAt_ = at;
+		if (clock.started()) // held while stopped (-1 after a reset), so the first pulse lands on cycle 0 at start
+			lastAt_ = at;
 		if (!in.resetEdge)
 			clock.step(in.clockConnected, in.clockEdge, false);
 		for (int c = 0; c < 16; c++) {

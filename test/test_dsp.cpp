@@ -402,6 +402,35 @@ TEST(clockout_n_per_cycle) {
 }
 
 // ---- Sequencer end-to-end ----
+TEST(sequencer_clk_pulses_on_the_downbeat_at_start) {
+	const int sr = 1000, N = 4;
+	const double cps = 0.5;
+	auto s = std::make_unique<Sequencer>();
+	s->setSampleRate(sr);
+	s->clock.setCps(cps);
+	s->clockOut.setDivision(N);
+	Sequencer::Inputs in;
+	Sequencer::Outputs out;
+	in.resetEdge = true; // PLAY: reset while stopped, the clock waits at 0
+	s->process(in, out);
+	in.resetEdge = false;
+	int stopped = out.clk;
+	for (int i = 0; i < 50; i++) {
+		s->process(in, out);
+		stopped += out.clk;
+	}
+	CHECK(stopped == 0);
+	s->start();
+	std::vector<int> pulses;
+	for (int i = 0; i < 2 * sr; i++) {
+		s->process(in, out);
+		if (out.clk)
+			pulses.push_back(i);
+	}
+	CHECK(pulses.size() >= 2 && pulses[0] == 0);
+	CHECK(pulses.size() >= 2 && pulses[1] == (int)(sr / (cps * N)));
+}
+
 TEST(sequencer_notes_sample_exact) {
 	auto s = std::make_unique<Sequencer>();
 	s->setSampleRate(48000);
