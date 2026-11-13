@@ -518,9 +518,10 @@ static GLFWwindow* createWindow(GLFWwindow* rack, const char* title, WindowGeome
 	glfwSwapInterval(0); // never block Rack's UI thread on this window's vsync
 	glfwMakeContextCurrent(rack);
 	glfwSetInputMode(win, GLFW_STICKY_KEYS, GLFW_TRUE); // a quick Esc tap between frames still registers
-	if (!monitorAt(g.x + g.w / 2, g.y + g.h / 2)) {
+	GLFWmonitor* primary = glfwGetPrimaryMonitor();     // null: no display connected (or all asleep)
+	if (primary && !monitorAt(g.x + g.w / 2, g.y + g.h / 2)) {
 		// Saved on a monitor that is gone (or another machine): don't open off-screen.
-		glfwGetMonitorWorkarea(glfwGetPrimaryMonitor(), &g.x, &g.y, NULL, NULL);
+		glfwGetMonitorWorkarea(primary, &g.x, &g.y, NULL, NULL);
 		g.x += 50;
 		g.y += 50;
 	}
@@ -531,13 +532,13 @@ static GLFWwindow* createWindow(GLFWwindow* rack, const char* title, WindowGeome
 static void applyFullscreen(GLFWwindow* win, const WindowGeometry& g) {
 	// Borderless window sized to its monitor, no video mode switch (glfwSetWindowMonitor would also iconify on
 	// focus loss).
-	if (g.fullscreen) {
-		GLFWmonitor* mon = monitorAt(g.x + g.w / 2, g.y + g.h / 2);
-		if (!mon)
-			mon = glfwGetPrimaryMonitor();
+	GLFWmonitor* mon = monitorAt(g.x + g.w / 2, g.y + g.h / 2);
+	if (!mon)
+		mon = glfwGetPrimaryMonitor();
+	const GLFWvidmode* mode = mon ? glfwGetVideoMode(mon) : NULL; // null: no display, stays windowed
+	if (g.fullscreen && mode) {
 		int mx, my;
 		glfwGetMonitorPos(mon, &mx, &my);
-		const GLFWvidmode* mode = glfwGetVideoMode(mon);
 		glfwSetWindowAttrib(win, GLFW_DECORATED, GLFW_FALSE);
 		glfwSetWindowSize(win, mode->width, mode->height); // size before pos: Cocoa keeps the top-left
 		glfwSetWindowPos(win, mx, my);
