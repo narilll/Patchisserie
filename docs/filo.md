@@ -122,7 +122,8 @@ Below, `Cmd/Ctrl` means the Cmd key on macOS and the Ctrl key on Windows and Lin
 | `Tab` or `Enter` | While the completion list is open, they insert the selected name. |
 | `Esc` | While the completion list is open, it closes the list. |
 | `Enter` | New line. The new line starts with the same indentation as the current one. |
-| `Tab` | Inserts two spaces. |
+| `Tab` | Inserts two spaces. When text is selected, it indents every line that the selection touches by two spaces instead. |
+| `Shift+Tab` | Removes up to two spaces (or one tab) of indentation from every line that the selection touches, or from the cursor's line. |
 | `Backspace`, `Delete` | Delete the selection, or the character before or after the cursor. |
 | `Alt+Backspace`, `Alt+Delete` (macOS), `Ctrl+Backspace`, `Ctrl+Delete` (Windows and Linux) | Delete a whole word. |
 | Arrow keys | Move the cursor. Hold `Shift` to extend the selection. |

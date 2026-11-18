@@ -258,15 +258,10 @@ class Doc {
 	}
 	/** Cmd/Ctrl+/ like CodeMirror's: the lines the selection touches (not a last one it only enters at column 0) lose
 	their "//" if all have it, else get "// " at the least indentation. Blank lines stay, but a lone one gets it at its
-	end. One undo step, the selection kept on its text. ponytail: the step replaces the whole block (playing spans in
-	it are dropped until the next evaluate). */
+	end. One undo step, the selection kept on its text. */
 	void toggleComment() {
-		int l0 = lineOf(selBegin()), l1 = lineOf(selEnd());
-		if (l1 > l0 && selEnd() == lineStart(l1))
-			l1--;
-		struct Edit {
-			size_t pos, del, ins;
-		};
+		int l0, l1;
+		selectedLines(l0, l1);
 		std::vector<Edit> edits;
 		std::vector<size_t> indents;
 		size_t least = SIZE_MAX;
@@ -293,28 +288,32 @@ class Doc {
 				if (k < (int)indents.size() && indents[k] >= lineStart(l) && indents[k] <= lineEnd(l))
 					edits.push_back({lineStart(l) + least, 0, 3}), k++;
 		}
-		if (edits.empty())
-			return;
-		size_t from = lineStart(l0), to = lineEnd(l1), a = anchor_, c = cursor_;
-		std::string out;
-		size_t at = from;
-		auto map = [&](size_t p) {
-			size_t q = p;
-			for (const Edit& e : edits)
-				if (p >= e.pos + e.del)
-					q = q + e.ins - e.del;
-				else if (p > e.pos)
-					q = q - (p - e.pos);
-			return q;
-		};
-		a = map(a), c = map(c);
-		for (const Edit& e : edits) {
-			out += text_.substr(at, e.pos - at) + (e.ins ? "// " : "");
-			at = e.pos + e.del;
+		editLines(l0, l1, edits, "// ");
+	}
+	/** Tab over a selection, and Shift+Tab: the lines the selection touches (as toggleComment()'s) get kIndent at their
+	start, or lose a tab or up to kIndent's spaces there. Empty lines stay. One undo step, the selection kept on its
+	text. */
+	void indent(bool less) {
+		int l0, l1;
+		selectedLines(l0, l1);
+		std::vector<Edit> edits;
+		size_t unit = std::strlen(kIndent);
+		for (int l = l0; l <= l1; l++) {
+			size_t b = lineStart(l), n = 0;
+			if (b == lineEnd(l))
+				continue;
+			if (!less)
+				edits.push_back({b, 0, unit});
+			else if (text_[b] == '\t')
+				edits.push_back({b, 1, 0});
+			else {
+				while (n < unit && b + n < lineEnd(l) && text_[b + n] == ' ')
+					n++;
+				if (n)
+					edits.push_back({b, n, 0});
+			}
 		}
-		out += text_.substr(at, to - at);
-		replace(from, to - from, out, Other);
-		anchor_ = a, cursor_ = c;
+		editLines(l0, l1, edits, kIndent);
 	}
 	/** Back to before the last step, its selection too. */
 	bool undo() {
@@ -472,6 +471,44 @@ class Doc {
 
   private:
 	enum Kind { Other, Typing, Backspace, Delete };
+	/** At pos: `del` bytes go, then `ins` (0 or all of editLines()'s s) come. */
+	struct Edit {
+		size_t pos, del, ins;
+	};
+
+	/** The lines the selection touches, not a last one it only enters at column 0. */
+	void selectedLines(int& l0, int& l1) const {
+		l0 = lineOf(selBegin()), l1 = lineOf(selEnd());
+		if (l1 > l0 && selEnd() == lineStart(l1))
+			l1--;
+	}
+
+	/** The edits (in order) within lines l0..l1 as one undo step, the selection kept on its text. ponytail: the step
+	replaces the whole block (playing spans in it are dropped until the next evaluate). */
+	void editLines(int l0, int l1, const std::vector<Edit>& edits, const std::string& s) {
+		if (edits.empty())
+			return;
+		size_t from = lineStart(l0), to = lineEnd(l1), a = anchor_, c = cursor_;
+		std::string out;
+		size_t at = from;
+		auto map = [&](size_t p) {
+			size_t q = p;
+			for (const Edit& e : edits)
+				if (p >= e.pos + e.del)
+					q = q + e.ins - e.del;
+				else if (p > e.pos)
+					q = q - (p - e.pos);
+			return q;
+		};
+		a = map(a), c = map(c);
+		for (const Edit& e : edits) {
+			out += text_.substr(at, e.pos - at) + s.substr(0, e.ins);
+			at = e.pos + e.del;
+		}
+		out += text_.substr(at, to - at);
+		replace(from, to - from, out, Other);
+		anchor_ = a, cursor_ = c;
+	}
 	struct Step {
 		size_t pos;
 		std::string removed, inserted;

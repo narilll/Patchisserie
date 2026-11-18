@@ -300,6 +300,43 @@ TEST(doc_toggle_comment) {
 	CHECK(d.text() == "  žluť\n  é" && d.cursor() == d.text().size());
 }
 
+TEST(doc_indent_lines) {
+	Doc d("a\n  b\n\nc");
+	d.selectAll();
+	d.indent(false); // every touched line but the empty one
+	CHECK(d.text() == "  a\n    b\n\n  c" && d.anchor() == 2 && d.cursor() == d.text().size());
+	d.indent(true);
+	CHECK(d.text() == "a\n  b\n\nc");
+	d.indent(true); // as far as there is indentation
+	CHECK(d.text() == "a\nb\n\nc");
+	// A selection ending at column 0 leaves that line out; within one line it takes the whole line.
+	d.setText("a\nb");
+	d.select(0, 2);
+	d.indent(false);
+	CHECK(d.text() == "  a\nb" && d.selection() == "a\n");
+	d.setText("ab\ncd");
+	d.select(4, 5);
+	d.indent(false);
+	CHECK(d.text() == "ab\n  cd" && d.selection() == "d");
+	// Shift+Tab without a selection: the cursor's line; a cursor in the removed indentation goes to the line's start.
+	d.setText("   x");
+	d.setCursor(4);
+	d.indent(true);
+	CHECK(d.text() == " x" && d.cursor() == 2);
+	d.setText("  x");
+	d.setCursor(1);
+	d.indent(true);
+	CHECK(d.text() == "x" && d.cursor() == 0);
+	d.setText("\t\tx"); // a tab (from a patch) at a time
+	d.indent(true);
+	CHECK(d.text() == "\tx");
+	// One undo step that restores text and selection.
+	d.setText("a\nb");
+	d.selectAll();
+	d.indent(false);
+	CHECK(d.undo() && d.text() == "a\nb" && d.anchor() == 0 && d.cursor() == 3);
+}
+
 TEST(doc_tokenizer_strudel_code) {
 	CHECK(tokens("$: s(\"bd*2 [sd hh]\").bank('tr909') // drums") ==
 		  "L:$: F:s S:\"bd*2 [sd hh]\" F:bank S:'tr909' C:// drums");

@@ -821,8 +821,13 @@ void View::onSelectKey(const SelectKeyEvent& e) {
 			doc->insert(clean(clip));
 	} else if ((e.key == GLFW_KEY_ENTER || e.key == GLFW_KEY_KP_ENTER) && m == 0)
 		doc->newline();
-	else if (e.key == GLFW_KEY_TAB && mods == 0)
-		doc->insert(kIndent);
+	else if (e.key == GLFW_KEY_TAB && mods == 0) {
+		if (doc->hasSelection())
+			doc->indent(false);
+		else
+			doc->insert(kIndent);
+	} else if (e.key == GLFW_KEY_TAB && mods == GLFW_MOD_SHIFT)
+		doc->indent(true);
 	else if (e.key == GLFW_KEY_BACKSPACE && (m == 0 || m == kWordMod))
 		doc->backspace(m == kWordMod);
 	else if (e.key == GLFW_KEY_DELETE && (m == 0 || m == kWordMod))
