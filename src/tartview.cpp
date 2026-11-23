@@ -129,6 +129,10 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 		cell(2, 1, "FINE", buf);
 		std::snprintf(buf, sizeof buf, "%d", n.vel);
 		cell(3, 1, "VELOCITY", buf);
+		if (v.heldCount) {
+			std::snprintf(buf, sizeof buf, "%d", v.heldCount);
+			cell(4, 1, "NOTES", buf);
+		}
 	} else {
 		std::snprintf(buf, sizeof buf, t.external ? "%.1f EXT" : "%.1f", t.shownBpm);
 		cell(0, 1, "TEMPO", buf);

@@ -1027,7 +1027,7 @@ TEST(seq_controls) {
 	r.pad(2, 1, 0);
 	r.step();
 	CHECK(led(2, 1) == tart::kPaletteDim && r.view().nNotes == 1);
-	r.click(push2::cc::Layout);
+	r.click(push2::cc::Layout), r.click(push2::cc::Layout); // via Sequencer + 32 Notes
 	CHECK(r.view().s.ui.noteLayout == 0);
 
 	r.m.edit([](tart::State& st) { st.s.ui.fixedBars = 3; });
@@ -3158,4 +3158,172 @@ TEST(double_loop) {
 	t.click(push2::cc::Record);
 	t.click(push2::cc::DoubleLoop);
 	CHECK(t.view().length[0][0] == tart::kMaxLength && t.view().s.ui.popup == tart::kNoPopup);
+}
+
+namespace {
+
+/** The split layout (Sequencer + 32 Notes) in Note mode; steps are the top four rows, step k at pad (7 - k / 8, k % 8).
+ */
+void split(Rig& r) {
+	r.click(push2::cc::Layout), r.click(push2::cc::Layout);
+}
+void sstep(Rig& r, int k, int vel = 100) {
+	r.pad(7 - k / 8, k % 8, vel);
+}
+void stap(Rig& r, int k) {
+	sstep(r, k), sstep(r, k, 0);
+}
+
+} // namespace
+
+TEST(layout_cycles) {
+	Rig r;
+	int seen[4];
+	for (int& n : seen)
+		r.click(push2::cc::Layout), n = r.view().s.ui.noteLayout;
+	CHECK(seen[0] == 1 && seen[1] == 2 && seen[2] == 0 && seen[3] == 1);
+	auto st = std::make_unique<tart::State>();
+	st->s.ui.noteLayout = 9;
+	tart::sanitize(*st);
+	CHECK(st->s.ui.noteLayout == 2); // the split layout is saved
+	st->s.ui.chord[0] = 5;
+	tart::sanitize(*st);
+	CHECK(st->s.ui.chord[0] == 0); // the chord is not
+}
+
+TEST(split_chord_step) {
+	Rig r;
+	split(r);
+	stap(r, 0); // the default chord: the bottom-left pad, 36
+	auto v = r.view();
+	CHECK(v.length[0][0] == 768 && v.nNotes == 1 && v.notes[0].tick == 0 && v.notes[0].len == 24 &&
+		  v.notes[0].pitch == 36 && v.notes[0].vel == 100);
+	stap(r, 0); // a step with notes: tapped off
+	CHECK(r.view().nNotes == 0);
+	r.pad(0, 1, 100), r.pad(0, 2, 100); // held together: 38 and 40
+	r.pad(0, 1, 0), r.pad(0, 2, 0);
+	stap(r, 1);
+	auto n = notesOf(r);
+	CHECK(n.size() == 2 && n[0].tick == 24 && n[0].pitch == 38 && n[1].tick == 24 && n[1].pitch == 40);
+	r.tap(0, 4); // a lone press replaces the chord (43)
+	stap(r, 2);
+	n = notesOf(r);
+	CHECK(n.size() == 3 && n[2].tick == 48 && n[2].pitch == 43);
+	// hold a step, press a later one: a long note for each of its notes
+	sstep(r, 1), stap(r, 5), sstep(r, 1, 0);
+	n = notesOf(r);
+	CHECK(n.size() == 3 && n[0].len == 5 * 24 + 24 - 24 && n[1].len == 5 * 24 + 24 - 24);
+	stap(r, 1); // a tap on a stretched step still takes all its notes off
+	CHECK(r.view().nNotes == 1);
+	stap(r, 31); // the last step of the 2 Bar clip
+	CHECK(r.view().nNotes == 2 && notesOf(r)[1].tick == 744);
+	r.click(push2::cc::PageRight); // the page has 32 steps: one 2 Bar clip of 1/16 is 32 steps, no second page
+	CHECK(r.view().s.ui.page == 0);
+}
+
+TEST(split_toggle_pitch) {
+	Rig r;
+	split(r);
+	sstep(r, 3); // an empty step: the chord's note is added, the step stays held
+	r.tap(0, 2); // 40 joins it
+	r.tap(0, 4); // and 43
+	auto n = notesOf(r);
+	CHECK(n.size() == 3 && n[1].pitch == 40 && n[2].pitch == 43 && n[0].tick == 72);
+	r.tap(0, 2); // pressed again: it goes
+	r.tap(0, 0); // so does the chord's 36
+	n = notesOf(r);
+	CHECK(n.size() == 1 && n[0].pitch == 43);
+	CHECK(r.view().s.ui.chord[0] == 0 && r.view().s.ui.chord[1] == 0); // the chord is untouched
+	sstep(r, 3, 0);                                                    // the hold edited the step: it stays
+	CHECK(r.view().nNotes == 1);
+	sstep(r, 3), r.tap(0, 4), sstep(r, 3, 0); // the last note taken off: an empty step
+	CHECK(r.view().nNotes == 0);
+}
+
+TEST(split_encoders_all_notes) {
+	Rig r;
+	split(r);
+	r.pad(0, 0, 100), r.pad(0, 2, 100), r.pad(0, 0, 0), r.pad(0, 2, 0); // 36 and 40
+	stap(r, 2);
+	sstep(r, 2);
+	auto v = r.view();
+	CHECK(v.s.ui.heldStep == 7 * 8 + 2 && v.heldCount == 2 && v.held == 0);
+	r.turn(3, 10); // Velocity
+	r.turn(0, 6);  // Nudge
+	r.turn(1, 8);  // Length: a step
+	auto n = notesOf(r);
+	CHECK(n.size() == 2 && n[0].vel == 110 && n[1].vel == 110 && n[0].tick == 51 && n[1].tick == 51 && n[0].len == 48 &&
+		  n[1].len == 48);
+	r.turn(2, 6); // Length fine
+	n = notesOf(r);
+	CHECK(n[0].len == 51 && n[1].len == 51);
+	sstep(r, 2, 0);
+	CHECK(r.view().nNotes == 2 && r.view().heldCount == 0);
+}
+
+TEST(split_records) {
+	Rig r;
+	split(r);
+	r.click(push2::cc::Record);
+	hold(r, 24, 48, 1); // the lower pads play and record: 38 at tick 24
+	runTo(r, 72);
+	stap(r, 5); // a step is edited, not played or recorded
+	auto n = notesOf(r);
+	CHECK(n.size() == 2 && n[0].tick == 24 && n[0].len == 24 && n[0].pitch == 38 && n[1].tick == 120);
+	CHECK(r.view().s.ui.recTrack == 0);
+}
+
+TEST(split_leds) {
+	Rig r;
+	split(r);
+	r.m.edit([](tart::State& st) {
+		tart::Clip& c = st.clip[0][0];
+		c.length = tart::kBar;
+		c.nNotes = 3;
+		c.notes[0] = {0, 24, 36, 100};
+		c.notes[1] = {24, 24, 36, 50};
+		c.notes[2] = {24, 24, 43, 100};
+	});
+	auto led = [&]() {
+		r.in.leds = true;
+		r.step();
+	};
+	auto at = [&](int row, int col) { return r.want.note[push2::padNote(row, col)].color; };
+	led();
+	// steps: velocity shading (the louder note of a step), empty dark gray, past the end black
+	CHECK(at(7, 0) == tart::kPaletteFull && at(7, 1) == tart::kPaletteFull && at(7, 2) == push2::kRgbDarkGray &&
+		  at(5, 0) == push2::kBlack);
+	// the lower pads as Note mode, the default chord (36) dim, the others in scale white
+	CHECK(at(0, 0) == tart::kPaletteDim && at(0, 1) == push2::kRgbWhite && at(0, 7) != tart::kPaletteDim);
+	r.pad(0, 1, 100), r.pad(0, 2, 100); // pressed pads are green, and become the chord
+	led();
+	CHECK(at(0, 1) == push2::kGreen && at(0, 2) == push2::kGreen);
+	r.pad(0, 1, 0), r.pad(0, 2, 0);
+	led();
+	CHECK(at(0, 1) == tart::kPaletteDim && at(0, 2) == tart::kPaletteDim && at(0, 0) == tart::kPaletteFull);
+	sstep(r, 1); // a held step: white, and its notes (36, 43) dim below instead of the chord
+	led();
+	CHECK(at(7, 1) == push2::kRgbWhite && at(0, 0) == tart::kPaletteDim && at(0, 4) == tart::kPaletteDim &&
+		  at(0, 1) == push2::kRgbWhite);
+	sstep(r, 1, 0);
+}
+
+TEST(split_undo) {
+	Rig r;
+	split(r);
+	r.pad(0, 0, 100), r.pad(0, 2, 100), r.pad(0, 0, 0), r.pad(0, 2, 0);
+	stap(r, 0); // creates the clip
+	CHECK(r.view().nNotes == 2);
+	sstep(r, 0);
+	r.turn(3, 10);
+	r.turn(3, 10); // two turns of a hold: one step for both notes
+	sstep(r, 0, 0);
+	CHECK(r.view().notes[0].vel == 120 && r.view().notes[1].vel == 120);
+	r.click(push2::cc::Undo);
+	auto n = notesOf(r);
+	CHECK(n.size() == 2 && n[0].vel == 100 && n[1].vel == 100);
+	r.click(push2::cc::Undo); // the creation: the clip is gone again
+	CHECK(r.view().nNotes == 0 && r.view().length[0][0] == 0);
+	undoClick(r, true), undoClick(r, true);
+	CHECK(r.view().nNotes == 2);
 }

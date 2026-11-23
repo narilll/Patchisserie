@@ -47,18 +47,42 @@ int seqPitch(const Session& s, int row, bool& root, bool& inScale) {
 }
 
 /** The pitch and the start tick of a sequencer pad of the selected track: a melodic row and column of the page of 8
- * steps, or a drum lane's step in the page of 32 (the top row is steps 1..8). The pitch is -1 for a pad that is no step
- * or is above 127. */
+ * steps, or a step of the page of 32 on a drum lane or in the split layout (the top row is steps 1..8). The pitch is -1
+ * for a pad that is no step or is above 127; a split step has none (a chord), it is 0. */
 int stepOf(const Session& s, int pad, int& start) {
 	const Ui& u = s.ui;
 	const Track& tr = s.track[u.track];
-	if (tr.type != Drum) {
+	const bool split = tr.type != Drum && u.noteLayout == 2;
+	if (tr.type != Drum && !split) {
 		bool root, inScale;
 		start = (u.page * 8 + pad % 8) * kGrid[tr.grid];
 		return seqPitch(s, pad / 8, root, inScale);
 	}
 	start = (u.page * kDrumSteps + (7 - pad / 8) * 8 + pad % 8) * kGrid[tr.grid];
-	return pad / 8 >= 4 ? kDrumNote + tr.lane : -1;
+	return pad / 8 < 4 ? -1 : split ? 0 : kDrumNote + tr.lane;
+}
+
+/** The notes that start on the step at `start`, whatever their pitch: the first `max` indices go to `idx`; returns how
+ * many there are. */
+int stepNotes(const Clip& c, int start, int grid, int* idx, int max) {
+	int k = 0;
+	for (int i = 0; i < c.nNotes; i++)
+		if (c.notes[i].tick >= start - grid / 2 && c.notes[i].tick < start + grid / 2) {
+			if (k < max)
+				idx[k] = i;
+			k++;
+		}
+	return k;
+}
+
+/** Whether the split layout's chord has `pitch`: the pads held on its lower half, by default the track's bottom-left
+ * pad. */
+bool chordHas(const Session& s, int pitch) {
+	const Ui& u = s.ui;
+	if (u.chord[0] | u.chord[1])
+		return u.chord[pitch >> 6] >> (pitch & 63) & 1;
+	bool root, inScale;
+	return pitch == padPitch(s.scale, s.track[u.track].octave, 0, 0, root, inScale);
 }
 
 /** The loop pad (counted from the clip's start) under a pad of the lower right 4 x 4: the pads show the group of 16
@@ -136,8 +160,8 @@ int lastPage(const Clip& c, int grid, int perPage) {
 }
 
 /** The steps on a page of the selected track. */
-int pageSteps(const Track& tr) {
-	return tr.type == Drum ? kDrumSteps : 8;
+int pageSteps(const Track& tr, const Ui& u) {
+	return tr.type == Drum || u.noteLayout == 2 ? kDrumSteps : 8;
 }
 
 /** Selects a slot: a held step belongs to the clip it was pressed on. */
@@ -304,7 +328,7 @@ void sanitize(State& st) {
 	sc.inKey = sc.inKey != 0, sc.fixed = sc.fixed != 0;
 	Ui& u = st.s.ui;
 	u.pads = std::min<uint8_t>(u.pads, kNote);
-	u.noteLayout = std::min<uint8_t>(u.noteLayout, 1);
+	u.noteLayout = std::min<uint8_t>(u.noteLayout, 2);
 	u.screen = kHome; // a patch opens on Home, as the Scale screen is a dialog
 	u.track = std::min<uint8_t>(u.track, kTracks - 1);
 	u.scene = std::min<uint8_t>(u.scene, kScenes - 1);
@@ -313,7 +337,8 @@ void sanitize(State& st) {
 	u.quantTo = std::min<uint8_t>(u.quantTo, 7), u.quantAmount = std::min<uint8_t>(u.quantAmount, 100);
 	u.recQuant = std::min<uint8_t>(u.recQuant, 7), u.recQuantOn = u.recQuantOn != 0;
 	u.quantizeAt = -1, u.quantizeUsed = false;
-	u.page = 0, u.heldStep = -1, u.heldHad = u.heldEdited = false, u.fixedAt = -1, u.bend = 0;
+	u.chord[0] = u.chord[1] = 0, u.page = 0, u.heldStep = -1, u.heldHad = u.heldEdited = false, u.fixedAt = -1,
+	u.bend = 0;
 	std::fill(u.pad, u.pad + 64, 0);
 	std::fill(u.button, u.button + 128, false);
 	u.touched = 0, u.popup = kNoPopup, u.popupAt = u.now = 0, u.screenAt = u.padsAt = -1;
@@ -564,17 +589,17 @@ void Machine::handle(State& st, const push2::Event& e) {
 			int8_t& o = s.track[ui.track].octave;
 			o = (int8_t)std::min(std::max(o + (e.index == push2::cc::OctaveUp ? 1 : -1), 0), kMaxOctave);
 		} else if (e.index == push2::cc::Layout)
-			ui.noteLayout ^= 1, ui.heldStep = -1, ui.page = 0;
+			ui.noteLayout = (uint8_t)((ui.noteLayout + 1) % 3), ui.heldStep = -1, ui.page = 0;
 		else if ((ui.noteLayout || drum) &&
 				 ui.heldStep < 0) { // the sequencers: pages and step sizes (not while a step is held)
 			Track& tr = s.track[ui.track];
-			int last = lastPage(st.clip[ui.track][ui.scene], kGrid[tr.grid], pageSteps(tr));
+			int last = lastPage(st.clip[ui.track][ui.scene], kGrid[tr.grid], pageSteps(tr, ui));
 			if (e.index == push2::cc::PageLeft || e.index == push2::cc::PageRight)
 				ui.page = (uint8_t)std::min(std::max(ui.page + (e.index == push2::cc::PageRight ? 1 : -1), 0), last);
 			else if (e.index >= push2::cc::Scene8 && e.index <= push2::cc::Scene1) {
 				tr.grid = (uint8_t)(push2::cc::Scene1 - e.index);
-				ui.page = (uint8_t)std::min<int>(ui.page,
-												 lastPage(st.clip[ui.track][ui.scene], kGrid[tr.grid], pageSteps(tr)));
+				ui.page = (uint8_t)std::min<int>(
+					ui.page, lastPage(st.clip[ui.track][ui.scene], kGrid[tr.grid], pageSteps(tr, ui)));
 			}
 		}
 		break;
@@ -739,6 +764,10 @@ void Machine::pad(State& st, int i, int vel) {
 	}
 	if (s.track[s.ui.track].type == Drum) {
 		drumPad(st, i, vel);
+		return;
+	}
+	if (s.ui.noteLayout == 2) {
+		splitPad(st, i, vel);
 		return;
 	}
 	if (s.ui.noteLayout) {
@@ -1000,32 +1029,136 @@ void Machine::sequencer(State& st, int i, int vel) {
 	}
 }
 
+/** A pad of the split layout (Sequencer + 32 Notes). The lower 4 x 4 play like Note mode; pads held together there are
+ * the chord (a lone press replaces it), and with a step held a press toggles its pitch in that step. The four rows
+ * above are 32 steps: a tap on an empty one adds the chord's notes, a tap on one with notes takes them all off, hold
+ * one and turn an encoder to edit all its notes, or hold it and press a later step for long notes. */
+void Machine::splitPad(State& st, int i, int vel) {
+	Session& s = st.s;
+	Ui& ui = s.ui;
+	Clip& c = st.clip[ui.track][ui.scene];
+	int grid = kGrid[s.track[ui.track].grid], start;
+	stepOf(s, i, start);
+	if (i / 8 < 4) {
+		if (!vel)
+			return;
+		bool root, inScale;
+		int p = padPitch(s.scale, s.track[ui.track].octave, i / 8, i % 8, root, inScale);
+		if (p < 0)
+			return;
+		if (ui.heldStep >= 0) {
+			int hs, n;
+			stepOf(s, ui.heldStep, hs);
+			n = findNote(c, p, hs, grid);
+			if (n >= 0) {
+				checkpoint(ui.track, ui.scene), eraseNote(c, n);
+			} else if (c.nNotes >= kMaxNotes) {
+				ui.popup = kClipFullPopup, ui.popupAt = ui.now;
+			} else {
+				checkpoint(ui.track, ui.scene);
+				insertNote(c, {(uint16_t)hs, (uint16_t)std::min(grid, c.length - hs), (uint8_t)p, 100});
+			}
+			ui.heldEdited = true;
+		} else {
+			bool alone = true;
+			for (int j = 0; j < 32; j++)
+				alone &= j == i || !ui.pad[j];
+			if (alone)
+				ui.chord[0] = ui.chord[1] = 0;
+			ui.chord[p >> 6] |= 1ull << (p & 63);
+		}
+		play(s, i, p, vel);
+		return;
+	}
+	int t0 = start - grid / 2, t1 = start + grid / 2;
+	if (!vel) { // a tap on a step that had notes takes them off, unless the hold edited it
+		if (i == ui.heldStep) {
+			if (ui.heldHad && !ui.heldEdited)
+				checkpoint(ui.track, ui.scene), eraseNotes(c, t0, t1, 0, 127);
+			ui.heldStep = -1;
+		}
+		return;
+	}
+	bool created = !c.length;
+	int length = c.length ? c.length : kPpqn << ui.fixedBars;
+	if (start >= length)
+		return;
+	bool has = stepNotes(c, start, grid, nullptr, 0) > 0;
+	if (ui.button[push2::cc::Delete]) {
+		if (has)
+			checkpoint(ui.track, ui.scene), eraseNotes(c, t0, t1, 0, 127);
+	} else if (ui.heldStep >= 0) { // a press on a later step stretches every note of the held one
+		int hs;
+		stepOf(s, ui.heldStep, hs);
+		if (start > hs && stepNotes(c, hs, grid, nullptr, 0)) {
+			checkpoint(ui.track, ui.scene);
+			for (int k = 0; k < c.nNotes; k++)
+				if (c.notes[k].tick >= hs - grid / 2 && c.notes[k].tick < hs + grid / 2)
+					c.notes[k].len = (uint16_t)(std::min(start + grid, length) - c.notes[k].tick);
+			ui.heldEdited = true;
+		}
+	} else if (has) {
+		ui.heldStep = (int8_t)i, ui.heldHad = true, ui.heldEdited = false;
+	} else {
+		int count = 0;
+		for (int p = 0; p < 128; p++)
+			count += chordHas(s, p);
+		if (!count)
+			return;
+		if (c.nNotes + count > kMaxNotes) {
+			ui.popup = kClipFullPopup, ui.popupAt = ui.now;
+			return;
+		}
+		checkpoint(ui.track, ui.scene);
+		for (int p = 0; p < 128; p++)
+			if (chordHas(s, p))
+				insertNote(c, {(uint16_t)start, (uint16_t)std::min(grid, length - start), (uint8_t)p, 100});
+		ui.heldStep = (int8_t)i, ui.heldHad = ui.heldEdited = false;
+		c.length = (uint16_t)length;
+		if (created)
+			launch(s, ui.track, ui.scene);
+	}
+}
+
 /** An encoder turned while a step is held: 0 Nudge (ticks, within half a step), 1 Length (steps), 2 Length fine
  * (ticks), 3 Velocity. */
 void Machine::noteEncoder(State& st, int encoder, int delta) {
 	Ui& ui = st.s.ui;
 	Clip& c = st.clip[ui.track][ui.scene];
 	int grid = kGrid[st.s.track[ui.track].grid], start;
-	int h = findNote(c, stepOf(st.s, ui.heldStep, start), start, grid);
+	int pitch = stepOf(st.s, ui.heldStep, start);
+	// The notes to edit: the one on the step, or in the split layout every one (ponytail: at most 16 at a time).
+	Note sel[16];
+	int cnt = 0, idx[16];
+	if (st.s.track[ui.track].type != Drum && ui.noteLayout == 2) {
+		cnt = std::min(stepNotes(c, start, grid, idx, 16), 16);
+		for (int k = 0; k < cnt; k++)
+			sel[k] = c.notes[idx[k]];
+	} else if (int h = findNote(c, pitch, start, grid); h >= 0) {
+		sel[cnt++] = c.notes[h];
+	}
 	int n = steps(accNote_[encoder], delta, kNoteUnits[encoder]);
-	if (h < 0 || !n)
+	if (!cnt || !n)
 		return;
 	checkpoint(ui.track, ui.scene);
-	Note note = c.notes[h];
 	ui.heldEdited = true;
-	if (encoder == 0) { // moves it in the order of the notes
-		int tick = std::min(std::max(note.tick + n, std::max(start - grid / 2, 0)),
-							std::min(start + grid / 2 - 1, c.length - 1));
-		eraseNote(c, h);
-		Note moved = note;
-		moved.tick = (uint16_t)tick;
-		if (insertNote(c, moved) < 0)
-			insertNote(c, note); // that tick and pitch is taken
-	} else if (encoder == 3) {
-		c.notes[h].vel = (uint8_t)std::min(std::max(note.vel + n, 1), 127);
-	} else {
-		int len = note.len + n * (encoder == 1 ? grid : 1);
-		c.notes[h].len = (uint16_t)std::min(std::max(len, 1), c.length - note.tick);
+	for (int k = 0; k < cnt; k++) {
+		const Note note = sel[k];
+		int h = (int)(std::lower_bound(c.notes, c.notes + c.nNotes, note, before) - c.notes);
+		if (encoder == 0) { // moves it in the order of the notes
+			int tick = std::min(std::max(note.tick + n, std::max(start - grid / 2, 0)),
+								std::min(start + grid / 2 - 1, c.length - 1));
+			eraseNote(c, h);
+			Note moved = note;
+			moved.tick = (uint16_t)tick;
+			if (insertNote(c, moved) < 0)
+				insertNote(c, note); // that tick and pitch is taken
+		} else if (encoder == 3) {
+			c.notes[h].vel = (uint8_t)std::min(std::max(note.vel + n, 1), 127);
+		} else {
+			int len = note.len + n * (encoder == 1 ? grid : 1);
+			c.notes[h].len = (uint16_t)std::min(std::max(len, 1), c.length - note.tick);
+		}
 	}
 }
 
@@ -1064,7 +1197,7 @@ static void sessionLeds(const State& st, push2::Leds& out) {
 static void pageLeds(const State& st, push2::Leds& out) {
 	const Ui& u = st.s.ui;
 	const Track& tr = st.s.track[u.track];
-	int last = lastPage(st.clip[u.track][u.scene], kGrid[tr.grid], pageSteps(tr));
+	int last = lastPage(st.clip[u.track][u.scene], kGrid[tr.grid], pageSteps(tr, u));
 	auto white = [&](int b, bool full) { out.cc[b] = {full ? push2::kWhiteFull : push2::kWhiteDark, push2::kStatic}; };
 	if (u.page > 0)
 		white(push2::cc::PageLeft, u.button[push2::cc::PageLeft]);
@@ -1120,6 +1253,34 @@ static void seqLeds(const State& st, push2::Leds& out) {
 		}
 }
 
+/** The 32 steps of the viewed page (the top four rows) for the drum lane and the split layout: the playhead green, a
+ * held one white, a note in the track's colour (dim for soft ones; `vel` is the velocity on each step, 0: none), an
+ * empty one dark gray, nothing past the end of the clip. Returns where the clip is (-1: not playing). */
+static int stepLeds(const State& st, const uint8_t* vel, push2::Leds& out) {
+	const Session& s = st.s;
+	const Ui& u = s.ui;
+	const Track& tr = s.track[u.track];
+	const Clip& c = st.clip[u.track][u.scene];
+	int grid = kGrid[tr.grid];
+	int pos = -1; // where the clip is
+	if (s.transport.playing && tr.playing == u.scene && c.length)
+		pos = (int)(std::max<int64_t>(s.transport.tick - tr.startTick, 0) % c.length);
+	for (int k = 0; k < kDrumSteps; k++) {
+		int step = u.page * kDrumSteps + k, pad = (7 - k / 8) * 8 + k % 8;
+		uint8_t color = push2::kRgbDarkGray;
+		if (c.length && step * grid >= c.length)
+			color = push2::kBlack;
+		else if (pad == u.heldStep)
+			color = push2::kRgbWhite;
+		else if (pos >= 0 && pos / grid == step)
+			color = hot(u, true);
+		else if (vel[k])
+			color = vel[k] < 64 ? (uint8_t)(kPaletteDim + u.track) : (uint8_t)(kPaletteFull + u.track);
+		out.note[push2::padNote(pad / 8, pad % 8)] = {color, push2::kStatic};
+	}
+	return pos;
+}
+
 /** A drum track's LEDs. Lanes: the selected one white, a sounding one green, else the track's colour, dim when the
  * clip has no note on it. Steps of the selected lane: the playhead green, a held one white, a note in the track's
  * colour (dim for soft ones), an empty one dark gray, nothing past the end of the clip. Loop pads: the playing one
@@ -1147,22 +1308,7 @@ static void drumLeds(const State& st, const filo::VoiceAllocator& voice, push2::
 														: has[lane]       ? (uint8_t)(kPaletteFull + u.track)
 																		  : (uint8_t)(kPaletteDim + u.track),
 														push2::kStatic};
-	int pos = -1; // where the clip is
-	if (s.transport.playing && tr.playing == u.scene && c.length)
-		pos = (int)(std::max<int64_t>(s.transport.tick - tr.startTick, 0) % c.length);
-	for (int k = 0; k < kDrumSteps; k++) {
-		int step = u.page * kDrumSteps + k, pad = (7 - k / 8) * 8 + k % 8;
-		uint8_t color = push2::kRgbDarkGray;
-		if (c.length && step * grid >= c.length)
-			color = push2::kBlack;
-		else if (pad == u.heldStep)
-			color = push2::kRgbWhite;
-		else if (pos >= 0 && pos / grid == step)
-			color = hot(u, true);
-		else if (vel[k])
-			color = vel[k] < 64 ? (uint8_t)(kPaletteDim + u.track) : (uint8_t)(kPaletteFull + u.track);
-		out.note[push2::padNote(pad / 8, pad % 8)] = {color, push2::kStatic};
-	}
+	int pos = stepLeds(st, vel, out);
 	int page = kDrumSteps * grid;
 	for (int row = 0; row < 4; row++)
 		for (int col = 4; col < 8; col++) {
@@ -1253,20 +1399,41 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 	if (tr.octave < kMaxOctave)
 		white(push2::cc::OctaveUp, u.button[push2::cc::OctaveUp]);
 	white(push2::cc::Layout, u.noteLayout || u.button[push2::cc::Layout]);
-	if (u.noteLayout) {
+	if (u.noteLayout == 1) {
 		seqLeds(st, out);
 		return;
 	}
 	bool held[128] = {}; // pitches sounding from the pads: lit on every pad with that pitch
 	for (int i = 0; i < 64; i++)
 		held[live_[i].pitch & 127] |= u.pad[i] != 0;
-	for (int row = 0; row < 8; row++)
+	// The split layout: the steps above, and the chord (a held step's notes while one is held) in dim colour below.
+	bool mark[128] = {};
+	if (u.noteLayout == 2) {
+		const Clip& c = st.clip[u.track][u.scene];
+		int grid = kGrid[tr.grid], heldAt = -1;
+		uint8_t vel[kDrumSteps] = {};
+		if (u.heldStep >= 0)
+			heldAt = u.page * kDrumSteps + (7 - u.heldStep / 8) * 8 + u.heldStep % 8;
+		for (int i = 0; i < c.nNotes; i++) {
+			int step = (c.notes[i].tick + grid / 2) / grid;
+			if (step - u.page * kDrumSteps >= 0 && step - u.page * kDrumSteps < kDrumSteps)
+				vel[step - u.page * kDrumSteps] = std::max(vel[step - u.page * kDrumSteps], c.notes[i].vel);
+			if (step == heldAt)
+				mark[c.notes[i].pitch & 127] = true;
+		}
+		for (int p = 0; p < 128 && heldAt < 0; p++)
+			mark[p] = chordHas(s, p);
+		pageLeds(st, out);
+		stepLeds(st, vel, out);
+	}
+	for (int row = 0; row < (u.noteLayout == 2 ? 4 : 8); row++)
 		for (int col = 0; col < 8; col++) {
 			bool root, inScale;
 			int p = padPitch(s.scale, tr.octave, row, col, root, inScale);
 			if (p < 0)
 				continue; // above 127: dark and silent
 			uint8_t c = held[p]   ? hot(u)
+						: mark[p] ? (uint8_t)(kPaletteDim + u.track)
 						: root    ? (uint8_t)(kPaletteFull + u.track)
 						: inScale ? push2::kRgbWhite
 								  : push2::kBlack;
@@ -1443,7 +1610,7 @@ bool Machine::undo(State& st, bool redo) {
 			vacate(st, e.track, e.scene);
 		if (e.track == ui.track && e.scene == ui.scene) {
 			const Track& tr = st.s.track[e.track];
-			ui.heldStep = -1, ui.page = (uint8_t)std::min<int>(ui.page, lastPage(c, kGrid[tr.grid], pageSteps(tr)));
+			ui.heldStep = -1, ui.page = (uint8_t)std::min<int>(ui.page, lastPage(c, kGrid[tr.grid], pageSteps(tr, ui)));
 		}
 	}
 	return true;
@@ -1588,9 +1755,16 @@ void Machine::view(View& v) {
 	v.nNotes = clip.nNotes;
 	std::copy(clip.notes, clip.notes + clip.nNotes, v.notes);
 	v.held = -1;
+	v.heldCount = 0;
 	if (u.pads == kNote && (u.noteLayout || v.s.track[u.track].type == Drum) && u.heldStep >= 0) {
-		int start, pitch = stepOf(v.s, u.heldStep, start);
-		v.held = (int16_t)findNote(clip, pitch, start, kGrid[v.s.track[u.track].grid]);
+		int start, pitch = stepOf(v.s, u.heldStep, start), grid = kGrid[v.s.track[u.track].grid];
+		if (u.noteLayout == 2 && v.s.track[u.track].type != Drum) { // the split layout: the first of its notes
+			int first = -1;
+			v.heldCount = (uint8_t)std::min(stepNotes(clip, start, grid, &first, 1), 255);
+			v.held = (int16_t)first;
+		} else {
+			v.held = (int16_t)findNote(clip, pitch, start, grid);
+		}
 	}
 	unlock();
 }

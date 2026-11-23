@@ -91,19 +91,21 @@ struct Scale {
 
 struct Ui {
 	// saved
-	// noteLayout: 0 64 notes, 1 the Melodic Sequencer. fixedBars: Fixed Length, 0..7 = 1 Beat, 2 Beats, 1 .. 32 Bars.
+	// noteLayout: 0 64 notes, 1 the Melodic Sequencer, 2 Sequencer + 32 Notes. fixedBars: Fixed Length, 0..7 = 1 Beat,
+	// 2 Beats, 1 .. 32 Bars.
 	uint8_t pads = kSession, noteLayout = 0, screen = 0, track = 0, scene = 0, fixedBars = 3;
 	bool fixedOn = false;
 	// Quantize: quantTo and recQuant index kQuantToNames, quantAmount is a percent, recQuantOn is Record Quantize.
 	uint8_t quantTo = 4 /*1/16*/, quantAmount = 100, recQuant = 4;
 	bool recQuantOn = false;
 	// transient
-	uint8_t page = 0;      // the sequencer's page of 8 steps (a drum track: 32)
-	uint8_t pad[64] = {};  // velocity of each held pad, row * 8 + col
-	bool button[128] = {}; // held buttons by CC
-	uint32_t touched = 0;  // bit per push2 encoder id
-	float bend = 0;        // the touch strip, -1..1
-	int8_t heldStep = -1;  // the sequencer pad (row * 8 + col) that is held, -1: none
+	uint8_t page = 0;       // the sequencer's page of 8 steps (a drum track: 32)
+	uint8_t pad[64] = {};   // velocity of each held pad, row * 8 + col
+	bool button[128] = {};  // held buttons by CC
+	uint32_t touched = 0;   // bit per push2 encoder id
+	float bend = 0;         // the touch strip, -1..1
+	uint64_t chord[2] = {}; // the split layout's chord: a bit per MIDI note, none: the bottom-left pad
+	int8_t heldStep = -1;   // the sequencer pad (row * 8 + col) that is held, -1: none
 	bool heldHad = false,
 		 heldEdited = false; // the held step had a note when pressed; a long note or an encoder edited it
 	double fixedAt = -1;     // when the press of Fixed Length began (-1: none, or used as a menu)
@@ -143,7 +145,8 @@ struct View {
 	uint16_t length[kTracks][kScenes];
 	uint16_t nNotes;
 	Note notes[kMaxNotes];
-	int16_t held = -1; // the index in `notes` of the note on the held sequencer step, -1: none
+	int16_t held = -1;     // the index in `notes` of the note on the held sequencer step, -1: none
+	uint8_t heldCount = 0; // how many notes the held step has (split layout; else 0)
 };
 
 /** Live's 70 clip colours as the Push shows them, by index (a track's `color`). They are also the Slice's number
@@ -256,6 +259,7 @@ class Machine {
 	void handle(State& st, const push2::Event& e);
 	void pad(State& st, int index, int vel);
 	void sequencer(State& st, int index, int vel);
+	void splitPad(State& st, int index, int vel);
 	void play(Session& s, int index, int pitch, int vel);
 	void drumPad(State& st, int index, int vel);
 	void loopPad(State& st, int index, int vel);
