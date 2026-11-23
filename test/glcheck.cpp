@@ -625,8 +625,9 @@ int main() {
 			view->length[0][0] = 384, view->nNotes = 3, view->s.track[0].playing = 0;
 			view->notes[0] = {0, 24, 36, 100}, view->notes[1] = {96, 48, 43, 60}, view->notes[2] = {200, 24, 40, 100};
 			int pass = 0;
-			// the Home screen with a clip, the Scale screen, the Home screen with a step held, then Fixed Length held
-			for (uint8_t id : {tart::kHome, tart::kScaleScreen, tart::kHome, tart::kHome}) {
+			// the Home screen with a clip, the Scale screen, the Home screen with a step held, then Fixed Length held,
+			// then the Clip screen
+			for (uint8_t id : {tart::kHome, tart::kScaleScreen, tart::kHome, tart::kHome, tart::kClipScreen}) {
 				view->s.ui.screen = id, view->s.scale.scale = 20;
 				view->held = pass == 2 ? 1 : -1, view->s.ui.button[push2::cc::FixedLength] = pass++ == 3;
 				if (!screen.begin(vg, fbVg)) {

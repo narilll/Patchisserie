@@ -76,6 +76,12 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 					rect(x + 3, y, 114, 24, white);
 				text(x + 60, y + 18, kScales[k].name, 14, NVG_ALIGN_CENTER, k == sc.scale ? black : white, sans);
 			}
+	} else if (ui.screen == kClipScreen) { // the length of the selected clip, as bars.beats.ticks
+		int length = v.length[ui.track][ui.scene];
+		if (length) {
+			std::snprintf(buf, sizeof buf, "%d.%d.%d", length / kBar, length / kPpqn % 4, length % kPpqn);
+			cell(0, 1, "LENGTH", buf);
+		}
 	} else if (ui.button[push2::cc::FixedLength]) {
 		cell(0, 1, "FIXED LENGTH", ui.fixedOn ? "On" : "Off");
 	} else if (v.held >= 0) { // a held step: its note
@@ -118,7 +124,7 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 		std::snprintf(buf, sizeof buf, "Track %d \xC2\xB7 Scene %d", ui.track + 1, ui.scene + 1);
 		text(8, 46, buf, 18, NVG_ALIGN_LEFT, white, sans);
 		int length = v.length[ui.track][ui.scene];
-		const float x0 = 8, w = 944, y0 = 54, h = 62;
+		const float x0 = 8, w = 944, y0 = 54, h = ui.screen == kClipScreen ? 70 : 62; // larger on the Clip screen
 		if (!length) {
 			text(480, 96, "Empty slot", 24, NVG_ALIGN_CENTER, dim, sans);
 		} else {

@@ -1559,3 +1559,88 @@ TEST(note_added_to_a_stopped_clip_does_not_launch) {
 	v = r.view();
 	CHECK(v.s.ui.scene == 1 && v.length[0][1] == tart::kBar && v.s.track[0].queued == 1);
 }
+
+TEST(clip_screen_momentary) {
+	using namespace push2::cc;
+	Rig r(false);
+	r.in.leds = true;
+	r.step();
+	CHECK(r.want.cc[Clip].color == push2::kWhiteDark);
+	r.press(Clip);
+	CHECK(r.view().s.ui.screen == tart::kClipScreen && r.want.cc[Clip].color == push2::kWhiteFull);
+	r.run_(100);
+	r.press(Clip, 0);
+	CHECK(r.view().s.ui.screen == tart::kClipScreen && r.want.cc[Clip].color == push2::kWhiteFull); // short: stays
+	r.press(Clip);
+	CHECK(r.view().s.ui.screen == tart::kHome);
+	r.press(Clip, 0);
+	CHECK(r.want.cc[Clip].color == push2::kWhiteDark);
+	r.press(Clip); // held 0.6 s: momentary
+	r.run_(48000 * 6 / 10);
+	r.press(Clip, 0);
+	CHECK(r.view().s.ui.screen == tart::kHome);
+	r.press(Clip); // held 0.4 s: stays
+	r.run_(48000 * 4 / 10);
+	r.press(Clip, 0);
+	CHECK(r.view().s.ui.screen == tart::kClipScreen);
+}
+
+TEST(clip_length_encoder) {
+	using namespace push2::cc;
+	Rig r(false);
+	r.m.edit([](tart::State& st) {
+		tart::Clip& c = st.clip[0][0];
+		c.length = 384, c.nNotes = 3;
+		c.notes[0] = {0, 24, 60, 100}, c.notes[1] = {200, 24, 62, 100}, c.notes[2] = {380, 4, 64, 100};
+		st.clip[2][0].length = 96;
+	});
+	r.turn(0, 4); // not on the Clip screen: nothing
+	CHECK(r.view().length[0][0] == 384);
+	r.press(Clip);
+	r.turn(0, 4);
+	CHECK(r.view().length[0][0] == 480);
+	r.turn(0, -4 + 128);
+	CHECK(r.view().length[0][0] == 384);
+	r.turn(0, 2); // half a beat: kept for the next turn
+	CHECK(r.view().length[0][0] == 384);
+	r.turn(0, 2);
+	CHECK(r.view().length[0][0] == 480);
+	r.turn(0, -4 + 128);
+	r.turn(0, -8 + 128); // 2 beats
+	auto v = r.view();
+	CHECK(v.length[0][0] == 192 && v.nNotes == 3 && v.notes[2].tick == 380); // kept, beyond the end
+	r.turn(0, 8);
+	CHECK(r.view().length[0][0] == 384 && r.view().nNotes == 3); // restored
+	for (int i = 0; i < 6; i++)
+		r.turn(0, 63);
+	for (int i = 0; i < 7; i++)
+		r.turn(0, -63 + 128);
+	CHECK(r.view().length[0][0] == 96); // 1 beat at least
+	for (int i = 0; i < 12; i++)
+		r.turn(0, 63);
+	CHECK(r.view().length[0][0] == 128 * tart::kPpqn && r.view().length[0][0] <= tart::kMaxLength);
+	// An empty slot stays empty; the other clips are untouched.
+	r.click(Track1Below + 1);
+	r.turn(0, 40);
+	v = r.view();
+	CHECK(v.length[1][0] == 0 && v.length[2][0] == 96 && v.length[0][0] == 128 * tart::kPpqn);
+	// The length is saved, and not a screen of its own.
+	CHECK(r.state()->clip[0][0].length == 128 * tart::kPpqn);
+}
+
+TEST(clip_shorten_releases_gate) {
+	SliceRig r(false);
+	r.m.edit([](tart::State& st) {
+		tart::Clip& c = st.clip[0][0];
+		c.length = 8 * tart::kPpqn, c.nNotes = 1, c.notes[0] = {0, 700, 60, 100};
+	});
+	tapSlot(r, 0, 0);
+	r.run_(250 * 300); // tick ~300 of 768: the note still sounds
+	CHECK(r.f.track[0].gate[0] == 10);
+	r.press(push2::cc::Clip);
+	r.turn(0, -6 * 4 + 128); // 2 beats: the position is past the new end
+	r.run_(3);
+	CHECK(r.f.track[0].gate[0] == 0);
+	r.run_(250 * 100); // tick ~400: the loop of 192 has wrapped and the note starts again
+	CHECK(r.f.track[0].gate[0] == 10);
+}

@@ -53,7 +53,7 @@ struct Track {
 
 enum Popup : uint8_t { kNoPopup, kTempoPopup, kSwingPopup };
 enum Pads : uint8_t { kSession, kNote };
-enum Screens : uint8_t { kHome, kScaleScreen };
+enum Screens : uint8_t { kHome, kScaleScreen, kClipScreen };
 
 struct Transport {
 	float bpm = 120; // the internal tempo; a patched CLOCK overrides it, the TEMPO input scales it
@@ -88,7 +88,7 @@ struct Ui {
 	double fixedAt = -1;     // when the press of Fixed Length began (-1: none, or used as a menu)
 	uint8_t popup = kNoPopup;
 	double popupAt = 0, now = 0; // seconds of audio time
-	double scaleAt = -1;         // when the press that opened the Scale screen began (-1: none)
+	double screenAt = -1;        // when the press that opened the Scale or Clip screen began (-1: none)
 	double padsAt = -1;          // when the press of Session or Note began (-1: none); held 0.5 s: momentary
 	uint8_t prevPads = kSession; // the mode before that press
 	int8_t dup = -1;             // Duplicate held: the slot to copy (track * 8 + scene), -1: none yet
@@ -224,6 +224,7 @@ class Machine {
 	void leds(const State& st, push2::Leds& out) const;
 	bool scaleButton(Scale& sc, int button); // on the Scale screen: whether it was one of its buttons
 	void tap(Transport& t);
+	void setLength(State& st, int beats);
 	void tick(State& st, int64_t k, Outputs& out);
 
 	// ponytail: one lock, as lattice::Machine; the audio side only try-locks and never waits.
@@ -262,7 +263,7 @@ class Machine {
 	double lastAt_ = -1;
 	Request request_ = Request::None;
 	bool sync_ = true; // take the lock this sample
-	int accTempo_ = 0, accSwing_ = 0, accScale_[8] = {}, accNote_[4] = {};
+	int accTempo_ = 0, accSwing_ = 0, accScale_[8] = {}, accNote_[4] = {}, accClip_ = 0;
 	uint8_t sentColor_[kTracks] = {255, 255, 255, 255, 255, 255, 255, 255}; // what the Push's palette has; 255: none
 	int64_t taps_[5] = {};
 	int nTaps_ = 0;

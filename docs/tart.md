@@ -16,15 +16,16 @@ Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad contro
 10. [Fixed Length](#fixed-length)
 11. [Swing](#swing)
 12. [Scale mode](#scale-mode)
-13. [The Home screen](#the-home-screen)
-14. [The lights](#the-lights)
-15. [The Push controls](#the-push-controls)
-16. [Context menu reference](#context-menu-reference)
-17. [Display status words](#display-status-words)
-18. [More than one Tart](#more-than-one-tart)
-19. [What is saved with the patch](#what-is-saved-with-the-patch)
-20. [Limitations](#limitations)
-21. [Credits and licenses](#credits-and-licenses)
+13. [Clip mode](#clip-mode)
+14. [The Home screen](#the-home-screen)
+15. [The lights](#the-lights)
+16. [The Push controls](#the-push-controls)
+17. [Context menu reference](#context-menu-reference)
+18. [Display status words](#display-status-words)
+19. [More than one Tart](#more-than-one-tart)
+20. [What is saved with the patch](#what-is-saved-with-the-patch)
+21. [Limitations](#limitations)
+22. [Credits and licenses](#credits-and-licenses)
 
 ## Quick start
 
@@ -280,6 +281,18 @@ While the Scale screen is open, the buttons below the display set the options an
 
 **The display.** The top row shows the layout (**LAYOUT**) over encoder 1, the roots C, G, D, A, E and B over the upper buttons, and the direction (**DIRECTION**) over encoder 8. The bottom row shows In Key or Chromatic over lower button 1, the roots F, Bb, Eb, Ab, Db and Gb over the lower buttons, and Fixed (**FIXED**) over lower button 8. The selected root is a filled box. The middle shows the list of scales in columns of four, under encoders 2 to 7. The selected scale is a filled box, and the list scrolls to keep it in view.
 
+## Clip mode
+
+Press CLIP on the Push to open the Clip screen, where you set the length of the clip in the selected slot. Press CLIP again to close it. If you hold CLIP for half a second or longer, the screen stays open only while you hold the button, and closes when you let go. The CLIP button is full white while the screen is open and dim white otherwise.
+
+Turn encoder 1 to change the length of the clip. One step of the encoder is one beat, and the length can be from 1 beat to 128 beats, which is 32 bars. The top row shows the length (**LENGTH**) over encoder 1 as bars, beats and ticks, so "2.0.0" is 2 bars, and "0.2.0" is 2 beats. A tick is 1/96 of a beat. The middle shows a larger picture of the notes of the clip, and the bottom row shows the track names. The buttons below the display still select tracks, and the arrows still move the selected slot, so you can go to another clip without leaving the screen.
+
+When you make a clip shorter, the notes after the new end are not deleted. They are kept, but they do not play. When you make the clip longer again, they play again. The notes after the end are not shown in the picture. If the clip is playing, the new length applies at once and the clip goes on from the new loop. When the clip is at a point after the new end at that moment, the notes that are sounding stop, so that no note stays on.
+
+An empty slot shows "Empty slot", and the encoder does nothing there. Make a clip first in the [Melodic Sequencer](#the-melodic-sequencer).
+
+**Differences from Ableton Live.** The Clip screen of Live also has the start of the loop, the loop on or off, and the position. Tart's Clip screen has only the length. A clip always starts at its first beat and always loops.
+
 ## The Home screen
 
 The Push display is 960 pixels wide and 160 pixels high. The mirror on the panel shows the same picture. The display is split into eight columns, one above each encoder and one above each button of the rows above and below the display.
@@ -319,7 +332,7 @@ Tart lights the Push buttons that do something in this version. All other button
 - **TAP TEMPO** and **SHIFT** are dim white, and turn full white while you hold them.
 - **NOTE** is full white in Note mode and dim white otherwise, and **SESSION** is full white in Session mode and dim white otherwise.
 - **SELECT**, **DELETE**, **DUPLICATE**, **NEW** and **STOP CLIP** are dim white, and turn full white while you hold them.
-- **SCALE** is full white while the [Scale screen](#scale-mode) is open and dim white otherwise.
+- **SCALE** is full white while the [Scale screen](#scale-mode) is open and dim white otherwise, and **CLIP** is the same for the [Clip screen](#clip-mode).
 - **OCTAVE UP** and **OCTAVE DOWN** are dim white while the selected track can move in that direction, and dark when it cannot.
 - **LAYOUT** is dim white in Note mode, and full white while the [Melodic Sequencer](#the-melodic-sequencer) is open.
 - **FIXED LENGTH** is full white while [Fixed Length](#fixed-length) is on and dim white while it is off.
@@ -341,6 +354,7 @@ Tart lights the Push buttons that do something in this version. All other button
 | NOTE | Puts the pads in [Note mode](#note-mode). Held for half a second or longer, it is Note mode only while you hold it. |
 | SESSION | Puts the pads in [Session mode](#session-mode), with the same tap and hold as NOTE. |
 | SCALE | Opens or closes the [Scale screen](#scale-mode). Held for half a second or longer, it is open only while you hold it. |
+| CLIP | Opens or closes the [Clip screen](#clip-mode), where encoder 1 sets the length of the selected clip. Held for half a second or longer, it is open only while you hold it. |
 | Pads | In Session mode, launch clips. In Note mode, play notes on the selected track, or in the Melodic Sequencer, the steps of its clip. |
 | LAYOUT | In Note mode, switches the pads between 64 Notes and the [Melodic Sequencer](#the-melodic-sequencer). |
 | PAGE LEFT, PAGE RIGHT | In the Melodic Sequencer, move to the previous or the next page of 8 steps. |
@@ -356,7 +370,7 @@ Tart lights the Push buttons that do something in this version. All other button
 | Buttons below the display | Select the track. While STOP CLIP is held, they stop the track. While FIXED LENGTH is held, they choose the length. |
 | LEFT, RIGHT | Move the selected slot to the previous or the next track. On the Scale screen, they move four scales back or forward. |
 | UP, DOWN | Move the selected slot to the previous or the next scene. On the Scale screen, they select the previous or the next scale. |
-| Encoders and the buttons above and below the display | On the Scale screen, they set the key, the layout and the scale. See [Scale mode](#scale-mode). |
+| Encoders and the buttons above and below the display | On the Scale screen, they set the key, the layout and the scale. See [Scale mode](#scale-mode). On the Clip screen, encoder 1 sets the length of the clip. See [Clip mode](#clip-mode). |
 | Touch strip | Bends the pitch of the selected track by up to 2 semitones. |
 
 The other controls of the Push do nothing yet.
@@ -402,7 +416,7 @@ If you duplicate the owning Tart, the copy closes the ports it copied and stays 
 
 ## What is saved with the patch
 
-Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices and the octave, and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty. It also saves the selected track and scene, the pad mode, the launch quantization, whether the Melodic Sequencer is open, and whether Fixed Length is on and its length. The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. See [Limitations](#limitations). The Scale screen is not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
+Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices and the octave, and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty. It also saves the selected track and scene, the pad mode, the launch quantization, whether the Melodic Sequencer is open, and whether Fixed Length is on and its length. The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. See [Limitations](#limitations). The Scale screen and the Clip screen are not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
 
 ## Limitations
 
@@ -414,6 +428,7 @@ Tart saves these things with the patch: the internal tempo, the swing, the metro
 - A pad that sounds when you change the number of voices of its track is cut off.
 - Push buttons other than the ones in the table above do nothing, and so does the master volume encoder.
 - The list of scales is Live's list as far as it is known, and it may be missing scales that Live added lately. If the encoders on the Scale screen move too fast or too slow on your Push, tell the author.
+- The length encoder of the Clip screen takes 4 steps for one beat. This is a guess too. The Clip screen has no start, loop or position, and the length is in whole beats.
 - The tempo encoder takes each step it receives as 1 BPM, and the swing encoder takes two steps for one percent. If the step sizes feel wrong on your Push, tell the author.
 - The note encoders of the sequencer take 2 steps for a tick of Nudge, 8 steps for a step of Length, 2 steps for a tick of Length fine and 1 step for a velocity. These are guesses too.
 - The step page does not follow the playhead as it does in Ableton Live, and the dim color of a soft note has only one level.

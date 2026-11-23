@@ -15,6 +15,8 @@ constexpr int kTempoUnits = 1; // raw encoder deltas per detent: 1 BPM
 // ponytail: the track encoders send about 210 steps per turn (the manual); 8 per scale and 30 per layout choice are
 // guesses, calibrate on the hardware.
 constexpr int kScaleUnits = 8, kLayoutUnits = 30;
+// ponytail: raw encoder deltas per beat of a clip's length on the Clip screen; a guess, calibrate on the hardware.
+constexpr int kLengthUnits = 4;
 constexpr double kHoldSeconds = 0.5; // a button held this long is momentary
 // ponytail: 2 raw deltas per percent, from the manual's "about 210 steps per turn"; calibrate on the hardware.
 constexpr int kSwingUnits = 2;
@@ -226,7 +228,7 @@ void sanitize(State& st) {
 	u.page = 0, u.heldStep = -1, u.heldHad = u.heldEdited = false, u.fixedAt = -1, u.bend = 0;
 	std::fill(u.pad, u.pad + 64, 0);
 	std::fill(u.button, u.button + 128, false);
-	u.touched = 0, u.popup = kNoPopup, u.popupAt = u.now = 0, u.scaleAt = u.padsAt = -1;
+	u.touched = 0, u.popup = kNoPopup, u.popupAt = u.now = 0, u.screenAt = u.padsAt = -1;
 	u.prevPads = kSession, u.dup = -1;
 	for (auto& row : st.clip)
 		for (Clip& c : row) { // `playing` is transient, so a clip needs no more than sorted notes of sound values
@@ -326,10 +328,11 @@ void Machine::handle(State& st, const push2::Event& e) {
 	case Event::Button:
 		ui.button[e.index & 127] = e.value != 0;
 		if (!e.value) {
-			if (e.index == push2::cc::Scale && ui.scaleAt >= 0 && ui.now - ui.scaleAt >= kHoldSeconds)
-				ui.screen = kHome; // held: the screen was only there for as long as the button
-			if (e.index == push2::cc::Scale)
-				ui.scaleAt = -1;
+			if ((e.index == push2::cc::Scale || e.index == push2::cc::Clip) && ui.screenAt >= 0) {
+				if (ui.now - ui.screenAt >= kHoldSeconds)
+					ui.screen = kHome; // held: the screen was only there for as long as the button
+				ui.screenAt = -1;
+			}
 			if (e.index == push2::cc::Session || e.index == push2::cc::Note) {
 				if (ui.padsAt >= 0 && ui.now - ui.padsAt >= kHoldSeconds)
 					ui.pads = ui.prevPads; // held: the mode was only there for as long as the button
@@ -356,9 +359,10 @@ void Machine::handle(State& st, const push2::Event& e) {
 		} else if (e.index == push2::cc::FixedLength)
 			ui.fixedAt = ui.now;
 		else if (ui.button[push2::cc::FixedLength] && fixedLengthButton(ui, e.index)) {
-		} else if (e.index == push2::cc::Scale) {
-			ui.screen = ui.screen == kScaleScreen ? kHome : kScaleScreen;
-			ui.scaleAt = ui.screen == kScaleScreen ? ui.now : -1;
+		} else if (e.index == push2::cc::Scale || e.index == push2::cc::Clip) {
+			uint8_t to = e.index == push2::cc::Scale ? kScaleScreen : kClipScreen;
+			ui.screen = ui.screen == to ? kHome : to;
+			ui.screenAt = ui.screen == to ? ui.now : -1;
 		} else if (ui.screen == kScaleScreen && scaleButton(s.scale, e.index)) {
 		} else if (e.index == push2::cc::StopClip) {
 			if (ui.button[push2::cc::Shift])
@@ -424,6 +428,10 @@ void Machine::handle(State& st, const push2::Event& e) {
 				int n = steps(accScale_[e.index], e.value, kScaleUnits);
 				sc.scale = (uint8_t)std::min(std::max(sc.scale + n, 0), kScaleCount - 1);
 			}
+		} else if (e.index == 0 && ui.screen == kClipScreen) { // the Clip screen: the length of the selected clip
+			int n = steps(accClip_, e.value, kLengthUnits);
+			if (n)
+				setLength(st, st.clip[ui.track][ui.scene].length / kPpqn + n);
 		} else if (e.index < 4 && ui.heldStep >= 0) { // a held step: Nudge, Length, Length fine, Velocity
 			noteEncoder(st, e.index, e.value);
 		} else if (e.index == push2::kSwingId) {
@@ -443,6 +451,24 @@ void Machine::handle(State& st, const push2::Event& e) {
 		break;
 	default:
 		break;
+	}
+}
+
+/** Sets the length of the selected clip to `beats` (1..128, at most kMaxLength); an empty slot stays empty. Notes
+ * beyond the new end are kept but don't play. A clip that plays on is cut at once: when its position is past the new
+ * end, the loop wraps and the notes that began in the cut part end. */
+void Machine::setLength(State& st, int beats) {
+	Ui& ui = st.s.ui;
+	Clip& c = st.clip[ui.track][ui.scene];
+	if (!c.length)
+		return;
+	int old = c.length;
+	c.length = (uint16_t)std::min(std::max(beats, 1) * kPpqn, std::min(128 * kPpqn, kMaxLength));
+	Track& tr = st.s.track[ui.track];
+	if (tr.playing == ui.scene && (st.s.transport.tick - tr.startTick) % old >= c.length) {
+		for (int i = 0; i < nActive_[ui.track]; i++)
+			voice_[ui.track].noteOff(active_[ui.track][i].id);
+		nActive_[ui.track] = 0;
 	}
 }
 
@@ -754,6 +780,7 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 	for (int b : {push2::cc::Select, push2::cc::Delete, push2::cc::Duplicate, push2::cc::New, push2::cc::StopClip})
 		white(b, u.button[b]);
 	white(push2::cc::Scale, u.screen == kScaleScreen || u.button[push2::cc::Scale]);
+	white(push2::cc::Clip, u.screen == kClipScreen || u.button[push2::cc::Clip]);
 	white(push2::cc::FixedLength, u.fixedOn || u.button[push2::cc::FixedLength]);
 	if (u.screen == kScaleScreen) { // the roots (the selected one white), In Key (always on) and Fixed
 		const Scale& sc = s.scale;
