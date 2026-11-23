@@ -1039,7 +1039,9 @@ struct LatticeWidget : ModuleWidget {
 	}
 };
 
-// --- Tart: Ableton Push 2 as a Rack controller (E2.1: transport and clock) ---
+// --- Tart: Ableton Push 2 as a Rack controller (E2.2: transport and clock, tracks, Note mode) ---
+
+static Model *modelTart, *modelSlice;
 
 struct Tart : Module {
 	enum InputId { PLAY_INPUT, STOP_INPUT, CLOCK_INPUT, RESET_INPUT, TEMPO_INPUT, INPUTS_LEN };
@@ -1105,7 +1107,12 @@ struct Tart : Module {
 		ti.events = pending;
 		ti.nEvents = nPending;
 		ti.leds = sync || args.frame % 256 == 0;
-		machine.process(ti, out, want);
+		Module* right = rightExpander.module; // a Slice on the right gets the tracks' voices (one sample late)
+		tart::SliceFrame* slice =
+			right && right->model == modelSlice ? (tart::SliceFrame*)right->leftExpander.producerMessage : nullptr;
+		machine.process(ti, out, want, slice);
+		if (slice)
+			right->leftExpander.requestMessageFlip();
 		if (out.consumed)
 			nPending = 0;
 		if (sync) {
@@ -1156,17 +1163,29 @@ struct Tart : Module {
 		auto st = std::make_unique<tart::State>(); // large: never on the stack
 		machine.save(*st);
 		const tart::Transport& t = st->s.transport;
-		return json_pack("{s:b, s:o, s:o, s:{s:f, s:i, s:i, s:b}, s:i, s:i}", "pushAuto", pushAuto, "pushIn",
-						 pushIn.toJson(), "pushOut", pushOut.toJson(), "transport", "bpm", (double)t.bpm, "swing",
-						 (int)t.swing, "quant", (int)t.quant, "metronome", t.metronome, "clkDivision", clkDivision,
-						 "ppc", ppc);
+		const tart::Scale& sc = st->s.scale;
+		const tart::Ui& u = st->s.ui;
+		json_t* tracks = json_array();
+		for (const tart::Track& tr : st->s.track)
+			json_array_append_new(tracks, json_pack("{s:s, s:i, s:i, s:i}", "name", tr.name, "color", tr.color,
+													"voices", tr.voices, "octave", tr.octave));
+		return json_pack("{s:b, s:o, s:o, s:{s:f, s:i, s:i, s:b}, s:{s:i, s:i, s:i, s:b, s:b}, "
+						 "s:{s:i, s:i, s:i, s:i, s:i, s:b, s:i}, s:o, s:i, s:i}",
+						 "pushAuto", pushAuto, "pushIn", pushIn.toJson(), "pushOut", pushOut.toJson(), "transport",
+						 "bpm", (double)t.bpm, "swing", (int)t.swing, "quant", (int)t.quant, "metronome", t.metronome,
+						 "scale", "root", (int)sc.root, "scale", (int)sc.scale, "layout", (int)sc.layout, "inKey",
+						 sc.inKey, "fixed", sc.fixed, "ui", "pads", (int)u.pads, "noteLayout", (int)u.noteLayout,
+						 "screen", (int)u.screen, "track", (int)u.track, "scene", (int)u.scene, "fixedOn", u.fixedOn,
+						 "fixedBars", (int)u.fixedBars, "tracks", tracks, "clkDivision", clkDivision, "ppc", ppc);
 	}
 
 	void dataFromJson(json_t* root) override {
 		int autoFind = pushAuto;
-		json_t *inJ = nullptr, *outJ = nullptr, *transportJ = nullptr;
-		json_unpack(root, "{s?b, s?o, s?o, s?o, s?i, s?i}", "pushAuto", &autoFind, "pushIn", &inJ, "pushOut", &outJ,
-					"transport", &transportJ, "clkDivision", &clkDivision, "ppc", &ppc);
+		json_t *inJ = nullptr, *outJ = nullptr, *transportJ = nullptr, *scaleJ = nullptr, *uiJ = nullptr,
+			   *tracksJ = nullptr;
+		json_unpack(root, "{s?b, s?o, s?o, s?o, s?o, s?o, s?o, s?i, s?i}", "pushAuto", &autoFind, "pushIn", &inJ,
+					"pushOut", &outJ, "transport", &transportJ, "scale", &scaleJ, "ui", &uiJ, "tracks", &tracksJ,
+					"clkDivision", &clkDivision, "ppc", &ppc);
 		pushAuto = autoFind;
 		if (inJ)
 			pushIn.fromJson(inJ);
@@ -1179,15 +1198,39 @@ struct Tart : Module {
 			ppc = 4;
 		auto st = std::make_unique<tart::State>();
 		machine.save(*st);
+		// Patch data is a real boundary: values are clamped into their field's type here, sanitize() does the rest.
+		auto u8 = [](int v) { return (uint8_t)clamp(v, 0, 255); };
 		tart::Transport& t = st->s.transport;
 		double bpm = t.bpm;
 		int swing = t.swing, quant = t.quant, metronome = t.metronome;
 		json_unpack(transportJ, "{s?F, s?i, s?i, s?b}", "bpm", &bpm, "swing", &swing, "quant", &quant, "metronome",
 					&metronome);
 		t.bpm = (float)bpm;
-		t.swing = (uint8_t)clamp(swing, 0, 100); // patch data is a real boundary: sanitize() clamps the rest
-		t.quant = (uint8_t)clamp(quant, 0, 255);
+		t.swing = u8(swing);
+		t.quant = u8(quant);
 		t.metronome = metronome;
+		tart::Scale& sc = st->s.scale;
+		int rootNote = sc.root, scale = sc.scale, layout = sc.layout, inKey = sc.inKey, fixed = sc.fixed;
+		json_unpack(scaleJ, "{s?i, s?i, s?i, s?b, s?b}", "root", &rootNote, "scale", &scale, "layout", &layout, "inKey",
+					&inKey, "fixed", &fixed);
+		sc.root = u8(rootNote), sc.scale = u8(scale), sc.layout = u8(layout), sc.inKey = inKey, sc.fixed = fixed;
+		tart::Ui& ui = st->s.ui;
+		int pads = ui.pads, noteLayout = ui.noteLayout, screen = ui.screen, track = ui.track, scene = ui.scene,
+			fixedOn = ui.fixedOn, fixedBars = ui.fixedBars;
+		json_unpack(uiJ, "{s?i, s?i, s?i, s?i, s?i, s?b, s?i}", "pads", &pads, "noteLayout", &noteLayout, "screen",
+					&screen, "track", &track, "scene", &scene, "fixedOn", &fixedOn, "fixedBars", &fixedBars);
+		ui.pads = u8(pads), ui.noteLayout = u8(noteLayout), ui.screen = u8(screen), ui.track = u8(track);
+		ui.scene = u8(scene), ui.fixedOn = fixedOn, ui.fixedBars = u8(fixedBars);
+		for (size_t i = 0; i < tart::kTracks && i < json_array_size(tracksJ); i++) {
+			tart::Track& tr = st->s.track[i];
+			const char* name = nullptr;
+			int color = tr.color, voices = tr.voices, octave = tr.octave;
+			json_unpack(json_array_get(tracksJ, i), "{s?s, s?i, s?i, s?i}", "name", &name, "color", &color, "voices",
+						&voices, "octave", &octave);
+			if (name)
+				tart::setName(tr, name);
+			tr.color = u8(color), tr.voices = u8(voices), tr.octave = (int8_t)clamp(octave, -128, 127);
+		}
 		tart::sanitize(*st);
 		machine.load(*st);
 	}
@@ -1234,6 +1277,16 @@ static bool findUserPort(midi::Port* port, bool reopen) {
 	}
 	return false;
 }
+
+/** The Track menu's name field: every edit renames the track. */
+struct TrackNameField : ui::TextField {
+	std::function<void(const std::string&)> set;
+	TrackNameField() { box.size.x = 160; }
+	void onChange(const ChangeEvent&) override {
+		if (set)
+			set(text);
+	}
+};
 
 struct TartWidget : ModuleWidget {
 	push2::Screen screen;
@@ -1385,6 +1438,35 @@ struct TartWidget : ModuleWidget {
 		menu->addChild(createIndexSubmenuItem(
 			"CLOCK input: pulses per beat", divisions, [=] { return index(m->ppc); },
 			[=](size_t i) { m->ppc = kDivisions[i]; }));
+		menu->addChild(createSubmenuItem("Track", "", [=](Menu* sub) {
+			tart::View v;
+			m->machine.view(v);
+			for (int t = 0; t < tart::kTracks; t++)
+				sub->addChild(createSubmenuItem("Track " + std::to_string(t + 1), v.s.track[t].name, [=](Menu* sub2) {
+					tart::View now;
+					m->machine.view(now);
+					sub2->addChild(createMenuLabel("Name"));
+					auto* field = new TrackNameField;
+					field->setText(now.s.track[t].name);
+					field->set = [=](const std::string& name) {
+						m->machine.edit([&](tart::State& st) { tart::setName(st.s.track[t], name.c_str()); });
+					};
+					sub2->addChild(field);
+					std::vector<std::string> counts;
+					for (int n = 1; n <= 16; n++)
+						counts.push_back(std::to_string(n));
+					sub2->addChild(createIndexSubmenuItem(
+						"Voices", counts,
+						[=] {
+							tart::View now;
+							m->machine.view(now);
+							return (size_t)now.s.track[t].voices - 1;
+						},
+						[=](size_t i) {
+							m->machine.edit([=](tart::State& st) { st.s.track[t].voices = (uint8_t)i + 1; });
+						}));
+				}));
+		}));
 		menu->addChild(new MenuSeparator);
 		menu->addChild(createBoolPtrMenuItem("Find Push automatically", "", &m->pushAuto));
 		menu->addChild(createMenuLabel("Push MIDI input (User Port)"));
@@ -1394,11 +1476,147 @@ struct TartWidget : ModuleWidget {
 	}
 };
 
+// --- Slice: one Tart track's voices as jacks, on the right of a Tart or another Slice ---
+
+struct Slice : Module {
+	enum OutputId { VOCT_OUTPUT, GATE_OUTPUT, VEL_OUTPUT, CC_OUTPUT, LEVEL_OUTPUT, PAN_OUTPUT, OUTPUTS_LEN };
+
+	tart::SliceFrame msg[2] = {}; // the left neighbour writes one and this module reads the other (Rack flips them)
+	int track = -1;               // -1: the chain position; set by the UI thread, read by process()
+	uint32_t lastFrame = 0;
+	std::atomic<int> shown{-1}; // for the panel: the track number, -1 not chained, -2 chained without a track
+	std::atomic<uint32_t> shownRgb{0};
+
+	Slice() {
+		config(0, 0, OUTPUTS_LEN, 0);
+		configOutput(VOCT_OUTPUT, "V/OCT (one channel per voice)");
+		configOutput(GATE_OUTPUT, "Gate (one channel per voice)");
+		configOutput(VEL_OUTPUT, "Velocity (one channel per voice)");
+		configOutput(CC_OUTPUT, "CC (8 channels, 0 V for now)");
+		configOutput(LEVEL_OUTPUT, "Level (10 V for now)");
+		configOutput(PAN_OUTPUT, "Pan (0 V for now)");
+		leftExpander.producerMessage = &msg[0];
+		leftExpander.consumerMessage = &msg[1];
+	}
+
+	void process(const ProcessArgs&) override {
+		Module* left = leftExpander.module;
+		bool chained = left && (left->model == modelTart || left->model == modelSlice);
+		const tart::SliceFrame* f = chained ? (const tart::SliceFrame*)leftExpander.consumerMessage : nullptr;
+		if (f && f->frame == lastFrame)
+			f = nullptr; // nothing new: the left neighbour is bypassed, removed or the engine is paused
+		else if (f)
+			lastFrame = f->frame;
+		int tr = !f ? -1 : track >= 0 ? track : f->hop < tart::kTracks ? f->hop : -1;
+		const tart::SliceTrack* t = tr >= 0 ? &f->track[tr] : nullptr;
+		if (!chained)
+			shown.store(-1, std::memory_order_relaxed);
+		else if (f)
+			shown.store(t ? tr : -2, std::memory_order_relaxed);
+		if (t)
+			shownRgb.store(t->rgb, std::memory_order_relaxed);
+		int n = t ? t->channels : 1;
+		for (int id : {VOCT_OUTPUT, GATE_OUTPUT, VEL_OUTPUT})
+			outputs[id].setChannels(n);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Warray-bounds"
+		outputs[CC_OUTPUT].setChannels(tart::kCcs); // as in Lattice: GCC 12+ false positive for a constant
+#pragma GCC diagnostic pop
+		for (int c = 0; c < n; c++) {
+			outputs[VOCT_OUTPUT].setVoltage(t ? t->voct[c] : 0.f, c);
+			outputs[GATE_OUTPUT].setVoltage(t ? t->gate[c] : 0.f, c);
+			outputs[VEL_OUTPUT].setVoltage(t ? t->vel[c] : 0.f, c);
+		}
+		for (int c = 0; c < tart::kCcs; c++)
+			outputs[CC_OUTPUT].setVoltage(t ? t->cc[c] : 0.f, c);
+		outputs[LEVEL_OUTPUT].setVoltage(t ? t->level : 0.f);
+		outputs[PAN_OUTPUT].setVoltage(t ? t->pan : 0.f);
+		Module* right = rightExpander.module; // the chain goes on, one position further
+		if (f && right && right->model == modelSlice) {
+			tart::SliceFrame* next = (tart::SliceFrame*)right->leftExpander.producerMessage;
+			*next = *f;
+			next->hop = (uint8_t)std::min<int>(f->hop + 1, 255);
+			right->leftExpander.requestMessageFlip();
+		}
+	}
+
+	json_t* dataToJson() override { return json_pack("{s:i}", "track", track); }
+
+	void dataFromJson(json_t* root) override {
+		int v = track;
+		json_unpack(root, "{s?i}", "track", &v);
+		track = clamp(v, -1, tart::kTracks - 1);
+	}
+};
+
+// Matches res/Slice.svg (mm): the number window and the hint under it; the jacks, two to a row.
+static const math::Rect kSliceStatusMm = math::Rect(3, 12, 24.5, 62);
+static const float kSliceWindowMm = 14;
+static Vec sliceJackMm(int i) {
+	return Vec(i % 2 ? 21.9f : 8.6f, 85.f + 16.f * (i / 2));
+}
+
+/** The track number in its colour, or what to do when there is none. */
+struct SliceStatus : widget::Widget {
+	Slice* slice = nullptr;
+	void draw(const DrawArgs& args) override {
+		std::shared_ptr<window::Font> font =
+			APP->window->loadFont(asset::plugin(pluginInstance, "res/fonts/IBMPlexSansCondensed-SemiBold.ttf"));
+		if (!slice || !font)
+			return;
+		int shown = slice->shown.load(std::memory_order_relaxed);
+		uint32_t rgb = slice->shownRgb.load(std::memory_order_relaxed);
+		nvgFontFaceId(args.vg, font->handle);
+		nvgTextLetterSpacing(args.vg, 0);
+		nvgFontSize(args.vg, 30);
+		nvgFillColor(args.vg,
+					 shown >= 0 ? nvgRGB(rgb >> 16 & 255, rgb >> 8 & 255, rgb & 255) : nvgRGB(0x90, 0x92, 0x8c));
+		nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
+		nvgText(args.vg, box.size.x / 2, mm2px(kSliceWindowMm) / 2,
+				shown >= 0 ? std::to_string(shown + 1).c_str() : "-", nullptr);
+		if (shown == -1) {
+			nvgFontSize(args.vg, 11);
+			nvgFillColor(args.vg, nvgRGB(0, 0, 0));
+			nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+			nvgTextBox(args.vg, 0, mm2px(kSliceWindowMm + 5), box.size.x, "Place right of a Tart or Slice", nullptr);
+		}
+	}
+};
+
+struct SliceWidget : ModuleWidget {
+	SliceWidget(Slice* module) {
+		setModule(module);
+		setPanel(createPanel(asset::plugin(pluginInstance, "res/Slice.svg")));
+		auto* status = new SliceStatus;
+		status->slice = module;
+		status->box = math::Rect(mm2px(kSliceStatusMm.pos), mm2px(kSliceStatusMm.size));
+		addChild(status);
+		auto* text = createWidget<PanelText>(Vec());
+		text->box.size = box.size;
+		text->band("SLICE");
+		const char* outputs[] = {"V/OCT", "GATE", "VEL", "CC", "LEVEL", "PAN"};
+		for (int i = 0; i < Slice::OUTPUTS_LEN; i++) {
+			addOutput(createOutputCentered<PJ301MPort>(mm2px(sliceJackMm(i)), module, i));
+			text->label(sliceJackMm(i), outputs[i], true);
+		}
+		addChild(text);
+	}
+
+	void appendContextMenu(Menu* menu) override {
+		Slice* m = static_cast<Slice*>(module);
+		menu->addChild(new MenuSeparator);
+		menu->addChild(createIndexSubmenuItem(
+			"Track", {"Chain position", "1", "2", "3", "4", "5", "6", "7", "8"}, [=] { return (size_t)(m->track + 1); },
+			[=](size_t i) { m->track = (int)i - 1; }));
+	}
+};
+
 void init(Plugin* p) {
 	pluginInstance = p;
 	loadSettings();
 	p->addModel(modelFilo = createModel<Filo, FiloWidget>("Filo"));
 	p->addModel(createModel<Icing, IcingWidget>("Icing"));
 	p->addModel(createModel<Lattice, LatticeWidget>("Lattice"));
-	p->addModel(createModel<Tart, TartWidget>("Tart"));
+	p->addModel(modelTart = createModel<Tart, TartWidget>("Tart"));
+	p->addModel(modelSlice = createModel<Slice, SliceWidget>("Slice"));
 }

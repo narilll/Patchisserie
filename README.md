@@ -8,15 +8,17 @@ VCV Rack 2 plugin that runs [Strudel](https://strudel.cc) and [Orca](https://100
 - **[Icing](docs/icing.md)**: Hydra visuals expander for Filo, with audio input for `a.fft`.
 - **[Lattice](docs/lattice.md)**: Orca's grid (on the orca-c VM). V/OCT, gate, velocity, triggers, CC and clock from
   the grid's MIDI operators; clock/reset.
-- **[Tart](docs/tart.md)**: Ableton Push 2 as a Rack controller (transport and clock, driven from the Push).
+- **[Tart](docs/tart.md)**: Ableton Push 2 as a Rack controller (transport and clock, an 8-track keyboard in Note mode).
+- **[Slice](docs/slice.md)**: expander that takes one Tart track's V/OCT, gate and velocity out as jacks.
 
 Status: early development.
 
 ## Documentation
 
 The user manual is in [`docs/`](docs/README.md): start with the [front page](docs/README.md), then read the manual
-for [Filo](docs/filo.md), [Icing](docs/icing.md), [Lattice](docs/lattice.md) or [Tart](docs/tart.md). It covers the
-panels, keys, menus, what is saved with a patch and what isn't supported; this README only covers building.
+for [Filo](docs/filo.md), [Icing](docs/icing.md), [Lattice](docs/lattice.md), [Tart](docs/tart.md) or
+[Slice](docs/slice.md). It covers the panels, keys, menus, what is saved with a patch and what isn't supported; this
+README only covers building.
 
 ## Build
 

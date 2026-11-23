@@ -1,6 +1,6 @@
 # Patchisserie user manual
 
-Patchisserie is a plugin for VCV Rack 2 that lets you live code music and visuals inside your patch. It runs [Strudel](https://strudel.cc) and [Orca](https://100r.co/site/orca.html) for sound and sequencing, and [Hydra](https://hydra.ojack.xyz) for visuals, all natively in Rack, with no browser involved. Filo and Lattice send out ordinary Rack signals, so you can patch them into any other module, and Icing shows visuals. Tart connects an Ableton Push 2.
+Patchisserie is a plugin for VCV Rack 2 that lets you live code music and visuals inside your patch. It runs [Strudel](https://strudel.cc) and [Orca](https://100r.co/site/orca.html) for sound and sequencing, and [Hydra](https://hydra.ojack.xyz) for visuals, all natively in Rack, with no browser involved. Filo and Lattice send out ordinary Rack signals, so you can patch them into any other module, and Icing shows visuals. Tart connects an Ableton Push 2, and Slice takes its notes out.
 
 ## The modules
 
@@ -10,11 +10,13 @@ Patchisserie is a plugin for VCV Rack 2 that lets you live code music and visual
 
 **Lattice** is an Orca live coding module. You type into a grid of letters and symbols, and the grid turns into V/OCT pitches, gates, triggers, CC messages and a clock. It runs the original Orca engine, so most patches from the Orca community work as written. The Lattice manual lists the differences. Read [the Lattice manual](lattice.md).
 
-**Tart** connects an Ableton Push 2 to Rack. This version is its transport and clock: you start, stop and set the tempo from the Push, and Tart sends a clock, a run signal and a metronome to your patch through its jacks. It has no clips or notes yet, and it is meant to become an 8-track Session sequencer. Read [the Tart manual](tart.md).
+**Tart** connects an Ableton Push 2 to Rack. You start, stop and set the tempo from the Push, and Tart sends a clock, a run signal and a metronome to your patch through its jacks. In Note mode the pads are a keyboard for the 8 tracks. It has no clips yet, and it is meant to become an 8-track Session sequencer. Read [the Tart manual](tart.md).
+
+**Slice** is an expander that takes the notes of one Tart track out of Tart: V/OCT, gate and velocity, with one channel for each voice. You place it directly to the right of a Tart, and add more Slices to the right for more tracks. Read [the Slice manual](slice.md).
 
 ## Installing
 
-Patchisserie is not listed in the VCV Library, so you build it yourself from the source at [github.com/narilll/Patchisserie](https://github.com/narilll/Patchisserie). Clone the repository with `git clone --recursive`, point `RACK_DIR` at the Rack SDK, run `make`, and then `make install` to copy the plugin into your Rack user folder. Restart Rack and the four modules appear in the module browser under Patchisserie. The repository's `README.md` lists every build and test command.
+Patchisserie is not listed in the VCV Library, so you build it yourself from the source at [github.com/narilll/Patchisserie](https://github.com/narilll/Patchisserie). Clone the repository with `git clone --recursive`, point `RACK_DIR` at the Rack SDK, run `make`, and then `make install` to copy the plugin into your Rack user folder. Restart Rack and the five modules appear in the module browser under Patchisserie. The repository's `README.md` lists every build and test command.
 
 Patchisserie is free software under the AGPL-3.0-or-later license. The full text is in the `LICENSE` file, and the licenses of the bundled Strudel, Hydra, QuickJS and Orca code, and of libusb, ship with the plugin.
 
@@ -22,9 +24,9 @@ Patchisserie is free software under the AGPL-3.0-or-later license. The full text
 
 Filo and Lattice each work alone: put either one in a patch and it makes sound and signals without any other Patchisserie module.
 
-Icing is the exception. It has no code editor of its own. It draws the Hydra code of the Filo placed directly to its left, so the two modules must sit side by side with Icing on the right. If you move Icing away from a Filo, it has nothing to show.
+Icing is an expander. It has no code editor of its own. It draws the Hydra code of the Filo placed directly to its left, so the two modules must sit side by side with Icing on the right. If you move Icing away from a Filo, it has nothing to show. Slice is an expander too: it sits directly to the right of a Tart, or of another Slice, and without a Tart it sends 0 V.
 
-Filo and Lattice send out standard Rack signals: audio, V/OCT pitch, gates, triggers and CC. Icing has no outputs, because it shows visuals. You can mix the modules freely, for example by using a Lattice to play the pitch input of any oscillator while a Filo plays drums.
+Filo and Lattice send out standard Rack signals: audio, V/OCT pitch, gates, triggers and CC. Icing has no outputs, because it shows visuals. Tart plays its notes through Slice. You can mix the modules freely, for example by using a Lattice to play the pitch input of any oscillator while a Filo plays drums.
 
 ## Glossary
 

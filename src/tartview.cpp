@@ -10,9 +10,6 @@ namespace tart {
 
 namespace {
 
-// ponytail: 8 fixed colours, as many as the tracks, until E2.3 brings Live's 70 and the colour menu.
-const uint8_t kTrackRgb[8][3] = {{255, 94, 94},  {255, 165, 40}, {240, 220, 60},  {90, 220, 90},
-								 {60, 210, 210}, {80, 140, 255}, {170, 110, 255}, {255, 110, 200}};
 const char* const kQuantNames[] = {"None", "8 Bars", "4 Bars", "2 Bars", "1 Bar", "1/2",   "1/2T",
 								   "1/4",  "1/4T",   "1/8",    "1/8T",   "1/16",  "1/16T", "1/32"};
 

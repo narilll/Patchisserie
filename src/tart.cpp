@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <thread>
 
 namespace tart {
@@ -22,20 +23,44 @@ int steps(int& acc, int delta, int units) {
 	return n;
 }
 
-void leds(const Session& s, push2::Leds& out) {
-	using push2::cc::Metronome, push2::cc::Play, push2::cc::Shift, push2::cc::TapTempo;
-	auto white = [&](int c, bool full) { out.cc[c] = {full ? push2::kWhiteFull : push2::kWhiteDark, push2::kStatic}; };
-	out = push2::Leds();
-	out.cc[Play] = {s.transport.playing ? push2::kGreen : push2::kRgbWhite, push2::kStatic};
-	// Metronome: solid white off, pulsing between white and dim as fast as the Push goes on (the static white is sent
-	// first)
-	out.cc[Metronome] = s.transport.metronome ? push2::Led{push2::kWhiteDark, push2::kPulse24th}
-											  : push2::Led{push2::kWhiteFull, push2::kStatic};
-	white(TapTempo, s.ui.button[TapTempo]);
-	white(Shift, s.ui.button[Shift]);
+} // namespace
+
+const uint8_t kTrackRgb[8][3] = {{255, 94, 94},  {255, 165, 40}, {240, 220, 60},  {90, 220, 90},
+								 {60, 210, 210}, {80, 140, 255}, {170, 110, 255}, {255, 110, 200}};
+
+// In Key scales as bitmasks of the semitones above the root. ponytail: Major only until E2.3's scale list.
+constexpr uint16_t kScaleMasks[] = {0xAB5};
+constexpr int kScaleCount = sizeof kScaleMasks / sizeof *kScaleMasks;
+
+int padPitch(const Scale& sc, int octave, int row, int col, bool& root, bool& inScale) {
+	if (sc.layout & 1)
+		std::swap(row, col); // right: rows and columns trade places
+	// What a row adds to the column, by layout (4ths, 3rds, Sequential), In Key in scale steps, Chromatic in semitones.
+	static const int kRise[2][3] = {{3, 2, 8}, {5, 4, 8}};
+	int step = col + kRise[!sc.inKey][sc.layout / 2] * row;
+	// ponytail: Fixed with In Key walks the scale from C instead of the root; E2.3 gives it Live's meaning.
+	int p = 12 * octave + (sc.fixed ? 0 : sc.root);
+	uint16_t mask = kScaleMasks[sc.scale % kScaleCount];
+	if (sc.inKey) {
+		int n = __builtin_popcount(mask), semis = 0;
+		for (int seen = -1; !(mask >> semis & 1 && ++seen == step % n); semis++) {
+		}
+		p += 12 * (step / n) + semis;
+	} else {
+		p += step;
+	}
+	int rel = ((p - sc.root) % 12 + 12) % 12;
+	root = rel == 0, inScale = mask >> rel & 1;
+	return p > 127 ? -1 : p;
 }
 
-} // namespace
+void setName(Track& t, const char* name) {
+	size_t n = std::min(std::strlen(name), (size_t)kNameBytes - 1);
+	while (n && (name[n] & 0xC0) == 0x80) // inside a character: leave it out
+		n--;
+	std::memmove(t.name, name, n);
+	std::memset(t.name + n, 0, kNameBytes - n);
+}
 
 State::State() {
 	for (int i = 0; i < kTracks; i++) {
@@ -52,12 +77,36 @@ void sanitize(State& st) {
 	t.playing = t.external = false;
 	t.tick = 0;
 	t.shownBpm = t.bpm;
+	Scale& sc = st.s.scale;
+	sc.root = std::min<uint8_t>(sc.root, 11);
+	sc.scale = sc.scale < kScaleCount ? sc.scale : 0;
+	sc.layout = std::min<uint8_t>(sc.layout, 5);
+	sc.inKey = sc.inKey != 0, sc.fixed = sc.fixed != 0;
 	Ui& u = st.s.ui;
+	u.pads = std::min<uint8_t>(u.pads, kNote);
+	u.noteLayout = std::min<uint8_t>(u.noteLayout, 1);
 	u.screen = 0; // ponytail: Home is the only screen until E2.3
 	u.track = std::min<uint8_t>(u.track, kTracks - 1);
 	u.scene = std::min<uint8_t>(u.scene, kScenes - 1);
+	u.fixedBars = std::min<uint8_t>(u.fixedBars, 5);
+	u.fixedOn = u.fixedOn != 0;
+	u.page = 0, u.heldStep = -1, u.bend = 0;
+	std::fill(u.pad, u.pad + 64, 0);
 	std::fill(u.button, u.button + 128, false);
 	u.touched = 0, u.popup = kNoPopup, u.popupAt = u.now = 0;
+	// ponytail: clips are empty until E2.4, which sanitizes them (sorted notes, lengths, playing slots).
+	for (Track& t : st.s.track) {
+		char name[kNameBytes + 1] = {};
+		std::memcpy(name, t.name, kNameBytes); // not necessarily terminated
+		setName(t, name);
+		t.color = std::min<uint8_t>(t.color, kColors - 1);
+		t.type = Melodic; // ponytail: the other types come with E3 and E5
+		t.voices = std::min<uint8_t>(std::max<uint8_t>(t.voices, 1), 16);
+		t.grid = std::min<uint8_t>(t.grid, 7);
+		t.octave = (int8_t)std::min<int>(std::max<int>(t.octave, 0), kMaxOctave);
+		t.playing = t.queued = kNone;
+		t.launchTick = t.startTick = 0;
+	}
 }
 
 void Machine::lock() {
@@ -97,6 +146,24 @@ void Machine::handle(Session& s, const push2::Event& e) {
 			t.metronome = !t.metronome;
 		else if (e.index == push2::cc::TapTempo)
 			tap(t), show(kTempoPopup); // never starts the transport
+		else if (e.index == push2::cc::Note)
+			ui.pads = kNote;
+		else if (e.index >= push2::cc::Track1Below && e.index <= push2::cc::Track8Below)
+			ui.track = (uint8_t)(e.index - push2::cc::Track1Below);
+		else if (ui.pads != kNote)
+			break;
+		else if (e.index == push2::cc::Left || e.index == push2::cc::Right)
+			ui.track = (uint8_t)std::min(std::max(ui.track + (e.index == push2::cc::Right ? 1 : -1), 0), kTracks - 1);
+		else if (e.index == push2::cc::OctaveUp || e.index == push2::cc::OctaveDown) {
+			int8_t& o = s.track[ui.track].octave;
+			o = (int8_t)std::min(std::max(o + (e.index == push2::cc::OctaveUp ? 1 : -1), 0), kMaxOctave);
+		}
+		break;
+	case Event::Pad:
+		pad(s, e.index & 63, e.value);
+		break;
+	case Event::Bend:
+		ui.bend = std::min(std::max((float)(e.value - 8192) / 8192.f, -1.f), 1.f);
 		break;
 	case Event::Encoder:
 		if (e.index == push2::kTempoId) {
@@ -112,6 +179,8 @@ void Machine::handle(Session& s, const push2::Event& e) {
 	case Event::Touch:
 		if (e.index < 32)
 			ui.touched = e.value ? ui.touched | 1u << e.index : ui.touched & ~(1u << e.index);
+		if (!e.value && e.index == push2::kStrip)
+			ui.bend = 0; // the strip springs back; don't wait for the Push's own message
 		if (e.value && e.index == push2::kTempoId)
 			show(kTempoPopup);
 		else if (e.value && e.index == push2::kSwingId)
@@ -122,13 +191,72 @@ void Machine::handle(Session& s, const push2::Event& e) {
 	}
 }
 
+/** A pad pressed (velocity 1..127) or released (0): the note goes to the track selected now, and stops on that track.
+ */
+void Machine::pad(Session& s, int i, int vel) {
+	Live& l = live_[i];
+	if (l.id)
+		voice_[l.track].noteOff(l.id), l = Live(), s.ui.pad[i] = 0;
+	if (!vel || s.ui.pads != kNote)
+		return;
+	bool root, inScale;
+	int p = padPitch(s.scale, s.track[s.ui.track].octave, i / 8, i % 8, root, inScale);
+	if (p < 0)
+		return;
+	l = {++nextId_, s.ui.track, (uint8_t)p};
+	s.ui.pad[i] = (uint8_t)vel;
+	voice_[l.track].noteOn(l.id, (float)p, (float)vel / 127.f, 0);
+}
+
+void Machine::leds(const Session& s, push2::Leds& out) const {
+	using push2::cc::Metronome, push2::cc::Play, push2::cc::Shift, push2::cc::TapTempo;
+	const Ui& u = s.ui;
+	const Track& tr = s.track[u.track];
+	auto white = [&](int c, bool full) { out.cc[c] = {full ? push2::kWhiteFull : push2::kWhiteDark, push2::kStatic}; };
+	out = push2::Leds();
+	out.cc[Play] = {s.transport.playing ? push2::kGreen : push2::kRgbWhite, push2::kStatic};
+	// Metronome: solid white off, pulsing between white and dim as fast as the Push goes on (the static white is sent
+	// first)
+	out.cc[Metronome] = s.transport.metronome ? push2::Led{push2::kWhiteDark, push2::kPulse24th}
+											  : push2::Led{push2::kWhiteFull, push2::kStatic};
+	white(TapTempo, u.button[TapTempo]);
+	white(Shift, u.button[Shift]);
+	white(push2::cc::Note, u.pads == kNote);
+	for (int t = 0; t < kTracks; t++) // ponytail: white and dark gray until E2.3's track colours
+		out.cc[push2::cc::Track1Below + t] = {t == u.track ? push2::kRgbWhite : push2::kRgbDarkGray, push2::kStatic};
+	if (u.pads != kNote)
+		return;
+	if (tr.octave > 0)
+		white(push2::cc::OctaveDown, u.button[push2::cc::OctaveDown]);
+	if (tr.octave < kMaxOctave)
+		white(push2::cc::OctaveUp, u.button[push2::cc::OctaveUp]);
+	bool held[128] = {}; // pitches sounding from the pads: lit on every pad with that pitch
+	for (int i = 0; i < 64; i++)
+		held[live_[i].pitch & 127] |= u.pad[i] != 0;
+	for (int row = 0; row < 8; row++)
+		for (int col = 0; col < 8; col++) {
+			bool root, inScale;
+			int p = padPitch(s.scale, tr.octave, row, col, root, inScale);
+			if (p < 0)
+				continue; // above 127: dark and silent
+			// ponytail: the root is blue, not the track colour, until E2.3's palette.
+			uint8_t c = held[p] ? push2::kGreen : root ? push2::kBlue : inScale ? push2::kRgbWhite : push2::kBlack;
+			out.note[push2::padNote(row, col)] = {c, push2::kStatic};
+		}
+}
+
 void Machine::tick(const Session& s, int64_t k, Outputs& out) {
 	if (s.transport.metronome && k % kPpqn == 0)
 		out.metro = true, out.metroV = k % kBar == 0 ? 10.f : 5.f;
 }
 
-void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want) {
+void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFrame* slice) {
 	out = Outputs();
+	if (silence_.load(std::memory_order_relaxed) && silence_.exchange(false)) { // a patch was loaded
+		for (filo::VoiceAllocator& v : voice_)
+			v.allOff();
+		std::fill(live_, live_ + 64, Live());
+	}
 	frame_ = in.frame;
 	if (in.sampleRate != sr_)
 		sr_ = in.sampleRate, clock_.setSampleRate(sr_);
@@ -176,10 +304,35 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want) {
 		t.playing = clock_.started(), t.external = in.clockConnected;
 		t.tick = std::max<int64_t>(nextTick_ - 1, 0);
 		t.shownBpm = (in.clockConnected ? (float)clock_.cps() : cps_) * 60.f;
+		for (int i = 0; i < kTracks; i++) {
+			voices_[i] = s.track[i].voices;
+			const uint8_t* c = kTrackRgb[s.track[i].color % 8];
+			rgb_[i] = (uint32_t)c[0] << 16 | (uint32_t)c[1] << 8 | c[2];
+		}
+		selected_ = s.ui.track, bend_ = s.ui.bend * 2.f / 12.f;
 		leds(s, want);
 		out.ledsDone = true;
 		unlock();
 	}
+
+	// The voices: the bend is on the selected track only.
+	for (int t = 0; t < kTracks; t++) {
+		filo::VoiceAllocator& v = voice_[t];
+		v.setChannels(voices_[t]);
+		if (slice) {
+			SliceTrack& o = slice->track[t];
+			float bend = t == selected_ ? bend_ : 0.f;
+			o.channels = (uint8_t)v.channels();
+			for (int c = 0; c < o.channels; c++)
+				o.voct[c] = v.pitchV(c) + bend, o.gate[c] = v.gate(c) ? 10.f : 0.f, o.vel[c] = v.velV(c);
+			// ponytail: CC, LEVEL and PAN stay at their defaults until E4 gives the clips automation and a mixer.
+			std::fill(o.cc, o.cc + kCcs, 0.f);
+			o.level = 10.f, o.pan = 0.f, o.rgb = rgb_[t];
+		}
+		v.tick();
+	}
+	if (slice)
+		slice->frame = (uint32_t)in.frame, slice->hop = 0;
 
 	out.run = clock_.started();
 	if (out.run) {
@@ -197,6 +350,13 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want) {
 void Machine::view(View& v) {
 	lock();
 	v.s = state_->s;
+	const Ui& u = v.s.ui;
+	for (int t = 0; t < kTracks; t++)
+		for (int c = 0; c < kScenes; c++)
+			v.length[t][c] = state_->clip[t][c].length;
+	const Clip& clip = state_->clip[u.track][u.scene];
+	v.nNotes = clip.nNotes;
+	std::copy(clip.notes, clip.notes + clip.nNotes, v.notes);
 	unlock();
 }
 
@@ -210,6 +370,7 @@ void Machine::load(const State& st) {
 	lock();
 	*state_ = st;
 	unlock();
+	silence_.store(true, std::memory_order_relaxed);
 	dirty_.store(true, std::memory_order_release);
 }
 

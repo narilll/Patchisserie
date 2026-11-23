@@ -1,7 +1,9 @@
 // Tart: the Push 2 decoder, LED diff, display frame and the echo state.
 #include <atomic>
 #include <cmath>
+#include <cstring>
 #include <memory>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -149,11 +151,12 @@ struct Rig {
 	int clk = 0, midiClock = 0, midiStart = 0, reset = 0, metro = 0;
 	std::vector<float> metroV;
 	bool run = false;
+	tart::SliceFrame* slice = nullptr;
 
 	Rig() { in.sampleRate = 48000; }
 	void step(const push2::Event* ev = nullptr, int n = 1) {
 		in.events = ev, in.nEvents = ev ? n : 0;
-		m.process(in, out, want);
+		m.process(in, out, want, slice);
 		in.frame++, in.play = in.stop = in.reset = in.clockEdge = false;
 		clk += out.clk, midiClock += out.midiClock, midiStart += out.midiStart, reset += out.reset;
 		if (out.metro)
@@ -173,11 +176,21 @@ struct Rig {
 		push2::Event e = dec({0xB0, cc, (uint8_t)(delta & 127)});
 		step(&e);
 	}
+	void pad(int row, int col, int vel) {
+		push2::Event e = dec({vel ? (uint8_t)0x90 : (uint8_t)0x80, push2::padNote(row, col), (uint8_t)vel});
+		step(&e);
+	}
 	tart::View view() {
 		tart::View v;
 		m.view(v);
 		return v;
 	}
+};
+
+/** A Rig with a Slice on its right: `f` is the frame a Slice would read. */
+struct SliceRig : Rig {
+	tart::SliceFrame f = {};
+	SliceRig() { slice = &f; }
 };
 
 } // namespace
@@ -324,7 +337,7 @@ TEST(tart_leds) {
 	CHECK(r.out.ledsDone);
 	CHECK(r.want.cc[push2::cc::Shift].color == push2::kWhiteDark &&
 		  r.want.cc[push2::cc::TapTempo].color == push2::kWhiteDark);
-	CHECK(r.want.cc[push2::cc::Undo].color == 0 && r.want.note[36].color == 0);
+	CHECK(r.want.cc[push2::cc::Undo].color == 0 && r.want.cc[push2::cc::Session].color == 0);
 	r.press(push2::cc::Shift);
 	CHECK(r.want.cc[push2::cc::Shift].color == push2::kWhiteFull);
 	r.press(push2::cc::Metronome);
@@ -354,13 +367,16 @@ TEST(tart_machine_threads) {
 		tart::Inputs in;
 		tart::Outputs out;
 		push2::Leds want;
-		push2::Event ev[2];
+		push2::Event ev[4];
 		ev[0] = dec({0xB0, push2::cc::kTempo, 1});
 		ev[1] = dec({0xB0, push2::cc::Metronome, 127});
+		ev[2] = dec({0x90, 36, 100}); // a pad and the touch strip
+		ev[3] = dec({0xE0, 0, 0x60});
+		tart::SliceFrame frame;
 		in.play = true;
 		for (int i = 0; i < 20000; i++) {
-			in.events = ev, in.nEvents = i % 7 == 0 ? 2 : 0, in.frame = i;
-			m.process(in, out, want);
+			in.events = ev, in.nEvents = i % 7 == 0 ? 4 : 0, in.frame = i;
+			m.process(in, out, want, &frame);
 			in.play = false;
 		}
 		done = true;
@@ -369,9 +385,227 @@ TEST(tart_machine_threads) {
 	auto v = std::make_unique<tart::View>();
 	while (!done) {
 		m.view(*v);
-		m.edit([&](tart::State& st) { st.s.transport.swing = (uint8_t)(n++ % 100); });
+		m.edit([&](tart::State& st) {
+			st.s.transport.swing = (uint8_t)(n % 100), st.s.track[0].voices = (uint8_t)(n++ % 16 + 1);
+		});
 	}
 	audio.join();
+	// The loop above may never get the lock (the UI side here locks back to back, Rack's at most 60 times a second):
+	// with the UI thread done, one more sample takes it for sure.
+	tart::Inputs in;
+	tart::Outputs out;
+	push2::Leds want;
+	tart::SliceFrame frame;
+	push2::Event tempo = dec({0xB0, push2::cc::kTempo, 1});
+	in.events = &tempo, in.nEvents = 1, in.frame = 20000;
+	m.process(in, out, want, &frame);
+	CHECK(out.consumed);
 	m.view(*v);
 	CHECK(v->s.transport.playing && v->s.transport.bpm > 120);
+}
+
+TEST(state_layout) {
+	CHECK(std::is_trivially_copyable<tart::State>::value);
+	CHECK(sizeof(tart::State) < 2 * 1024 * 1024); // heap only: ~1.3 MB
+	CHECK(sizeof(tart::Machine) < 16 * 1024);
+	CHECK(sizeof(tart::SliceFrame) < 2048);
+	CHECK(sizeof(tart::State) > 1000000);
+	auto st = std::make_unique<tart::State>();
+	CHECK(std::string(st->s.track[0].name) == "Track 1" && std::string(st->s.track[7].name) == "Track 8");
+	CHECK(st->s.track[0].voices == 1 && st->s.track[0].octave == 3 && st->s.track[0].playing == tart::kNone);
+	CHECK(st->clip[7][7].length == 0 && st->clip[0][0].nNotes == 0);
+}
+
+TEST(pad_pitch) {
+	bool root, in;
+	tart::Scale c; // C Major, In Key, 4ths up
+	CHECK(tart::padPitch(c, 3, 0, 0, root, in) == 36 && root && in);
+	CHECK(tart::padPitch(c, 3, 0, 1, root, in) == 38 && !root && in);
+	CHECK(tart::padPitch(c, 3, 1, 0, root, in) == 41);
+	CHECK(tart::padPitch(c, 3, 0, 7, root, in) == 36 + 12 && root);     // the octave
+	CHECK(tart::padPitch(c, 3, 7, 7, root, in) == 36 + 12 * 4 && root); // degree 28: four octaves up
+	c.layout = 1;                                                       // 4ths, right: rows and columns trade places
+	CHECK(tart::padPitch(c, 3, 0, 1, root, in) == 41 && tart::padPitch(c, 3, 1, 0, root, in) == 38);
+	c.layout = 2; // 3rds up: a row is two scale steps
+	CHECK(tart::padPitch(c, 3, 1, 0, root, in) == 40 && tart::padPitch(c, 3, 0, 1, root, in) == 38);
+	c.layout = 4;                                               // Sequential: a row is eight scale steps
+	CHECK(tart::padPitch(c, 3, 1, 0, root, in) == 50 && !root); // eight steps: an octave and a degree, D
+	c.layout = 0;
+	c.root = 2; // D Major: the bottom-left pad is D, the root
+	CHECK(tart::padPitch(c, 3, 0, 0, root, in) == 38 && root);
+	c.fixed = true;  // Fixed: the pads stay where they were
+	c.inKey = false; // Chromatic, so the root doesn't move the layout either
+	CHECK(tart::padPitch(c, 3, 0, 0, root, in) == 36 && !root && !in);
+	CHECK(tart::padPitch(c, 3, 0, 2, root, in) == 38 && root && in);
+	c = tart::Scale();
+	c.inKey = false; // Chromatic 4ths: a row is five semitones, out-of-key pads are not in the scale
+	CHECK(tart::padPitch(c, 3, 1, 0, root, in) == 41 && in);
+	CHECK(tart::padPitch(c, 3, 0, 1, root, in) == 37 && !in && !root);
+	CHECK(tart::padPitch(c, 10, 7, 7, root, in) == -1); // above 127
+	CHECK(tart::padPitch(c, 10, 0, 7, root, in) == 127);
+}
+
+TEST(live_notes) {
+	SliceRig r;
+	r.run_(2);
+	CHECK(r.f.track[0].gate[0] == 0 && r.f.track[0].channels == 1);
+	r.pad(0, 0, 100); // C1
+	CHECK(r.f.track[0].gate[0] == 10 && r.f.track[0].voct[0] == -2.f);
+	CHECK_NEAR(r.f.track[0].vel[0], 100 / 127.f * 10, 1e-4);
+	CHECK(r.f.track[1].gate[0] == 0);
+	CHECK(r.view().s.ui.pad[0] == 100);
+	CHECK(r.want.note[push2::padNote(0, 0)].color == push2::kGreen); // pressed
+	r.in.leds = true;
+	r.step();
+	CHECK(r.want.note[push2::padNote(0, 0)].color == push2::kGreen);
+	r.pad(0, 3, 100); // F: pad (1, 0) has the same note and lights up too
+	CHECK(r.want.note[push2::padNote(1, 0)].color == push2::kGreen);
+	r.pad(0, 3, 0);
+	CHECK(r.want.note[push2::padNote(1, 0)].color == push2::kRgbWhite);
+	r.pad(0, 0, 0);
+	CHECK(r.f.track[0].gate[0] == 0);
+	CHECK(r.view().s.ui.pad[0] == 0);
+}
+
+TEST(live_notes_voices_and_tracks) {
+	SliceRig r;
+	r.m.edit([](tart::State& st) { st.s.track[0].voices = 3; });
+	r.run_(2);
+	r.pad(0, 0, 100);
+	r.pad(0, 1, 90);
+	r.pad(0, 2, 80);
+	CHECK(r.f.track[0].channels == 3);
+	int on = 0;
+	for (int c = 0; c < 3; c++)
+		on += r.f.track[0].gate[c] > 0;
+	CHECK(on == 3);
+	r.pad(0, 2, 0);
+	r.pad(0, 1, 0);
+	// A pad held across a track switch keeps sounding on its old track and stops there.
+	r.press(push2::cc::Track1Below + 3);
+	CHECK(r.view().s.ui.track == 3);
+	CHECK(r.f.track[0].gate[0] == 10 && r.f.track[3].gate[0] == 0);
+	r.pad(1, 0, 70); // a new pad goes to the new track
+	CHECK(r.f.track[3].gate[0] == 10 && r.f.track[0].gate[0] == 10);
+	r.pad(0, 0, 0);
+	CHECK(r.f.track[0].gate[0] == 0 && r.f.track[3].gate[0] == 10);
+	r.pad(1, 0, 0);
+	CHECK(r.f.track[3].gate[0] == 0);
+	// Pads above 127 are silent.
+	r.m.edit([](tart::State& st) { st.s.track[3].octave = 10; });
+	r.run_(1);
+	r.pad(7, 7, 100);
+	CHECK(r.f.track[3].gate[0] == 0 && r.view().s.ui.pad[63] == 0);
+}
+
+TEST(track_buttons_and_octave) {
+	Rig r;
+	r.in.leds = true;
+	r.step();
+	CHECK(r.want.cc[push2::cc::Track1Below].color == push2::kRgbWhite &&
+		  r.want.cc[push2::cc::Track1Below + 1].color == push2::kRgbDarkGray);
+	r.press(push2::cc::Track1Below + 5);
+	r.press(push2::cc::Track1Below + 5, 0);
+	CHECK(r.view().s.ui.track == 5);
+	CHECK(r.want.cc[push2::cc::Track1Below + 5].color == push2::kRgbWhite &&
+		  r.want.cc[push2::cc::Track1Below].color == push2::kRgbDarkGray);
+	r.press(push2::cc::Left);
+	CHECK(r.view().s.ui.track == 4);
+	for (int i = 0; i < 10; i++)
+		r.press(push2::cc::Right);
+	CHECK(r.view().s.ui.track == 7);
+	for (int i = 0; i < 10; i++)
+		r.press(push2::cc::Left);
+	CHECK(r.view().s.ui.track == 0);
+	r.press(push2::cc::OctaveUp);
+	CHECK(r.view().s.track[0].octave == 4 && r.view().s.track[1].octave == 3);
+	for (int i = 0; i < 20; i++)
+		r.press(push2::cc::OctaveUp);
+	CHECK(r.view().s.track[0].octave == tart::kMaxOctave && r.want.cc[push2::cc::OctaveUp].color == 0);
+	CHECK(r.want.cc[push2::cc::OctaveDown].color == push2::kWhiteDark);
+	for (int i = 0; i < 20; i++)
+		r.press(push2::cc::OctaveDown);
+	CHECK(r.view().s.track[0].octave == 0 && r.want.cc[push2::cc::OctaveDown].color == 0);
+	// pad LEDs: the root (C) is lit blue, other in-key notes white
+	CHECK(r.want.note[push2::padNote(0, 0)].color == push2::kBlue &&
+		  r.want.note[push2::padNote(0, 1)].color == push2::kRgbWhite);
+	CHECK(r.want.cc[push2::cc::Note].color == push2::kWhiteFull && r.want.cc[push2::cc::Session].color == 0);
+}
+
+TEST(bend) {
+	SliceRig r;
+	r.run_(2);
+	r.pad(0, 0, 100);
+	r.press(push2::cc::Track1Below + 1);
+	r.pad(1, 0, 100);
+	push2::Event e = dec({0xE0, 16320 & 127, (uint8_t)(16320 >> 7)});
+	r.step(&e);
+	CHECK_NEAR(r.view().s.ui.bend, 0.9922, 0.001);
+	CHECK_NEAR(r.f.track[1].voct[0], (41 - 60) / 12.f + 2 / 12.f, 0.003); // the selected track bends
+	CHECK_NEAR(r.f.track[0].voct[0], (36 - 60) / 12.f, 1e-5);             // the other does not
+	e = dec({0xE0, 0, 0x40});                                             // 8192: the strip is back in the middle
+	r.step(&e);
+	CHECK_NEAR(r.f.track[1].voct[0], (41 - 60) / 12.f, 1e-5);
+	e = dec({0xE0, 0, 0});
+	r.step(&e);
+	CHECK_NEAR(r.f.track[1].voct[0], (41 - 60) / 12.f - 2 / 12.f, 1e-4); // down
+	e = dec({0x90, 12, 0});                                              // touch released: bend resets
+	r.step(&e);
+	CHECK_NEAR(r.f.track[1].voct[0], (41 - 60) / 12.f, 1e-5);
+}
+
+TEST(slice_frame) {
+	SliceRig r;
+	r.m.edit([](tart::State& st) { st.s.track[2].voices = 5, st.s.track[2].color = 3; });
+	r.run_(2);
+	for (int t = 0; t < tart::kTracks; t++) {
+		const tart::SliceTrack& s = r.f.track[t];
+		CHECK(s.level == 10 && s.pan == 0);
+		for (float cc : s.cc)
+			CHECK(cc == 0);
+		CHECK(s.channels == (t == 2 ? 5 : 1));
+	}
+	CHECK(r.f.track[2].rgb == (90u << 16 | 220u << 8 | 90u) && r.f.hop == 0);
+	uint32_t before = r.f.frame;
+	r.run_(1);
+	CHECK(r.f.frame != before); // changes every sample
+}
+
+TEST(sanitize_tracks) {
+	auto st = std::make_unique<tart::State>();
+	tart::Track& t = st->s.track[1];
+	std::memset(t.name, 'a', tart::kNameBytes);       // no terminator
+	t.name[30] = (char)0xC3, t.name[31] = (char)0xA9; // an 'e acute' cut by the field's end
+	t.color = 200, t.voices = 0, t.octave = 99, t.grid = 9, t.type = 4, t.playing = 3, t.queued = 2;
+	st->s.track[2].voices = 40, st->s.track[2].octave = -3;
+	st->s.scale.root = 12, st->s.scale.scale = 9, st->s.scale.layout = 6;
+	st->s.ui.pads = 5, st->s.ui.fixedBars = 9, st->s.ui.scene = 20, st->s.ui.bend = 1, st->s.ui.pad[3] = 9;
+	tart::sanitize(*st);
+	CHECK(std::strlen(t.name) == 30 && t.name[29] == 'a'); // cut before the broken character
+	CHECK(t.color == 69 && t.voices == 1 && t.octave == tart::kMaxOctave && t.grid == 7 && t.type == tart::Melodic);
+	CHECK(t.playing == tart::kNone && t.queued == tart::kNone);
+	CHECK(st->s.track[2].voices == 16 && st->s.track[2].octave == 0);
+	CHECK(st->s.scale.root == 11 && st->s.scale.scale == 0 && st->s.scale.layout == 5);
+	CHECK(st->s.ui.pads == tart::kNote && st->s.ui.fixedBars == 5 && st->s.ui.scene == 7 && st->s.ui.bend == 0 &&
+		  st->s.ui.pad[3] == 0);
+	std::string long_name = "Bass";
+	for (int i = 0; i < 20; i++)
+		long_name += "\xC3\xA9";
+	tart::setName(st->s.track[0], long_name.c_str());
+	CHECK(std::strlen(st->s.track[0].name) == 30); // 4 + 13 two-byte characters would be 30 bytes, the 14th doesn't fit
+}
+
+TEST(load_silences_notes) {
+	SliceRig r;
+	r.run_(2);
+	r.pad(0, 0, 100);
+	CHECK(r.f.track[0].gate[0] == 10);
+	auto st = std::make_unique<tart::State>();
+	r.m.save(*st);
+	tart::sanitize(*st);
+	r.m.load(*st);
+	r.run_(2);
+	CHECK(r.f.track[0].gate[0] == 0);
+	r.pad(0, 0, 0); // the stale release does nothing
+	CHECK(r.f.track[0].gate[0] == 0);
 }
