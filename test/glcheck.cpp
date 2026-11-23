@@ -18,6 +18,7 @@
 #include "editor/view.hpp"
 #include "engine.hpp"
 #include "lattice.hpp"
+#include "push2.hpp"
 
 rack::plugin::Plugin* pluginInstance = nullptr; // view.cpp's (plugin.cpp's in the plugin): no docs here
 
@@ -536,8 +537,40 @@ int main() {
 		std::printf("  -> %s\n", why.empty() ? "ok" : ("FAIL " + why).c_str());
 		failures += !why.empty();
 	}
+	// Tart's display: a red 10x10 square top left on black, rendered into push2::Screen, read back and converted. Pins
+	// the orientation and the colour order of what the Push gets; then the mirror draws the framebuffer.
+	std::printf("push2 screen\n");
+	std::string why;
+	{
+		push2::Screen screen;
+		std::vector<uint8_t> rgba((size_t)push2::kWidth * push2::kHeight * 4), frame(push2::kFrameBytes);
+		if (!screen.begin(vg)) {
+			why = "no framebuffer";
+		} else {
+			nvgBeginPath(vg);
+			nvgRect(vg, 0, 0, 10, 10);
+			nvgFillColor(vg, nvgRGB(255, 0, 0));
+			nvgFill(vg);
+			screen.end(vg, rgba.data());
+			push2::toFrame(rgba.data(), frame.data());
+			const uint8_t* last = &frame[(size_t)(push2::kHeight - 1) * push2::kLineBytes];
+			nvgBeginFrame(vg, 64, 64, 1);
+			screen.drawMirror(vg, 0, 0, 64, 64);
+			nvgEndFrame(vg);
+			GLenum error = glGetError();
+			std::printf("  first pixel %02X %02X, first of the last line %02X %02X\n", frame[0], frame[1], last[0],
+						last[1]);
+			why = error                                                    ? "GL error " + std::to_string(error)
+				  : frame[0] != (0x1F ^ 0xE7) || frame[1] != (0x00 ^ 0xF3) ? "the top left is not red"
+				  : last[0] != 0xE7 || last[1] != 0xF3                     ? "the bottom left is not black"
+																		   : "";
+		}
+		screen.destroy();
+	}
+	std::printf("  -> %s\n", why.empty() ? "ok" : ("FAIL " + why).c_str());
+	failures += !why.empty();
 	std::printf("editor window\n");
-	std::string why = editorWindow(win, "Patchisserie");
+	why = editorWindow(win, "Patchisserie");
 	std::printf("  -> %s\n", why.empty() ? "ok" : ("FAIL " + why).c_str());
 	failures += !why.empty();
 	why = editorWindow(win, "githubLight"); // a light theme: #ffffff

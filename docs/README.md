@@ -1,6 +1,6 @@
 # Patchisserie user manual
 
-Patchisserie is a plugin for VCV Rack 2 that lets you live code music and visuals inside your patch. It runs [Strudel](https://strudel.cc) and [Orca](https://100r.co/site/orca.html) for sound and sequencing, and [Hydra](https://hydra.ojack.xyz) for visuals, all natively in Rack, with no browser involved. Filo and Lattice send out ordinary Rack signals, so you can patch them into any other module, and Icing shows visuals.
+Patchisserie is a plugin for VCV Rack 2 that lets you live code music and visuals inside your patch. It runs [Strudel](https://strudel.cc) and [Orca](https://100r.co/site/orca.html) for sound and sequencing, and [Hydra](https://hydra.ojack.xyz) for visuals, all natively in Rack, with no browser involved. Filo and Lattice send out ordinary Rack signals, so you can patch them into any other module, and Icing shows visuals. Tart connects an Ableton Push 2.
 
 ## The modules
 
@@ -10,11 +10,13 @@ Patchisserie is a plugin for VCV Rack 2 that lets you live code music and visual
 
 **Lattice** is an Orca live coding module. You type into a grid of letters and symbols, and the grid turns into V/OCT pitches, gates, triggers, CC messages and a clock. It runs the original Orca engine, so most patches from the Orca community work as written. The Lattice manual lists the differences. Read [the Lattice manual](lattice.md).
 
+**Tart** connects an Ableton Push 2 to Rack. This first version is a hardware test: it has no jacks yet, and it lights the Push's pads and buttons as you press them and draws a test pattern on the Push display and on its own panel. It is meant to become an 8-track Session sequencer. Read [the Tart manual](tart.md).
+
 ## Installing
 
-Patchisserie is not listed in the VCV Library, so you build it yourself from the source at [github.com/narilll/Patchisserie](https://github.com/narilll/Patchisserie). Clone the repository with `git clone --recursive`, point `RACK_DIR` at the Rack SDK, run `make`, and then `make install` to copy the plugin into your Rack user folder. Restart Rack and the three modules appear in the module browser under Patchisserie. The repository's `README.md` lists every build and test command.
+Patchisserie is not listed in the VCV Library, so you build it yourself from the source at [github.com/narilll/Patchisserie](https://github.com/narilll/Patchisserie). Clone the repository with `git clone --recursive`, point `RACK_DIR` at the Rack SDK, run `make`, and then `make install` to copy the plugin into your Rack user folder. Restart Rack and the four modules appear in the module browser under Patchisserie. The repository's `README.md` lists every build and test command.
 
-Patchisserie is free software under the AGPL-3.0-or-later license. The full text is in the `LICENSE` file, and the licenses of the bundled Strudel, Hydra, QuickJS and Orca code ship with the plugin.
+Patchisserie is free software under the AGPL-3.0-or-later license. The full text is in the `LICENSE` file, and the licenses of the bundled Strudel, Hydra, QuickJS and Orca code, and of libusb, ship with the plugin.
 
 ## How the modules work together
 

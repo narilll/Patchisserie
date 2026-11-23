@@ -61,7 +61,7 @@ TEST_FLAGS := -std=c++17 -g -O1 -Wall -Wextra -Isrc -Itest -I$(RACK_DIR)/include
 # Web Audio graph + QuickJS binding, Filo's engine and downloads: linked into the tests; dep/include for simde (pulled in
 # by Rack's dsp/ringbuffer.hpp) and ghc::filesystem.
 ENGINE_SOURCES := src/engine.cpp src/fetch.cpp
-TEST_SOURCES += $(AUDIO_SOURCES) $(ENGINE_SOURCES) src/lattice.cpp
+TEST_SOURCES += $(AUDIO_SOURCES) $(ENGINE_SOURCES) src/lattice.cpp src/tart.cpp
 TEST_FLAGS += -I$(RACK_DIR)/dep/include
 # MinGW: M_PI needs _USE_MATH_DEFINES and Rack's simd needs SSE 4.2 (SIMDe's fallback clashes with the intrinsics
 # <windows.h> declares), as in Rack's compile.mk; no sanitizer runtimes: tests run without them.
@@ -100,10 +100,10 @@ test: build/test/run
 
 # Graph, worklet, engine and download tests (command/event queues, the worklet runtime on the render thread vs the JS
 # thread, Filo's JS / render / audio threads, the download worker) under ThreadSanitizer.
-TSAN_TESTS := test/main.cpp test/test_graph.cpp test/test_worklets.cpp test/test_engine.cpp test/test_fetch.cpp test/test_lattice.cpp
-build/test/run-tsan: $(TSAN_TESTS) $(wildcard test/*.hpp) $(AUDIO_SOURCES) $(ENGINE_SOURCES) src/lattice.cpp $(call host_objects,tsan) $(wildcard src/*.hpp src/audio/*.hpp)
+TSAN_TESTS := test/main.cpp test/test_graph.cpp test/test_worklets.cpp test/test_engine.cpp test/test_fetch.cpp test/test_lattice.cpp test/test_tart.cpp
+build/test/run-tsan: $(TSAN_TESTS) $(wildcard test/*.hpp) $(AUDIO_SOURCES) $(ENGINE_SOURCES) src/lattice.cpp src/tart.cpp $(call host_objects,tsan) $(wildcard src/*.hpp src/audio/*.hpp)
 	@mkdir -p $(@D)
-	$(CXX) $(TEST_FLAGS) -fsanitize=thread -o $@ $(TSAN_TESTS) $(AUDIO_SOURCES) $(ENGINE_SOURCES) src/lattice.cpp $(call host_objects,tsan)
+	$(CXX) $(TEST_FLAGS) -fsanitize=thread -o $@ $(TSAN_TESTS) $(AUDIO_SOURCES) $(ENGINE_SOURCES) src/lattice.cpp src/tart.cpp $(call host_objects,tsan)
 
 tsan: build/test/run-tsan
 	build/test/run-tsan

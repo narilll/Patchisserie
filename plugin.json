@@ -33,6 +33,13 @@
       "name": "Lattice",
       "description": "Orca live coding (orca-c): a 2D grid sequencer as V/OCT, gates, triggers, CC and clock",
       "tags": ["Sequencer", "Polyphonic", "Clock generator"]
+    },
+    {
+      "slug": "Tart",
+      "manualUrl": "https://github.com/narilll/Patchisserie/blob/main/docs/tart.md",
+      "name": "Tart",
+      "description": "Ableton Push 2 as an 8-track Session sequencer",
+      "tags": ["Sequencer", "Controller", "MIDI", "Clock generator", "Polyphonic"]
     }
   ]
 }

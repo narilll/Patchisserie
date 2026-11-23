@@ -6,6 +6,8 @@
 #include "engine.hpp"
 #include "hydra.hpp"
 #include "lattice.hpp"
+#include "push2.hpp"
+#include "tart.hpp"
 
 using namespace rack;
 
@@ -1036,10 +1038,325 @@ struct LatticeWidget : ModuleWidget {
 	}
 };
 
+// --- Tart: Ableton Push 2 as a Rack controller (E1: the hardware echo test) ---
+
+struct Tart : Module {
+	enum LightId { PUSH_LIGHT, PUSH_RED_LIGHT, LIGHTS_LEN }; // one green-red light: green first
+
+	// The Push's User port, both directions: ports found by name or picked in the menu, saved in the patch.
+	midi::InputQueue pushIn;
+	midi::Output pushOut;
+	tart::Machine machine;
+	push2::Event pending[64]; // decoded, not yet applied: the machine's lock was busy
+	int nPending = 0;
+	push2::Leds want, sent; // the LEDs the state asks for, the ones the Push has been sent
+	float clockPhase = 0;
+	// process()'s messages, reused so the audio thread doesn't allocate: LEDs, MIDI clock and start, the User-mode
+	// SysEx. ponytail: sendMessage() and tryPop() lock inside Rack's MIDI drivers, as in every Rack MIDI module.
+	midi::Message in, led, one, userMode;
+	std::atomic<bool> resync{false}; // UI -> audio: the Push (re)opened: set User mode and send every LED again
+	std::atomic<bool> owner{false};  // UI -> audio: this Tart holds the Push
+	std::atomic<int> pushState{0};   // UI -> audio, for the light: 0 none, 1 MIDI only, 2 MIDI and display
+	bool pushAuto = true;            // UI thread only
+
+	Tart() {
+		config(0, 0, 0, LIGHTS_LEN);
+		configLight(PUSH_LIGHT, "Push 2 (green: MIDI and display, red: MIDI only)");
+		pushOut.channel = -1; // else Rack overwrites the channel byte, which carries the LED animation
+		one.setSize(1);
+		userMode.bytes.assign(push2::kUserMode, push2::kUserMode + sizeof push2::kUserMode);
+	}
+
+	void process(const ProcessArgs& args) override {
+		if (!owner.load(std::memory_order_relaxed)) { // another Tart's: keep the queue empty
+			while (pushIn.tryPop(&in, args.frame)) {
+			}
+			lights[PUSH_LIGHT].setBrightness(0.f);
+			lights[PUSH_RED_LIGHT].setBrightness(0.f);
+			return;
+		}
+		while (pushIn.tryPop(&in, args.frame)) { // Rack filters the menu's channel
+			push2::Event e;
+			if (nPending < 64 && push2::decode(in.bytes.data(), in.bytes.size(), e))
+				pending[nPending++] = e;
+		}
+		if (resync.load(std::memory_order_relaxed) && resync.exchange(false)) {
+			if (!machine.apply(nullptr, 0, want)) {
+				resync.store(true); // the UI thread holds the lock: again next sample
+			} else {
+				userMode.setFrame(args.frame);
+				pushOut.sendMessage(userMode);
+				one.bytes[0] = 0xFA; // Start: the Push animates LEDs only while it gets clock and start
+				one.setFrame(args.frame);
+				pushOut.sendMessage(one);
+				for (push2::Led& l : sent.note) // none matches `want`: all of it goes out, 32 messages at a time
+					l = {255, 255};
+				for (push2::Led& l : sent.cc)
+					l = {255, 255};
+			}
+		}
+		if (nPending && machine.apply(pending, nPending, want))
+			nPending = 0;
+		clockPhase += args.sampleTime * 48.f; // 24 pulses per quarter note
+		if (clockPhase >= 1.f) {              // ponytail: fixed 120 BPM until E2's transport drives it
+			clockPhase -= 1.f;
+			one.bytes[0] = 0xF8;
+			one.setFrame(args.frame);
+			pushOut.sendMessage(one);
+		}
+		if (args.frame % 256 == 0) {
+			uint8_t out[32][3];
+			int n = push2::diff(want, sent, false, out, 32);
+			for (int i = 0; i < n; i++) {
+				std::copy(out[i], out[i] + 3, led.bytes.begin());
+				led.setFrame(args.frame);
+				pushOut.sendMessage(led);
+			}
+			int state = pushState.load(std::memory_order_relaxed);
+			lights[PUSH_LIGHT].setBrightness(state == 2 ? 1.f : 0.f);
+			lights[PUSH_RED_LIGHT].setBrightness(state == 1 ? 1.f : 0.f);
+		}
+	}
+
+	json_t* dataToJson() override {
+		return json_pack("{s:b, s:o, s:o}", "pushAuto", pushAuto, "pushIn", pushIn.toJson(), "pushOut",
+						 pushOut.toJson());
+	}
+
+	void dataFromJson(json_t* root) override {
+		int autoFind = pushAuto;
+		json_t *inJ = nullptr, *outJ = nullptr;
+		json_unpack(root, "{s?b, s?o, s?o}", "pushAuto", &autoFind, "pushIn", &inJ, "pushOut", &outJ);
+		pushAuto = autoFind;
+		if (inJ)
+			pushIn.fromJson(inJ);
+		if (outJ)
+			pushOut.fromJson(outJ);
+		pushOut.channel = -1;
+	}
+};
+
+// Matches res/Tart.svg (mm): the dark area under the top band, where the display's mirror goes, and the PUSH light.
+static const math::Rect kMirrorMm = math::Rect(3, 12, 95.6, 15.9); // the display's 6:1
+static const Vec kPushLightMm = Vec(10.3, 38);
+
+/** The display's mirror: the last frame drawn for the Push, scaled into the box. */
+struct TartMirror : widget::Widget {
+	push2::Screen* screen;
+	explicit TartMirror(push2::Screen* s) : screen(s) {}
+	void drawLayer(const DrawArgs& args, int layer) override {
+		if (layer == 1) // like lights: drawn after the room-brightness dimming
+			screen->drawMirror(args.vg, 0, 0, box.size.x, box.size.y);
+	}
+};
+
+/** The Tart that owns the Push (-1: none): the first to step claims it, one at a time. UI thread. */
+static int64_t pushOwner = -1;
+
+/** Points `port` at the Push 2's User port unless it is on one already, choosing a driver first if it has none.
+`reopen`: close and open it again even when it is on the right one. True if it was (re)opened. */
+static bool findUserPort(midi::Port* port, bool reopen) {
+	if (!port->getDriver()) {
+		std::vector<int> drivers = midi::getDriverIds();
+		if (drivers.empty())
+			return false;
+		port->setDriverId(drivers[0]); // ponytail: the first driver; the menu picks another
+	}
+	std::vector<int> ids = port->getDeviceIds();
+	int current = port->getDeviceId();
+	bool listed = std::find(ids.begin(), ids.end(), current) != ids.end();
+	if (!reopen && listed && push2::isUserPort(port->getDeviceName(current)))
+		return false;
+	for (int id : ids) {
+		if (!push2::isUserPort(port->getDeviceName(id)))
+			continue;
+		if (reopen)
+			port->setDeviceId(-1);
+		port->setDeviceId(id);
+		return true;
+	}
+	return false;
+}
+
+struct TartWidget : ModuleWidget {
+	push2::Screen screen;
+	push2::Display display;
+	std::vector<uint8_t> rgba;
+	bool wasOwner = false;
+	uint32_t connectionsSeen = 0, frames = 0;
+	int outSeen = -1;
+	double lastScan = -1e9, lastPaint = 0;
+
+	TartWidget(Tart* module) {
+		setModule(module);
+		setPanel(createPanel(asset::plugin(pluginInstance, "res/Tart.svg")));
+		auto* mirror = new TartMirror(&screen);
+		mirror->box = math::Rect(mm2px(kMirrorMm.pos), mm2px(kMirrorMm.size));
+		addChild(mirror);
+		addChild(createLightCentered<SmallLight<GreenRedLight>>(mm2px(kPushLightMm), module, Tart::PUSH_LIGHT));
+		auto* text = createWidget<PanelText>(Vec());
+		text->box.size = box.size;
+		text->band("TART");
+		text->label(kPushLightMm, "PUSH");
+		addChild(text);
+	}
+
+	~TartWidget() override {
+		if (module && pushOwner == module->id)
+			pushOwner = -1; // another Tart claims it on its next step
+		display.stop();
+		if (APP->window) // null at app exit, where onContextDestroy has already freed everything
+			screen.destroy();
+	}
+
+	void onContextDestroy(const ContextDestroyEvent& e) override {
+		screen.destroy();
+		ModuleWidget::onContextDestroy(e);
+	}
+
+	void step() override {
+		ModuleWidget::step();
+		if (!module)
+			return;
+		Tart* m = static_cast<Tart*>(module);
+		if (pushOwner < 0 || !APP->engine->getModule(pushOwner))
+			pushOwner = m->id;
+		bool own = pushOwner == m->id;
+		m->owner.store(own, std::memory_order_relaxed);
+		double now = system::getTime();
+		if (!own) {
+			wasOwner = false; // a duplicated Tart carries the owner's ports
+			for (midi::Port* port : {(midi::Port*)&m->pushIn, (midi::Port*)&m->pushOut})
+				if (port->getDeviceId() >= 0)
+					port->setDeviceId(-1);
+			display.stop();
+			m->pushState.store(0, std::memory_order_relaxed);
+		} else {
+			if (!wasOwner)
+				m->resync.store(true, std::memory_order_relaxed);
+			wasOwner = true;
+			display.start();
+			uint32_t connections = display.connections();
+			bool replug = connections != connectionsSeen;
+			if (m->pushAuto && (replug || now - lastScan >= 2)) {
+				lastScan = now;
+				findUserPort(&m->pushIn, replug);
+				if (findUserPort(&m->pushOut, replug))
+					m->resync.store(true, std::memory_order_relaxed);
+			}
+			connectionsSeen = connections;
+			m->pushOut.channel = -1; // the menu offers a channel, which would overwrite the animation channels
+			if (m->pushOut.getDeviceId() != outSeen) { // found, picked in the menu or unplugged
+				outSeen = m->pushOut.getDeviceId();
+				m->resync.store(true, std::memory_order_relaxed);
+			}
+			bool midi = m->pushIn.getDeviceId() >= 0 && m->pushOut.getDeviceId() >= 0;
+			m->pushState.store(midi ? (display.status() == push2::Display::Connected ? 2 : 1) : 0,
+							   std::memory_order_relaxed);
+		}
+		// Rendered here, not in draw(): draw() is skipped for off-screen modules, the Push's display must keep going.
+		// At most ~60 fps: 1/75 s, not 1/60, so a 60 Hz Rack's frame jitter doesn't skip every other frame.
+		if (now - lastPaint < 1.0 / 75)
+			return;
+		lastPaint = now;
+		NVGcontext* vg = APP->window->vg;
+		if (!screen.begin(vg))
+			return;
+		paint(vg, m, own);
+		bool send = own && display.status() == push2::Display::Connected;
+		if (send)
+			rgba.resize((size_t)push2::kWidth * push2::kHeight * 4);
+		screen.end(vg, send ? rgba.data() : nullptr);
+		if (send)
+			display.submit(rgba.data());
+	}
+
+	/** The E1 test pattern: colour bars and an orientation mark (colours and orientation), each encoder's total, the
+	touch strip, the last MIDI bytes, a frame counter and the status line. */
+	void paint(NVGcontext* vg, Tart* m, bool own) {
+		std::shared_ptr<window::Font> mono =
+			APP->window->loadFont(asset::plugin(pluginInstance, "res/fonts/IBMPlexMono-Regular.ttf"));
+		std::shared_ptr<window::Font> sans =
+			APP->window->loadFont(asset::plugin(pluginInstance, "res/fonts/IBMPlexSansCondensed-SemiBold.ttf"));
+		if (!mono || !sans)
+			return;
+		const NVGcolor white = nvgRGB(255, 255, 255), dim = nvgRGB(0x90, 0x92, 0x8c);
+		auto text = [&](float x, float y, const std::string& s, float size, int align, NVGcolor c, bool numbers) {
+			nvgFontFaceId(vg, (numbers ? mono : sans)->handle);
+			nvgFontSize(vg, size);
+			nvgFillColor(vg, c);
+			nvgTextAlign(vg, align | NVG_ALIGN_BASELINE);
+			nvgText(vg, x, y, s.c_str(), nullptr);
+		};
+		auto rect = [&](float x, float y, float w, float h, NVGcolor c) {
+			nvgBeginPath(vg);
+			nvgRect(vg, x, y, w, h);
+			nvgFillColor(vg, c);
+			nvgFill(vg);
+		};
+		auto portName = [](midi::Port* p) {
+			return p->getDeviceId() >= 0 ? p->getDeviceName(p->getDeviceId()) : std::string("-");
+		};
+		bool noPush =
+			m->pushIn.getDeviceId() < 0 && m->pushOut.getDeviceId() < 0 && display.status() <= push2::Display::NoDevice;
+		if (!own || noPush) {
+			text(480, 90, own ? "No Push 2" : "Push in use by another Tart", 40, NVG_ALIGN_CENTER, white, false);
+			return;
+		}
+		tart::State s = m->machine.snapshot();
+		// The orientation mark and the colour bars: red, green, blue, white.
+		rect(0, 0, 10, 10, white);
+		text(16, 12, "TOP LEFT", 14, NVG_ALIGN_LEFT, white, false);
+		const NVGcolor bars[4] = {nvgRGB(255, 0, 0), nvgRGB(0, 255, 0), nvgRGB(0, 0, 255), white};
+		for (int i = 0; i < 4; i++)
+			rect(840.f + 30 * i, 0, 30, 20, bars[i]);
+		// Track encoders: the total of their turns, lit while touched.
+		for (int i = 0; i < 8; i++) {
+			bool touched = s.touched >> i & 1;
+			rect(120.f * i + 4, 26, 112, 60, touched ? nvgRGB(0x30, 0x60, 0xa0) : nvgRGB(0x20, 0x20, 0x20));
+			text(120.f * i + 10, 42, string::f("ENC %d", i + 1), 14, NVG_ALIGN_LEFT, dim, false);
+			text(120.f * i + 60, 76, string::f("%d", s.encoder[i]), 26, NVG_ALIGN_CENTER, white, true);
+		}
+		// The touch strip's bend, then master volume, swing and tempo.
+		rect(4, 94, 580, 20, nvgRGB(0x20, 0x20, 0x20));
+		rect(4, 94, 580.f * s.bend / 16383, 20, s.touched >> push2::kStrip & 1 ? nvgRGB(0x40, 0xa0, 0xff) : dim);
+		const char* names[3] = {"MASTER", "SWING", "TEMPO"};
+		for (int i = 0; i < 3; i++) {
+			float x = 600.f + 120 * i;
+			rect(x + 4, 94, 112, 20,
+				 s.touched >> (push2::kMasterId + i) & 1 ? nvgRGB(0x30, 0x60, 0xa0) : nvgRGB(0x20, 0x20, 0x20));
+			text(x + 8, 109, names[i], 12, NVG_ALIGN_LEFT, dim, false);
+			text(x + 112, 109, string::f("%d", s.encoder[push2::kMasterId + i]), 14, NVG_ALIGN_RIGHT, white, true);
+		}
+		std::string hex;
+		for (int i = 0; i < s.lastSize; i++)
+			hex += string::f("%02X ", s.last[i]);
+		text(8, 134, "LAST " + hex + string::f(" EVENTS %u", s.events), 16, NVG_ALIGN_LEFT, white, true);
+		text(952, 134, string::f("FRAME %u", frames++), 16, NVG_ALIGN_RIGHT, white, true);
+		static const char* const status[] = {"display off",  "no display",        "no access",        "no driver",
+											 "display busy", "display USB error", "display connected"};
+		text(8, 154,
+			 string::f("%s | in %s | out %s", status[display.status()], portName(&m->pushIn).c_str(),
+					   portName(&m->pushOut).c_str()),
+			 14, NVG_ALIGN_LEFT, dim, false);
+	}
+
+	void appendContextMenu(Menu* menu) override {
+		Tart* m = static_cast<Tart*>(module);
+		menu->addChild(new MenuSeparator);
+		menu->addChild(createBoolPtrMenuItem("Find Push automatically", "", &m->pushAuto));
+		menu->addChild(createMenuLabel("Push MIDI input (User Port)"));
+		app::appendMidiMenu(menu, &m->pushIn);
+		menu->addChild(createMenuLabel("Push MIDI output (User Port)"));
+		app::appendMidiMenu(menu, &m->pushOut);
+	}
+};
+
 void init(Plugin* p) {
 	pluginInstance = p;
 	loadSettings();
 	p->addModel(modelFilo = createModel<Filo, FiloWidget>("Filo"));
 	p->addModel(createModel<Icing, IcingWidget>("Icing"));
 	p->addModel(createModel<Lattice, LatticeWidget>("Lattice"));
+	p->addModel(createModel<Tart, TartWidget>("Tart"));
 }
