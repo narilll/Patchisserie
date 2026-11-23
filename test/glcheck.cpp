@@ -626,9 +626,11 @@ int main() {
 			view->notes[0] = {0, 24, 36, 100}, view->notes[1] = {96, 48, 43, 60}, view->notes[2] = {200, 24, 40, 100};
 			int pass = 0;
 			// the Home screen with a clip, the Scale screen, the Home screen with a step held, then Fixed Length held,
-			// then the Clip screen
-			for (uint8_t id : {tart::kHome, tart::kScaleScreen, tart::kHome, tart::kHome, tart::kClipScreen}) {
-				view->s.ui.screen = id, view->s.scale.scale = 20;
+			// then the Clip screen, the Browse screen and the Home screen of a drum track
+			for (uint8_t id : {tart::kHome, tart::kScaleScreen, tart::kHome, tart::kHome, tart::kClipScreen,
+							   tart::kBrowseScreen, tart::kHome}) {
+				view->s.ui.screen = id, view->s.scale.scale = 20, view->s.ui.browse = 1;
+				view->s.track[0].type = pass == 6 ? tart::Drum : tart::Melodic;
 				view->held = pass == 2 ? 1 : -1, view->s.ui.button[push2::cc::FixedLength] = pass++ == 3;
 				if (!screen.begin(vg, fbVg)) {
 					why = "no framebuffer";

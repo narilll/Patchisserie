@@ -17,7 +17,9 @@ constexpr int kTempoUnits = 1; // raw encoder deltas per detent: 1 BPM
 constexpr int kScaleUnits = 8, kLayoutUnits = 30;
 // ponytail: raw encoder deltas per beat of a clip's length on the Clip screen; a guess, calibrate on the hardware.
 constexpr int kLengthUnits = 4;
-constexpr double kHoldSeconds = 0.5; // a button held this long is momentary
+// Ableton's MOMENTARY_DELAY: a button held this long is momentary (Session, Note, Scale, Clip) or not a tap (Fixed
+// Length).
+constexpr double kHoldSeconds = 0.3;
 // ponytail: 2 raw deltas per percent, from the manual's "about 210 steps per turn"; calibrate on the hardware.
 constexpr int kSwingUnits = 2;
 // ponytail: raw encoder deltas per change of a held step's Nudge, Length (a step), Length fine (a tick) and Velocity
@@ -95,6 +97,8 @@ int steps(int& acc, int delta, int units) {
 }
 
 } // namespace
+
+const char* const kTypeNames[kBrowseTypes] = {"Melodic", "Drum"};
 
 const char* const kQuantNames[14] = {"None", "8 Bars", "4 Bars", "2 Bars", "1 Bar", "1/2",   "1/2T",
 									 "1/4",  "1/4T",   "1/8",    "1/8T",   "1/16",  "1/16T", "1/32"};
@@ -229,7 +233,7 @@ void sanitize(State& st) {
 	std::fill(u.pad, u.pad + 64, 0);
 	std::fill(u.button, u.button + 128, false);
 	u.touched = 0, u.popup = kNoPopup, u.popupAt = u.now = 0, u.screenAt = u.padsAt = -1;
-	u.prevPads = kSession, u.dup = -1;
+	u.prevPads = kSession, u.dup = -1, u.browse = 0;
 	for (auto& row : st.clip)
 		for (Clip& c : row) { // `playing` is transient, so a clip needs no more than sorted notes of sound values
 			c.length = std::min<uint16_t>(c.length, kMaxLength);
@@ -254,7 +258,8 @@ void sanitize(State& st) {
 		std::memcpy(name, t.name, kNameBytes); // not necessarily terminated
 		setName(t, name);
 		t.color = std::min<uint8_t>(t.color, kColors - 1);
-		t.type = Melodic; // ponytail: the other types come with E3 and E5
+		t.type = t.type == Drum ? Drum : Melodic; // ponytail: Euclid comes with E5
+		t.lane = std::min<uint8_t>(t.lane, kLanes - 1);
 		t.voices = std::min<uint8_t>(std::max<uint8_t>(t.voices, 1), 16);
 		t.grid = std::min<uint8_t>(t.grid, 7);
 		t.octave = (int8_t)std::min<int>(std::max<int>(t.octave, 0), kMaxOctave);
@@ -293,6 +298,23 @@ bool Machine::scaleButton(Scale& sc, int button) {
 	return true;
 }
 
+/** The Browse screen's buttons: UP and DOWN move the cursor, lower 8 is LOAD (the type goes to the selected track) and
+ * upper 1 is CLOSE; LEFT, RIGHT and the other buttons above and below the display do nothing. */
+bool Machine::browseButton(State& st, int button) {
+	using namespace push2::cc;
+	Ui& ui = st.s.ui;
+	if (button == Up || button == Down) {
+		ui.browse = (uint8_t)std::min(std::max(ui.browse + (button == Down ? 1 : -1), 0), kBrowseTypes - 1);
+	} else if (button == Track8Below) {
+		st.s.track[ui.track].type = ui.browse, ui.heldStep = -1, ui.screen = kHome;
+	} else if (button == Track1Above) {
+		ui.screen = kHome;
+	} else if (button < Left || button > Down) {
+		return (button >= Track1Below && button <= Track8Below) || (button >= Track1Above && button <= Track8Above);
+	}
+	return true;
+}
+
 /** Average of the last 4 intervals between taps; a gap above 2 s starts a new series. */
 void Machine::tap(Transport& t) {
 	if (nTaps_ && (double)(frame_ - taps_[nTaps_ - 1]) > 2.0 * sr_)
@@ -324,6 +346,7 @@ void Machine::handle(State& st, const push2::Event& e) {
 	Transport& t = s.transport;
 	Ui& ui = s.ui;
 	auto show = [&](Popup p) { ui.popup = p, ui.popupAt = ui.now; };
+	bool drum = s.track[ui.track].type == Drum;
 	switch (e.type) {
 	case Event::Button:
 		ui.button[e.index & 127] = e.value != 0;
@@ -363,7 +386,11 @@ void Machine::handle(State& st, const push2::Event& e) {
 			uint8_t to = e.index == push2::cc::Scale ? kScaleScreen : kClipScreen;
 			ui.screen = ui.screen == to ? kHome : to;
 			ui.screenAt = ui.screen == to ? ui.now : -1;
+		} else if (e.index == push2::cc::Browse) {
+			ui.screen = ui.screen == kBrowseScreen ? kHome : kBrowseScreen;
+			ui.browse = std::min<uint8_t>(s.track[ui.track].type, kBrowseTypes - 1);
 		} else if (ui.screen == kScaleScreen && scaleButton(s.scale, e.index)) {
+		} else if (ui.screen == kBrowseScreen && browseButton(st, e.index)) {
 		} else if (e.index == push2::cc::StopClip) {
 			if (ui.button[push2::cc::Shift])
 				for (int k = 0; k < kTracks; k++)
@@ -388,12 +415,16 @@ void Machine::handle(State& st, const push2::Event& e) {
 		} else if (ui.pads == kSession) {
 			if (e.index >= push2::cc::Scene8 && e.index <= push2::cc::Scene1)
 				sceneButton(st, push2::cc::Scene1 - e.index);
+		} else if (drum && (e.index == push2::cc::OctaveUp || e.index == push2::cc::OctaveDown ||
+							e.index == push2::cc::Layout)) {
+			// drum pads have no octave and no sequencer layout
 		} else if (e.index == push2::cc::OctaveUp || e.index == push2::cc::OctaveDown) {
 			int8_t& o = s.track[ui.track].octave;
 			o = (int8_t)std::min(std::max(o + (e.index == push2::cc::OctaveUp ? 1 : -1), 0), kMaxOctave);
 		} else if (e.index == push2::cc::Layout)
 			ui.noteLayout ^= 1, ui.heldStep = -1, ui.page = 0;
-		else if (ui.noteLayout && ui.heldStep < 0) { // the sequencer: pages and step sizes (not while a step is held)
+		else if (ui.noteLayout && !drum &&
+				 ui.heldStep < 0) { // the sequencer: pages and step sizes (not while a step is held)
 			Track& tr = s.track[ui.track];
 			int last = lastPage(st.clip[ui.track][ui.scene], kGrid[tr.grid]);
 			if (e.index == push2::cc::PageLeft || e.index == push2::cc::PageRight)
@@ -428,6 +459,9 @@ void Machine::handle(State& st, const push2::Event& e) {
 				int n = steps(accScale_[e.index], e.value, kScaleUnits);
 				sc.scale = (uint8_t)std::min(std::max(sc.scale + n, 0), kScaleCount - 1);
 			}
+		} else if (e.index < 7 && ui.screen == kBrowseScreen) { // the Browse screen: the cursor
+			int n = steps(accBrowse_, e.value, kScaleUnits);
+			ui.browse = (uint8_t)std::min(std::max(ui.browse + n, 0), kBrowseTypes - 1);
 		} else if (e.index == 0 && ui.screen == kClipScreen) { // the Clip screen: the length of the selected clip
 			int n = steps(accClip_, e.value, kLengthUnits);
 			if (n)
@@ -484,6 +518,10 @@ void Machine::pad(State& st, int i, int vel) {
 			session(st, i);
 		return;
 	}
+	if (s.track[s.ui.track].type == Drum) {
+		drumPad(st, i, vel);
+		return;
+	}
 	if (s.ui.noteLayout) {
 		sequencer(st, i, vel);
 		return;
@@ -492,11 +530,29 @@ void Machine::pad(State& st, int i, int vel) {
 		return;
 	bool root, inScale;
 	int p = padPitch(s.scale, s.track[s.ui.track].octave, i / 8, i % 8, root, inScale);
-	if (p < 0)
-		return;
-	l = {++nextId_, s.ui.track, (uint8_t)p};
+	if (p >= 0)
+		play(s, i, p, vel);
+}
+
+/** Starts the note of pad `i` on the selected track. A drum track plays it on the voice channel of its lane. */
+void Machine::play(Session& s, int i, int pitch, int vel) {
+	Live& l = live_[i];
+	l = {++nextId_, s.ui.track, (uint8_t)pitch};
 	s.ui.pad[i] = (uint8_t)vel;
-	voice_[l.track].noteOn(l.id, (float)p, (float)vel / 127.f, 0);
+	int midichan = s.track[l.track].type == Drum ? pitch - kDrumNote + 1 : 0;
+	voice_[l.track].noteOn(l.id, (float)pitch, (float)vel / 127.f, midichan);
+}
+
+/** A pad of a drum track: the lower left 4 x 4 are the lanes (row * 4 + col, from the bottom left), which a press
+ * selects and plays; with Select held it only selects. */
+void Machine::drumPad(State& st, int i, int vel) {
+	Session& s = st.s;
+	if (!vel || i / 8 > 3 || i % 8 > 3)
+		return;
+	int lane = i / 8 * 4 + i % 8;
+	s.track[s.ui.track].lane = (uint8_t)lane;
+	if (!s.ui.button[push2::cc::Select])
+		play(s, i, kDrumNote + lane, vel);
 }
 
 /** Starts the clip of `scene` on `track` at the launch quantization, at once when the transport is stopped. */
@@ -629,8 +685,8 @@ void Machine::sequencer(State& st, int i, int vel) {
 		}
 		return;
 	}
-	bool created = !c.length; // the first note makes the clip and launches it
-	int length = c.length ? c.length : ui.fixedOn ? kPpqn << ui.fixedBars : kBar;
+	bool created = !c.length;                                 // the first note makes the clip and launches it
+	int length = c.length ? c.length : kPpqn << ui.fixedBars; // the Fixed Length setting, on or off
 	if (pitch < 0 || start >= length)
 		return;
 	int n = findNote(c, pitch, start, grid);
@@ -645,8 +701,10 @@ void Machine::sequencer(State& st, int i, int vel) {
 		ui.heldStep = (int8_t)i, ui.heldHad = true, ui.heldEdited = false;
 	} else {
 		Note note = {(uint16_t)start, (uint16_t)std::min(grid, length - start), (uint8_t)pitch, 100};
-		if (insertNote(c, note) < 0)
+		if (insertNote(c, note) < 0) {
+			ui.popup = kClipFullPopup, ui.popupAt = ui.now; // it can't be a duplicate: findNote found none
 			return;
+		}
 		ui.heldStep = (int8_t)i, ui.heldHad = ui.heldEdited = false;
 		c.length = (uint16_t)length;
 		if (created)
@@ -782,7 +840,10 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 	white(push2::cc::Scale, u.screen == kScaleScreen || u.button[push2::cc::Scale]);
 	white(push2::cc::Clip, u.screen == kClipScreen || u.button[push2::cc::Clip]);
 	white(push2::cc::FixedLength, u.fixedOn || u.button[push2::cc::FixedLength]);
-	if (u.screen == kScaleScreen) { // the roots (the selected one white), In Key (always on) and Fixed
+	white(push2::cc::Browse, u.screen == kBrowseScreen || u.button[push2::cc::Browse]);
+	if (u.screen == kBrowseScreen) { // LOAD and CLOSE; the other buttons stay dark
+		out.cc[push2::cc::Track8Below] = out.cc[push2::cc::Track1Above] = {push2::kRgbWhite, push2::kStatic};
+	} else if (u.screen == kScaleScreen) { // the roots (the selected one white), In Key (always on) and Fixed
 		const Scale& sc = s.scale;
 		auto option = [&](int c, bool on) {
 			out.cc[c] = {on ? push2::kRgbWhite : push2::kRgbDarkGray, push2::kStatic};
@@ -811,6 +872,14 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 	}
 	if (u.pads == kSession) {
 		sessionLeds(st, out);
+		return;
+	}
+	if (tr.type == Drum) { // the lanes: the selected one white, a sounding one green; no octave, no layout
+		for (int lane = 0; lane < kLanes; lane++)
+			out.note[push2::padNote(lane / 4, lane % 4)] = {voice_[u.track].gate(lane) ? push2::kGreen
+															: lane == tr.lane          ? push2::kRgbWhite
+																			  : (uint8_t)(kPaletteFull + u.track),
+															push2::kStatic};
 		return;
 	}
 	if (tr.octave > 0)
@@ -865,6 +934,7 @@ void Machine::tick(State& st, int64_t k, Outputs& out) {
 		if (!c.length)
 			continue;
 		int pos = (int)((k - tr.startTick) % c.length);
+		bool drum = tr.type == Drum;
 		// Swing delays the notes exactly on an even sixteenth (tick 24 of 48) by up to 12 ticks, where they start late.
 		int d = (s.transport.swing * 12 + 50) / 100;
 		for (int pass = 0; pass <= (d > 0); pass++) {
@@ -874,10 +944,14 @@ void Machine::tick(State& st, int64_t k, Outputs& out) {
 				 n != c.notes + c.nNotes && n->tick == at; n++) {
 				if (d > 0 && (n->tick % 48 == 24) != (pass == 1))
 					continue;
+				int ch = drum ? n->pitch - kDrumNote + 1 : 0; // a drum lane plays on the voice channel of its number
+				if (drum && (ch < 1 || ch > kLanes))
+					continue; // outside the lanes: kept, silent
+
 				if (nActive_[t] == kActive)
 					break;
 				uint32_t id = ++nextId_;
-				v.noteOn(id, (float)n->pitch, (float)n->vel / 127.f, 0);
+				v.noteOn(id, (float)n->pitch, (float)n->vel / 127.f, ch);
 				active_[t][nActive_[t]++] = {id, k + n->len};
 			}
 		}
@@ -943,6 +1017,14 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 		for (int i = 0; i < in.nEvents; i++)
 			handle(*state_, in.events[i]);
 		out.consumed = in.nEvents > 0;
+		for (int i = 0; i < kTracks; i++) { // a track changed type (Browse or the menu): silence it, switch its voices
+			if (s.track[i].type == type_[i])
+				continue;
+			type_[i] = s.track[i].type;
+			voice_[i].allOff(), nActive_[i] = 0;
+			voice_[i].setMode(type_[i] == Drum ? filo::VoiceAllocator::MPE : filo::VoiceAllocator::Rotate);
+			voice_[i].setChannels(type_[i] == Drum ? kLanes : s.track[i].voices);
+		}
 		// ponytail: at most 8 ticks per sample, the rest follow on the next samples; only an external clock at 1 or 2
 		// pulses per beat jumps that far.
 		for (int n = 0; n < 8 && clock_.started() && nextTick_ <= due; n++)
@@ -974,13 +1056,15 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 	// The voices: the bend is on the selected track only.
 	for (int t = 0; t < kTracks; t++) {
 		filo::VoiceAllocator& v = voice_[t];
-		v.setChannels(voices_[t]);
+		bool drum = type_[t] == Drum; // 16 channels, one for each lane, whatever Voices says
+		v.setChannels(drum ? kLanes : voices_[t]);
 		if (slice) {
 			SliceTrack& o = slice->track[t];
-			float bend = t == selected_ ? bend_ : 0.f;
+			float bend = t == selected_ && !drum ? bend_ : 0.f;
 			o.channels = (uint8_t)v.channels();
 			for (int c = 0; c < o.channels; c++)
-				o.voct[c] = v.pitchV(c) + bend, o.gate[c] = v.gate(c) ? 10.f : 0.f, o.vel[c] = v.velV(c);
+				o.voct[c] = (drum ? (float)(kDrumNote + c - 60) / 12.f : v.pitchV(c)) + bend,
+				o.gate[c] = v.gate(c) ? 10.f : 0.f, o.vel[c] = v.velV(c);
 			// ponytail: CC, LEVEL and PAN stay at their defaults until E4 gives the clips automation and a mixer.
 			std::fill(o.cc, o.cc + kCcs, 0.f);
 			o.level = 10.f, o.pan = 0.f, o.rgb = rgb_[t];

@@ -43,6 +43,8 @@ The panel shows the name SLICE, the track window and six output jacks, two to a 
 
 The number of channels on V/OCT, GATE and VEL is the number of voices of the track, set with **Voices** in the **Track** menu of the Tart. The default is 1.
 
+**Drum tracks.** When the track is a Drum track (see [Drum tracks](tart.md#drum-tracks) in the Tart manual), the three outputs always have 16 channels, and **Voices** is ignored. Channel 1 is the first drum pad, channel 2 the second, and channel 16 the sixteenth. The V/OCT of each channel does not change: it is the pitch of the pad's MIDI note, 1 V per octave with 0 V as MIDI note 60, so channel 1 is -2 V (MIDI note 36), channel 2 is -1.917 V and channel 16 is -0.75 V (MIDI note 51). GATE of a channel is 10 V while that pad's note sounds, and VEL is its velocity. The touch strip does not bend a drum track.
+
 CC, LEVEL and PAN are there for later versions of Tart, where clips will control them. For now they stay at the values in the table.
 
 ## Context menu reference

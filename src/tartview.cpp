@@ -76,6 +76,26 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 					rect(x + 3, y, 114, 24, white);
 				text(x + 60, y + 18, kScales[k].name, 14, NVG_ALIGN_CENTER, k == sc.scale ? black : white, sans);
 			}
+	} else if (ui.screen == kBrowseScreen) { // CLOSE over upper 1, TYPE over encoder 1, the list, LOAD over lower 8
+		const Track& tr = v.s.track[ui.track];
+		rect(3, 2, 114, 20, nvgRGB(0x30, 0x32, 0x36));
+		text(60, 18, "CLOSE", 15, NVG_ALIGN_CENTER, white, sans);
+		cell(0, 1, "TYPE", kTypeNames[std::min<int>(tr.type, kBrowseTypes - 1)], 40);
+		for (int k = 0; k < kBrowseTypes; k++) {
+			float y = 54.f + 27 * k;
+			bool cursor = k == ui.browse;
+			if (cursor)
+				rect(123, y, 234, 24, white);
+			if (k == tr.type) { // the type the track has now
+				nvgBeginPath(vg);
+				nvgCircle(vg, 138, y + 12, 4);
+				nvgFillColor(vg, cursor ? black : dim);
+				nvgFill(vg);
+			}
+			text(150, y + 18, kTypeNames[k], 14, NVG_ALIGN_LEFT, cursor ? black : white, sans);
+		}
+		rect(120.f * 7 + 3, 138, 114, 20, white);
+		text(120.f * 7 + 60, 154, "LOAD", 15, NVG_ALIGN_CENTER, black, sans);
 	} else if (ui.screen == kClipScreen) { // the length of the selected clip, as bars.beats.ticks
 		int length = v.length[ui.track][ui.scene];
 		if (length) {
@@ -117,11 +137,13 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 		nvgFillColor(vg, t.playing ? nvgRGB(0x40, 0xd0, 0x60) : dim);
 		nvgFill(vg);
 	}
-	if (ui.screen != kScaleScreen) {
+	if (ui.screen != kScaleScreen && ui.screen != kBrowseScreen) {
 		// Middle: the selected slot, its notes over time and the playhead.
 		const Track& tr = v.s.track[ui.track];
 		const uint8_t* tc = kLiveColors[tr.color % kColors];
-		std::snprintf(buf, sizeof buf, "Track %d \xC2\xB7 Scene %d", ui.track + 1, ui.scene + 1);
+		const bool drum = tr.type == Drum;
+		std::snprintf(buf, sizeof buf, "Track %d \xC2\xB7 Scene %d%s", ui.track + 1, ui.scene + 1,
+					  drum ? " \xC2\xB7 Drum" : "");
 		text(8, 46, buf, 18, NVG_ALIGN_LEFT, white, sans);
 		int length = v.length[ui.track][ui.scene];
 		const float x0 = 8, w = 944, y0 = 54, h = ui.screen == kClipScreen ? 70 : 62; // larger on the Clip screen
@@ -140,10 +162,12 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 			for (int i = 0; i < v.nNotes; i++)
 				lo = std::min<int>(lo, v.notes[i].pitch), hi = std::max<int>(hi, v.notes[i].pitch);
 			int span = std::max(hi - lo + 1, 12); // semitones the box shows, from the lowest note
+			if (drum)
+				lo = kDrumNote, span = kLanes; // the lanes
 			float nh = std::max(h / span, 2.f);
 			for (int i = 0; i < v.nNotes; i++) {
 				const Note& n = v.notes[i];
-				if (n.tick >= length)
+				if (n.tick >= length || (drum && (n.pitch < lo || n.pitch >= lo + span)))
 					continue;
 				float x = x0 + w * n.tick / length,
 					  nw = std::max(w * std::min<int>(n.len, length - n.tick) / length, 2.f);
@@ -199,10 +223,13 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 	}
 
 	// Popup: while the encoder is touched and for a second after a turn.
-	bool tempo = ui.popup == kTempoPopup;
-	if ((tempo || ui.popup == kSwingPopup) &&
-		(ui.touched >> (tempo ? push2::kTempoId : push2::kSwingId) & 1 || ui.now - ui.popupAt < 1)) {
-		if (tempo)
+	bool tempo = ui.popup == kTempoPopup, full = ui.popup == kClipFullPopup;
+	if (full ? ui.now - ui.popupAt < 1
+			 : (tempo || ui.popup == kSwingPopup) &&
+				   (ui.touched >> (tempo ? push2::kTempoId : push2::kSwingId) & 1 || ui.now - ui.popupAt < 1)) {
+		if (full)
+			std::snprintf(buf, sizeof buf, "Clip full");
+		else if (tempo)
 			std::snprintf(buf, sizeof buf, t.external ? "Tempo %.1f BPM EXT" : "Tempo %.1f BPM",
 						  t.external ? t.shownBpm : t.bpm);
 		else

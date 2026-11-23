@@ -439,7 +439,8 @@ TEST(tart_machine_threads) {
 	while (!done) {
 		m.view(*v);
 		m.edit([&](tart::State& st) {
-			st.s.transport.swing = (uint8_t)(n % 100), st.s.track[0].voices = (uint8_t)(n++ % 16 + 1);
+			st.s.transport.swing = (uint8_t)(n % 100), st.s.track[0].voices = (uint8_t)(n % 16 + 1);
+			st.s.track[1].type = (uint8_t)(n++ / 7 % 2);
 		});
 	}
 	audio.join();
@@ -459,10 +460,11 @@ TEST(tart_machine_threads) {
 
 TEST(state_layout) {
 	CHECK(std::is_trivially_copyable<tart::State>::value);
-	CHECK(sizeof(tart::State) < 2 * 1024 * 1024); // heap only: ~1.3 MB
+	CHECK(tart::kMaxNotes == 4096);
+	CHECK(sizeof(tart::State) < 3 * 1024 * 1024); // heap only: ~2.1 MB
 	CHECK(sizeof(tart::Machine) < 16 * 1024);
 	CHECK(sizeof(tart::SliceFrame) < 2048);
-	CHECK(sizeof(tart::State) > 1000000);
+	CHECK(sizeof(tart::State) > 2 * 1024 * 1024);
 	auto st = std::make_unique<tart::State>();
 	CHECK(std::string(st->s.track[0].name) == "Track 1" && std::string(st->s.track[7].name) == "Track 8");
 	CHECK(st->s.track[0].voices == 1 && st->s.track[0].octave == 3 && st->s.track[0].playing == tart::kNone);
@@ -637,6 +639,11 @@ TEST(sanitize_tracks) {
 	tart::sanitize(*st);
 	CHECK(std::strlen(t.name) == 30 && t.name[29] == 'a'); // cut before the broken character
 	CHECK(t.color == 69 && t.voices == 1 && t.octave == tart::kMaxOctave && t.grid == 7 && t.type == tart::Melodic);
+	st->s.track[3].type = tart::Drum, st->s.track[3].lane = 99, st->s.track[4].type = tart::Euclidean;
+	st->s.ui.browse = 5, st->s.ui.screen = tart::kBrowseScreen;
+	tart::sanitize(*st); // Euclid is E5: a Melodic track until then
+	CHECK(st->s.track[3].type == tart::Drum && st->s.track[3].lane == tart::kLanes - 1);
+	CHECK(st->s.track[4].type == tart::Melodic && st->s.ui.browse == 0 && st->s.ui.screen == tart::kHome);
 	CHECK(t.playing == tart::kNone && t.queued == tart::kNone);
 	CHECK(st->s.track[2].voices == 16 && st->s.track[2].octave == 0);
 	CHECK(st->s.scale.root == 11 && st->s.scale.scale == 0 && st->s.scale.layout == 5);
@@ -777,9 +784,9 @@ TEST(scale_buttons) {
 	r.run_(48000 * 6 / 10);
 	r.press(Scale, 0);
 	CHECK(r.view().s.ui.screen == tart::kHome);
-	// Held but under 0.5 s: stays.
+	// Held but under 0.3 s: stays.
 	r.press(Scale);
-	r.run_(48000 * 4 / 10);
+	r.run_(48000 * 2 / 10);
 	r.press(Scale, 0);
 	CHECK(r.view().s.ui.screen == tart::kScaleScreen);
 	// Roots: upper 2..7 C G D A E B; lower 2..7 F Bb Eb Ab Db Gb. The lower buttons don't select tracks here.
@@ -909,13 +916,13 @@ TEST(seq_toggle) {
 	CHECK(r.view().s.ui.noteLayout == 1);
 	r.tap(0, 0);
 	auto v = r.view();
-	CHECK(v.length[0][0] == 384 && v.nNotes == 1); // Fixed Length off: one bar
+	CHECK(v.length[0][0] == 768 && v.nNotes == 1); // Fixed Length off: its setting all the same, 2 Bars
 	CHECK(v.notes[0].tick == 0 && v.notes[0].len == 24 && v.notes[0].pitch == 36 && v.notes[0].vel == 100);
 	CHECK(v.s.track[0].playing == 0); // stopped: it is the playing clip
 	CHECK(r.f.track[0].gate[0] == 0); // the pads make no sound in the sequencer
 	r.tap(0, 0);
 	v = r.view();
-	CHECK(v.nNotes == 0 && v.length[0][0] == 384); // the clip stays, empty
+	CHECK(v.nNotes == 0 && v.length[0][0] == 768); // the clip stays, empty
 
 	// Fixed Length on, 1 Beat: the clip of another track
 	r.click(push2::cc::FixedLength);
@@ -968,6 +975,7 @@ TEST(seq_toggle) {
 
 TEST(seq_controls) {
 	Rig r;
+	r.m.edit([](tart::State& st) { st.s.ui.fixedBars = 2; }); // new clips: 1 Bar
 	r.click(push2::cc::Layout);
 	r.click(push2::cc::Scene1 - 2); // 1/8: the third scene button from the top
 	CHECK(r.view().s.track[0].grid == 2);
@@ -1009,6 +1017,7 @@ TEST(seq_controls) {
 	r.click(push2::cc::Layout);
 	CHECK(r.view().s.ui.noteLayout == 0);
 
+	r.m.edit([](tart::State& st) { st.s.ui.fixedBars = 3; });
 	// Fixed Length: its buttons while it is held, and a tap on it
 	r.press(push2::cc::FixedLength);
 	r.press(push2::cc::Track1Above);
@@ -1186,9 +1195,9 @@ TEST(stop_releases_clip_not_pads) {
 TEST(sanitize_clips) {
 	auto st = std::make_unique<tart::State>();
 	tart::Clip& c = st->clip[1][2];
-	c.length = 20000, c.nNotes = 3000;
-	for (int i = 0; i < 2048; i++)
-		c.notes[i] = {(uint16_t)(2047 - i), 0, (uint8_t)(i % 100), 0};
+	c.length = 20000, c.nNotes = 5000;
+	for (int i = 0; i < tart::kMaxNotes; i++)
+		c.notes[i] = {(uint16_t)(tart::kMaxNotes - 1 - i), 0, (uint8_t)(i % 100), 0};
 	c.notes[0] = {5, 10, 200, 60};   // pitch too high: dropped
 	c.notes[1] = {7, 60000, 60, 0};  // length and velocity clamped
 	c.notes[2] = {7, 3, 60, 99};     // the same tick and pitch: one of them stays
@@ -1199,7 +1208,7 @@ TEST(sanitize_clips) {
 	s.length = 96, s.nNotes = 2, s.notes[0] = {50, 3, 70, 90}, s.notes[1] = {10, 3, 71, 90};
 	st->s.track[0].playing = 1;
 	tart::sanitize(*st);
-	CHECK(c.length == tart::kMaxLength && c.nNotes == 2045);
+	CHECK(c.length == tart::kMaxLength && c.nNotes == tart::kMaxNotes - 3);
 	bool ok = true;
 	int at7 = 0;
 	for (int i = 0; i < c.nNotes; i++) {
@@ -1557,7 +1566,7 @@ TEST(note_added_to_a_stopped_clip_does_not_launch) {
 	r.click(push2::cc::Down);
 	r.tap(0, 0);
 	v = r.view();
-	CHECK(v.s.ui.scene == 1 && v.length[0][1] == tart::kBar && v.s.track[0].queued == 1);
+	CHECK(v.s.ui.scene == 1 && v.length[0][1] == 2 * tart::kBar && v.s.track[0].queued == 1);
 }
 
 TEST(clip_screen_momentary) {
@@ -1579,8 +1588,8 @@ TEST(clip_screen_momentary) {
 	r.run_(48000 * 6 / 10);
 	r.press(Clip, 0);
 	CHECK(r.view().s.ui.screen == tart::kHome);
-	r.press(Clip); // held 0.4 s: stays
-	r.run_(48000 * 4 / 10);
+	r.press(Clip); // held 0.2 s: stays
+	r.run_(48000 * 2 / 10);
 	r.press(Clip, 0);
 	CHECK(r.view().s.ui.screen == tart::kClipScreen);
 }
@@ -1643,4 +1652,259 @@ TEST(clip_shorten_releases_gate) {
 	CHECK(r.f.track[0].gate[0] == 0);
 	r.run_(250 * 100); // tick ~400: the loop of 192 has wrapped and the note starts again
 	CHECK(r.f.track[0].gate[0] == 10);
+}
+
+TEST(hold_threshold) { // one constant, 0.3 s, for every momentary hold
+	using namespace push2::cc;
+	Rig r(false);
+	auto held = [&](int cc, double seconds) {
+		r.press(cc);
+		r.run_((int)(48000 * seconds));
+		r.press(cc, 0);
+	};
+	for (int cc : {Scale, Clip}) { // 0.25 s stays, 0.35 s only while held
+		uint8_t on = cc == Scale ? tart::kScaleScreen : tart::kClipScreen;
+		held(cc, 0.25);
+		CHECK(r.view().s.ui.screen == on);
+		r.click(cc);
+		held(cc, 0.35);
+		CHECK(r.view().s.ui.screen == tart::kHome);
+	}
+	held(Note, 0.25);
+	CHECK(r.view().s.ui.pads == tart::kNote);
+	held(Session, 0.35);
+	CHECK(r.view().s.ui.pads == tart::kNote); // went to Session while held, back to Note
+	held(Session, 0.25);
+	CHECK(r.view().s.ui.pads == tart::kSession);
+	held(FixedLength, 0.25); // a tap toggles; a hold doesn't
+	CHECK(r.view().s.ui.fixedOn);
+	held(FixedLength, 0.35);
+	CHECK(r.view().s.ui.fixedOn);
+}
+
+TEST(step_clip_length_is_fixed_length_setting) {
+	Rig r;
+	r.click(push2::cc::Layout);
+	r.tap(0, 0); // Fixed Length off, 2 Bars at the start
+	CHECK(!r.view().s.ui.fixedOn && r.view().length[0][0] == 768);
+	r.m.edit([](tart::State& st) { st.s.ui.fixedBars = 0; });
+	r.click(push2::cc::Track1Below + 1);
+	r.tap(0, 0);
+	CHECK(r.view().length[1][0] == 96); // 1 Beat, still off
+	r.m.edit([](tart::State& st) { st.s.ui.fixedBars = 7, st.s.ui.fixedOn = true; });
+	r.click(push2::cc::Track1Below + 2);
+	r.tap(0, 0);
+	CHECK(r.view().length[2][0] == 32 * tart::kBar); // on: the same
+}
+
+TEST(clip_full_popup) {
+	Rig r;
+	r.click(push2::cc::Layout);
+	r.m.edit([](tart::State& st) { // every step of every row of a 32-bar clip but one, and a note off the grid
+		tart::Clip& c = st.clip[0][0];
+		c.length = 32 * tart::kBar;
+		for (int step = 0; step < 512; step++)
+			for (int row = 0; row < 8; row++)
+				if (step || row < 7)
+					c.notes[c.nNotes++] = {(uint16_t)(step * 24), 24, (uint8_t)rowPitch(row), 100};
+		c.notes[c.nNotes++] = {12288 - 1, 1, 100, 100};
+	});
+	CHECK(r.view().nNotes == tart::kMaxNotes);
+	std::unique_ptr<tart::State> before = r.state();
+	r.pad(7, 0, 100);
+	CHECK(r.view().nNotes == tart::kMaxNotes && r.view().s.ui.popup == tart::kClipFullPopup);
+	std::unique_ptr<tart::State> after = r.state();
+	CHECK(std::memcmp(&before->clip[0][0], &after->clip[0][0], sizeof(tart::Clip)) == 0);
+	CHECK(r.view().s.ui.heldStep == -1);
+}
+
+TEST(drum_pads_slice) {
+	SliceRig r;
+	r.m.edit([](tart::State& st) { st.s.track[0].type = tart::Drum, st.s.track[0].voices = 3; }); // Voices is ignored
+	r.run_(2);
+	const tart::SliceTrack& t = r.f.track[0];
+	CHECK(t.channels == 16 && r.f.track[1].channels == 1);
+	CHECK(t.voct[0] == -2.f && t.voct[15] == -0.75f && t.voct[7] == (7 - 24) / 12.f);
+	r.pad(0, 0, 100); // lane 0, channel 0
+	int on = 0;
+	for (int c = 0; c < 16; c++)
+		on += t.gate[c] > 5;
+	CHECK(t.gate[0] == 10 && on == 1 && t.voct[0] == -2.f);
+	CHECK_NEAR(t.vel[0], 100 / 127.f * 10, 1e-4);
+	CHECK(r.view().s.track[0].lane == 0 && r.view().s.ui.pad[0] == 100);
+	r.pad(0, 0, 0);
+	CHECK(t.gate[0] == 0);
+	r.pad(1, 3, 90); // row 1, column 3: lane 7
+	on = 0;
+	for (int c = 0; c < 16; c++)
+		on += t.gate[c] > 5;
+	CHECK(t.gate[7] == 10 && on == 1 && r.view().s.track[0].lane == 7);
+	r.pad(0, 0, 100); // two at once
+	CHECK(t.gate[0] == 10 && t.gate[7] == 10);
+	r.pad(3, 3, 100); // lane 15
+	CHECK(t.gate[15] == 10 && t.voct[15] == -0.75f);
+	r.pad(0, 0, 0), r.pad(1, 3, 0), r.pad(3, 3, 0);
+	for (int c = 0; c < 16; c++)
+		CHECK(t.gate[c] == 0);
+	// Outside the 4 x 4: silent and the lane stays. Select: selects without playing.
+	r.pad(0, 4, 100), r.pad(4, 0, 100), r.pad(7, 7, 100);
+	for (int c = 0; c < 16; c++)
+		CHECK(t.gate[c] == 0);
+	CHECK(r.view().s.track[0].lane == 15);
+	r.press(push2::cc::Select);
+	r.pad(0, 2, 100);
+	CHECK(t.gate[2] == 0 && r.view().s.track[0].lane == 2);
+	r.pad(0, 2, 0);
+	r.press(push2::cc::Select, 0);
+	// The octave, the layout, the touch strip and the lights.
+	r.click(push2::cc::OctaveUp);
+	r.click(push2::cc::Layout);
+	push2::Event bend = dec({0xE0, 0x7F, 0x7F});
+	r.step(&bend);
+	auto v = r.view();
+	CHECK(v.s.track[0].octave == 3 && v.s.ui.noteLayout == 0 && v.s.ui.bend > 0.9f);
+	r.run_(2);
+	CHECK(t.voct[0] == -2.f && t.voct[15] == -0.75f);
+	r.in.leds = true;
+	r.step();
+	auto led = [&](int row, int col) { return r.want.note[push2::padNote(row, col)].color; };
+	CHECK(led(0, 2) == push2::kRgbWhite && led(0, 0) == tart::kPaletteFull && led(3, 3) == tart::kPaletteFull);
+	CHECK(led(0, 4) == 0 && led(4, 0) == 0 && led(7, 7) == 0);
+	CHECK(r.want.cc[push2::cc::OctaveUp].color == 0 && r.want.cc[push2::cc::Layout].color == 0);
+	r.pad(2, 1, 100); // lane 9 sounds: green, the selected lane white
+	CHECK(led(2, 1) == push2::kGreen && led(0, 2) == tart::kPaletteFull); // pressing selects it too
+	r.pad(2, 1, 0);
+	// A melodic track (track 2) keeps its rotating voices.
+	r.click(push2::cc::Track1Below + 1);
+	r.pad(0, 0, 100);
+	CHECK(r.f.track[1].channels == 1 && r.f.track[1].gate[0] == 10);
+	CHECK_NEAR(r.f.track[1].voct[0], -2.f + 1.f / 6, 1e-3); // the strip bends a melodic track
+}
+
+TEST(drum_clip_playback) {
+	SliceRig r;
+	r.m.edit([](tart::State& st) {
+		tart::Clip& c = st.clip[0][0];
+		c.length = tart::kBar, c.nNotes = 5;
+		c.notes[0] = {0, 24, 41, 100};  // lane 5
+		c.notes[1] = {48, 24, 35, 100}; // outside the lanes: silent
+		c.notes[2] = {96, 24, 60, 100};
+		c.notes[3] = {144, 24, 52, 100};
+		c.notes[4] = {192, 24, 36, 100}; // lane 0
+		st.s.track[0].type = tart::Drum, st.s.track[0].playing = 0;
+	});
+	int first5 = -1, first0 = -1;
+	bool other = false;
+	for (int i = 0; i < 48100; i++) {
+		r.in.play = i == 0;
+		r.step();
+		for (int c = 0; c < 16; c++) {
+			if (r.f.track[0].gate[c] <= 5)
+				continue;
+			int& first = c == 5 ? first5 : first0;
+			if (c != 5 && c != 0)
+				other = true;
+			else if (first < 0)
+				first = i;
+		}
+	}
+	CHECK(first5 == 0 && r.f.track[0].gate[5] == 0); // channel 5 at sample 0, for 24 ticks
+	CHECK(!other);                                   // 35, 52 and 60 are silent
+	CHECK(first0 == 48000);                          // lane 0 at tick 192
+	// Switching the type loses nothing: as a Melodic track the pitch 60 note plays, on voice 0.
+	r.m.edit([](tart::State& st) { st.s.track[0].type = tart::Melodic; });
+	CHECK(r.state()->clip[0][0].nNotes == 5);
+	r.in.reset = true;
+	bool seen = false;
+	for (int i = 0; i < 24100; i++) {
+		r.step();
+		seen |= i > 24000 && r.f.track[0].gate[0] > 5 && r.f.track[0].voct[0] == 0.f;
+	}
+	CHECK(seen);
+}
+
+TEST(browse_load_close) {
+	using namespace push2::cc;
+	Rig r;
+	r.in.leds = true;
+	r.step();
+	CHECK(r.want.cc[Browse].color == push2::kWhiteDark);
+	r.press(Browse);
+	r.press(Browse, 0);
+	auto v = r.view();
+	CHECK(v.s.ui.screen == tart::kBrowseScreen && v.s.ui.browse == tart::Melodic);
+	CHECK(r.want.cc[Browse].color == push2::kWhiteFull);
+	CHECK(r.want.cc[Track8Below].color == push2::kRgbWhite && r.want.cc[Track1Above].color == push2::kRgbWhite);
+	for (int b = Track1Below; b < Track8Below; b++)
+		CHECK(r.want.cc[b].color == 0); // dark meanwhile
+	for (int b = Track1Above + 1; b <= Track8Above; b++)
+		CHECK(r.want.cc[b].color == 0);
+	r.click(Track1Below + 3); // the track buttons and the arrows don't move the selection
+	r.click(Right);
+	CHECK(r.view().s.ui.track == 0 && r.view().s.ui.screen == tart::kBrowseScreen);
+	r.click(Up); // already at the top
+	CHECK(r.view().s.ui.browse == 0);
+	r.click(Down);
+	CHECK(r.view().s.ui.browse == 1 && r.view().s.ui.scene == 0);
+	r.click(Down);
+	CHECK(r.view().s.ui.browse == 1); // two types: stops at the end
+	r.click(Up);
+	r.turn(6, 8); // encoders 1..7
+	CHECK(r.view().s.ui.browse == 1);
+	r.turn(2, -8);
+	CHECK(r.view().s.ui.browse == 0);
+	r.turn(7, 8); // encoder 8 is not the list's
+	CHECK(r.view().s.ui.browse == 0);
+	r.click(Track1Above); // CLOSE: no change
+	v = r.view();
+	CHECK(v.s.ui.screen == tart::kHome && v.s.track[0].type == tart::Melodic);
+	r.click(Track1Below + 2); // select track 3, open Browse, choose Drum, LOAD
+	r.click(Browse);
+	r.click(Down);
+	r.click(Track8Below);
+	v = r.view();
+	CHECK(v.s.ui.screen == tart::kHome && v.s.track[2].type == tart::Drum && v.s.track[0].type == tart::Melodic);
+	r.step();
+	CHECK(r.want.cc[Browse].color == push2::kWhiteDark);
+	r.click(Browse); // the cursor starts on the track's type
+	CHECK(r.view().s.ui.browse == tart::Drum);
+	r.click(Browse); // BROWSE again closes
+	CHECK(r.view().s.ui.screen == tart::kHome && r.view().s.track[2].type == tart::Drum);
+	r.click(Browse), r.click(Up), r.click(Track8Below); // back to Melodic
+	CHECK(r.view().s.track[2].type == tart::Melodic);
+}
+
+TEST(type_switch_silences) {
+	SliceRig r;
+	r.m.edit([](tart::State& st) {
+		tart::Clip& c = st.clip[1][0];
+		c.length = tart::kBar, c.nNotes = 1, c.notes[0] = {0, 380, 41, 100}; // sounds for the whole bar
+		st.s.track[1].type = tart::Drum, st.s.track[1].playing = 0;
+	});
+	r.run_(2);
+	r.pad(0, 0, 100); // a held pad on track 1, melodic
+	r.in.play = true;
+	r.run_(10);
+	CHECK(r.f.track[0].gate[0] == 10 && r.f.track[1].gate[5] == 10);
+	// By the menu (an edit from the UI thread): both tracks go quiet at once.
+	r.m.edit([](tart::State& st) { st.s.track[0].type = tart::Drum, st.s.track[1].type = tart::Melodic; });
+	r.run_(2);
+	for (int c = 0; c < 16; c++) // a Slice reads only the channels there are
+		CHECK((c < r.f.track[0].channels ? r.f.track[0].gate[c] : 0) == 0 &&
+			  (c < r.f.track[1].channels ? r.f.track[1].gate[c] : 0) == 0);
+	CHECK(r.f.track[0].channels == 16 && r.f.track[1].channels == 1);
+	r.pad(0, 0, 0); // the stale release is harmless
+	r.run_(2);
+	for (int c = 0; c < 16; c++) // a Slice reads only the channels there are
+		CHECK((c < r.f.track[0].channels ? r.f.track[0].gate[c] : 0) == 0 &&
+			  (c < r.f.track[1].channels ? r.f.track[1].gate[c] : 0) == 0);
+	// By Browse: Melodic -> Drum on track 1 stops the note of the pad.
+	r.click(push2::cc::Track1Below + 1);
+	r.pad(0, 0, 100);
+	CHECK(r.f.track[1].gate[0] == 10);
+	r.click(push2::cc::Browse), r.click(push2::cc::Down), r.click(push2::cc::Track8Below);
+	r.run_(2);
+	CHECK(r.f.track[1].channels == 16);
+	for (int c = 0; c < 16; c++)
+		CHECK(r.f.track[1].gate[c] == 0);
 }

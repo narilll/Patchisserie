@@ -14,14 +14,15 @@
 namespace tart {
 
 constexpr int kTracks = 8, kScenes = 8, kPpqn = 96, kBar = 4 * kPpqn, kMaxLength = 32 * kBar; // 12288 fits uint16_t
-// ponytail: per-clip ceilings. 2048 notes = 32 bars of 16ths in 4-note chords; a 32-bar 16-lane drum clip needs 8192
-// (E3: raise to 8192, +36 KB/clip, or cap drum clips at 8 bars).
-constexpr int kMaxNotes = 2048, kCcs = 8, kMaxPoints = 256, kNameBytes = 32, kColors = 70, kMaxOctave = 10;
+// ponytail: per-clip ceilings. 4096 notes (Clip 32.8 KB, State 2.1 MB) = 32 bars of 16ths in 8-note chords or a 16-bar
+// 16-lane drum clip; a full 32-bar one needs 8192 (+36 KB/clip, State 4.2 MB), and a clip past the ceiling says "Clip
+// full".
+constexpr int kMaxNotes = 4096, kCcs = 8, kMaxPoints = 256, kNameBytes = 32, kColors = 70, kMaxOctave = 10;
 
 // The clips. The layout is final: later commits only fill it.
 struct Note {
 	uint16_t tick, len;
-	uint8_t pitch, vel; // pitch = MIDI note (E3: drum lane)
+	uint8_t pitch, vel; // pitch = MIDI note; on a drum track lane n is pitch kDrumNote + n
 };
 struct Point {
 	uint16_t tick, value; // E4
@@ -38,12 +39,16 @@ struct Clip {
 	Euclid euclid = {};
 };
 
-enum Type : uint8_t { Melodic, Drum /*E3*/, Euclidean /*E5*/ };
+enum Type : uint8_t { Melodic, Drum, Euclidean /*E5*/ };
+/** What Browse lists (E5 adds Euclid): the track types by name. Drum tracks have kLanes lanes, lane n is the MIDI note
+ * kDrumNote + n and plays on the voice channel n of the track's 16. */
+constexpr int kBrowseTypes = 2, kLanes = 16, kDrumNote = 36;
+extern const char* const kTypeNames[kBrowseTypes];
 enum : int8_t { kNone = -1, kStopQueued = -2 };
 
 struct Track {
 	char name[kNameBytes] = {};
-	uint8_t color = 0, type = Melodic, voices = 1, grid = 4 /*1/16*/;
+	uint8_t color = 0, type = Melodic, voices = 1, grid = 4 /*1/16*/, lane = 0 /*selected drum pad*/;
 	int8_t octave = 3;      // the bottom-left pad is 12 * octave (+ the root): 36 = C1
 	int8_t playing = kNone; // launched scene; Stop clears it (as Live)
 	int8_t queued = kNone;  // transient from here on
@@ -51,9 +56,9 @@ struct Track {
 	// E4 adds ccName[8][16], ccRange[8], level, pan, mute, solo
 };
 
-enum Popup : uint8_t { kNoPopup, kTempoPopup, kSwingPopup };
+enum Popup : uint8_t { kNoPopup, kTempoPopup, kSwingPopup, kClipFullPopup };
 enum Pads : uint8_t { kSession, kNote };
-enum Screens : uint8_t { kHome, kScaleScreen, kClipScreen };
+enum Screens : uint8_t { kHome, kScaleScreen, kClipScreen, kBrowseScreen };
 
 struct Transport {
 	float bpm = 120; // the internal tempo; a patched CLOCK overrides it, the TEMPO input scales it
@@ -89,9 +94,10 @@ struct Ui {
 	uint8_t popup = kNoPopup;
 	double popupAt = 0, now = 0; // seconds of audio time
 	double screenAt = -1;        // when the press that opened the Scale or Clip screen began (-1: none)
-	double padsAt = -1;          // when the press of Session or Note began (-1: none); held 0.5 s: momentary
+	double padsAt = -1;          // when the press of Session or Note began (-1: none); held kHoldSeconds: momentary
 	uint8_t prevPads = kSession; // the mode before that press
 	int8_t dup = -1;             // Duplicate held: the slot to copy (track * 8 + scene), -1: none yet
+	uint8_t browse = 0;          // the Browse screen's cursor (a type)
 };
 
 struct Session {
@@ -213,6 +219,9 @@ class Machine {
 	void handle(State& st, const push2::Event& e);
 	void pad(State& st, int index, int vel);
 	void sequencer(State& st, int index, int vel);
+	void play(Session& s, int index, int pitch, int vel);
+	void drumPad(State& st, int index, int vel);
+	bool browseButton(State& st, int button);
 	void noteEncoder(State& st, int encoder, int delta);
 	void session(State& st, int index);
 	void sceneButton(State& st, int scene);
@@ -256,6 +265,7 @@ class Machine {
 	uint32_t nextId_ = 0;
 	// What process() reads without the lock: copies of the state, refreshed under it.
 	int voices_[kTracks] = {}, selected_ = 0;
+	uint8_t type_[kTracks] = {}; // a change silences the track and switches its voices between rotating and 16 channels
 	uint32_t rgb_[kTracks] = {};
 	float bend_ = 0; // V
 	float sr_ = 48000, bpm_ = 120, cps_ = 0, freePhase_ = 0;
@@ -263,7 +273,7 @@ class Machine {
 	double lastAt_ = -1;
 	Request request_ = Request::None;
 	bool sync_ = true; // take the lock this sample
-	int accTempo_ = 0, accSwing_ = 0, accScale_[8] = {}, accNote_[4] = {}, accClip_ = 0;
+	int accTempo_ = 0, accSwing_ = 0, accScale_[8] = {}, accNote_[4] = {}, accClip_ = 0, accBrowse_ = 0;
 	uint8_t sentColor_[kTracks] = {255, 255, 255, 255, 255, 255, 255, 255}; // what the Push's palette has; 255: none
 	int64_t taps_[5] = {};
 	int nTaps_ = 0;

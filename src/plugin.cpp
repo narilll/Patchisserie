@@ -1202,8 +1202,9 @@ struct Tart : Module {
 				}
 				json_array_append_new(clips, clip);
 			}
-			json_array_append_new(tracks, json_pack("{s:s, s:i, s:i, s:i, s:o}", "name", tr.name, "color", tr.color,
-													"voices", tr.voices, "octave", tr.octave, "clips", clips));
+			json_array_append_new(tracks, json_pack("{s:s, s:i, s:i, s:i, s:i, s:i, s:o}", "name", tr.name, "color",
+													tr.color, "voices", tr.voices, "octave", tr.octave, "type", tr.type,
+													"lane", tr.lane, "clips", clips));
 		}
 		return json_pack("{s:b, s:o, s:o, s:{s:f, s:i, s:i, s:b}, s:{s:i, s:i, s:i, s:b, s:b}, "
 						 "s:{s:i, s:i, s:i, s:i, s:i, s:b, s:i}, s:o, s:i, s:i}",
@@ -1260,12 +1261,13 @@ struct Tart : Module {
 		for (size_t i = 0; i < tart::kTracks && i < json_array_size(tracksJ); i++) {
 			tart::Track& tr = st->s.track[i];
 			const char* name = nullptr;
-			int color = tr.color, voices = tr.voices, octave = tr.octave;
-			json_unpack(json_array_get(tracksJ, i), "{s?s, s?i, s?i, s?i}", "name", &name, "color", &color, "voices",
-						&voices, "octave", &octave);
+			int color = tr.color, voices = tr.voices, octave = tr.octave, type = tart::Melodic, lane = tr.lane;
+			json_unpack(json_array_get(tracksJ, i), "{s?s, s?i, s?i, s?i, s?i, s?i}", "name", &name, "color", &color,
+						"voices", &voices, "octave", &octave, "type", &type, "lane", &lane); // E2 patches: Melodic
 			if (name)
 				tart::setName(tr, name);
 			tr.color = u8(color), tr.voices = u8(voices), tr.octave = (int8_t)clamp(octave, -128, 127);
+			tr.type = u8(type), tr.lane = u8(lane);
 			json_t* clipsJ = json_object_get(json_array_get(tracksJ, i), "clips");
 			for (size_t j = 0; j < tart::kScenes && json_is_array(clipsJ); j++) {
 				tart::Clip& c = st->clip[i][j];
@@ -1570,6 +1572,17 @@ struct TartWidget : ModuleWidget {
 						},
 						[=](size_t i) {
 							m->machine.edit([=](tart::State& st) { st.s.track[t].voices = (uint8_t)i + 1; });
+						}));
+					sub2->addChild(createIndexSubmenuItem(
+						"Type", std::vector<std::string>(tart::kTypeNames, tart::kTypeNames + tart::kBrowseTypes),
+						[=] {
+							tart::View now;
+							m->machine.view(now);
+							return (size_t)std::min<int>(now.s.track[t].type, tart::kBrowseTypes - 1);
+						},
+						[=](size_t i) {
+							m->machine.edit(
+								[=](tart::State& st) { st.s.track[t].type = (uint8_t)i, st.s.ui.heldStep = -1; });
 						}));
 				}));
 		}));
