@@ -30,6 +30,9 @@ constexpr int kDrumSteps = 32;
 constexpr int loopTicks(int grid) {
 	return std::min(kDrumSteps * grid, kBar);
 }
+// ponytail: a Device encoder's raw delta is 312 of the 65535 a lane spans (about 210 steps per turn, as the manual
+// says), and SHIFT divides it by 31; guesses, calibrate on the hardware.
+constexpr int kValueUnits = 312, kFineDivisor = 31;
 // The grids of Quantize To and Record Quantize (kQuantToNames): the straight step and the triplet one (0: none). "+T"
 // takes the nearer of the two.
 constexpr int kQuantTo[8][2] = {{96, 0}, {48, 0}, {32, 0}, {48, 32}, {24, 0}, {16, 0}, {24, 16}, {12, 0}};
@@ -154,6 +157,28 @@ void eraseNotes(Clip& c, int t0, int t1, int p0, int p1) {
 	c.nNotes = (uint16_t)(std::remove_if(c.notes, c.notes + c.nNotes, in) - c.notes);
 }
 
+/** The value a lane returns to (Delete + touch): 0 V, the middle of a bipolar range, 10 V for LEVEL. */
+uint16_t defaultValue(const Track& t, int lane) {
+	return lane == kLevel ? 65535 : lane == kPan || (t.bipolar >> lane & 1) ? 32768 : 0;
+}
+
+/** Replaces the points of `lane` with a tick in [t0, t1] by the `n` sorted ones in `add`. False, and nothing changed,
+ * when the lane would hold too many; `dry` only asks. */
+bool replacePoints(Clip& c, int lane, int t0, int t1, const Point* add, int n, bool dry = false) {
+	Point *p = c.points[lane], *end = p + c.nPoints[lane];
+	Point* lo = std::lower_bound(p, end, t0, [](const Point& a, int t) { return a.tick < t; });
+	Point* hi = std::upper_bound(lo, end, t1, [](int t, const Point& a) { return t < a.tick; });
+	int count = c.nPoints[lane] - (int)(hi - lo) + n;
+	if (count > kMaxPoints)
+		return false;
+	if (!dry) {
+		std::memmove(lo + n, hi, (size_t)(end - hi) * sizeof(Point));
+		std::copy(add, add + n, lo);
+		c.nPoints[lane] = (uint16_t)count;
+	}
+	return true;
+}
+
 /** The last page of the clip at this step size, `perPage` steps to a page. */
 int lastPage(const Clip& c, int grid, int perPage) {
 	return c.length ? std::max(((c.length + grid - 1) / grid + perPage - 1) / perPage - 1, 0) : 0;
@@ -169,6 +194,12 @@ void select(Ui& ui, int track, int scene) {
 	ui.heldStep = -1;
 	if (track != ui.track || scene != ui.scene)
 		ui.track = (uint8_t)track, ui.scene = (uint8_t)scene, ui.page = 0;
+}
+
+/** The ticks the held step covers, [start, end), cut at the end of the clip. */
+void stepSpan(const Session& s, const Clip& c, int& start, int& end) {
+	stepOf(s, s.ui.heldStep, start);
+	end = std::min(start + kGrid[s.track[s.ui.track].grid], (int)c.length);
 }
 
 /** The tick a launch or stop happens at: the next multiple of the launch quantization after `tick`. */
@@ -412,6 +443,7 @@ void sanitize(State& st) {
 		t.octave = (int8_t)std::min<int>(std::max<int>(t.octave, 0), kMaxOctave);
 		t.playing = t.queued = kNone;
 		t.launchTick = t.startTick = 0;
+		t.overridden = 0;
 	}
 }
 
@@ -541,7 +573,8 @@ void Machine::handle(State& st, const push2::Event& e) {
 	case Event::Button:
 		ui.button[e.index & 127] = e.value != 0;
 		if (!e.value) {
-			if ((e.index == push2::cc::Scale || e.index == push2::cc::Clip) && ui.screenAt >= 0) {
+			if ((e.index == push2::cc::Scale || e.index == push2::cc::Clip || e.index == push2::cc::Device) &&
+				ui.screenAt >= 0) {
 				if (ui.now - ui.screenAt >= kHoldSeconds)
 					ui.screen = kHome; // held: the screen was only there for as long as the button
 				ui.screenAt = -1;
@@ -589,8 +622,10 @@ void Machine::handle(State& st, const push2::Event& e) {
 			doubleLoop(st);
 		} else if (ui.button[push2::cc::Quantize] && e.index == push2::cc::Track1Above + 4) { // Record Quantize
 			ui.recQuantOn = !ui.recQuantOn, ui.quantizeUsed = true;
-		} else if (e.index == push2::cc::Scale || e.index == push2::cc::Clip) {
-			uint8_t to = e.index == push2::cc::Scale ? kScaleScreen : kClipScreen;
+		} else if (e.index == push2::cc::Scale || e.index == push2::cc::Clip || e.index == push2::cc::Device) {
+			uint8_t to = e.index == push2::cc::Scale  ? kScaleScreen
+						 : e.index == push2::cc::Clip ? kClipScreen
+													  : kDeviceScreen;
 			ui.screen = ui.screen == to ? (uint8_t)kHome : to;
 			ui.screenAt = ui.screen == to ? ui.now : -1;
 		} else if (e.index == push2::cc::Browse) {
@@ -679,6 +714,8 @@ void Machine::handle(State& st, const push2::Event& e) {
 			int n = steps(accClip_, e.value, kLengthUnits);
 			if (n)
 				setLength(st, (st.clip[ui.track][ui.scene].length / kPpqn + n) * kPpqn);
+		} else if (e.index < 8 && ui.screen == kDeviceScreen) { // the Device screen: CC 1 to 8, or a held step's lock
+			valueEncoder(st, e.index, e.value);
 		} else if (e.index < 4 && ui.heldStep >= 0) { // a held step: Nudge, Length, Length fine, Velocity
 			noteEncoder(st, e.index, e.value);
 		} else if (e.index == push2::kSwingId) {
@@ -689,6 +726,8 @@ void Machine::handle(State& st, const push2::Event& e) {
 	case Event::Touch:
 		if (e.index < 32)
 			ui.touched = e.value ? ui.touched | 1u << e.index : ui.touched & ~(1u << e.index);
+		if (e.value && e.index < 8 && ui.screen == kDeviceScreen && ui.button[push2::cc::Delete])
+			deleteLane(st, e.index);
 		if (!e.value && e.index == push2::kStrip)
 			ui.bend = 0; // the strip springs back; don't wait for the Push's own message
 		if (e.value && e.index == push2::kTempoId)
@@ -925,7 +964,7 @@ void Machine::launch(Session& s, int track, int scene) {
 		endTake();
 	Track& tr = s.track[track];
 	if (!clock_.started()) {
-		tr.playing = (int8_t)scene, tr.queued = kNone, tr.startTick = 0;
+		tr.playing = (int8_t)scene, tr.queued = kNone, tr.startTick = 0, tr.overridden = 0;
 		return;
 	}
 	tr.queued = (int8_t)scene;
@@ -1227,6 +1266,74 @@ void Machine::noteEncoder(State& st, int encoder, int delta) {
 	}
 }
 
+/** An encoder turned on the Device screen: with a step held a step lock, else CC `lane` + 1 of the selected track moves
+ * (DELETE held: nothing, the touch cleared it). A lane that the track's playing clip has points for is then overridden
+ * until the clip launches again. */
+void Machine::valueEncoder(State& st, int lane, int delta) {
+	Ui& ui = st.s.ui;
+	if (ui.button[push2::cc::Delete])
+		return;
+	Track& tr = st.s.track[ui.track];
+	int d = delta * kValueUnits / (ui.button[push2::cc::Shift] ? kFineDivisor : 1);
+	if (ui.heldStep >= 0) {
+		stepLock(st, lane, d);
+		return;
+	}
+	tr.value[lane] = (uint16_t)std::min(std::max(tr.value[lane] + d, 0), 65535);
+	if (tr.playing != kNone && st.clip[ui.track][tr.playing].nPoints[lane])
+		tr.overridden |= (uint16_t)(1 << lane);
+}
+
+/** A step lock: the held step of the selected clip gets a flat segment of the lane over its length, at the envelope in
+ * its middle (the lane's value when it has no points) moved by `delta`. The points are (start, line before) (start, v)
+ * (end, v) (end, line after), the line being what it was on either side, without those that change nothing. A step
+ * next to a lock shares its edge. One undo step per hold. */
+void Machine::stepLock(State& st, int lane, int delta) {
+	Ui& ui = st.s.ui;
+	Clip& c = st.clip[ui.track][ui.scene];
+	int start, end;
+	ui.heldEdited = true; // a turn is an edit, even when it changes nothing: the release keeps the note
+	stepSpan(st.s, c, start, end);
+	int value = st.s.track[ui.track].value[lane];
+	int now = envelope(c, lane, (start + end) / 2);
+	now = now < 0 ? value : now;
+	int v = std::min(std::max(now + delta, 0), 65535);
+	if (v == now)
+		return;
+	int before = envelope(c, lane, start, true), after = envelope(c, lane, end);
+	if (before < 0)
+		before = after = value;
+	Point add[4];
+	int n = 0;
+	if (before != v)
+		add[n++] = {(uint16_t)start, (uint16_t)before};
+	add[n++] = {(uint16_t)start, (uint16_t)v};
+	add[n++] = {(uint16_t)end, (uint16_t)v};
+	if (after != v)
+		add[n++] = {(uint16_t)end, (uint16_t)after};
+	if (!replacePoints(c, lane, start, end, add, n, true)) {
+		ui.popup = kClipFullPopup, ui.popupAt = ui.now;
+		return;
+	}
+	checkpoint(ui.track, ui.scene);
+	replacePoints(c, lane, start, end, add, n);
+}
+
+/** Delete + touch of an encoder on the Device screen: the selected clip's points on the lane go, one undo step; with
+ * none, the lane's value goes back to its default. */
+void Machine::deleteLane(State& st, int lane) {
+	Ui& ui = st.s.ui;
+	Clip& c = st.clip[ui.track][ui.scene];
+	Track& tr = st.s.track[ui.track];
+	if (c.nPoints[lane]) {
+		gesture_++; // the touch is a gesture of its own
+		checkpoint(ui.track, ui.scene);
+		c.nPoints[lane] = 0;
+	} else {
+		tr.value[lane] = defaultValue(tr, lane);
+	}
+}
+
 /** The Session's LEDs: the pads in the track's color, pulsing on the clip that plays, blinking green on one that is
  * queued (the playing clip blinks to dark when a stop is queued); the scene buttons green where the scene has clips,
  * blinking where one is queued. */
@@ -1406,6 +1513,7 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 		white(b, u.button[b]);
 	white(push2::cc::Scale, u.screen == kScaleScreen || u.button[push2::cc::Scale]);
 	white(push2::cc::Clip, u.screen == kClipScreen || u.button[push2::cc::Clip]);
+	white(push2::cc::Device, u.screen == kDeviceScreen || u.button[push2::cc::Device]);
 	white(push2::cc::FixedLength, u.fixedOn || u.button[push2::cc::FixedLength]);
 	if (u.button[push2::cc::Undo] || (u.button[Shift] ? undoTop_ != undoEnd_ : undoTop_ != undoBottom_))
 		white(push2::cc::Undo, u.button[push2::cc::Undo]); // dim: there is something to undo (Shift: to redo)
@@ -1524,7 +1632,7 @@ void Machine::tick(State& st, int64_t k, Outputs& out) {
 			if (tr.queued == kStopQueued)
 				stopTrack(s, t, true);
 			else
-				tr.playing = tr.queued, tr.startTick = k;
+				tr.playing = tr.queued, tr.startTick = k, tr.overridden = 0;
 			tr.queued = kNone;
 		}
 		for (int i = 0; i < nActive_[t];) {
@@ -1541,7 +1649,7 @@ void Machine::tick(State& st, int64_t k, Outputs& out) {
 		int pos = (int)((k - tr.startTick) % c.length);
 		for (int j = 0; j < kAutos; j++) { // a lane with points plays them, the others keep their value
 			int e = envelope(c, j, pos);
-			if (e >= 0)
+			if (e >= 0 && !(tr.overridden >> j & 1))
 				tr.value[j] = (uint16_t)e;
 		}
 		bool drum = tr.type == Drum;
@@ -1768,7 +1876,7 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 			int pos = c && c->length ? (int)(std::max<int64_t>(lastTick_ - tr.startTick, 0) % c->length) : 0;
 			for (int j = 0; j < kAutos; j++) {
 				from_[i][j] = volts(tr, j, tr.value[j]);
-				int e = c && c->length ? envelope(*c, j, pos + 1) : -1;
+				int e = c && c->length && !(tr.overridden >> j & 1) ? envelope(*c, j, pos + 1) : -1;
 				to_[i][j] = e >= 0 ? volts(tr, j, e) : from_[i][j];
 			}
 		}
@@ -1833,16 +1941,33 @@ void Machine::view(View& v) {
 	lock();
 	v.s = state_->s;
 	const Ui& u = v.s.ui;
-	for (int t = 0; t < kTracks; t++)
+	const Clip& clip = state_->clip[u.track][u.scene];
+	for (int t = 0; t < kTracks; t++) {
 		for (int c = 0; c < kScenes; c++)
 			v.length[t][c] = state_->clip[t][c].length;
-	const Clip& clip = state_->clip[u.track][u.scene];
+		const int8_t playing = v.s.track[t].playing;
+		const Clip* lanes = t == u.track ? &clip : playing != kNone ? &state_->clip[t][playing] : nullptr;
+		v.automated[t] = 0;
+		for (int j = 0; lanes && j < kAutos; j++)
+			v.automated[t] |= (uint16_t)((lanes->nPoints[j] != 0) << j);
+	}
+	for (int j = 0; j < kAutos; j++)
+		v.at[j] = v.s.track[u.track].value[j];
+	v.lane = 255, v.nShown = 0;
+	for (int b = 0; b < kCcs && u.screen == kDeviceScreen && v.lane == 255; b++)
+		if (u.touched >> b & 1)
+			v.lane = (uint8_t)b, v.nShown = clip.nPoints[b],
+			std::copy(clip.points[b], clip.points[b] + v.nShown, v.shown);
 	v.nNotes = clip.nNotes;
 	std::copy(clip.notes, clip.notes + clip.nNotes, v.notes);
 	v.held = -1;
 	v.heldCount = 0;
 	if (u.pads == kNote && (u.noteLayout || v.s.track[u.track].type == Drum) && u.heldStep >= 0) {
-		int start, pitch = stepOf(v.s, u.heldStep, start), grid = kGrid[v.s.track[u.track].grid];
+		int start, end, pitch = stepOf(v.s, u.heldStep, start), grid = kGrid[v.s.track[u.track].grid];
+		stepSpan(v.s, clip, start, end);
+		for (int j = 0; j < kAutos; j++)
+			if (int e = envelope(clip, j, (start + end) / 2); e >= 0)
+				v.at[j] = (uint16_t)e;
 		if (u.noteLayout == 2 && v.s.track[u.track].type != Drum) { // the split layout: the first of its notes
 			int first = -1;
 			v.heldCount = (uint8_t)std::min(stepNotes(clip, start, grid, &first, 1), 255);

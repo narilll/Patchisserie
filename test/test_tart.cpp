@@ -421,7 +421,7 @@ TEST(tart_machine_threads) {
 		tart::Inputs in;
 		tart::Outputs out;
 		push2::Leds want;
-		push2::Event ev[15];
+		push2::Event ev[19];
 		ev[0] = dec({0xB0, push2::cc::kTempo, 1});
 		ev[1] = dec({0xB0, push2::cc::Metronome, 127});
 		ev[2] = dec({0x90, 36, 100}); // a pad and the touch strip
@@ -437,10 +437,14 @@ TEST(tart_machine_threads) {
 		ev[12] = dec({0xB0, push2::cc::Shift, 0});
 		ev[13] = dec({0xB0, push2::cc::Record, 127}); // a take on whichever slot is selected, pads recorded in it
 		ev[14] = dec({0xB0, push2::cc::Record, 0});
+		ev[15] = dec({0xB0, push2::cc::Device, 127}); // the Device screen, a turn and a touch
+		ev[16] = dec({0xB0, 71, 3});
+		ev[17] = dec({0x90, 0, 127});
+		ev[18] = dec({0xB0, push2::cc::Device, 0});
 		tart::SliceFrame frame;
 		in.play = true;
 		for (int i = 0; i < 20000; i++) {
-			in.events = ev, in.nEvents = i % 7 == 0 ? 15 : 0, in.frame = i;
+			in.events = ev, in.nEvents = i % 7 == 0 ? 19 : 0, in.frame = i;
 			m.process(in, out, want, &frame);
 			in.play = false;
 		}
@@ -3504,4 +3508,373 @@ TEST(automation_undo_and_copy) {
 	r.click(push2::cc::Undo);
 	st = r.state();
 	CHECK(st->clip[0][0].nPoints[2] == 2 && st->clip[0][0].points[2][0].value == 5);
+}
+
+namespace {
+
+/** An encoder touched (id 0..7 are the track encoders) or let go. */
+void touch(Rig& r, int id, bool on = true) {
+	push2::Event e = dec({0x90, (uint8_t)id, (uint8_t)(on ? 127 : 0)});
+	r.step(&e);
+}
+
+/** The points of a lane of the clip in slot (0, 0), as (tick, value) pairs. */
+std::vector<std::pair<int, int>> pointsOf(Rig& r, int lane) {
+	auto st = r.state();
+	const tart::Clip& c = st->clip[0][0];
+	std::vector<std::pair<int, int>> out;
+	for (int i = 0; i < c.nPoints[lane]; i++)
+		out.push_back({c.points[lane][i].tick, c.points[lane][i].value});
+	return out;
+}
+
+using Pts = std::vector<std::pair<int, int>>;
+
+} // namespace
+
+TEST(device_encoder_value) {
+	using namespace push2::cc;
+	Rig r(false);
+	r.click(Device);
+	r.turn(0, 1);
+	CHECK(r.state()->s.track[0].value[0] == 312); // one raw unit
+	r.turn(0, 5);
+	CHECK(r.state()->s.track[0].value[0] == 312 * 6);
+	r.press(Shift); // 31 times finer
+	r.turn(1, 1);
+	CHECK(r.state()->s.track[0].value[1] == 10);
+	r.turn(1, -2);
+	CHECK(r.state()->s.track[0].value[1] == 0); // clamped at the bottom
+	r.press(Shift, 0);
+	for (int i = 0; i < 4; i++)
+		r.turn(0, 63);
+	CHECK(r.state()->s.track[0].value[0] == 65535); // and at the top
+	r.m.edit([](tart::State& st) { st.s.track[0].bipolar = 1 << 2, st.s.track[0].value[2] = 32768; });
+	r.turn(2, 63);
+	r.turn(2, 63);
+	r.turn(2, 63);
+	r.turn(2, 63);
+	auto st = r.state();
+	CHECK(st->s.track[0].value[2] == 65535 && st->s.track[0].overridden == 0); // no clip, nothing to override
+	CHECK_NEAR(tart::volts(st->s.track[0], 2, 65535), 5.f, 1e-3);
+	r.click(Track1Below + 1); // the selected track's CCs
+	r.turn(0, 1);
+	st = r.state();
+	CHECK(st->s.track[1].value[0] == 312 && st->s.track[0].value[0] == 65535);
+	r.click(Device); // closed: the encoder does nothing
+	r.turn(0, 1);
+	CHECK(r.state()->s.track[1].value[0] == 312);
+}
+
+TEST(step_lock_points) {
+	using namespace push2::cc;
+	Rig r;
+	r.click(Layout);
+	r.tap(0, 2); // a 2-bar clip; step 3 is ticks 48..72
+	r.click(Device);
+	r.pad(0, 2, 100);
+	r.turn(0, 1);
+	CHECK((pointsOf(r, 0) == Pts{{48, 0}, {48, 312}, {72, 312}, {72, 0}})); // flat over the step, the line before/after
+	r.turn(0, 1);
+	CHECK((pointsOf(r, 0) == Pts{{48, 0}, {48, 624}, {72, 624}, {72, 0}})); // a turn on moves the same segment
+	r.pad(0, 2, 0);
+	CHECK(r.view().nNotes == 1); // the lock was an edit: the note stays
+	auto st = r.state();
+	CHECK(tart::envelope(st->clip[0][0], 0, 47) == 0 && tart::envelope(st->clip[0][0], 0, 60) == 624 &&
+		  tart::envelope(st->clip[0][0], 0, 73) == 0);
+	CHECK(st->s.track[0].value[0] == 0 && st->s.track[0].overridden == 0); // the lane's value isn't touched
+	r.pad(0, 3, 100);                                                      // the next step: the edge is shared
+	r.turn(0, 3);
+	r.pad(0, 3, 0);
+	CHECK((pointsOf(r, 0) == Pts{{48, 0}, {48, 624}, {72, 624}, {72, 936}, {96, 936}, {96, 0}}));
+	// A lock with the value of its neighbour drops the point that changes nothing: 3 points instead of 4.
+	r.m.edit([](tart::State& s) { s.clip[0][0].nPoints[0] = 0; });
+	r.pad(0, 2, 100);
+	r.turn(0, 1);
+	r.pad(0, 2, 0);
+	r.pad(0, 3, 100);
+	r.turn(0, 1);
+	r.pad(0, 3, 0);
+	CHECK((pointsOf(r, 0) == Pts{{48, 0}, {48, 312}, {72, 312}, {96, 312}, {96, 0}}));
+	// Shift: finer
+	r.press(Shift);
+	r.pad(0, 4, 100);
+	r.turn(1, 31);
+	r.pad(0, 4, 0);
+	r.press(Shift, 0);
+	CHECK((pointsOf(r, 1) == Pts{{96, 0}, {96, 312}, {120, 312}, {120, 0}}));
+}
+
+TEST(step_lock_undo_one_step) {
+	using namespace push2::cc;
+	Rig r;
+	r.click(Layout);
+	r.tap(0, 2);
+	r.click(Device);
+	r.pad(0, 2, 100); // a note is there: hold it, turn two lanes several times: one step
+	r.turn(0, 1), r.turn(0, 1), r.turn(1, 1);
+	r.pad(0, 2, 0);
+	CHECK(!pointsOf(r, 0).empty() && !pointsOf(r, 1).empty());
+	undoClick(r);
+	CHECK(pointsOf(r, 0).empty() && pointsOf(r, 1).empty() && r.view().nNotes == 1);
+	undoClick(r, true);
+	CHECK(pointsOf(r, 0).size() == 4 && pointsOf(r, 1).size() == 4);
+	undoClick(r);
+	// An empty step: the press makes its note, the lock joins that step.
+	r.pad(0, 5, 100);
+	r.turn(0, 1);
+	r.pad(0, 5, 0);
+	CHECK(r.view().nNotes == 2 && pointsOf(r, 0).size() == 4);
+	undoClick(r);
+	CHECK(r.view().nNotes == 1 && pointsOf(r, 0).empty());
+}
+
+TEST(step_lock_drum_and_split) {
+	using namespace push2::cc;
+	Rig r;
+	drumTrack(r);
+	dtap(r, 3); // lane 1's first step: 72..96
+	r.click(Device);
+	dstep(r, 3);
+	r.turn(2, 2);
+	dstep(r, 3, 0);
+	CHECK((pointsOf(r, 2) == Pts{{72, 0}, {72, 624}, {96, 624}, {96, 0}}) && r.view().nNotes == 1);
+	undoClick(r);
+	CHECK(pointsOf(r, 2).empty() && r.view().nNotes == 1);
+	// The split layout: the same on its steps
+	Rig q;
+	split(q);
+	stap(q, 1); // 24..48 with the chord of the bottom-left pad
+	q.click(Device);
+	sstep(q, 1);
+	q.turn(0, 1);
+	sstep(q, 1, 0);
+	CHECK((pointsOf(q, 0) == Pts{{24, 0}, {24, 312}, {48, 312}, {48, 0}}) && q.view().nNotes == 1);
+}
+
+TEST(step_lock_reaches_slice_in_its_step) {
+	using namespace push2::cc;
+	SliceRig r;
+	r.click(Layout);
+	r.tap(0, 0); // ticks 0..24, 250 samples a tick
+	r.click(Device);
+	r.pad(0, 0, 100);
+	for (int i = 0; i < 3; i++)
+		r.turn(0, 63);
+	r.pad(0, 0, 0);
+	float inside = -1, outside = -1;
+	for (int i = 0; i < 8000; i++) {
+		r.in.play = i == 0;
+		r.step();
+		if (i == 1000)
+			inside = r.f.track[0].cc[0];
+		if (i == 7000)
+			outside = r.f.track[0].cc[0];
+	}
+	CHECK_NEAR(inside, 189 * 312 * 10.f / 65535, 0.01);
+	CHECK_NEAR(outside, 0.f, 1e-4); // tick 28: the lock is over
+	CHECK(r.f.track[0].cc[1] == 0);
+}
+
+TEST(step_lock_full_popup) {
+	using namespace push2::cc;
+	Rig r;
+	r.click(Layout);
+	r.tap(0, 2);
+	r.click(Device);
+	auto points = [&](int n) {
+		r.m.edit([=](tart::State& st) {
+			tart::Clip& c = st.clip[0][0];
+			c.nPoints[0] = (uint16_t)n;
+			for (int i = 0; i < n; i++)
+				c.points[0][i] = {(uint16_t)(200 + i), 5};
+			st.s.ui.popup = tart::kNoPopup;
+		});
+	};
+	points(253); // a lock adds 4: 257
+	r.pad(0, 2, 100);
+	r.turn(0, 1);
+	r.pad(0, 2, 0);
+	CHECK(r.view().s.ui.popup == tart::kClipFullPopup && r.state()->clip[0][0].nPoints[0] == 253);
+	CHECK(r.view().nNotes == 1); // the turn was an edit: the release keeps the note
+	undoClick(r);                // the failed lock left no step: this undoes the note that made the clip
+	CHECK(r.state()->clip[0][0].length == 0);
+	undoClick(r, true);
+	points(252);
+	r.pad(0, 2, 100);
+	r.turn(0, 1);
+	r.pad(0, 2, 0);
+	CHECK(r.state()->clip[0][0].nPoints[0] == 256 && r.view().s.ui.popup == tart::kNoPopup);
+}
+
+TEST(delete_touch_clears_or_resets) {
+	using namespace push2::cc;
+	Rig r(false);
+	fill(r, 0, 0);
+	r.click(Device);
+	r.m.edit([](tart::State& st) {
+		tart::Track& t = st.s.track[0];
+		t.value[0] = 5000, t.value[1] = 100, t.bipolar = 1 << 1;
+	});
+	touch(r, 0); // no Delete: just a touch
+	touch(r, 0, false);
+	CHECK(r.state()->s.track[0].value[0] == 5000);
+	r.press(Delete);
+	r.turn(0, 5); // Delete held: a turn does nothing
+	CHECK(r.state()->s.track[0].value[0] == 5000);
+	touch(r, 0), touch(r, 0, false);
+	touch(r, 1), touch(r, 1, false);
+	auto st = r.state();
+	CHECK(st->s.track[0].value[0] == 0 && st->s.track[0].value[1] == 32768); // defaults: 0 V, the middle if bipolar
+	r.press(Delete, 0);
+	// With points: the lane's points go, each touch its own undo step, the value stays.
+	setPoints(r, 2, {{0, 5}, {50, 9}});
+	setPoints(r, 3, {{0, 7}});
+	r.m.edit([](tart::State& st) { st.s.track[0].value[2] = 1234; });
+	r.press(Delete);
+	touch(r, 2), touch(r, 2, false);
+	touch(r, 3), touch(r, 3, false);
+	r.press(Delete, 0);
+	st = r.state();
+	CHECK(st->clip[0][0].nPoints[2] == 0 && st->clip[0][0].nPoints[3] == 0 && st->s.track[0].value[2] == 1234);
+	undoClick(r);
+	st = r.state();
+	CHECK(st->clip[0][0].nPoints[3] == 1 && st->clip[0][0].nPoints[2] == 0);
+	undoClick(r);
+	CHECK(r.state()->clip[0][0].nPoints[2] == 2);
+	// Not on another screen
+	r.click(Device);
+	r.press(Delete);
+	touch(r, 2);
+	r.press(Delete, 0);
+	CHECK(r.state()->clip[0][0].nPoints[2] == 2);
+}
+
+TEST(override_until_relaunch) {
+	using namespace push2::cc;
+	SliceRig r(false);
+	fill(r, 0, 0);
+	fill(r, 0, 1);
+	setPoints(r, 0, {{0, 0}, {384, 65535}}, 384);
+	r.m.edit([](tart::State& st) {
+		st.s.track[0].playing = 0, st.s.transport.quant = 0, st.clip[0][1].nPoints[2] = 1;
+		st.clip[0][1].points[2][0] = {0, 9};
+	});
+	r.in.play = true;
+	r.run_(3000);
+	r.click(Device);
+	r.turn(1, 1); // a lane the playing clip has no points for
+	CHECK(r.state()->s.track[0].overridden == 0);
+	auto st = r.state();
+	int v = st->s.track[0].value[0];
+	CHECK(v > 1500);
+	r.turn(0, 1);
+	st = r.state();
+	CHECK(st->s.track[0].overridden == 1 && st->s.track[0].value[0] == v + 312);
+	r.run_(3000); // the clip goes on, the lane doesn't
+	CHECK(r.state()->s.track[0].value[0] == v + 312);
+	CHECK_NEAR(r.f.track[0].cc[0], (v + 312) * 10.f / 65535, 1e-3);
+	r.click(Down); // the selected clip has points on lane 2, the playing one doesn't
+	r.turn(2, 1);
+	CHECK(r.state()->s.track[0].overridden == 1);
+	r.click(Up);
+	tapSlot(r, 0, 0); // relaunched
+	r.run_(600);
+	st = r.state();
+	CHECK(st->s.track[0].overridden == 0 && st->s.track[0].value[0] < 1000);
+	st->s.track[0].overridden = 7;
+	tart::sanitize(*st);
+	CHECK(st->s.track[0].overridden == 0);
+}
+
+TEST(device_screen_momentary) {
+	using namespace push2::cc;
+	Rig r(false);
+	r.in.leds = true;
+	r.step();
+	CHECK(r.want.cc[Device].color == push2::kWhiteDark);
+	r.press(Device);
+	CHECK(r.view().s.ui.screen == tart::kDeviceScreen && r.want.cc[Device].color == push2::kWhiteFull);
+	r.run_(100);
+	r.press(Device, 0);
+	CHECK(r.view().s.ui.screen == tart::kDeviceScreen && r.want.cc[Device].color == push2::kWhiteFull); // short: stays
+	r.press(Device);
+	CHECK(r.view().s.ui.screen == tart::kHome);
+	r.press(Device, 0);
+	CHECK(r.want.cc[Device].color == push2::kWhiteDark);
+	r.press(Device); // held 0.6 s: momentary
+	r.run_(48000 * 6 / 10);
+	r.press(Device, 0);
+	CHECK(r.view().s.ui.screen == tart::kHome);
+	r.click(Device); // it joins SCALE and CLIP: the last one pressed is the screen
+	r.click(Clip);
+	CHECK(r.view().s.ui.screen == tart::kClipScreen);
+	r.click(Device);
+	CHECK(r.view().s.ui.screen == tart::kDeviceScreen);
+	r.press(Scale);
+	r.run_(48000 * 4 / 10);
+	r.press(Scale, 0);
+	CHECK(r.view().s.ui.screen == tart::kHome);
+	r.click(Device);
+	r.in.leds = true;
+	r.step();
+	CHECK(r.want.cc[Track1Above].color == push2::kBlack && r.want.cc[Track8Above].color == push2::kBlack);
+	CHECK(r.want.cc[Track1Below + 3].color == tart::kPaletteFull + 3);
+	r.click(Track1Below + 2); // the lower buttons still select tracks
+	CHECK(r.view().s.ui.track == 2);
+}
+
+TEST(home_held_step_still_edits_notes) {
+	using namespace push2::cc;
+	Rig r;
+	r.click(Layout);
+	r.tap(0, 2);
+	r.pad(0, 2, 100);
+	r.turn(0, 6); // Nudge on Home
+	r.turn(3, 10);
+	auto v = r.view();
+	CHECK(v.notes[0].tick == 51 && v.notes[0].vel == 110 && v.held == 0);
+	CHECK(pointsOf(r, 0).empty() && pointsOf(r, 3).empty());
+	r.pad(0, 2, 0);
+	r.click(Device); // on the Device screen the same encoders are CC lanes: the velocity stays
+	r.pad(0, 2, 100);
+	r.turn(3, 10);
+	r.pad(0, 2, 0);
+	v = r.view();
+	CHECK(v.notes[0].vel == 110 && v.nNotes == 1);
+	CHECK(pointsOf(r, 3).size() == 4);
+	r.click(Device); // back on Home
+	r.pad(0, 2, 100);
+	r.turn(3, 5);
+	r.pad(0, 2, 0);
+	CHECK(r.view().notes[0].vel == 115);
+}
+
+TEST(device_view) {
+	using namespace push2::cc;
+	Rig r;
+	r.click(Layout);
+	r.tap(0, 2);
+	r.click(Device);
+	r.m.edit([](tart::State& st) {
+		st.s.track[0].value[1] = 777;
+		st.s.track[3].playing = 0;
+		st.clip[3][0].length = tart::kBar, st.clip[3][0].nPoints[4] = 1; // the playing clip of another track
+	});
+	r.pad(0, 2, 100);
+	r.turn(0, 1);
+	auto v = r.view();
+	CHECK(v.automated[0] == 1 && v.automated[3] == 1 << 4 && v.automated[1] == 0);
+	CHECK(v.at[0] == 312 && v.at[1] == 777); // at the held step: the lock, and a lane's value
+	r.pad(0, 2, 0);
+	CHECK(v.lane == 255 && v.nShown == 0);
+	touch(r, 0);
+	v = r.view();
+	CHECK(v.lane == 0 && v.nShown == 4 && v.shown[1].value == 312);
+	touch(r, 3);
+	touch(r, 0, false);
+	v = r.view();
+	CHECK(v.lane == 3 && v.nShown == 0); // the lowest touched one
+	touch(r, 3, false);
+	CHECK(r.view().lane == 255);
 }

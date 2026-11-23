@@ -45,7 +45,7 @@ The number of channels on V/OCT, GATE and VEL is the number of voices of the tra
 
 **Drum tracks.** When the track is a Drum track (see [Drum tracks](tart.md#drum-tracks) in the Tart manual), the three outputs always have 16 channels, and **Voices** is ignored. Channel 1 is the first drum pad, channel 2 the second, and channel 16 the sixteenth. The V/OCT of each channel does not change: it is the pitch of the pad's MIDI note, 1 V per octave with 0 V as MIDI note 60, so channel 1 is -2 V (MIDI note 36), channel 2 is -1.917 V and channel 16 is -0.75 V (MIDI note 51). GATE of a channel is 10 V while that pad's note sounds, and VEL is its velocity. The touch strip does not bend a drum track.
 
-**CC, LEVEL and PAN.** These three follow the automation of the clip that the track is playing, and move smoothly between the ticks of the clock. A lane without automation sends the value the track has for it, and it stays there when the clip stops. See [CC and automation](tart.md#cc-and-automation) in the Tart manual. Automation cannot be edited on the Push yet, so with a new patch these three stay at the values in the table.
+**CC, LEVEL and PAN.** These three follow the automation of the clip that the track is playing, and move smoothly between the ticks of the clock. A lane without automation sends the value the track has for it, and it stays there when the clip stops. See [CC and automation](tart.md#cc-and-automation) in the Tart manual. You change the CC values and make automation for the CC lanes on the Push, see [Device mode](tart.md#device-mode) and [Step automation](tart.md#step-automation). LEVEL and PAN have no encoders yet, so with a new patch they stay at the values in the table.
 
 ## Context menu reference
 
@@ -70,4 +70,4 @@ A Slice saves its **Track** setting. Which track it plays by position follows fr
 - A Slice plays one track. For all eight tracks you need eight Slices in a row, or Slices with chosen tracks.
 - Slices work only on the right of a Tart or of another Slice. They do not work on its left.
 - The chain passes on the tracks one sample later for each Slice, because Rack passes messages between modules with one sample of delay. You will not hear this.
-- CC, LEVEL and PAN only move when a clip has automation, which comes from a loaded patch for now. There is no mute, and no way yet to change them from the Push.
+- LEVEL and PAN only move when a clip has automation, which comes from a loaded patch for now, and the CC outputs only move when you turn an encoder of the Device screen or a clip has automation. There is no mute, and no way yet to change LEVEL and PAN from the Push.

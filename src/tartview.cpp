@@ -118,6 +118,23 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 			 ui.recQuantOn ? black : white, sans);
 	} else if (ui.button[push2::cc::FixedLength]) {
 		cell(0, 1, "FIXED LENGTH", ui.fixedOn ? "On" : "Off");
+	} else if (ui.screen == kDeviceScreen) { // CC 1 to 8: the name and a dot (white: automated, gray: overridden) over
+		const Track& tr = v.s.track[ui.track]; // the value, which is the one at the held step while one is held
+		for (int j = 0; j < kCcs; j++) {
+			float x = 120.f * j;
+			bool over = tr.overridden >> j & 1, lit = over || v.automated[ui.track] >> j & 1;
+			if (lit) {
+				nvgBeginPath(vg);
+				nvgCircle(vg, x + 10, 8, 3.5f);
+				nvgFillColor(vg, over ? nvgRGB(0x70, 0x72, 0x6c) : white);
+				nvgFill(vg);
+			}
+			std::snprintf(buf, sizeof buf, "CC %d", j + 1);
+			text(x + 18, 11, tr.ccName[j][0] ? tr.ccName[j] : buf, 11, NVG_ALIGN_LEFT, dim, sans);
+			float volts = tart::volts(tr, j, ui.heldStep >= 0 ? v.at[j] : tr.value[j]);
+			std::snprintf(buf, sizeof buf, tr.bipolar >> j & 1 ? "%+.2f V" : "%.2f V", volts);
+			text(x + 114, 27, buf, 14, NVG_ALIGN_RIGHT, white, mono);
+		}
 	} else if (v.held >= 0) { // a held step: its note
 		const Note& n = v.notes[v.held];
 		int grid = kGrids[v.s.track[ui.track].grid];
@@ -197,6 +214,17 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 				nvgRect(vg, x, y0 + h - nh * (n.pitch - lo + 1), nw, nh - 1);
 				nvgFillColor(vg, nvgRGB(tc[0], tc[1], tc[2]));
 				nvgFill(vg);
+			}
+			if (v.nShown) { // the touched CC's envelope: a step at every jump
+				auto y = [&](int value) { return y0 + h - 1 - (h - 2) * (float)value / 65535.f; };
+				nvgBeginPath(vg);
+				nvgMoveTo(vg, x0, y(v.shown[0].value));
+				for (int i = 0; i < v.nShown; i++)
+					nvgLineTo(vg, x0 + w * std::min<int>(v.shown[i].tick, length) / length, y(v.shown[i].value));
+				nvgLineTo(vg, x0 + w, y(v.shown[v.nShown - 1].value));
+				nvgStrokeColor(vg, white);
+				nvgStrokeWidth(vg, 2);
+				nvgStroke(vg);
 			}
 			if (t.playing && tr.playing == ui.scene) {
 				float x = x0 + w * (float)(std::max<int64_t>(t.tick - tr.startTick, 0) % length) / length;

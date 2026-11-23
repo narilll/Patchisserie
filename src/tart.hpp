@@ -62,6 +62,7 @@ struct Track {
 	char ccName[kCcs][kCcNameBytes] = {}; // "" shows "CC n"
 	uint8_t bipolar = 0;                  // bit c: CC c is -5 V to +5 V (else 0 V to 10 V)
 	uint16_t value[kAutos] = {};          // what each lane outputs without automation; a playing clip writes it
+	uint16_t overridden = 0;              // transient: bit j: lane j ignores the playing clip until it launches again
 										  // E4 adds mute, solo
 };
 
@@ -77,7 +78,7 @@ enum Popup : uint8_t {
 	kLoopTooLongPopup
 };
 enum Pads : uint8_t { kSession, kNote };
-enum Screens : uint8_t { kHome, kScaleScreen, kClipScreen, kBrowseScreen };
+enum Screens : uint8_t { kHome, kScaleScreen, kClipScreen, kBrowseScreen, kDeviceScreen };
 
 struct Transport {
 	float bpm = 120; // the internal tempo; a patched CLOCK overrides it, the TEMPO input scales it
@@ -153,6 +154,12 @@ struct View {
 	Note notes[kMaxNotes];
 	int16_t held = -1;     // the index in `notes` of the note on the held sequencer step, -1: none
 	uint8_t heldCount = 0; // how many notes the held step has (split layout; else 0)
+	// Device screen: the lanes with points per track (the selected clip for the selected track, the playing clip for
+	// the others), the values at the held step, and the lowest touched encoder's lane (255: none) with its points.
+	uint16_t automated[kTracks] = {}, at[kAutos] = {};
+	uint8_t lane = 255;
+	uint16_t nShown = 0;
+	Point shown[kMaxPoints];
 };
 
 /** Live's 70 clip colours as the Push shows them, by index (a track's `color`). They are also the Slice's number
@@ -281,6 +288,9 @@ class Machine {
 	void loopPad(State& st, int index, int vel);
 	bool browseButton(State& st, int button);
 	void noteEncoder(State& st, int encoder, int delta);
+	void valueEncoder(State& st, int lane, int delta);
+	void stepLock(State& st, int lane, int delta);
+	void deleteLane(State& st, int lane);
 	void session(State& st, int index);
 	void sceneButton(State& st, int scene);
 	void launch(Session& s, int track, int scene);
