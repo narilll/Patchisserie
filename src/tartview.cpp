@@ -123,10 +123,11 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 		for (int j = 0; j < kCcs; j++) {
 			float x = 120.f * j;
 			bool over = tr.overridden >> j & 1, lit = over || v.automated[ui.track] >> j & 1;
-			if (lit) {
+			bool written = ui.recTrack == ui.track && ui.writing >> j & 1; // red: the take is writing it
+			if (lit || written) {
 				nvgBeginPath(vg);
 				nvgCircle(vg, x + 10, 8, 3.5f);
-				nvgFillColor(vg, over ? nvgRGB(0x70, 0x72, 0x6c) : white);
+				nvgFillColor(vg, written ? nvgRGB(0xff, 0x30, 0x30) : over ? nvgRGB(0x70, 0x72, 0x6c) : white);
 				nvgFill(vg);
 			}
 			std::snprintf(buf, sizeof buf, "CC %d", j + 1);

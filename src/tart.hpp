@@ -105,6 +105,7 @@ struct Ui {
 	// Quantize: quantTo and recQuant index kQuantToNames, quantAmount is a percent, recQuantOn is Record Quantize.
 	uint8_t quantTo = 4 /*1/16*/, quantAmount = 100, recQuant = 4;
 	bool recQuantOn = false;
+	bool automate = false; // AUTOMATE: a take records the encoders of the Device screen
 	// transient
 	uint8_t page = 0;       // the sequencer's page of 8 steps (a drum track: 32)
 	uint8_t pad[64] = {};   // velocity of each held pad, row * 8 + col
@@ -130,6 +131,7 @@ struct Ui {
 	int8_t recTrack = -1, recScene = 0;
 	bool recFresh = false, recOpen = false;
 	int64_t recEnd = -1;
+	uint16_t writing = 0; // the take's lanes that are being written (bit j: lane j of recTrack)
 };
 
 struct Session {
@@ -291,6 +293,8 @@ class Machine {
 	void valueEncoder(State& st, int lane, int delta);
 	void stepLock(State& st, int lane, int delta);
 	void deleteLane(State& st, int lane);
+	void write(State& st, int lane, int pos);
+	void endWrite(State& st, int lane, bool stop = true);
 	void session(State& st, int index);
 	void sceneButton(State& st, int scene);
 	void launch(Session& s, int track, int scene);
@@ -369,6 +373,20 @@ class Machine {
 	// What the Slice reads: each lane's volts at the last tick and at the next, mirrored under the lock.
 	float from_[kTracks][kAutos] = {}, to_[kTracks][kAutos] = {};
 	int64_t lastTick_ = 0;
+	// The automation writer, one swinging door per lane of the take's track: `on` while a pass is being written, `prev`
+	// the last tick written, (t0, v0) the last point put in the clip, vl the value at prev, [lo, hi] the slopes from
+	// (t0, v0) that stay within the tolerance of every sample since, `pre` the lane's value before its first turn and
+	// oldLeft the old curve's last point at or before prev (`old`: the lane had a curve). writeBy_: the lane each
+	// encoder is writing (-1: none), so that the release of its touch ends it.
+	struct Door {
+		bool on = false, old = false;
+		int prev = 0, t0 = 0;
+		uint16_t v0 = 0, vl = 0, pre = 0;
+		float lo = 0, hi = 0;
+		Point oldLeft = {};
+	};
+	Door door_[kAutos];
+	int8_t writeBy_[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
 	uint8_t sentColor_[kTracks] = {255, 255, 255, 255, 255, 255, 255, 255}; // what the Push's palette has; 255: none
 	int64_t taps_[5] = {};
 	int nTaps_ = 0;

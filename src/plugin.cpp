@@ -1228,15 +1228,15 @@ struct Tart : Module {
 			json_array_append_new(tracks, trackJ);
 		}
 		return json_pack("{s:b, s:o, s:o, s:{s:f, s:i, s:i, s:b}, s:{s:i, s:i, s:i, s:b, s:b}, "
-						 "s:{s:i, s:i, s:i, s:i, s:i, s:b, s:i, s:i, s:i, s:i, s:b}, s:o, s:i, s:i}",
+						 "s:{s:i, s:i, s:i, s:i, s:i, s:b, s:i, s:i, s:i, s:i, s:b, s:b}, s:o, s:i, s:i}",
 						 "pushAuto", pushAuto, "pushIn", pushIn.toJson(), "pushOut", pushOut.toJson(), "transport",
 						 "bpm", (double)t.bpm, "swing", (int)t.swing, "quant", (int)t.quant, "metronome", t.metronome,
 						 "scale", "root", (int)sc.root, "scale", (int)sc.scale, "layout", (int)sc.layout, "inKey",
 						 sc.inKey, "fixed", sc.fixed, "ui", "pads", (int)u.pads, "noteLayout", (int)u.noteLayout,
 						 "screen", (int)u.screen, "track", (int)u.track, "scene", (int)u.scene, "fixedOn", u.fixedOn,
 						 "fixedBars", (int)u.fixedBars, "quantTo", (int)u.quantTo, "quantAmount", (int)u.quantAmount,
-						 "recQuant", (int)u.recQuant, "recQuantOn", u.recQuantOn, "tracks", tracks, "clkDivision",
-						 clkDivision, "ppc", ppc);
+						 "recQuant", (int)u.recQuant, "recQuantOn", u.recQuantOn, "automate", u.automate, "tracks",
+						 tracks, "clkDivision", clkDivision, "ppc", ppc);
 	}
 
 	void dataFromJson(json_t* root) override {
@@ -1277,15 +1277,15 @@ struct Tart : Module {
 		tart::Ui& ui = st->s.ui;
 		int pads = ui.pads, noteLayout = ui.noteLayout, screen = ui.screen, track = ui.track, scene = ui.scene,
 			fixedOn = ui.fixedOn, fixedBars = ui.fixedBars, quantTo = ui.quantTo, quantAmount = ui.quantAmount,
-			recQuant = ui.recQuant, recQuantOn = ui.recQuantOn;
-		json_unpack(uiJ, "{s?i, s?i, s?i, s?i, s?i, s?b, s?i, s?i, s?i, s?i, s?b}", "pads", &pads, "noteLayout",
+			recQuant = ui.recQuant, recQuantOn = ui.recQuantOn, automate = ui.automate;
+		json_unpack(uiJ, "{s?i, s?i, s?i, s?i, s?i, s?b, s?i, s?i, s?i, s?i, s?b, s?b}", "pads", &pads, "noteLayout",
 					&noteLayout, "screen", &screen, "track", &track, "scene", &scene, "fixedOn", &fixedOn, "fixedBars",
 					&fixedBars, "quantTo", &quantTo, "quantAmount", &quantAmount, "recQuant", &recQuant, "recQuantOn",
-					&recQuantOn);
+					&recQuantOn, "automate", &automate);
 		ui.pads = u8(pads), ui.noteLayout = u8(noteLayout), ui.screen = u8(screen), ui.track = u8(track);
 		ui.scene = u8(scene), ui.fixedOn = fixedOn, ui.fixedBars = u8(fixedBars);
 		ui.quantTo = u8(quantTo), ui.quantAmount = u8(quantAmount), ui.recQuant = u8(recQuant);
-		ui.recQuantOn = recQuantOn;
+		ui.recQuantOn = recQuantOn, ui.automate = automate;
 		for (size_t i = 0; i < tart::kTracks && i < json_array_size(tracksJ); i++) {
 			tart::Track& tr = st->s.track[i];
 			const char* name = nullptr;

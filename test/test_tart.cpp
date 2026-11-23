@@ -421,7 +421,7 @@ TEST(tart_machine_threads) {
 		tart::Inputs in;
 		tart::Outputs out;
 		push2::Leds want;
-		push2::Event ev[19];
+		push2::Event ev[23];
 		ev[0] = dec({0xB0, push2::cc::kTempo, 1});
 		ev[1] = dec({0xB0, push2::cc::Metronome, 127});
 		ev[2] = dec({0x90, 36, 100}); // a pad and the touch strip
@@ -441,10 +441,14 @@ TEST(tart_machine_threads) {
 		ev[16] = dec({0xB0, 71, 3});
 		ev[17] = dec({0x90, 0, 127});
 		ev[18] = dec({0xB0, push2::cc::Device, 0});
+		ev[19] = dec({0xB0, push2::cc::Automate, 127}); // Automate: the touch and the turns of the take write a lane
+		ev[20] = dec({0xB0, push2::cc::Automate, 0});
+		ev[21] = dec({0xB0, 71, 40});
+		ev[22] = dec({0x90, 0, 0});
 		tart::SliceFrame frame;
 		in.play = true;
 		for (int i = 0; i < 20000; i++) {
-			in.events = ev, in.nEvents = i % 7 == 0 ? 19 : 0, in.frame = i;
+			in.events = ev, in.nEvents = i % 7 == 0 ? 23 : 0, in.frame = i;
 			m.process(in, out, want, &frame);
 			in.play = false;
 		}
@@ -473,6 +477,16 @@ TEST(tart_machine_threads) {
 	CHECK(out.consumed);
 	m.view(*v);
 	CHECK(v->s.transport.playing && v->s.transport.bpm > 120);
+	auto st = std::make_unique<tart::State>(); // whatever the takes wrote is sorted and fits
+	m.save(*st);
+	for (auto& row : st->clip)
+		for (const tart::Clip& c : row)
+			for (int j = 0; j < tart::kAutos; j++) {
+				CHECK(c.nPoints[j] <= tart::kMaxPoints);
+				for (int k = 1; k < c.nPoints[j]; k++)
+					CHECK(c.points[j][k - 1].tick <= c.points[j][k].tick);
+			}
+	CHECK(st->s.ui.recTrack >= 0 || st->s.ui.writing == 0);
 }
 
 TEST(state_layout) {
@@ -3877,4 +3891,354 @@ TEST(device_view) {
 	CHECK(v.lane == 3 && v.nShown == 0); // the lowest touched one
 	touch(r, 3, false);
 	CHECK(r.view().lane == 255);
+}
+
+// ---- Automate (AUTOMATE, CC 89): recording the encoders into a take
+
+namespace {
+
+/** Automate on, the Device screen open and a take running on the 1-bar clip of slot 1/1 (a note at tick 0). */
+void automateTake(Rig& r) {
+	fill(r, 0, 0);
+	r.click(push2::cc::Automate);
+	r.click(push2::cc::Device);
+	r.click(push2::cc::Record);
+}
+
+} // namespace
+
+TEST(automate_records_while_touched) {
+	SliceRig r;
+	automateTake(r);
+	runTo(r, 24);
+	touch(r, 0);
+	runTo(r, 30);
+	CHECK(r.view().s.ui.writing == 0 && pointsOf(r, 0).empty()); // the touch alone writes nothing
+	r.turn(0, 10);                                               // 3120: written from the next tick
+	CHECK(r.view().s.ui.writing == 1);
+	runTo(r, 40);
+	r.turn(0, 10); // 6240
+	runTo(r, 50);
+	r.run_(20); // a lane that is being written plays its value, not the (partial) curve
+	CHECK_NEAR(r.f.track[0].cc[0], 6240 * 10.f / 65535, 1e-3);
+	touch(r, 0, false);
+	auto v = r.view();
+	CHECK(v.s.ui.writing == 0 && v.s.ui.recTrack == 0); // the touch ended the write, not the take
+	Pts p = pointsOf(r, 0);
+	CHECK((p == Pts{{31, 0}, {31, 3120}, {40, 3120}, {41, 6240}, {50, 6240}}));
+	CHECK(pointsOf(r, 1).empty());
+	r.turn(0, 10); // untouched again: no more writing
+	runTo(r, 60);
+	CHECK(pointsOf(r, 0) == p && r.state()->s.track[0].overridden == 1); // an ordinary turn: the lane is overridden
+	r.click(push2::cc::Record);
+	auto st = r.state();
+	CHECK(tart::envelope(st->clip[0][0], 0, 35) == 3120 && tart::envelope(st->clip[0][0], 0, 45) == 6240);
+}
+
+TEST(automate_overwrite_keeps_outside) {
+	Rig r;
+	automateTake(r);
+	setPoints(r, 0, {{0, 0}, {384, 38400}}); // 100 a tick
+	runTo(r, 100);
+	r.turn(0, 0); // not touched: nothing yet
+	touch(r, 0);
+	r.turn(0, 63); // +19656 from what is heard
+	runTo(r, 200);
+	touch(r, 0, false);
+	auto st = r.state();
+	const tart::Clip& c = st->clip[0][0];
+	CHECK(tart::envelope(c, 0, 50) == 5000 && tart::envelope(c, 0, 90) == 9000); // before the punch-in: kept
+	int in = tart::envelope(c, 0, 102), at200 = tart::envelope(c, 0, 200, true);
+	CHECK(in > 25000 && at200 == in);               // replaced: the heard value plus the turn, held
+	CHECK(tart::envelope(c, 0, 100, true) < 11000); // the old curve arrives at the punch-in, then jumps
+	CHECK(tart::envelope(c, 0, 200) == 20000);      // punched out: back on the old line
+	CHECK(tart::envelope(c, 0, 250) == 25000 && tart::envelope(c, 0, 384) == 38400); // and it goes on
+	CHECK(c.nPoints[0] <= 8); // a held value is a few points, not one a tick
+}
+
+TEST(automate_wraps_loop) {
+	Rig r;
+	automateTake(r);
+	runTo(r, 300);
+	touch(r, 0);
+	r.turn(0, 10); // 3120 from tick 301 to the end of the clip
+	runTo(r, 384 + 20);
+	r.turn(0, 10); // 6240 on the second pass, from tick 20 on
+	runTo(r, 384 + 50);
+	touch(r, 0, false);
+	auto st = r.state();
+	const tart::Clip& c = st->clip[0][0];
+	CHECK(tart::envelope(c, 0, 310) == 3120 && tart::envelope(c, 0, 383) == 3120); // the first pass runs to the end
+	CHECK(tart::envelope(c, 0, 10) == 3120 && tart::envelope(c, 0, 40) == 6240);   // the second pass begins at tick 0
+	CHECK(tart::envelope(c, 0, 100) == 0 && tart::envelope(c, 0, 250) == 0);       // punched out: the old curve is back
+	for (int i = 1; i < c.nPoints[0]; i++)
+		CHECK(c.points[0][i - 1].tick <= c.points[0][i].tick);
+	CHECK(r.view().s.ui.recTrack == 0);
+}
+
+TEST(automate_thinning) {
+	Rig r;
+	automateTake(r);
+	runTo(r, 10);
+	touch(r, 0);
+	r.press(push2::cc::Shift); // 10 a turn
+	std::vector<int> value(384);
+	for (int t = 11; t < 371; t++) {
+		runTo(r, t);
+		value[t] = r.state()->s.track[0].value[0];
+		r.turn(0, 3); // 30 a tick: a slow sweep
+	}
+	touch(r, 0, false);
+	auto st = r.state();
+	const tart::Clip& c = st->clip[0][0];
+	CHECK(c.nPoints[0] >= 3 && c.nPoints[0] <= 6);
+	int worst = 0;
+	for (int t = 12; t < 371; t++)
+		worst = std::max(worst, std::abs(tart::envelope(c, 0, t) - value[t]));
+	CHECK(worst <= 512);
+}
+
+TEST(automate_needs_take_and_touch) {
+	using namespace push2::cc;
+	Rig r;
+	fill(r, 0, 0);
+	r.click(Device);
+	r.click(Automate);
+	touch(r, 0);
+	r.turn(0, 5); // no take: just the value
+	r.click(Record);
+	CHECK(r.view().s.ui.writing == 0 && pointsOf(r, 0).empty());
+	touch(r, 0, false);
+	runTo(r, 20);
+	r.turn(0, 5); // a take, but no touch
+	CHECK(r.view().s.ui.writing == 0);
+	r.click(Automate); // a take and a touch, but Automate is off
+	touch(r, 0);
+	r.turn(0, 5);
+	CHECK(!r.view().s.ui.automate && r.view().s.ui.writing == 0);
+	r.click(Automate);
+	r.click(Track1Below + 1); // another track is selected than the one that records
+	touch(r, 0, false);
+	touch(r, 0);
+	r.turn(0, 5);
+	CHECK(r.view().s.ui.writing == 0 && r.state()->s.track[1].value[0] == 5 * 312);
+	r.click(Track1Below);
+	touch(r, 0, false);
+	r.click(Device); // and the Home screen: the encoders aren't lanes
+	touch(r, 0);
+	r.turn(0, 5);
+	CHECK(r.view().s.ui.writing == 0);
+	r.click(Device);
+	r.turn(0, 5); // all there: the first turn writes
+	CHECK(r.view().s.ui.writing == 1);
+	runTo(r, 40);
+	touch(r, 0, false);
+	CHECK(r.view().s.ui.writing == 0 && !pointsOf(r, 0).empty());
+	// Without a running take, an automated lane is overridden as before
+	r.click(Record);
+	r.click(Automate);
+	r.click(Automate);
+	r.turn(0, 1);
+	CHECK(r.state()->s.track[0].overridden == 1 && r.view().s.ui.writing == 0);
+}
+
+TEST(automate_take_one_undo) {
+	Rig r;
+	automateTake(r);
+	runTo(r, 50);
+	touch(r, 0);
+	r.turn(0, 20);
+	runTo(r, 100);
+	r.turn(1, 20); // a second lane, untouched: nothing
+	r.turn(0, 20);
+	touch(r, 1);
+	r.turn(1, 20);
+	runTo(r, 150);
+	hold(r, 160, 170);
+	r.click(push2::cc::Record);
+	auto st = r.state();
+	CHECK(st->clip[0][0].nPoints[0] > 3 && st->clip[0][0].nPoints[1] > 1 && st->clip[0][0].nNotes == 2);
+	CHECK(r.view().s.ui.writing == 0); // the take ended: nothing is written any more
+	undoClick(r);                      // one step: the pads and both lanes
+	st = r.state();
+	CHECK(st->clip[0][0].nPoints[0] == 0 && st->clip[0][0].nPoints[1] == 0 && st->clip[0][0].nNotes == 1);
+	undoClick(r, true);
+	st = r.state();
+	CHECK(st->clip[0][0].nPoints[0] > 3 && st->clip[0][0].nPoints[1] > 1 && st->clip[0][0].nNotes == 2);
+}
+
+TEST(automate_ends_with_every_take_end) {
+	using namespace push2::cc;
+	for (int how = 0; how < 5; how++) {
+		Rig r;
+		automateTake(r);
+		runTo(r, 30);
+		touch(r, 0);
+		r.turn(0, 10);
+		runTo(r, 40);
+		CHECK(r.view().s.ui.writing == 1);
+		if (how == 0) {
+			r.click(Record);
+		} else if (how == 1) {
+			r.click(New);
+		} else if (how == 2) {
+			r.click(Play); // the transport stops
+		} else if (how == 3) {
+			r.click(Session);
+			tapSlot(r, 0, 0); // a launch on its track
+		} else {
+			r.click(Session);
+			r.press(Delete); // its slot is deleted
+			slot(r, 0, 0, 100);
+			slot(r, 0, 0, 0);
+			r.press(Delete, 0);
+		}
+		auto v = r.view();
+		CHECK(v.s.ui.recTrack == -1 && v.s.ui.writing == 0);
+		r.turn(0, 1); // the touch is still down: nothing writes any more
+		CHECK(r.view().s.ui.writing == 0);
+		touch(r, 0, false);
+	}
+}
+
+TEST(shift_automate_reenables) {
+	using namespace push2::cc;
+	Rig r(false);
+	fill(r, 0, 0);
+	setPoints(r, 0, {{0, 0}, {384, 65535}}, 384);
+	r.m.edit([](tart::State& st) { st.s.track[3].overridden = 6, st.s.track[0].playing = 0; });
+	r.click(Device);
+	r.in.play = true;
+	r.run_(1000);
+	r.turn(0, 1);
+	CHECK(r.state()->s.track[0].overridden == 1);
+	r.press(Shift);
+	r.click(Automate);
+	r.press(Shift, 0);
+	auto st = r.state();
+	CHECK(st->s.track[0].overridden == 0 && st->s.track[3].overridden == 0 && !st->s.ui.automate);
+	r.run_(1000); // the lane follows the clip again
+	CHECK(r.state()->s.track[0].value[0] > 600);
+	r.click(Automate);
+	CHECK(r.view().s.ui.automate);
+}
+
+TEST(delete_automate_clears) {
+	using namespace push2::cc;
+	Rig r(false);
+	fill(r, 0, 0);
+	setPoints(r, 0, {{0, 5}, {50, 9}});
+	setPoints(r, 3, {{10, 7}});
+	setPoints(r, tart::kPan, {{10, 7}});
+	r.m.edit([](tart::State& st) { st.clip[0][1].nPoints[0] = 1; }); // another clip: left alone
+	r.press(Delete);
+	r.click(Automate);
+	r.press(Delete, 0);
+	auto st = r.state();
+	CHECK(!st->s.ui.automate);
+	for (int j = 0; j < tart::kAutos; j++)
+		CHECK(st->clip[0][0].nPoints[j] == 0);
+	CHECK(st->clip[0][0].nNotes == 1 && st->clip[0][1].nPoints[0] == 1);
+	undoClick(r); // one step brings every lane back
+	st = r.state();
+	CHECK(st->clip[0][0].nPoints[0] == 2 && st->clip[0][0].nPoints[3] == 1 && st->clip[0][0].nPoints[tart::kPan] == 1);
+	r.press(Delete); // nothing to clear: no step of its own
+	r.click(Automate);
+	r.click(Automate);
+	r.press(Delete, 0);
+	r.click(Automate);
+	CHECK(r.view().s.ui.automate);
+}
+
+TEST(automate_led) {
+	using namespace push2::cc;
+	Rig r(false);
+	auto led = [&]() {
+		r.in.leds = true;
+		r.step();
+		return r.want.cc[Automate];
+	};
+	CHECK(led().color == push2::kWhiteDark);
+	r.press(Automate);
+	CHECK(led().color == push2::kWhiteFull); // held, and it toggled
+	CHECK(r.view().s.ui.automate);
+	CHECK(led().color == push2::kRed && led().channel == 0);
+	r.press(Automate, 0);
+	CHECK(led().color == push2::kRed);
+	r.click(Automate);
+	CHECK(led().color == push2::kWhiteDark);
+}
+
+TEST(automate_writing_dot_and_view) {
+	Rig r;
+	automateTake(r);
+	runTo(r, 30);
+	touch(r, 0);
+	r.turn(2, 1);
+	auto v = r.view();
+	CHECK(v.s.ui.writing == 0); // encoder 3 isn't touched
+	touch(r, 2);
+	r.turn(2, 1);
+	v = r.view();
+	CHECK(v.s.ui.writing == 1 << 2 && v.s.ui.recTrack == v.s.ui.track);
+}
+
+namespace {
+
+uint32_t lcg(uint32_t& s) {
+	return s = s * 1664525u + 1013904223u;
+}
+
+} // namespace
+
+TEST(automate_fuzz) {
+	using namespace push2::cc;
+	Rig r;
+	uint32_t seed = 12345;
+	auto next = [&](int n) { return (int)(lcg(seed) >> 8) % n; };
+	// Old curves on a few lanes of a 2-beat clip (so that the loop wraps often), some of them nearly full.
+	r.m.edit([&](tart::State& st) {
+		tart::Clip& c = st.clip[0][0];
+		c.length = 2 * tart::kPpqn, c.nNotes = 1, c.notes[0] = {0, 24, 60, 100};
+		for (int j : {0, 2, 5}) {
+			c.nPoints[j] = (uint16_t)(j == 5 ? 250 : 12);
+			for (int i = 0; i < c.nPoints[j]; i++)
+				c.points[j][i] = {(uint16_t)(j == 5 ? i * 192 / 250 : i * 15), (uint16_t)next(65536)};
+		}
+	});
+	setQuant(r, 0); // a take starts at once
+	r.click(Automate);
+	r.click(Device);
+	r.click(Record);
+	auto st = std::make_unique<tart::State>();
+	int written = 0, grown = 0;
+	for (int i = 0; i < 3000; i++) {
+		int op = next(10), before = 0;
+		for (int j = 0; j < tart::kAutos; j++)
+			before += r.state()->clip[0][0].nPoints[j];
+		if (op < 2)
+			touch(r, next(4), next(5) > 0);
+		else if (op < 7)
+			r.turn(next(4), next(2) ? 1 + next(63) : 127 - next(63)), r.run_(next(1500));
+		else if (op < 8)
+			r.run_(next(3000));
+		else if (op == 8)
+			r.click(next(60) ? next(8) ? Record : Play : Automate);
+		else
+			r.press(Shift, next(2) * 127);
+		r.m.save(*st);
+		const tart::Ui& u = st->s.ui;
+		CHECK(u.recTrack >= 0 || u.writing == 0);
+		written += u.writing != 0;
+		int after = 0;
+		for (int j = 0; j < tart::kAutos; j++) {
+			const tart::Clip& c = st->clip[0][0];
+			after += c.nPoints[j];
+			CHECK(c.nPoints[j] <= tart::kMaxPoints);
+			for (int k = 1; k < c.nPoints[j]; k++)
+				CHECK(c.points[j][k - 1].tick <= c.points[j][k].tick);
+		}
+		grown += after > before;
+	}
+	CHECK(written > 800 && grown > 250); // the run did write, with doors shutting
 }

@@ -33,6 +33,10 @@ constexpr int loopTicks(int grid) {
 // ponytail: a Device encoder's raw delta is 312 of the 65535 a lane spans (about 210 steps per turn, as the manual
 // says), and SHIFT divides it by 31; guesses, calibrate on the hardware.
 constexpr int kValueUnits = 312, kFineDivisor = 31;
+// ponytail: the writer drops a recorded point when the line through its neighbours stays within 256 of 65535 (0.4% of
+// the range; the 256 points of a lane are then about a minute of a slow sweep); a guess, lower it if sweeps look
+// angular.
+constexpr int kDoorTolerance = 256;
 // The grids of Quantize To and Record Quantize (kQuantToNames): the straight step and the triplet one (0: none). "+T"
 // takes the nearer of the two.
 constexpr int kQuantTo[8][2] = {{96, 0}, {48, 0}, {32, 0}, {48, 32}, {24, 0}, {16, 0}, {24, 16}, {12, 0}};
@@ -177,6 +181,13 @@ bool replacePoints(Clip& c, int lane, int t0, int t1, const Point* add, int n, b
 		c.nPoints[lane] = (uint16_t)count;
 	}
 	return true;
+}
+
+/** The last point of `lane` with a tick in [t0, t1], or null. */
+const Point* lastIn(const Clip& c, int lane, int t0, int t1) {
+	const Point *p = c.points[lane], *end = p + c.nPoints[lane];
+	const Point* hi = std::upper_bound(p, end, t1, [](int t, const Point& a) { return t < a.tick; });
+	return hi != p && hi[-1].tick >= t0 ? hi - 1 : nullptr;
 }
 
 /** The last page of the clip at this step size, `perPage` steps to a page. */
@@ -399,7 +410,8 @@ void sanitize(State& st) {
 	std::fill(u.button, u.button + 128, false);
 	u.touched = 0, u.popup = kNoPopup, u.popupAt = u.now = 0, u.screenAt = u.padsAt = -1;
 	u.prevPads = kSession, u.dup = -1, u.browse = 0;
-	u.recTrack = -1, u.recScene = 0, u.recFresh = u.recOpen = false, u.recEnd = -1;
+	u.recTrack = -1, u.recScene = 0, u.recFresh = u.recOpen = false, u.recEnd = -1, u.writing = 0;
+	u.automate = u.automate != 0;
 	for (auto& row : st.clip)
 		for (Clip& c : row) { // `playing` is transient, so a clip needs no more than sorted notes of sound values
 			c.length = std::min<uint16_t>(c.length, kMaxLength);
@@ -610,6 +622,17 @@ void Machine::handle(State& st, const push2::Event& e) {
 				show(redo ? kRedoPopup : kUndoPopup);
 		} else if (e.index == push2::cc::Record) {
 			record(st);
+		} else if (e.index == push2::cc::Automate) { // Shift: automation follows the clips again; Delete: no automation
+			Clip& c = st.clip[ui.track][ui.scene];
+			if (ui.button[push2::cc::Shift]) {
+				for (Track& tr : s.track)
+					tr.overridden = 0;
+			} else if (ui.button[push2::cc::Delete]) {
+				if (std::any_of(c.nPoints, c.nPoints + kAutos, [](uint16_t n) { return n != 0; }))
+					checkpoint(ui.track, ui.scene), std::fill(c.nPoints, c.nPoints + kAutos, 0);
+			} else {
+				ui.automate = !ui.automate;
+			}
 		} else if (e.index == push2::cc::Note || e.index == push2::cc::Session) {
 			ui.prevPads = ui.pads, ui.pads = e.index == push2::cc::Note ? kNote : kSession;
 			ui.padsAt = ui.now, ui.heldStep = -1;
@@ -728,6 +751,8 @@ void Machine::handle(State& st, const push2::Event& e) {
 			ui.touched = e.value ? ui.touched | 1u << e.index : ui.touched & ~(1u << e.index);
 		if (e.value && e.index < 8 && ui.screen == kDeviceScreen && ui.button[push2::cc::Delete])
 			deleteLane(st, e.index);
+		if (!e.value && e.index < 8 && writeBy_[e.index] >= 0) // the touch ends what its turns wrote
+			endWrite(st, writeBy_[e.index]), writeBy_[e.index] = -1;
 		if (!e.value && e.index == push2::kStrip)
 			ui.bend = 0; // the strip springs back; don't wait for the Push's own message
 		if (e.value && e.index == push2::kTempoId)
@@ -1267,8 +1292,10 @@ void Machine::noteEncoder(State& st, int encoder, int delta) {
 }
 
 /** An encoder turned on the Device screen: with a step held a step lock, else CC `lane` + 1 of the selected track moves
- * (DELETE held: nothing, the touch cleared it). A lane that the track's playing clip has points for is then overridden
- * until the clip launches again. */
+ * (DELETE held: nothing, the touch cleared it). While Automate is on, the take's clip plays on this track and the
+ * encoder is touched, the lane is written from the first turn until the touch ends (see write). Otherwise a lane that
+ * the track's playing clip has points for is overridden until the clip launches again. ponytail: the encoder number is
+ * the lane here; Mix (E4.4) maps its encoders to LEVEL and PAN. */
 void Machine::valueEncoder(State& st, int lane, int delta) {
 	Ui& ui = st.s.ui;
 	if (ui.button[push2::cc::Delete])
@@ -1279,9 +1306,99 @@ void Machine::valueEncoder(State& st, int lane, int delta) {
 		stepLock(st, lane, d);
 		return;
 	}
+	const uint16_t was = tr.value[lane];
 	tr.value[lane] = (uint16_t)std::min(std::max(tr.value[lane] + d, 0), 65535);
-	if (tr.playing != kNone && st.clip[ui.track][tr.playing].nPoints[lane])
+	if (ui.automate && ui.recTrack == ui.track && tr.playing == ui.recScene && ui.touched >> lane & 1) {
+		if (!(ui.writing >> lane & 1))
+			door_[lane].on = false, door_[lane].pre = was;
+		ui.writing |= (uint16_t)(1 << lane), tr.overridden &= (uint16_t)~(1 << lane), writeBy_[lane] = (int8_t)lane;
+	} else if (tr.playing != kNone && st.clip[ui.track][tr.playing].nPoints[lane]) {
 		tr.overridden |= (uint16_t)(1 << lane);
+	}
+}
+
+/** The swinging-door writer: the take's clip takes the value of `lane` at tick `pos` of its loop; called every tick
+ * for the lanes in Ui::writing. A pass begins at its first tick (and again at tick 0 after a wrap): the old curve
+ * arrives at `pos`, then jumps to the value. Each tick the old points the head has passed are taken off, and a point
+ * is kept only when the line from the last one can no longer stay within kDoorTolerance of the samples since, so a slow
+ * sweep takes few. endWrite ends the pass. The stretch between punch-in and punch-out is replaced on every pass. A lane
+ * that is within 3 points of its limit stops writing ("Clip full"): the two points that endWrite adds always fit. */
+void Machine::write(State& st, int lane, int pos) {
+	Ui& u = st.s.ui;
+	Clip& c = st.clip[u.recTrack][u.recScene];
+	Door& d = door_[lane];
+	const int v = st.s.track[u.recTrack].value[lane];
+	auto full = [&](int extra) {
+		if (c.nPoints[lane] + extra + 2 <= kMaxPoints)
+			return false;
+		endWrite(st, lane);
+		u.popup = kClipFullPopup, u.popupAt = u.now;
+		return true;
+	};
+	if (d.on && pos <= d.prev)
+		endWrite(st, lane, false); // the loop wrapped: this pass is over, the next begins here
+	if (!d.on) {
+		int arriving = envelope(c, lane, pos, true);
+		Point add[2];
+		int n = 0;
+		if (full(2))
+			return;
+		d.old = arriving >= 0;
+		d.oldLeft = {(uint16_t)pos, (uint16_t)std::max(arriving, 0)};
+		if (const Point* l = lastIn(c, lane, pos, pos))
+			d.oldLeft = *l;
+		if (arriving < 0)
+			arriving = d.pre;
+		if (pos > 0 && arriving != v)
+			add[n++] = {(uint16_t)pos, (uint16_t)arriving};
+		add[n++] = {(uint16_t)pos, (uint16_t)v};
+		replacePoints(c, lane, pos, pos, add, n);
+		d.on = true, d.prev = d.t0 = pos, d.v0 = d.vl = (uint16_t)v, d.lo = -1e30f, d.hi = 1e30f;
+		return;
+	}
+	float lo = std::max(d.lo, (float)(v - kDoorTolerance - d.v0) / (float)(pos - d.t0)),
+		  hi = std::min(d.hi, (float)(v + kDoorTolerance - d.v0) / (float)(pos - d.t0));
+	if (lo > hi) { // the door is shut: the last sample is a point, and the next line starts from it
+		if (full(1))
+			return;
+		const Point p = {(uint16_t)d.prev, d.vl};
+		replacePoints(c, lane, d.prev + 1, d.prev, &p, 1);
+		d.t0 = d.prev, d.v0 = d.vl;
+		lo = (float)(v - kDoorTolerance - d.v0) / (float)(pos - d.t0);
+		hi = (float)(v + kDoorTolerance - d.v0) / (float)(pos - d.t0);
+	}
+	if (const Point* l = lastIn(c, lane, d.prev + 1, pos)) // the head passes the old points: they go
+		d.oldLeft = *l;
+	replacePoints(c, lane, d.prev + 1, pos, nullptr, 0);
+	d.lo = lo, d.hi = hi, d.prev = pos, d.vl = (uint16_t)v;
+}
+
+/** Ends the pass of `lane`: the last value becomes a point, then the old curve comes back at once (a jump to what it
+ * was at that tick, unless the clip ends there or the lane had no curve). `stop`: the lane is no longer written (else
+ * the touch goes on and the next pass follows). */
+void Machine::endWrite(State& st, int lane, bool stop) {
+	Ui& u = st.s.ui;
+	Door& d = door_[lane];
+	if (d.on && u.writing >> lane & 1) { // (a patch that was loaded mid-pass leaves `on` behind)
+		Clip& c = st.clip[u.recTrack][u.recScene];
+		Point add[2];
+		int n = 0;
+		if (d.prev > d.t0)
+			add[n++] = {(uint16_t)d.prev, d.vl};
+		if (d.old && d.prev + 1 < c.length) {
+			const Point *p = c.points[lane], *end = p + c.nPoints[lane];
+			const Point* r = std::upper_bound(p, end, d.prev, [](int t, const Point& a) { return t < a.tick; });
+			int was = d.oldLeft.value;
+			if (r != end)
+				was += (int)((int64_t)(r->value - was) * (d.prev - d.oldLeft.tick) / (r->tick - d.oldLeft.tick));
+			if (was != d.vl)
+				add[n++] = {(uint16_t)d.prev, (uint16_t)was};
+		}
+		replacePoints(c, lane, d.prev + 1, d.prev, add, n);
+	}
+	d.on = false;
+	if (stop)
+		u.writing &= (uint16_t)~(1 << lane);
 }
 
 /** A step lock: the held step of the selected clip gets a flat segment of the lane over its length, at the envelope in
@@ -1524,6 +1641,9 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 	} else {
 		white(push2::cc::Record, u.button[push2::cc::Record]);
 	}
+	out.cc[push2::cc::Automate] =
+		u.automate ? push2::Led{push2::kRed, push2::kStatic}
+				   : push2::Led{u.button[push2::cc::Automate] ? push2::kWhiteFull : push2::kWhiteDark, push2::kStatic};
 	white(push2::cc::Quantize, u.button[push2::cc::Quantize]);
 	if (st.clip[u.track][u.scene].length || u.button[push2::cc::DoubleLoop])
 		white(push2::cc::DoubleLoop, u.button[push2::cc::DoubleLoop]);
@@ -1647,7 +1767,11 @@ void Machine::tick(State& st, int64_t k, Outputs& out) {
 		if (!c.length)
 			continue;
 		int pos = (int)((k - tr.startTick) % c.length);
-		for (int j = 0; j < kAutos; j++) { // a lane with points plays them, the others keep their value
+		for (int j = 0; j < kAutos; j++) {               // a lane with points plays them, the others keep their value
+			if (t == u.recTrack && u.writing >> j & 1) { // a lane that is being written plays its value
+				write(st, j, pos);
+				continue;
+			}
 			int e = envelope(c, j, pos);
 			if (e >= 0 && !(tr.overridden >> j & 1))
 				tr.value[j] = (uint16_t)e;
@@ -1719,6 +1843,9 @@ void Machine::endTake(bool discard) {
 		return;
 	Track& tr = st.s.track[u.recTrack];
 	Clip& c = st.clip[u.recTrack][u.recScene];
+	for (int j = 0; j < kAutos; j++) // every lane that is written ends here
+		endWrite(st, j);
+	std::fill(writeBy_, writeBy_ + 8, -1);
 	if (tr.playing != u.recScene) {
 		if (tr.queued == u.recScene)
 			tr.queued = kNone;
@@ -1876,7 +2003,8 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 			int pos = c && c->length ? (int)(std::max<int64_t>(lastTick_ - tr.startTick, 0) % c->length) : 0;
 			for (int j = 0; j < kAutos; j++) {
 				from_[i][j] = volts(tr, j, tr.value[j]);
-				int e = c && c->length && !(tr.overridden >> j & 1) ? envelope(*c, j, pos + 1) : -1;
+				bool plays = !(tr.overridden >> j & 1) && !(i == s.ui.recTrack && s.ui.writing >> j & 1);
+				int e = c && c->length && plays ? envelope(*c, j, pos + 1) : -1;
 				to_[i][j] = e >= 0 ? volts(tr, j, e) : from_[i][j];
 			}
 		}
