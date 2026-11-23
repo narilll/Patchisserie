@@ -1039,7 +1039,7 @@ struct LatticeWidget : ModuleWidget {
 	}
 };
 
-// --- Tart: Ableton Push 2 as a Rack controller (E2.2: transport and clock, tracks, Note mode) ---
+// --- Tart: Ableton Push 2 as a Rack controller (E2.3: transport and clock, tracks, Note mode, colours, scales) ---
 
 static Model *modelTart, *modelSlice;
 
@@ -1061,8 +1061,9 @@ struct Tart : Module {
 	float metroV = 0;
 	tart::Outputs out{};
 	// process()'s messages, reused so the audio thread doesn't allocate: LEDs, MIDI clock and start, the User-mode
-	// SysEx. ponytail: sendMessage() and tryPop() lock inside Rack's MIDI drivers, as in every Rack MIDI module.
-	midi::Message in, led, one, userMode;
+	// SysEx, a palette entry and the palette reapply. ponytail: sendMessage() and tryPop() lock inside Rack's MIDI
+	// drivers, as in every Rack MIDI module.
+	midi::Message in, led, one, userMode, palette, reapply;
 	std::atomic<bool> resync{false}; // UI -> audio: the Push (re)opened: set User mode and send every LED again
 	std::atomic<bool> owner{false};  // UI -> audio: this Tart holds the Push
 	std::atomic<int> pushState{0};   // UI -> audio, for the light: 0 none, 1 MIDI only, 2 MIDI and display
@@ -1083,6 +1084,21 @@ struct Tart : Module {
 		pushOut.channel = -1; // else Rack overwrites the channel byte, which carries the LED animation
 		one.setSize(1);
 		userMode.bytes.assign(push2::kUserMode, push2::kUserMode + sizeof push2::kUserMode);
+		reapply.bytes.assign(push2::kReapplyPalette, push2::kReapplyPalette + sizeof push2::kReapplyPalette);
+		palette.bytes.resize(17); // the capacity process() writes into
+	}
+
+	/** The 16 palette entries of the track colours, then the reapply: 17 SysEx messages (audio thread). */
+	void sendPalette(int64_t frame) {
+		for (int k = 0; k < 16; k++) {
+			uint32_t c = out.rgb[k];
+			push2::paletteEntry((uint8_t)(tart::kPaletteFull + k), (uint8_t)(c >> 16), (uint8_t)(c >> 8), (uint8_t)c, 0,
+								palette.bytes.data());
+			palette.setFrame(frame);
+			pushOut.sendMessage(palette);
+		}
+		reapply.setFrame(frame);
+		pushOut.sendMessage(reapply);
 	}
 
 	void process(const ProcessArgs& args) override {
@@ -1121,6 +1137,7 @@ struct Tart : Module {
 			} else {
 				userMode.setFrame(args.frame);
 				pushOut.sendMessage(userMode);
+				sendPalette(args.frame);
 				one.bytes[0] = 0xFA; // Start: the Push animates LEDs only while it gets clock and start
 				one.setFrame(args.frame);
 				pushOut.sendMessage(one);
@@ -1130,6 +1147,8 @@ struct Tart : Module {
 					l = {255, 255};
 			}
 		}
+		if (own && !sync && out.palette) // a track colour changed
+			sendPalette(args.frame);
 		if (own && (out.midiStart || out.midiClock)) {
 			one.bytes[0] = out.midiStart ? 0xFA : 0xF8; // a Start and a Clock on one sample: Start, the Clock next
 			one.setFrame(args.frame);
@@ -1285,6 +1304,37 @@ struct TrackNameField : ui::TextField {
 	void onChange(const ChangeEvent&) override {
 		if (set)
 			set(text);
+	}
+};
+
+/** The Track menu's Color entry: Live's 70 colours as swatches, 14 to a row; a click picks one. */
+struct LiveColorGrid : ui::MenuEntry {
+	static constexpr float kCell = 16;
+	int current = 0;
+	std::function<void(int)> set;
+	LiveColorGrid() { box.size = Vec(14 * kCell + 8, 5 * kCell + 8); }
+	void draw(const DrawArgs& args) override {
+		for (int i = 0; i < tart::kColors; i++) {
+			const uint8_t* c = tart::kLiveColors[i];
+			nvgBeginPath(args.vg);
+			nvgRect(args.vg, 4 + i % 14 * kCell, 4 + i / 14 * kCell, kCell - 2, kCell - 2);
+			nvgFillColor(args.vg, nvgRGB(c[0], c[1], c[2]));
+			nvgFill(args.vg);
+			if (i == current) {
+				nvgStrokeColor(args.vg, nvgRGB(255, 255, 255));
+				nvgStrokeWidth(args.vg, 2);
+				nvgStroke(args.vg);
+			}
+		}
+	}
+	void onButton(const ButtonEvent& e) override {
+		if (e.action != GLFW_PRESS || e.button != GLFW_MOUSE_BUTTON_LEFT)
+			return;
+		int col = (int)std::floor((e.pos.x - 4) / kCell), row = (int)std::floor((e.pos.y - 4) / kCell);
+		int i = row * 14 + col;
+		if (col >= 0 && col < 14 && row >= 0 && row < 5 && i < tart::kColors && set)
+			current = i, set(i);
+		e.consume(this); // the menu stays open
 	}
 };
 
@@ -1452,6 +1502,13 @@ struct TartWidget : ModuleWidget {
 						m->machine.edit([&](tart::State& st) { tart::setName(st.s.track[t], name.c_str()); });
 					};
 					sub2->addChild(field);
+					sub2->addChild(createMenuLabel("Color"));
+					auto* grid = new LiveColorGrid;
+					grid->current = now.s.track[t].color;
+					grid->set = [=](int color) {
+						m->machine.edit([=](tart::State& st) { st.s.track[t].color = (uint8_t)color; });
+					};
+					sub2->addChild(grid);
 					std::vector<std::string> counts;
 					for (int n = 1; n <= 16; n++)
 						counts.push_back(std::to_string(n));

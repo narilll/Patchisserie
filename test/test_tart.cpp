@@ -172,7 +172,9 @@ struct Rig {
 		step(&e);
 	}
 	void turn(int id, int delta) { // the encoder CC for the id, delta as the Push sends it
-		uint8_t cc = id == push2::kTempoId ? push2::cc::kTempo : push2::cc::kSwing;
+		uint8_t cc = id < 8                  ? (uint8_t)(push2::cc::kTrack1 + id)
+					 : id == push2::kTempoId ? push2::cc::kTempo
+											 : push2::cc::kSwing;
 		push2::Event e = dec({0xB0, cc, (uint8_t)(delta & 127)});
 		step(&e);
 	}
@@ -503,12 +505,12 @@ TEST(track_buttons_and_octave) {
 	r.in.leds = true;
 	r.step();
 	CHECK(r.want.cc[push2::cc::Track1Below].color == push2::kRgbWhite &&
-		  r.want.cc[push2::cc::Track1Below + 1].color == push2::kRgbDarkGray);
+		  r.want.cc[push2::cc::Track1Below + 1].color == tart::kPaletteFull + 1); // the others in their colour
 	r.press(push2::cc::Track1Below + 5);
 	r.press(push2::cc::Track1Below + 5, 0);
 	CHECK(r.view().s.ui.track == 5);
 	CHECK(r.want.cc[push2::cc::Track1Below + 5].color == push2::kRgbWhite &&
-		  r.want.cc[push2::cc::Track1Below].color == push2::kRgbDarkGray);
+		  r.want.cc[push2::cc::Track1Below].color == tart::kPaletteFull);
 	r.press(push2::cc::Left);
 	CHECK(r.view().s.ui.track == 4);
 	for (int i = 0; i < 10; i++)
@@ -526,8 +528,8 @@ TEST(track_buttons_and_octave) {
 	for (int i = 0; i < 20; i++)
 		r.press(push2::cc::OctaveDown);
 	CHECK(r.view().s.track[0].octave == 0 && r.want.cc[push2::cc::OctaveDown].color == 0);
-	// pad LEDs: the root (C) is lit blue, other in-key notes white
-	CHECK(r.want.note[push2::padNote(0, 0)].color == push2::kBlue &&
+	// pad LEDs: the root (C) is lit in the track's colour (selected track 0), other in-key notes white
+	CHECK(r.want.note[push2::padNote(0, 0)].color == tart::kPaletteFull &&
 		  r.want.note[push2::padNote(0, 1)].color == push2::kRgbWhite);
 	CHECK(r.want.cc[push2::cc::Note].color == push2::kWhiteFull && r.want.cc[push2::cc::Session].color == 0);
 }
@@ -556,7 +558,7 @@ TEST(bend) {
 
 TEST(slice_frame) {
 	SliceRig r;
-	r.m.edit([](tart::State& st) { st.s.track[2].voices = 5, st.s.track[2].color = 3; });
+	r.m.edit([](tart::State& st) { st.s.track[2].voices = 5, st.s.track[2].color = 3; }); // EDDA3C
 	r.run_(2);
 	for (int t = 0; t < tart::kTracks; t++) {
 		const tart::SliceTrack& s = r.f.track[t];
@@ -565,7 +567,7 @@ TEST(slice_frame) {
 			CHECK(cc == 0);
 		CHECK(s.channels == (t == 2 ? 5 : 1));
 	}
-	CHECK(r.f.track[2].rgb == (90u << 16 | 220u << 8 | 90u) && r.f.hop == 0);
+	CHECK(r.f.track[2].rgb == (0xEDu << 16 | 0xDAu << 8 | 0x3Cu) && r.f.hop == 0);
 	uint32_t before = r.f.frame;
 	r.run_(1);
 	CHECK(r.f.frame != before); // changes every sample
@@ -578,7 +580,7 @@ TEST(sanitize_tracks) {
 	t.name[30] = (char)0xC3, t.name[31] = (char)0xA9; // an 'e acute' cut by the field's end
 	t.color = 200, t.voices = 0, t.octave = 99, t.grid = 9, t.type = 4, t.playing = 3, t.queued = 2;
 	st->s.track[2].voices = 40, st->s.track[2].octave = -3;
-	st->s.scale.root = 12, st->s.scale.scale = 9, st->s.scale.layout = 6;
+	st->s.scale.root = 12, st->s.scale.scale = 99, st->s.scale.layout = 6;
 	st->s.ui.pads = 5, st->s.ui.fixedBars = 9, st->s.ui.scene = 20, st->s.ui.bend = 1, st->s.ui.pad[3] = 9;
 	tart::sanitize(*st);
 	CHECK(std::strlen(t.name) == 30 && t.name[29] == 'a'); // cut before the broken character
@@ -608,4 +610,203 @@ TEST(load_silences_notes) {
 	CHECK(r.f.track[0].gate[0] == 0);
 	r.pad(0, 0, 0); // the stale release does nothing
 	CHECK(r.f.track[0].gate[0] == 0);
+}
+
+TEST(palette_bytes) {
+	uint8_t m[17];
+	push2::paletteEntry(125, 0, 0, 255, 126, m); // the manual's example
+	const uint8_t want[] = {0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x03, 0x7D, 0x00,
+							0x00, 0x00, 0x00, 0x7F, 0x01, 0x7E, 0x00, 0xF7};
+	CHECK(std::memcmp(m, want, 17) == 0);
+	push2::paletteEntry(100, 0xED, 0x59, 0x38, 0, m); // high bit of r, then the low 7 bits
+	CHECK(m[7] == 100 && m[8] == 0x6D && m[9] == 1 && m[10] == 0x59 && m[11] == 0 && m[12] == 0x38 && m[16] == 0xF7);
+	const uint8_t reapply[] = {0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x05, 0xF7};
+	CHECK(sizeof push2::kReapplyPalette == 8 && std::memcmp(push2::kReapplyPalette, reapply, 8) == 0);
+	// the slots stay off the white LEDs' indices and the fixed colours
+	for (int k = 0; k < 16; k++) {
+		int i = tart::kPaletteFull + k;
+		CHECK(i != push2::kWhiteDark && i != push2::kWhiteLight && i != push2::kWhiteFull && i < push2::kRgbWhite);
+	}
+}
+
+TEST(track_colors) {
+	auto st = std::make_unique<tart::State>();
+	for (int i = 0; i < tart::kTracks; i++)
+		for (int j = 0; j < i; j++) {
+			const uint8_t *a = tart::kLiveColors[st->s.track[i].color], *b = tart::kLiveColors[st->s.track[j].color];
+			CHECK(a[0] != b[0] || a[1] != b[1] || a[2] != b[2]); // the 8 defaults differ
+		}
+	CHECK(tart::kLiveColors[69][0] == 0x58 && tart::kLiveColors[12][2] == 0x32);
+}
+
+TEST(palette_on_change) {
+	Rig r;
+	r.in.leds = true;
+	r.step();
+	CHECK(r.out.palette && r.out.ledsDone); // the first pass: the Push has no colours yet
+	CHECK(r.out.rgb[0] == 0xFF1E32 &&
+		  r.out.rgb[tart::kTracks] == (0x3Fu << 16 | 0x07u << 8 | 0x0Cu)); // track 1, full and a quarter
+	r.in.leds = false;
+	r.step();
+	CHECK(!r.out.palette);
+	r.m.edit([](tart::State& st) { st.s.track[2].color = 0; }); // from the UI thread
+	r.step();
+	CHECK(r.out.palette && r.out.rgb[2] == 0xED5938 &&
+		  r.out.rgb[tart::kTracks + 2] == (0x3Bu << 16 | 0x16u << 8 | 0x0Eu));
+	r.step();
+	CHECK(!r.out.palette);
+	CHECK(r.want.cc[push2::cc::Track1Below + 2].color == tart::kPaletteFull + 2); // LED indices stay put
+	auto st = std::make_unique<tart::State>();
+	r.m.save(*st);
+	st->s.track[0].color = 99; // a bad patch is clamped by sanitize
+	tart::sanitize(*st);
+	CHECK(st->s.track[0].color == tart::kColors - 1);
+}
+
+TEST(scale_layouts) {
+	bool root, in;
+	tart::Scale c;
+	c.scale = 12; // Major Pentatonic: C D E G A
+	CHECK(std::string(tart::kScales[12].name) == "Major Pentatonic");
+	CHECK(tart::padPitch(c, 3, 0, 4, root, in) == 45 && tart::padPitch(c, 3, 0, 5, root, in) == 48 && root);
+	CHECK(tart::padPitch(c, 3, 1, 0, root, in) == 43); // 4ths: three steps up, G
+	c.scale = 1;                                       // D Minor In Key walks from the root
+	c.root = 2;
+	CHECK(tart::padPitch(c, 3, 0, 0, root, in) == 38 && root);
+	CHECK(tart::padPitch(c, 3, 0, 2, root, in) == 41 && !root && in); // F, the third
+	// Fixed + In Key: the bottom-left pad stays C (or the first note of the scale above it), the root moves the lights
+	c = tart::Scale();
+	c.fixed = true;
+	c.root = 2;                                                       // D Major: D E F# G A B C#
+	CHECK(tart::padPitch(c, 3, 0, 0, root, in) == 37 && !root && in); // C#
+	CHECK(tart::padPitch(c, 3, 0, 1, root, in) == 38 && root && in);  // D
+	CHECK(tart::padPitch(c, 3, 0, 7, root, in) == 37 + 12);
+	c.root = 7; // G Major: G A B C D E F#; C is in it, so the pad is C
+	CHECK(tart::padPitch(c, 3, 0, 0, root, in) == 36 && !root);
+	CHECK(tart::padPitch(c, 3, 0, 3, root, in) == 42); // C D E F#
+	CHECK(tart::padPitch(c, 3, 0, 4, root, in) == 43 && root);
+	c.root = 9, c.scale = 1; // A Minor: A B C D E F G
+	CHECK(tart::padPitch(c, 3, 0, 0, root, in) == 36 && tart::padPitch(c, 3, 0, 5, root, in) == 45 && root);
+	CHECK(tart::padPitch(c, 3, 0, 6, root, in) == 47);
+	c.inKey = false; // Chromatic keeps C at the bottom left, A lights as the root
+	CHECK(tart::padPitch(c, 3, 0, 0, root, in) == 36 && in && !root);
+	CHECK(tart::padPitch(c, 3, 0, 1, root, in) == 37 && !in);
+	CHECK(tart::padPitch(c, 3, 0, 9, root, in) == 45 && root);
+	// the table: every scale has its root and no duplicate name
+	CHECK(tart::kScaleCount == 37);
+	for (int i = 0; i < tart::kScaleCount; i++) {
+		CHECK(tart::kScales[i].mask & 1 && tart::kScales[i].mask < 4096);
+		for (int j = 0; j < i; j++)
+			CHECK(std::string(tart::kScales[i].name) != tart::kScales[j].name);
+	}
+	CHECK(tart::kScales[0].mask == 0xAB5 && std::string(tart::kScales[1].name) == "Minor");
+}
+
+TEST(scale_buttons) {
+	using namespace push2::cc;
+	Rig r;
+	r.in.leds = true;
+	r.step();
+	r.m.edit([](tart::State& st) {
+		st.clip[0][0].length = 384, st.clip[0][0].nNotes = 1, st.clip[0][0].notes[0] = {0, 24, 60, 100};
+	});
+	// A tap toggles the screen; the second tap closes it.
+	r.press(Scale);
+	CHECK(r.view().s.ui.screen == tart::kScaleScreen && r.want.cc[Scale].color == push2::kWhiteFull);
+	r.run_(100);
+	r.press(Scale, 0);
+	CHECK(r.view().s.ui.screen == tart::kScaleScreen); // short: stays
+	r.press(Scale);
+	CHECK(r.view().s.ui.screen == tart::kHome && r.want.cc[Scale].color == push2::kWhiteFull); // still held
+	r.press(Scale, 0);
+	CHECK(r.want.cc[Scale].color == push2::kWhiteDark);
+	// Held for 0.6 s: momentary.
+	r.press(Scale);
+	r.run_(48000 * 6 / 10);
+	r.press(Scale, 0);
+	CHECK(r.view().s.ui.screen == tart::kHome);
+	// Held but under 0.5 s: stays.
+	r.press(Scale);
+	r.run_(48000 * 4 / 10);
+	r.press(Scale, 0);
+	CHECK(r.view().s.ui.screen == tart::kScaleScreen);
+	// Roots: upper 2..7 C G D A E B; lower 2..7 F Bb Eb Ab Db Gb. The lower buttons don't select tracks here.
+	const int upper[] = {0, 7, 2, 9, 4, 11}, lower[] = {5, 10, 3, 8, 1, 6};
+	for (int i = 0; i < 6; i++) {
+		r.press(Track1Above + 1 + i);
+		CHECK(r.view().s.scale.root == upper[i]);
+		CHECK(r.want.cc[Track1Above + 1 + i].color == push2::kRgbWhite &&
+			  r.want.cc[Track1Above + 1 + (i + 1) % 6].color == push2::kRgbDarkGray);
+		r.press(Track1Below + 1 + i);
+		CHECK(r.view().s.scale.root == lower[i] && r.view().s.ui.track == 0);
+		CHECK(r.want.cc[Track1Below + 1 + i].color == push2::kRgbWhite &&
+			  r.want.cc[Track1Above + 1 + i].color == push2::kRgbDarkGray);
+	}
+	CHECK(r.want.cc[Track1Above].color == 0 && r.want.cc[Track1Above + 7].color == 0);
+	r.press(Track1Above + 1);
+	// In Key / Chromatic and Fixed.
+	CHECK(r.view().s.scale.inKey && !r.view().s.scale.fixed && r.want.cc[Track1Below].color == push2::kRgbWhite);
+	CHECK(r.want.cc[Track1Below + 7].color == push2::kRgbDarkGray);
+	r.press(Track1Below);
+	r.press(Track1Below + 7);
+	CHECK(!r.view().s.scale.inKey && r.view().s.scale.fixed && r.want.cc[Track1Below + 7].color == push2::kRgbWhite);
+	r.press(Track1Below);
+	r.press(Track1Below + 7);
+	// Encoders: 1 layout, 8 direction, 2..7 the scale list.
+	r.turn(0, 30);
+	CHECK(r.view().s.scale.layout == 2);
+	r.turn(0, 30), r.turn(0, 30), r.turn(0, 30);
+	CHECK(r.view().s.scale.layout == 4); // the end of the list
+	r.turn(0, -30);
+	CHECK(r.view().s.scale.layout == 2);
+	r.turn(7, 30);
+	CHECK(r.view().s.scale.layout == 3);
+	r.turn(7, -30);
+	CHECK(r.view().s.scale.layout == 2);
+	r.turn(3, 8);
+	CHECK(r.view().s.scale.scale == 1);
+	r.turn(6, -8 + 128); // a negative delta as the Push sends it
+	CHECK(r.view().s.scale.scale == 0);
+	r.turn(1, -8 + 128);
+	CHECK(r.view().s.scale.scale == 0); // clamped
+	r.turn(1, 63), r.turn(1, 63), r.turn(1, 63), r.turn(1, 63), r.turn(1, 63), r.turn(1, 63);
+	CHECK(r.view().s.scale.scale == tart::kScaleCount - 1); // 47 steps, but the list ends
+	// The arrows: up and down by one, left and right by four.
+	r.press(Down);
+	CHECK(r.view().s.scale.scale == tart::kScaleCount - 1);
+	r.press(Left);
+	r.press(Left);
+	CHECK(r.view().s.scale.scale == tart::kScaleCount - 9 && r.view().s.ui.track == 0);
+	r.press(Up);
+	CHECK(r.view().s.scale.scale == tart::kScaleCount - 10);
+	r.press(Right);
+	CHECK(r.view().s.scale.scale == tart::kScaleCount - 6);
+	// Back on Home the buttons select tracks again; the scale never touched a clip.
+	r.press(Scale);
+	r.press(Scale, 0);
+	r.press(Track1Below + 4);
+	CHECK(r.view().s.ui.track == 4);
+	tart::View v = r.view();
+	CHECK(v.length[0][0] == 384);
+	auto st = std::make_unique<tart::State>();
+	r.m.save(*st);
+	CHECK(st->clip[0][0].nNotes == 1 && st->clip[0][0].notes[0].pitch == 60);
+}
+
+TEST(scale_leds) {
+	Rig r;
+	r.in.leds = true;
+	r.step();
+	// The pads follow the scale: D Major Fixed, In Key: C# at the bottom left, the D pads in the track's colour.
+	r.m.edit([](tart::State& st) { st.s.scale.root = 2, st.s.scale.fixed = true; });
+	r.step();
+	CHECK(r.want.note[push2::padNote(0, 0)].color == push2::kRgbWhite);   // C#, not the root
+	CHECK(r.want.note[push2::padNote(0, 1)].color == tart::kPaletteFull); // D
+	CHECK(r.want.note[push2::padNote(0, 7)].color == push2::kRgbWhite);   // C# an octave up
+	// Chromatic: out-of-key pads are dark.
+	r.m.edit([](tart::State& st) { st.s.scale.inKey = false; });
+	r.step();
+	CHECK(r.want.note[push2::padNote(0, 0)].color == push2::kBlack);    // C is not in D Major
+	CHECK(r.want.note[push2::padNote(0, 1)].color == push2::kRgbWhite); // C#
+	CHECK(r.want.note[push2::padNote(0, 2)].color == tart::kPaletteFull);
 }

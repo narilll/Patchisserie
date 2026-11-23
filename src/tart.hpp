@@ -1,8 +1,8 @@
 #pragma once
-// Tart: the Push 2 as a Rack controller. E2.2: transport and clock, tracks, Note mode. The Session (what the Push
-// shows and saves) is owned by Machine under one lock; the audio thread (Machine::process) handles the Push's events
-// and runs the clock, the UI thread reads a View copy and edits through Machine::edit. Audio-thread paths never
-// allocate, wait on a lock, throw or log.
+// Tart: the Push 2 as a Rack controller. E2.3: transport and clock, tracks, Note mode, colours, Scale mode. The Session
+// (what the Push shows and saves) is owned by Machine under one lock; the audio thread (Machine::process) handles the
+// Push's events and runs the clock, the UI thread reads a View copy and edits through Machine::edit. Audio-thread paths
+// never allocate, wait on a lock, throw or log.
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -53,6 +53,7 @@ struct Track {
 
 enum Popup : uint8_t { kNoPopup, kTempoPopup, kSwingPopup };
 enum Pads : uint8_t { kSession, kNote };
+enum Screens : uint8_t { kHome, kScaleScreen };
 
 struct Transport {
 	float bpm = 120; // the internal tempo; a patched CLOCK overrides it, the TEMPO input scales it
@@ -63,8 +64,8 @@ struct Transport {
 	float shownBpm = 120;                   // what the clock runs at now: the CV applied, or measured from CLOCK
 };
 
-/** The pad layout of Note mode (the Scale screen of E2.3 edits it; until then it stays C Major, In Key, 4ths up).
- * `layout` = 2 * (0 4ths, 1 3rds, 2 Sequential) + (0 up, 1 right). */
+/** The pad layout of Note mode (the Scale screen edits it). `layout` = 2 * (0 4ths, 1 3rds, 2 Sequential) + (0 up,
+ * 1 right). */
 struct Scale {
 	uint8_t root = 0, scale = 0 /*Major*/, layout = 0;
 	bool inKey = true, fixed = false;
@@ -84,6 +85,7 @@ struct Ui {
 	int8_t heldStep = -1;  // E2.4
 	uint8_t popup = kNoPopup;
 	double popupAt = 0, now = 0; // seconds of audio time
+	double scaleAt = -1;         // when the press that opened the Scale screen began (-1: none)
 };
 
 struct Session {
@@ -108,8 +110,24 @@ struct View {
 	Note notes[kMaxNotes];
 };
 
-/** The 8 default track colours (also the Slice's number colours) until E2.3 brings Live's 70. */
-extern const uint8_t kTrackRgb[8][3];
+/** Live's 70 clip colours as the Push shows them, by index (a track's `color`). They are also the Slice's number
+ * colours. */
+extern const uint8_t kLiveColors[kColors][3];
+
+/** Palette slots of the Push's LEDs for the tracks: 100 + t full, 108 + t a quarter of it. They avoid the white LEDs'
+ * indices (16, 48, 127) and the fixed colours 122..127. */
+constexpr uint8_t kPaletteFull = 100, kPaletteDim = kPaletteFull + kTracks;
+
+/** Where the Scale screen's root buttons go: the six upper buttons (2..7), then the six lower ones (2..7). */
+constexpr uint8_t kRoots[12] = {0, 7, 2, 9, 4, 11, 5, 10, 3, 8, 1, 6};
+
+/** Live's scales: the semitones above the root as a bitmask. */
+struct ScaleDef {
+	const char* name;
+	uint16_t mask;
+};
+extern const ScaleDef kScales[];
+extern const int kScaleCount;
 
 /** The MIDI note of a pad in Note mode (row 0 = bottom), or -1 above 127. `root`: the pad is the scale's root,
  * `inScale`: it is in the scale (for Chromatic, which lights them). */
@@ -150,6 +168,9 @@ struct Outputs {
 	bool clk = false, reset = false, run = false, metro = false; // this sample; the caller makes pulses of them
 	float metroV = 0;
 	bool midiClock = false, midiStart = false;
+	bool palette = false; // the track colours changed (or never went out): send `rgb`, then reapply
+	uint32_t rgb[16] =
+		{}; // 0xRRGGBB for palette index kPaletteFull + k (kPaletteDim is k = 8..15); valid with `ledsDone`
 };
 
 class Machine {
@@ -182,6 +203,7 @@ class Machine {
 	void handle(Session& s, const push2::Event& e);
 	void pad(Session& s, int index, int vel);
 	void leds(const Session& s, push2::Leds& out) const;
+	bool scaleButton(Scale& sc, int button); // on the Scale screen: whether it was one of its buttons
 	void tap(Transport& t);
 	void tick(const Session& s, int64_t k, Outputs& out);
 
@@ -210,7 +232,8 @@ class Machine {
 	double lastAt_ = -1;
 	Request request_ = Request::None;
 	bool sync_ = true; // take the lock this sample
-	int accTempo_ = 0, accSwing_ = 0;
+	int accTempo_ = 0, accSwing_ = 0, accScale_[8] = {};
+	uint8_t sentColor_[kTracks] = {255, 255, 255, 255, 255, 255, 255, 255}; // what the Push's palette has; 255: none
 	int64_t taps_[5] = {};
 	int nTaps_ = 0;
 };

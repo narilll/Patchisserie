@@ -232,6 +232,21 @@ inline int diff(const Leds& want, Leds& sent, bool all, uint8_t (*out)[3], int m
 	return n;
 }
 
+// ---- Color palette ("RGB LED Color Processing": Set LED Color Palette Entry 0x03, Reapply Color Palette 0x05)
+
+inline constexpr uint8_t kReapplyPalette[] = {0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x05, 0xF7};
+
+/** The SysEx that sets palette entry `i` (0..127) to r, g, b and white w (0..255 each; w is the white LEDs' level for
+ * the same index). Each value goes out as its low 7 bits, then its high bit. */
+inline void paletteEntry(uint8_t i, uint8_t r, uint8_t g, uint8_t b, uint8_t w, uint8_t out[17]) {
+	const uint8_t head[] = {0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x03, i};
+	std::memcpy(out, head, sizeof head);
+	const uint8_t v[4] = {r, g, b, w};
+	for (int k = 0; k < 4; k++)
+		out[8 + 2 * k] = v[k] & 0x7F, out[9 + 2 * k] = v[k] >> 7;
+	out[16] = 0xF7;
+}
+
 // ---- Display frame ("Pixel Data", "Pixel Color Encoding", "XORing Pixel Data")
 
 /** `rgba`: kWidth*kHeight RGBA8, bottom row first (glReadPixels). `frame`: kFrameBytes, top row first, each pixel 16

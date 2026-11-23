@@ -585,17 +585,25 @@ int main() {
 		for (int i = 0; i < tart::kTracks; i++)
 			std::snprintf(view->s.track[i].name, tart::kNameBytes, "Track %d", i + 1),
 				view->s.track[i].color = (uint8_t)i;
-		if (sans < 0 || mono < 0 || !screen.begin(vg)) {
-			why = "no fonts or no framebuffer";
+		if (sans < 0 || mono < 0) {
+			why = "no fonts";
 		} else {
-			tart::paint(vg, *view, sans, mono, "no display | in - | out -", nullptr);
-			screen.end(vg, rgba.data());
-			size_t lit = 0;
-			for (size_t i = 0; i < rgba.size(); i += 4)
-				lit += rgba[i] || rgba[i + 1] || rgba[i + 2];
-			GLenum error = glGetError();
-			std::printf("  %.1f %% lit\n", 100.0 * lit / ((double)rgba.size() / 4));
-			why = error ? "GL error " + std::to_string(error) : lit < 1000 ? "nothing drawn" : "";
+			for (uint8_t id : {tart::kHome, tart::kScaleScreen}) { // the Home screen, then the Scale screen
+				view->s.ui.screen = id, view->s.scale.scale = 20;
+				if (!screen.begin(vg)) {
+					why = "no framebuffer";
+					break;
+				}
+				tart::paint(vg, *view, sans, mono, "no display | in - | out -", nullptr);
+				screen.end(vg, rgba.data());
+				size_t lit = 0;
+				for (size_t i = 0; i < rgba.size(); i += 4)
+					lit += rgba[i] || rgba[i + 1] || rgba[i + 2];
+				GLenum error = glGetError();
+				std::printf("  %.1f %% lit\n", 100.0 * lit / ((double)rgba.size() / 4));
+				if (why.empty())
+					why = error ? "GL error " + std::to_string(error) : lit < 1000 ? "nothing drawn" : "";
+			}
 		}
 		screen.destroy();
 	}
