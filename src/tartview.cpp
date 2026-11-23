@@ -146,6 +146,7 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 					  drum ? " \xC2\xB7 Drum" : "");
 		text(8, 46, buf, 18, NVG_ALIGN_LEFT, white, sans);
 		int length = v.length[ui.track][ui.scene];
+		const bool rec = ui.recTrack == ui.track && ui.recScene == ui.scene;          // a take runs here
 		const float x0 = 8, w = 944, y0 = 54, h = ui.screen == kClipScreen ? 70 : 62; // larger on the Clip screen
 		if (!length) {
 			text(480, 96, "Empty slot", 24, NVG_ALIGN_CENTER, dim, sans);
@@ -156,7 +157,15 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 				std::snprintf(buf, sizeof buf, "%d Beats", length / kPpqn);
 			else
 				std::snprintf(buf, sizeof buf, length == kBar ? "1 Bar" : "%d Bars", length / kBar);
-			text(952, 46, buf, 18, NVG_ALIGN_RIGHT, dim, sans);
+			const NVGcolor red = nvgRGB(0xff, 0x30, 0x30);
+			if (rec && ui.recOpen) { // the length is not known yet
+				text(952, 46, "Recording", 18, NVG_ALIGN_RIGHT, red, sans);
+			} else {
+				text(952, 46, buf, 18, NVG_ALIGN_RIGHT, dim, sans);
+				if (rec)
+					text(942 - nvgTextBounds(vg, 0, 0, buf, nullptr, nullptr), 46, "REC", 18, NVG_ALIGN_RIGHT, red,
+						 sans);
+			}
 			rect(x0, y0, w, h, nvgRGB(0x20, 0x22, 0x26));
 			int lo = 127, hi = 0;
 			for (int i = 0; i < v.nNotes; i++)

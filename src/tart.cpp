@@ -126,6 +126,20 @@ int64_t launchAt(const Transport& t) {
 	return q ? (t.tick / q + 1) * q : t.tick + 1;
 }
 
+/** Where an open take ends if it ends now: the next whole unit (the launch quantization, at least a beat) counted from
+ * the clip's start, at most kMaxLength long. */
+int64_t takeEnd(const Session& s, const Track& tr) {
+	int64_t unit = std::max(kQuant[s.transport.quant], kPpqn);
+	int64_t elapsed = std::max<int64_t>(s.transport.tick - tr.startTick, 0);
+	return tr.startTick + std::min((elapsed / unit + 1) * unit, (int64_t)kMaxLength);
+}
+
+/** What a sounding pad or the playhead is lit with: green, red while a take records on the selected track (the
+ * playhead: in the selected slot). */
+uint8_t hot(const Ui& u, bool head = false) {
+	return u.recTrack == u.track && (!head || u.recScene == u.scene) ? push2::kRed : push2::kGreen;
+}
+
 /** Whole detents of an encoder: `delta` raw units added to the remainder `acc`, `units` per detent. */
 int steps(int& acc, int delta, int units) {
 	acc += delta;
@@ -272,6 +286,7 @@ void sanitize(State& st) {
 	std::fill(u.button, u.button + 128, false);
 	u.touched = 0, u.popup = kNoPopup, u.popupAt = u.now = 0, u.screenAt = u.padsAt = -1;
 	u.prevPads = kSession, u.dup = -1, u.browse = 0;
+	u.recTrack = -1, u.recScene = 0, u.recFresh = u.recOpen = false, u.recEnd = -1;
 	for (auto& row : st.clip)
 		for (Clip& c : row) { // `playing` is transient, so a clip needs no more than sorted notes of sound values
 			c.length = std::min<uint16_t>(c.length, kMaxLength);
@@ -420,6 +435,8 @@ void Machine::handle(State& st, const push2::Event& e) {
 			bool redo = ui.button[push2::cc::Shift];
 			if (undo(st, redo))
 				show(redo ? kRedoPopup : kUndoPopup);
+		} else if (e.index == push2::cc::Record) {
+			record(st);
 		} else if (e.index == push2::cc::Note || e.index == push2::cc::Session) {
 			ui.prevPads = ui.pads, ui.pads = e.index == push2::cc::Note ? kNote : kSession;
 			ui.padsAt = ui.now, ui.heldStep = -1;
@@ -449,7 +466,8 @@ void Machine::handle(State& st, const push2::Event& e) {
 			int v = e.index == push2::cc::Up ? -1 : e.index == push2::cc::Down ? 1 : 0;
 			select(ui, std::min(std::max(ui.track + d, 0), kTracks - 1),
 				   std::min(std::max(ui.scene + v, 0), kScenes - 1));
-		} else if (e.index == push2::cc::New) { // stops the track and moves to the next empty slot
+		} else if (e.index == push2::cc::New) { // ends a take, stops the track and moves to the next empty slot
+			endTake();
 			stopTrack(s, ui.track, false);
 			int sc = ui.scene;
 			while (sc < kScenes && st.clip[ui.track][sc].length)
@@ -539,7 +557,7 @@ void Machine::handle(State& st, const push2::Event& e) {
 void Machine::setLength(State& st, int ticks) {
 	Ui& ui = st.s.ui;
 	Clip& c = st.clip[ui.track][ui.scene];
-	if (!c.length)
+	if (!c.length || (ui.recOpen && ui.recTrack == ui.track && ui.recScene == ui.scene)) // an open take sets it
 		return;
 	checkpoint(ui.track, ui.scene);
 	int old = c.length;
@@ -557,8 +575,12 @@ void Machine::setLength(State& st, int ticks) {
 void Machine::pad(State& st, int i, int vel) {
 	Session& s = st.s;
 	Live& l = live_[i];
-	if (l.id)
-		voice_[l.track].noteOff(l.id), l = Live();
+	if (l.id) {
+		voice_[l.track].noteOff(l.id);
+		if (l.rec >= 0)
+			recordNote(st, i);
+		l = Live();
+	}
 	s.ui.pad[i] = 0;
 	if (s.ui.pads == kSession) {
 		if (vel)
@@ -584,8 +606,13 @@ void Machine::pad(State& st, int i, int vel) {
 /** Starts the note of pad `i` on the selected track. A drum track plays it on the voice channel of its lane. */
 void Machine::play(Session& s, int i, int pitch, int vel) {
 	Live& l = live_[i];
-	l = {++nextId_, s.ui.track, (uint8_t)pitch};
+	l = {++nextId_, s.ui.track, (uint8_t)pitch, (uint8_t)vel};
 	s.ui.pad[i] = (uint8_t)vel;
+	const Ui& u = s.ui;
+	int length = state_->clip[l.track][u.recScene].length;
+	if (u.recTrack == l.track && s.track[l.track].playing == u.recScene && length)
+		l.rec = u.recScene, l.at = atTicks_,
+		l.pos = (uint16_t)(std::max<int64_t>(atTicks_ - s.track[l.track].startTick, 0) % length);
 	int midichan = s.track[l.track].type == Drum ? pitch - kDrumNote + 1 : 0;
 	voice_[l.track].noteOn(l.id, (float)pitch, (float)vel / 127.f, midichan);
 }
@@ -646,6 +673,8 @@ void Machine::loopPad(State& st, int i, int vel) {
 
 /** Starts the clip of `scene` on `track` at the launch quantization, at once when the transport is stopped. */
 void Machine::launch(Session& s, int track, int scene) {
+	if (s.ui.recTrack == track)
+		endTake();
 	Track& tr = s.track[track];
 	if (!clock_.started()) {
 		tr.playing = (int8_t)scene, tr.queued = kNone, tr.startTick = 0;
@@ -658,6 +687,8 @@ void Machine::launch(Session& s, int track, int scene) {
 /** Stops the track's clip at the launch quantization (at once when `now` or the transport is stopped) and cancels a
  * launch that is waiting. */
 void Machine::stopTrack(Session& s, int track, bool now) {
+	if (s.ui.recTrack == track)
+		endTake();
 	Track& tr = s.track[track];
 	if (!now && clock_.started()) {
 		if (tr.playing != kNone || tr.queued != kNone)
@@ -689,6 +720,8 @@ void Machine::vacate(State& st, int track, int scene) {
 
 /** Empties a slot. */
 void Machine::clear(State& st, int track, int scene) {
+	if (st.s.ui.recTrack == track && st.s.ui.recScene == scene)
+		endTake(true);
 	if (st.clip[track][scene].length)
 		checkpoint(track, scene);
 	vacate(st, track, scene);
@@ -698,6 +731,8 @@ void Machine::clear(State& st, int track, int scene) {
 /** Copies a slot (an empty one empties the destination). */
 void Machine::copy(State& st, int track, int scene, int toTrack, int toScene) {
 	if (st.clip[track][scene].length) {
+		if (st.s.ui.recTrack == toTrack && st.s.ui.recScene == toScene)
+			endTake(true);
 		checkpoint(toTrack, toScene);
 		st.clip[toTrack][toScene] = st.clip[track][scene];
 	} else
@@ -858,6 +893,9 @@ static void sessionLeds(const State& st, push2::Leds& out) {
 												   : push2::Led{(uint8_t)(kPaletteDim + t), push2::kPulseHalf, full};
 				if (tr.queued == sc)
 					led = {push2::kGreen, push2::kBlinkQuarter, full};
+				if (s.ui.recTrack == t && s.ui.recScene == sc) // the take: red
+					led = tr.playing == sc ? push2::Led{push2::kRed, push2::kPulseHalf, full}
+										   : push2::Led{push2::kBlack, push2::kBlinkQuarter, push2::kRed};
 			}
 			out.note[push2::padNote(7 - sc, t)] = led;
 			clips |= st.clip[t][sc].length != 0, queued |= tr.queued == sc;
@@ -919,7 +957,7 @@ static void seqLeds(const State& st, push2::Leds& out) {
 						: vel[row][col] < 64 ? (uint8_t)(kPaletteDim + u.track)
 											 : (uint8_t)(kPaletteFull + u.track);
 			} else {
-				color = step == head   ? push2::kGreen
+				color = step == head   ? hot(u, true)
 						: root[row]    ? push2::kRgbWhite
 						: inScale[row] ? push2::kRgbDarkGray
 									   : push2::kBlack;
@@ -950,7 +988,7 @@ static void drumLeds(const State& st, const filo::VoiceAllocator& voice, push2::
 			vel[step] = n.vel;
 	}
 	for (int lane = 0; lane < kLanes; lane++)
-		out.note[push2::padNote(lane / 4, lane % 4)] = {voice.gate(lane)  ? push2::kGreen
+		out.note[push2::padNote(lane / 4, lane % 4)] = {voice.gate(lane)  ? hot(u)
 														: lane == tr.lane ? push2::kRgbWhite
 														: has[lane]       ? (uint8_t)(kPaletteFull + u.track)
 																		  : (uint8_t)(kPaletteDim + u.track),
@@ -966,7 +1004,7 @@ static void drumLeds(const State& st, const filo::VoiceAllocator& voice, push2::
 		else if (pad == u.heldStep)
 			color = push2::kRgbWhite;
 		else if (pos >= 0 && pos / grid == step)
-			color = push2::kGreen;
+			color = hot(u, true);
 		else if (vel[k])
 			color = vel[k] < 64 ? (uint8_t)(kPaletteDim + u.track) : (uint8_t)(kPaletteFull + u.track);
 		out.note[push2::padNote(pad / 8, pad % 8)] = {color, push2::kStatic};
@@ -976,7 +1014,7 @@ static void drumLeds(const State& st, const filo::VoiceAllocator& voice, push2::
 		for (int col = 4; col < 8; col++) {
 			int p = loopIndex(s, row * 8 + col);
 			bool inside = p * len < c.length, viewed = p * len < (u.page + 1) * page && (p + 1) * len > u.page * page;
-			out.note[push2::padNote(row, col)] = {pos >= 0 && pos / len == p ? push2::kGreen
+			out.note[push2::padNote(row, col)] = {pos >= 0 && pos / len == p ? hot(u, true)
 												  : inside && viewed         ? push2::kRgbWhite
 												  : inside                   ? push2::kRgbLightGray
 																			 : push2::kBlack,
@@ -1006,6 +1044,13 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 	white(push2::cc::FixedLength, u.fixedOn || u.button[push2::cc::FixedLength]);
 	if (u.button[push2::cc::Undo] || (u.button[Shift] ? undoTop_ != undoEnd_ : undoTop_ != undoBottom_))
 		white(push2::cc::Undo, u.button[push2::cc::Undo]); // dim: there is something to undo (Shift: to redo)
+	if (u.recTrack >= 0) {                                 // a take: red, blinking while it waits to start or to stop
+		bool waiting = s.track[u.recTrack].playing != u.recScene || u.recEnd >= 0;
+		out.cc[push2::cc::Record] = waiting ? push2::Led{push2::kBlack, push2::kBlinkHalf, push2::kRed}
+											: push2::Led{push2::kRed, push2::kStatic};
+	} else {
+		white(push2::cc::Record, u.button[push2::cc::Record]);
+	}
 	white(push2::cc::Browse, u.screen == kBrowseScreen || u.button[push2::cc::Browse]);
 	if (u.screen == kBrowseScreen) { // LOAD and CLOSE; the other buttons stay dark
 		out.cc[push2::cc::Track8Below] = out.cc[push2::cc::Track1Above] = {push2::kRgbWhite, push2::kStatic};
@@ -1062,7 +1107,7 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 			int p = padPitch(s.scale, tr.octave, row, col, root, inScale);
 			if (p < 0)
 				continue; // above 127: dark and silent
-			uint8_t c = held[p]   ? push2::kGreen
+			uint8_t c = held[p]   ? hot(u)
 						: root    ? (uint8_t)(kPaletteFull + u.track)
 						: inScale ? push2::kRgbWhite
 								  : push2::kBlack;
@@ -1074,6 +1119,13 @@ void Machine::leds(const State& st, push2::Leds& out) const {
  * that ends on the tick another starts is released first, so the voice retriggers. */
 void Machine::tick(State& st, int64_t k, Outputs& out) {
 	Session& s = st.s;
+	Ui& u = s.ui;
+	if (u.recOpen && u.recTrack >= 0 &&
+		s.track[u.recTrack].playing == u.recScene) { // an open take ends, or hits 32 bars
+		int64_t end = u.recEnd >= 0 ? u.recEnd : s.track[u.recTrack].startTick + kMaxLength;
+		if (k >= end)
+			u.recEnd = end, endTake();
+	}
 	for (int t = 0; t < kTracks; t++) {
 		Track& tr = s.track[t];
 		filo::VoiceAllocator& v = voice_[t];
@@ -1122,9 +1174,81 @@ void Machine::tick(State& st, int64_t k, Outputs& out) {
 		out.metro = true, out.metroV = k % kBar == 0 ? 10.f : 5.f;
 }
 
+/** RECORD: starts a take on the selected slot, or ends the one that is running. A slot without a clip gets one first:
+ * of the Fixed Length when that is on, else an open one (kMaxLength until the take ends). The clip is launched when it
+ * isn't playing (at once when the transport is stopped, which then starts), and Fixed Length or not, the take
+ * overdubs every pass until RECORD. An open take ends at the next whole unit from its start (see takeEnd). */
+void Machine::record(State& st) {
+	Session& s = st.s;
+	Ui& ui = s.ui;
+	if (ui.recTrack >= 0) {
+		const Track& tr = s.track[ui.recTrack];
+		if (!ui.recOpen || tr.playing != ui.recScene)
+			endTake();
+		else if (ui.recEnd < 0)
+			ui.recEnd = takeEnd(s, tr);
+		return;
+	}
+	int t = ui.track, sc = ui.scene;
+	Clip& c = st.clip[t][sc];
+	checkpoint(t, sc); // the take is one step: no more for this slot until it ends
+	bool fresh = !c.length;
+	if (fresh)
+		c.length = (uint16_t)(ui.fixedOn ? kPpqn << ui.fixedBars : kMaxLength);
+	if (s.track[t].playing != sc && s.track[t].queued != sc) {
+		launch(s, t, sc);
+		if (!clock_.started())
+			request_ = Request::Play;
+	}
+	ui.recTrack = (int8_t)t, ui.recScene = (int8_t)sc, ui.recFresh = fresh, ui.recOpen = fresh && !ui.fixedOn;
+	ui.recEnd = -1;
+}
+
+/** Ends the take, whichever way: RECORD, NEW, Stop, a launch or a stop of its track, Delete or a copy over its slot,
+ * Undo, or 32 bars. An open length becomes what the take has run (a take that never began leaves no clip behind), and
+ * a launch that was waiting for it is dropped. A pad that is still held is recorded when it is let go, unless
+ * `discard`. */
+void Machine::endTake(bool discard) {
+	State& st = *state_; // every caller runs under the lock on this state
+	Ui& u = st.s.ui;
+	if (u.recTrack < 0)
+		return;
+	Track& tr = st.s.track[u.recTrack];
+	Clip& c = st.clip[u.recTrack][u.recScene];
+	if (tr.playing != u.recScene) {
+		if (tr.queued == u.recScene)
+			tr.queued = kNone;
+		if (u.recFresh)
+			std::memset(&c, 0, sizeof(Clip));
+	} else if (u.recOpen) {
+		c.length = (uint16_t)((u.recEnd >= 0 ? u.recEnd : takeEnd(st.s, tr)) - tr.startTick);
+	}
+	if (discard)
+		for (Live& l : live_)
+			l.rec = -1;
+	u.recTrack = -1, u.recFresh = u.recOpen = false, u.recEnd = -1;
+}
+
+/** A pad that was recorded is let go: its note goes into the clip of the take, from where it began to now (at least a
+ * tick, at most the clip). A full clip says so. */
+void Machine::recordNote(State& st, int pad) {
+	const Live& l = live_[pad];
+	Clip& c = st.clip[l.track][l.rec];
+	if (l.pos >= c.length)
+		return;
+	if (c.nNotes >= kMaxNotes) {
+		st.s.ui.popup = kClipFullPopup, st.s.ui.popupAt = st.s.ui.now;
+		return;
+	}
+	int len = (int)std::min<int64_t>(std::max<int64_t>(atTicks_ - l.at, 1), c.length);
+	insertNote(c, {l.pos, (uint16_t)len, l.pitch, l.vel}); // the same tick and pitch as a note there: left as it was
+}
+
 /** Keeps the slot's clip as it is now, before an edit. One entry for a slot and a gesture (hold + encoder turns); a new
  * one drops the redo entries, and a full ring its oldest. */
 void Machine::checkpoint(int track, int scene) {
+	if (track == state_->s.ui.recTrack && scene == state_->s.ui.recScene)
+		return; // the take's own step covers it
 	if (undoTop_ != undoBottom_) {
 		const Snapshot& top = undo_[(undoTop_ - 1) % kUndo];
 		if (top.step == gesture_ && top.track == track && top.scene == scene)
@@ -1143,6 +1267,7 @@ void Machine::checkpoint(int track, int scene) {
 bool Machine::undo(State& st, bool redo) {
 	if (redo ? undoTop_ == undoEnd_ : undoTop_ == undoBottom_)
 		return false;
+	endTake(true); // the history is about to change under it
 	Ui& ui = st.s.ui;
 	uint32_t step = undo_[(redo ? undoTop_ : undoTop_ - 1) % kUndo].step;
 	while (redo ? undoTop_ != undoEnd_ : undoTop_ != undoBottom_) {
@@ -1197,6 +1322,7 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 	// External: no epsilon, the PLL holds just below the next pulse and an epsilon would fire ticks early.
 	double at = clock_.cycle() + (in.clockConnected ? 0 : kEps);
 	int64_t due = (int64_t)std::floor(at * kPpqn);
+	atTicks_ = std::max<int64_t>((int64_t)std::llround(at * kPpqn), 0);
 	if (in.nEvents || in.leds || (clock_.started() && nextTick_ <= due))
 		sync_ = true;
 

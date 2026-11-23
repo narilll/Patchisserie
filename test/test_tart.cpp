@@ -420,7 +420,7 @@ TEST(tart_machine_threads) {
 		tart::Inputs in;
 		tart::Outputs out;
 		push2::Leds want;
-		push2::Event ev[13];
+		push2::Event ev[15];
 		ev[0] = dec({0xB0, push2::cc::kTempo, 1});
 		ev[1] = dec({0xB0, push2::cc::Metronome, 127});
 		ev[2] = dec({0x90, 36, 100}); // a pad and the touch strip
@@ -434,10 +434,12 @@ TEST(tart_machine_threads) {
 		ev[10] = dec({0xB0, push2::cc::Undo, 127});
 		ev[11] = dec({0xB0, push2::cc::Undo, 0});
 		ev[12] = dec({0xB0, push2::cc::Shift, 0});
+		ev[13] = dec({0xB0, push2::cc::Record, 127}); // a take on whichever slot is selected, pads recorded in it
+		ev[14] = dec({0xB0, push2::cc::Record, 0});
 		tart::SliceFrame frame;
 		in.play = true;
 		for (int i = 0; i < 20000; i++) {
-			in.events = ev, in.nEvents = i % 7 == 0 ? 13 : 0, in.frame = i;
+			in.events = ev, in.nEvents = i % 7 == 0 ? 15 : 0, in.frame = i;
 			m.process(in, out, want, &frame);
 			in.play = false;
 		}
@@ -2455,4 +2457,444 @@ TEST(undo_clip_mode_length) {
 	CHECK(r.view().length[0][0] == tart::kBar);
 	undoClick(r, true);
 	CHECK(r.view().length[0][0] == 672);
+}
+
+// ---- Recording (RECORD, CC 86)
+
+namespace {
+
+/** Runs until the clock has played tick `tick`: the next sample is within a few hundredths of a tick of it. */
+void runTo(Rig& r, int64_t tick) {
+	while (r.view().s.transport.tick < tick)
+		r.run_(10);
+}
+
+/** The notes of the selected clip. */
+std::vector<tart::Note> notesOf(Rig& r) {
+	tart::View v = r.view();
+	return std::vector<tart::Note>(v.notes, v.notes + v.nNotes);
+}
+
+/** The pad at (0, 0) of Note mode (pitch 36) held from tick `from` to tick `to`. */
+void hold(Rig& r, int64_t from, int64_t to, int col = 0, int vel = 100) {
+	runTo(r, from);
+	r.pad(0, col, vel);
+	runTo(r, to);
+	r.pad(0, col, 0);
+}
+
+/** A take on the empty slot 1/1 (open length, 1 Bar quantization) that has run to tick 100 with one note. */
+void openTake(Rig& r) {
+	r.click(push2::cc::Record);
+	hold(r, 24, 48);
+	runTo(r, 100);
+}
+
+} // namespace
+
+TEST(record_new_clip) {
+	Rig r;
+	r.click(push2::cc::Record); // the transport is stopped: it starts, the clip launches at once
+	auto v = r.view();
+	CHECK(v.s.ui.recTrack == 0 && v.s.ui.recScene == 0 && v.s.ui.recOpen && v.s.track[0].playing == 0);
+	CHECK(v.length[0][0] == tart::kMaxLength);
+	r.run_(4);
+	CHECK(r.view().s.transport.playing);
+	hold(r, 24, 48);
+	runTo(r, 60);
+	r.run_(160); // 60.6 ticks: rounded to 61
+	r.pad(0, 1, 90);
+	runTo(r, 70);
+	r.pad(0, 1, 0);
+	runTo(r, 100);
+	r.click(push2::cc::Record); // ends at the next whole bar: waiting
+	v = r.view();
+	CHECK(v.s.ui.recTrack == 0 && v.s.ui.recEnd == 384 && v.length[0][0] == tart::kMaxLength);
+	runTo(r, 383);
+	CHECK(r.view().s.ui.recTrack == 0);
+	runTo(r, 384);
+	v = r.view();
+	CHECK(v.s.ui.recTrack == -1 && v.length[0][0] == 384 && v.s.track[0].playing == 0); // the clip plays on
+	CHECK(v.nNotes == 2);
+	CHECK(v.notes[0].tick == 24 && v.notes[0].len == 24 && v.notes[0].pitch == 36 && v.notes[0].vel == 100);
+	CHECK(v.notes[1].tick == 61 && v.notes[1].len == 9 && v.notes[1].pitch == 38 && v.notes[1].vel == 90);
+}
+
+TEST(record_unit_is_at_least_a_beat) {
+	Rig r;
+	setQuant(r, 0); // None: a beat
+	r.click(push2::cc::Record);
+	runTo(r, 100);
+	r.click(push2::cc::Record);
+	CHECK(r.view().s.ui.recEnd == 192);
+	runTo(r, 192);
+	CHECK(r.view().length[0][0] == 192 && r.view().s.ui.recTrack == -1);
+	Rig q;
+	setQuant(q, 1); // 8 Bars
+	q.click(push2::cc::Record);
+	runTo(q, 100);
+	q.click(push2::cc::Record);
+	CHECK(q.view().s.ui.recEnd == 3072);
+}
+
+TEST(record_overdub_wraps) {
+	Rig r;
+	fill(r, 0, 0); // a bar with a note at 0, stopped
+	r.click(push2::cc::Record);
+	auto v = r.view();
+	CHECK(v.s.ui.recTrack == 0 && !v.s.ui.recOpen && v.s.track[0].playing == 0 && v.length[0][0] == 384);
+	hold(r, 400, 410);          // 16 into the second pass
+	r.click(push2::cc::Record); // overdub ends at once
+	v = r.view();
+	CHECK(v.s.ui.recTrack == -1 && v.length[0][0] == 384 && v.s.track[0].playing == 0);
+	CHECK(v.nNotes == 2 && v.notes[0].tick == 0 && v.notes[0].pitch == 60);
+	CHECK(v.notes[1].tick == 16 && v.notes[1].len == 10 && v.notes[1].pitch == 36);
+}
+
+TEST(record_fixed_length_loops) {
+	Rig r;
+	r.m.edit([](tart::State& st) { st.s.ui.fixedOn = true, st.s.ui.fixedBars = 2; }); // 1 Bar
+	r.click(push2::cc::Record);
+	auto v = r.view();
+	CHECK(v.length[0][0] == 384 && !v.s.ui.recOpen && v.s.ui.recTrack == 0 && v.s.track[0].playing == 0);
+	hold(r, 100, 110);
+	hold(r, 384 + 200, 384 + 210, 1);     // the second pass: another pad, another place
+	hold(r, 768 + 100, 768 + 105, 0, 50); // the third: the same tick and pitch as the first, which stays
+	runTo(r, 900);
+	v = r.view();
+	CHECK(v.s.ui.recTrack == 0 && v.length[0][0] == 384 && v.nNotes == 2); // still taking
+	CHECK(v.notes[0].tick == 100 && v.notes[0].len == 10 && v.notes[0].vel == 100);
+	CHECK(v.notes[1].tick == 200 && v.notes[1].pitch == 38);
+	r.click(push2::cc::Record);
+	v = r.view();
+	CHECK(v.s.ui.recTrack == -1 && v.length[0][0] == 384 && v.s.track[0].playing == 0);
+	// Fixed Length on, but a slot with a clip: an overdub of that clip
+	Rig q;
+	q.m.edit([](tart::State& st) { st.s.ui.fixedOn = true, st.s.ui.fixedBars = 0; });
+	fill(q, 0, 0, 2);
+	q.click(push2::cc::Record);
+	CHECK(q.view().length[0][0] == 768 && !q.view().s.ui.recFresh);
+}
+
+TEST(record_waits_for_the_launch) {
+	Rig r;
+	r.press(push2::cc::Play), r.press(push2::cc::Play, 0);
+	runTo(r, 100); // running: the launch waits for the next bar
+	r.click(push2::cc::Record);
+	auto v = r.view();
+	CHECK(v.s.ui.recTrack == 0 && v.s.track[0].playing == tart::kNone && v.s.track[0].queued == 0);
+	r.in.leds = true;
+	r.step();
+	CHECK(r.want.cc[push2::cc::Record].channel == push2::kBlinkHalf &&
+		  r.want.cc[push2::cc::Record].base == push2::kRed && r.want.cc[push2::cc::Record].color == push2::kBlack);
+	hold(r, 110, 120); // not recorded: the clip has not begun
+	runTo(r, 384);
+	v = r.view();
+	CHECK(v.s.track[0].playing == 0 && v.nNotes == 0);
+	r.in.leds = true;
+	r.step();
+	CHECK(r.want.cc[push2::cc::Record].channel == 0 && r.want.cc[push2::cc::Record].color == push2::kRed);
+	hold(r, 400, 410);
+	CHECK(r.view().nNotes == 1 && r.view().notes[0].tick == 16);
+	// RECORD while waiting cancels: a clip the take made goes again
+	Rig q;
+	q.press(push2::cc::Play), q.press(push2::cc::Play, 0);
+	runTo(q, 100);
+	q.click(push2::cc::Record);
+	q.click(push2::cc::Record);
+	v = q.view();
+	CHECK(v.s.ui.recTrack == -1 && v.s.track[0].queued == tart::kNone && v.length[0][0] == 0);
+	// an existing clip: only the launch is canceled
+	fill(q, 0, 0);
+	q.click(push2::cc::Record);
+	CHECK(q.view().s.track[0].queued == 0);
+	q.click(push2::cc::Record);
+	v = q.view();
+	CHECK(v.s.ui.recTrack == -1 && v.s.track[0].queued == tart::kNone && v.length[0][0] == 384);
+}
+
+TEST(record_ended_by_new) {
+	Rig r;
+	openTake(r);
+	r.click(push2::cc::New);
+	auto v = r.view();
+	CHECK(v.s.ui.recTrack == -1 && v.length[0][0] == 384 && r.state()->clip[0][0].nNotes == 1);
+	CHECK(v.s.track[0].queued == tart::kStopQueued && v.s.ui.scene == 1);
+}
+
+TEST(record_ended_by_transport_stop) {
+	Rig r;
+	openTake(r);
+	r.click(push2::cc::Play);
+	r.run_(3);
+	auto v = r.view();
+	CHECK(!v.s.transport.playing && v.s.ui.recTrack == -1 && v.length[0][0] == 384 && v.nNotes == 1);
+	CHECK(v.s.track[0].playing == tart::kNone);
+}
+
+TEST(record_ended_by_launch) {
+	Rig r(false);
+	fill(r, 0, 1);
+	r.click(push2::cc::Note);
+	r.click(push2::cc::Record);
+	hold(r, 24, 48);
+	runTo(r, 100);
+	r.click(push2::cc::Session);
+	tapSlot(r, 0, 1); // another clip of the track
+	auto v = r.view();
+	CHECK(v.s.ui.recTrack == -1 && v.length[0][0] == 384 && v.s.track[0].queued == 1);
+	// a launch of a clip on another track does not end it
+	Rig q(false);
+	fill(q, 1, 0);
+	q.click(push2::cc::Note);
+	q.click(push2::cc::Record);
+	q.click(push2::cc::Session);
+	tapSlot(q, 1, 0);
+	CHECK(q.view().s.ui.recTrack == 0);
+	// a stop of the track ends it too
+	q.press(push2::cc::StopClip);
+	q.click(push2::cc::Track1Below);
+	q.press(push2::cc::StopClip, 0);
+	CHECK(q.view().s.ui.recTrack == -1);
+}
+
+TEST(record_ended_by_delete) {
+	Rig r(false);
+	r.click(push2::cc::Note);
+	openTake(r);
+	r.click(push2::cc::Session);
+	r.press(push2::cc::Delete);
+	tapSlot(r, 0, 0);
+	r.press(push2::cc::Delete, 0);
+	auto v = r.view();
+	CHECK(v.s.ui.recTrack == -1 && v.length[0][0] == 0 && v.s.track[0].playing == tart::kNone);
+	// a take that has not begun: its slot deleted
+	Rig q(false);
+	q.press(push2::cc::Play), q.press(push2::cc::Play, 0);
+	runTo(q, 100);
+	q.click(push2::cc::Record);
+	q.press(push2::cc::Delete);
+	tapSlot(q, 0, 0);
+	q.press(push2::cc::Delete, 0);
+	v = q.view();
+	CHECK(v.s.ui.recTrack == -1 && v.length[0][0] == 0 && v.s.track[0].queued == tart::kNone);
+	// Duplicate over the slot of a take ends it too
+	Rig d(false);
+	fill(d, 0, 0);
+	fill(d, 1, 3);
+	d.click(push2::cc::Note);
+	d.click(push2::cc::Record);
+	d.click(push2::cc::Session);
+	d.press(push2::cc::Duplicate);
+	tapSlot(d, 1, 3);
+	tapSlot(d, 0, 0);
+	d.press(push2::cc::Duplicate, 0);
+	CHECK(d.view().s.ui.recTrack == -1);
+}
+
+TEST(record_ended_by_undo) {
+	Rig r;
+	openTake(r);
+	r.click(push2::cc::Undo);
+	auto v = r.view();
+	CHECK(v.s.ui.recTrack == -1 && v.length[0][0] == 0 && v.nNotes == 0 && v.s.track[0].playing == tart::kNone);
+	// an overdub: the take's notes are undone, the clip is as it was
+	Rig q;
+	fill(q, 0, 0);
+	q.click(push2::cc::Record);
+	hold(q, 100, 110);
+	CHECK(q.view().nNotes == 2);
+	q.click(push2::cc::Undo);
+	v = q.view();
+	CHECK(v.s.ui.recTrack == -1 && v.nNotes == 1 && v.notes[0].pitch == 60 && v.s.track[0].playing == 0);
+}
+
+TEST(record_caps_32_bars) {
+	Rig r;
+	r.m.edit([](tart::State& st) { st.s.transport.bpm = 300; });
+	r.click(push2::cc::Record);
+	hold(r, 12000, 12100);
+	runTo(r, 12287);
+	CHECK(r.view().s.ui.recTrack == 0);
+	runTo(r, 12288);
+	auto v = r.view();
+	CHECK(v.s.ui.recTrack == -1 && v.length[0][0] == tart::kMaxLength && v.s.track[0].playing == 0);
+	CHECK(v.nNotes == 1 && v.notes[0].tick == 12000);
+	// RECORD late in the last bar: the end is capped at 32 bars
+	Rig q;
+	q.m.edit([](tart::State& st) {
+		st.s.transport.bpm = 300;
+		st.s.transport.quant = 1;
+	});
+	q.click(push2::cc::Record);
+	runTo(q, 3100);
+	q.click(push2::cc::Record);
+	CHECK(q.view().s.ui.recEnd == 6144);
+}
+
+TEST(record_take_is_one_undo) {
+	Rig r;
+	fill(r, 0, 0);
+	r.click(push2::cc::Record);
+	hold(r, 50, 60), hold(r, 100, 110, 1), hold(r, 150, 160, 2);
+	r.click(push2::cc::Record);
+	CHECK(r.view().nNotes == 4);
+	undoClick(r);
+	CHECK(r.view().nNotes == 1);
+	undoClick(r, true);
+	CHECK(r.view().nNotes == 4);
+	// an open take on an empty slot: one undo takes the clip away
+	Rig q;
+	openTake(q);
+	q.click(push2::cc::Record);
+	runTo(q, 384);
+	CHECK(q.view().length[0][0] == 384);
+	undoClick(q);
+	CHECK(q.view().length[0][0] == 0 && q.view().s.track[0].playing == tart::kNone);
+	undoClick(q, true);
+	CHECK(q.view().length[0][0] == 384 && q.view().nNotes == 1);
+}
+
+TEST(record_held_pad_across_the_end) {
+	// a pad still held when the take ends is recorded when you let go, with its real length
+	Rig r;
+	fill(r, 0, 0);
+	r.click(push2::cc::Record);
+	runTo(r, 50);
+	r.pad(0, 1, 100);
+	runTo(r, 60);
+	r.click(push2::cc::Record);
+	CHECK(r.view().s.ui.recTrack == -1);
+	runTo(r, 80);
+	r.pad(0, 1, 0);
+	auto n = notesOf(r);
+	CHECK(n.size() == 2 && n[1].tick == 50 && n[1].len == 30 && n[1].pitch == 38);
+	// Undo ends the take and throws such a note away
+	Rig q;
+	fill(q, 0, 0);
+	q.click(push2::cc::Record);
+	runTo(q, 50);
+	q.pad(0, 1, 100);
+	q.click(push2::cc::Undo);
+	runTo(q, 80);
+	q.pad(0, 1, 0);
+	CHECK(q.view().nNotes == 1);
+	// an open take: the held pad of the end is inside the clip it made
+	Rig o;
+	o.click(push2::cc::Record);
+	runTo(o, 30);
+	o.pad(0, 0, 100);
+	o.click(push2::cc::Record);
+	runTo(o, 384);
+	CHECK(o.view().length[0][0] == 384);
+	runTo(o, 400);
+	o.pad(0, 0, 0);
+	auto m = notesOf(o);
+	CHECK(m.size() == 1 && m[0].tick == 30 && m[0].len == 370);
+}
+
+TEST(record_only_the_takes_track) {
+	Rig r;
+	r.click(push2::cc::Record);
+	r.click(push2::cc::Track1Below + 1); // another track is selected: its pads are not recorded
+	hold(r, 24, 48);
+	CHECK(r.view().nNotes == 0 && r.view().s.ui.recTrack == 0);
+	r.click(push2::cc::Track1Below); // back
+	r.pad(0, 0, 100);
+	r.click(push2::cc::Track1Below + 1); // selected away while held: still recorded when let go
+	runTo(r, 70);
+	r.pad(0, 0, 0);
+	r.click(push2::cc::Track1Below);
+	CHECK(r.view().nNotes == 1);
+	r.click(push2::cc::Layout); // the sequencer's pads are steps, not played
+	r.tap(0, 0);
+	CHECK(r.view().nNotes == 2);
+	CHECK(r.state()->clip[1][0].length == 0);
+}
+
+TEST(record_drum_lane) {
+	Rig r;
+	drumTrack(r);
+	r.click(push2::cc::Record);
+	runTo(r, 48);
+	r.pad(1, 1, 90); // lane 5: note 41
+	runTo(r, 72);
+	r.pad(1, 1, 0);
+	r.press(push2::cc::Select); // selects the lane without playing it
+	r.tap(0, 3);
+	r.press(push2::cc::Select, 0);
+	dstep(r, 3), dstep(r, 3, 0); // a step of the selected lane 4 is edited, not played (and it joins the take's clip)
+	auto n = notesOf(r);
+	CHECK(n.size() == 2);
+	CHECK(n[0].tick == 48 && n[0].len == 24 && n[0].pitch == 41 && n[0].vel == 90);
+	CHECK(n[1].tick == 72 && n[1].pitch == 39);
+	r.click(push2::cc::Record);
+	runTo(r, 384);
+	CHECK(r.view().length[0][0] == 384 && r.view().s.ui.recTrack == -1);
+}
+
+TEST(record_clip_full) {
+	Rig r;
+	r.m.edit([](tart::State& st) {
+		tart::Clip& c = st.clip[0][0];
+		c.length = 32 * tart::kBar;
+		for (int i = 0; i < tart::kMaxNotes; i++)
+			c.notes[c.nNotes++] = {(uint16_t)(i * 3), 1, 100, 100};
+	});
+	r.click(push2::cc::Record);
+	hold(r, 24, 48);
+	auto v = r.view();
+	CHECK(v.nNotes == tart::kMaxNotes && v.s.ui.popup == tart::kClipFullPopup);
+}
+
+TEST(record_leds) {
+	Rig r;
+	auto leds = [&]() {
+		r.in.leds = true;
+		r.step();
+	};
+	leds();
+	CHECK(r.want.cc[push2::cc::Record].color == push2::kWhiteDark && r.want.cc[push2::cc::Record].channel == 0);
+	drumTrack(r);
+	r.click(push2::cc::Record);
+	runTo(r, 10);
+	leds();
+	CHECK(r.want.cc[push2::cc::Record].color == push2::kRed && r.want.cc[push2::cc::Record].channel == 0);
+	// a pressed lane pad and the playhead are red during the take, green outside it
+	r.pad(0, 0, 100);
+	leds();
+	CHECK(r.want.note[push2::padNote(0, 0)].color == push2::kRed);
+	CHECK(r.want.note[push2::padNote(7, 0)].color == push2::kRed); // the playhead on step 1 of the page
+	r.pad(0, 0, 0);
+	r.click(push2::cc::Session);
+	leds();
+	auto pad = r.want.note[push2::padNote(7, 0)];
+	CHECK(pad.channel == push2::kPulseHalf && pad.color == push2::kRed && pad.base == tart::kPaletteFull);
+	// waiting to end: the button blinks
+	r.click(push2::cc::Record);
+	leds();
+	CHECK(r.want.cc[push2::cc::Record].channel == push2::kBlinkHalf);
+	runTo(r, 384);
+	r.click(push2::cc::Note);
+	r.pad(0, 0, 100);
+	leds();
+	CHECK(r.want.note[push2::padNote(0, 0)].color == push2::kGreen);
+	CHECK(r.want.cc[push2::cc::Record].color == push2::kWhiteDark);
+	r.pad(0, 0, 0);
+	// a queued take: the pad blinks red and black
+	Rig q(false);
+	q.press(push2::cc::Play), q.press(push2::cc::Play, 0);
+	runTo(q, 100);
+	q.click(push2::cc::Record);
+	q.in.leds = true;
+	q.step();
+	pad = q.want.note[push2::padNote(7, 0)];
+	CHECK(pad.channel == push2::kBlinkQuarter && pad.color == push2::kBlack && pad.base == push2::kRed);
+}
+
+TEST(record_state_is_transient) {
+	auto st = std::make_unique<tart::State>();
+	st->s.ui.recTrack = 3, st->s.ui.recOpen = st->s.ui.recFresh = true, st->s.ui.recEnd = 99;
+	tart::sanitize(*st);
+	CHECK(st->s.ui.recTrack == -1 && !st->s.ui.recOpen && !st->s.ui.recFresh && st->s.ui.recEnd == -1);
 }

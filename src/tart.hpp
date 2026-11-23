@@ -98,6 +98,11 @@ struct Ui {
 	uint8_t prevPads = kSession; // the mode before that press
 	int8_t dup = -1;             // Duplicate held: the slot to copy (track * 8 + scene), -1: none yet
 	uint8_t browse = 0;          // the Browse screen's cursor (a type)
+	// The take (RECORD): its slot (recTrack -1: none), whether the clip was made by it, whether its length is open
+	// (kMaxLength until it ends) and the tick at which an open take ends once RECORD is pressed again (-1: not yet).
+	int8_t recTrack = -1, recScene = 0;
+	bool recFresh = false, recOpen = false;
+	int64_t recEnd = -1;
 };
 
 struct Session {
@@ -238,6 +243,9 @@ class Machine {
 	void setLength(State& st, int ticks);
 	void tick(State& st, int64_t k, Outputs& out);
 	void checkpoint(int track, int scene);
+	void record(State& st);
+	void endTake(bool discard = false);
+	void recordNote(State& st, int pad);
 	bool undo(State& st, bool redo);
 
 	// ponytail: one lock, as lattice::Machine; the audio side only try-locks and never waits.
@@ -263,7 +271,10 @@ class Machine {
 	filo::VoiceAllocator voice_[kTracks];
 	struct Live {
 		uint32_t id = 0; // 0: the pad isn't sounding
-		uint8_t track = 0, pitch = 0;
+		uint8_t track = 0, pitch = 0, vel = 0;
+		int8_t rec = -1;  // the scene of the take it is recorded into (-1: not recorded)
+		uint16_t pos = 0; // where in that clip it started
+		int64_t at = 0;   // the tick it started at
 	};
 	Live live_[64]; // the note each held pad started, on the track that was selected then
 	// The notes the clips have started and when they end (tick), per track. ponytail: a track that has 64 notes
@@ -284,7 +295,7 @@ class Machine {
 	uint32_t rgb_[kTracks] = {};
 	float bend_ = 0; // V
 	float sr_ = 48000, bpm_ = 120, cps_ = 0, freePhase_ = 0;
-	int64_t nextTick_ = 0, frame_ = 0;
+	int64_t nextTick_ = 0, frame_ = 0, atTicks_ = 0; // atTicks_: the clock's position now, rounded, for the pads
 	double lastAt_ = -1;
 	Request request_ = Request::None;
 	bool sync_ = true; // take the lock this sample

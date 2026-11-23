@@ -1,6 +1,6 @@
 # Tart
 
-Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad controller with 64 pads, buttons, encoders (endless knobs), a touch strip and a small color display. Tart is meant to become an 8-track Session sequencer for the Push 2. This version has a transport and clock, a Session view with 8 tracks and 8 scenes of clips, a keyboard for the 8 tracks, drum pads and a drum step sequencer for drum tracks, and a step sequencer that makes the clips. The transport starts and stops, keeps the tempo, and sends a clock, a run signal and a metronome to your patch, and you drive all of it from the Push as well as from the jacks. In Note mode you play the pads in the scale and the color of your choice, and the notes go to the tracks, which you take out of Tart with [Slice](slice.md) modules placed on its right. You make the clips in the Melodic Sequencer or, on a drum track, the Drum Sequencer, which use the pads as steps, and you start and stop them in Session mode, where the pads are a grid of clips. This manual explains how to connect the Push, what the jacks and the Push controls do, and how to read the display.
+Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad controller with 64 pads, buttons, encoders (endless knobs), a touch strip and a small color display. Tart is meant to become an 8-track Session sequencer for the Push 2. This version has a transport and clock, a Session view with 8 tracks and 8 scenes of clips, a keyboard for the 8 tracks, drum pads and a drum step sequencer for drum tracks, and a step sequencer and live recording that make the clips. The transport starts and stops, keeps the tempo, and sends a clock, a run signal and a metronome to your patch, and you drive all of it from the Push as well as from the jacks. In Note mode you play the pads in the scale and the color of your choice, and the notes go to the tracks, which you take out of Tart with [Slice](slice.md) modules placed on its right. You make the clips by recording what you play, or in the Melodic Sequencer or, on a drum track, the Drum Sequencer, which use the pads as steps, and you start and stop them in Session mode, where the pads are a grid of clips. This manual explains how to connect the Push, what the jacks and the Push controls do, and how to read the display.
 
 ## Contents
 
@@ -17,19 +17,20 @@ Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad contro
 11. [Drum tracks](#drum-tracks)
 12. [The Drum Sequencer](#the-drum-sequencer)
 13. [Fixed Length](#fixed-length)
-14. [Swing](#swing)
-15. [Scale mode](#scale-mode)
-16. [Clip mode](#clip-mode)
-17. [Undo and Redo](#undo-and-redo)
-18. [The Home screen](#the-home-screen)
-19. [The lights](#the-lights)
-20. [The Push controls](#the-push-controls)
-21. [Context menu reference](#context-menu-reference)
-22. [Display status words](#display-status-words)
-23. [More than one Tart](#more-than-one-tart)
-24. [What is saved with the patch](#what-is-saved-with-the-patch)
-25. [Limitations](#limitations)
-26. [Credits and licenses](#credits-and-licenses)
+14. [Recording](#recording)
+15. [Swing](#swing)
+16. [Scale mode](#scale-mode)
+17. [Clip mode](#clip-mode)
+18. [Undo and Redo](#undo-and-redo)
+19. [The Home screen](#the-home-screen)
+20. [The lights](#the-lights)
+21. [The Push controls](#the-push-controls)
+22. [Context menu reference](#context-menu-reference)
+23. [Display status words](#display-status-words)
+24. [More than one Tart](#more-than-one-tart)
+25. [What is saved with the patch](#what-is-saved-with-the-patch)
+26. [Limitations](#limitations)
+27. [Credits and licenses](#credits-and-licenses)
 
 ## Quick start
 
@@ -184,14 +185,14 @@ In Session mode the 64 pads are a grid of clips, as in the Session view of Ablet
 
 **Launch quantization.** The launch quantization says when a launch or a stop happens. It is set with **Launch quantization** in the context menu, and the Home screen shows it as QUANT. The choices are None, 8 Bars, 4 Bars, 2 Bars, 1 Bar, 1/2, 1/2T, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T and 1/32, where T means triplet. The default is 1 Bar. A launch happens at the next multiple of that length counted from the start of the transport, and never on the tick you pressed in. With None it happens on the next tick.
 
-**The lights.** Each pad of a clip is in the color of its track. A clip that plays pulses between that color and a dimmer one, once for every two beats. A clip that is waiting to launch blinks between green and the color of the track. When a stop is waiting, the clip that plays blinks between its color and dark. An empty slot is dark. A scene button is green when its scene has at least one clip, and dark when it has none. It blinks between green and dark while a clip of its scene is waiting to launch. With STOP CLIP held, the buttons below the display pulse red for the tracks that play a clip, and blink red for the tracks whose stop is waiting. See [The lights](#the-lights).
+**The lights.** Each pad of a clip is in the color of its track. A clip that plays pulses between that color and a dimmer one, once for every two beats. The slot of a [take](#recording) pulses between red and the color of the clip, and blinks between red and dark while the take waits to start. A clip that is waiting to launch blinks between green and the color of the track. When a stop is waiting, the clip that plays blinks between its color and dark. An empty slot is dark. A scene button is green when its scene has at least one clip, and dark when it has none. It blinks between green and dark while a clip of its scene is waiting to launch. With STOP CLIP held, the buttons below the display pulse red for the tracks that play a clip, and blink red for the tracks whose stop is waiting. See [The lights](#the-lights).
 
 **Differences from Ableton Live.**
 
 - The grid does not scroll. A Push in Live shows 8 tracks and 8 scenes at a time and scrolls over the rest.
 - DUPLICATE with a scene button copies the row over the next scene. Live inserts a new scene. NEW does not insert a scene either: it only selects an empty slot.
 - STOP CLIP alone does not stop the selected track, and holding it does not lock the stop mode on.
-- An empty slot never starts a recording.
+- Pressing an empty slot does not start a recording. You record with RECORD, see [Recording](#recording).
 - A playing clip stays pulsing in its own color. In Live's Push script a scene has no separate color while it plays.
 - SHIFT and STOP CLIP stop the tracks at the launch quantization.
 
@@ -206,6 +207,8 @@ In Note mode the 64 pads are a keyboard for the selected track. Press NOTE on th
 **Velocity.** The harder you hit a pad, the higher the VEL output of the Slice, up to 10 V. The pads do not react to the pressure after the first hit (aftertouch).
 
 **Octave.** Press OCTAVE UP or OCTAVE DOWN to move the pads of the selected track one octave (not on a [drum track](#drum-tracks)). Each button is lit only when it can move further. The octave is a setting of the track, so each track keeps its own. Pads above MIDI note 127 are dark and silent.
+
+**Recording.** Press RECORD to record what you play into the selected clip. See [Recording](#recording).
 
 **Changing the track while you play.** A pad that you still hold when you change the track keeps sounding on the track where it started, and stops there when you let go. New pads play the new track.
 
@@ -252,7 +255,7 @@ A drum track is a track whose [type](#track-types-and-browse) is Drum. It is mea
 
 **The channels.** Lane 1 is channel 1 of the Slice, lane 2 is channel 2, and lane 16 is channel 16. A drum track always has 16 channels on V/OCT, GATE and VEL, and the **Voices** setting does not matter. On GATE, a lane's channel is 10 V while its note sounds. On VEL, it is the velocity of the last note of that lane. The V/OCT output of a lane does not move: it is the pitch of the lane's MIDI note, which is 36 for lane 1, 37 for lane 2 and 51 for lane 16, so lane 1 is -2 V and lane 16 is -0.75 V. A lane is one voice, so a note that starts on a lane while its old note still sounds makes the gate drop for one sample, and starts again.
 
-**The clips.** A clip of a drum track plays on the lanes in the same way: a note with the pitch 36 plays lane 1, the pitch 37 lane 2, and so on up to 51. Notes with other pitches stay in the clip and are silent. You launch and stop the clips in [Session mode](#session-mode) as for any track. You put the notes on a drum clip with the [Drum Sequencer](#the-drum-sequencer). A drum track has no recording. A drum clip also plays the notes that it has from elsewhere, for example the notes of a melodic clip when you change the track to Drum, or the notes of a loaded patch.
+**The clips.** A clip of a drum track plays on the lanes in the same way: a note with the pitch 36 plays lane 1, the pitch 37 lane 2, and so on up to 51. Notes with other pitches stay in the clip and are silent. You launch and stop the clips in [Session mode](#session-mode) as for any track. You put the notes on a drum clip with the [Drum Sequencer](#the-drum-sequencer). You can record the lane pads into a drum clip, see [Recording](#recording). A drum clip also plays the notes that it has from elsewhere, for example the notes of a melodic clip when you change the track to Drum, or the notes of a loaded patch.
 
 **What does nothing on a drum track.** LAYOUT, OCTAVE UP, OCTAVE DOWN and the touch strip do nothing, and OCTAVE UP, OCTAVE DOWN and LAYOUT are dark. The pads do not change with the scale either. The Scale screen does not affect a drum track.
 
@@ -296,7 +299,7 @@ The lane whose steps you see is the selected lane. Press a lane pad to select an
 
 ## Fixed Length
 
-Fixed Length is the length that a new clip gets. It is a setting of the whole Tart, not of a track. It changes only clips that you make after you set it.
+Fixed Length is the length that a new clip gets, and it decides how a [recording](#recording) into an empty slot works. It is a setting of the whole Tart, not of a track. It changes only clips that you make after you set it.
 
 **Switching it on and off.** Tap FIXED LENGTH on the Push. The button is full white while Fixed Length is on and dim white while it is off. You can also hold FIXED LENGTH and press the first button above the display, which is the on and off switch.
 
@@ -315,7 +318,45 @@ Fixed Length is the length that a new clip gets. It is a setting of the whole Ta
 
 The standard is 2 Bars. The chosen button is white and the others are dark gray. A press that lasts 0.3 seconds or more, or that has chosen a length, does not also switch Fixed Length on or off when you let go.
 
-The chosen length is used for every clip that you make in the [Melodic Sequencer](#the-melodic-sequencer), whether Fixed Length is on or off, as in Ableton Live. The on and off switch changes nothing yet except its own light and the word on the display: it is there for recording, which a later version of Tart will have.
+The chosen length is used for every clip that you make in the [Melodic Sequencer](#the-melodic-sequencer) or the [Drum Sequencer](#the-drum-sequencer), whether Fixed Length is on or off, as in Ableton Live. The on and off switch matters only for recording into an empty slot. With Fixed Length on, RECORD makes a clip of the chosen length, and it loops while you record. With Fixed Length off, the clip has no length until you end the take. See [Recording](#recording). A slot that already has a clip is recorded into at its own length, whatever Fixed Length says.
+
+## Recording
+
+Press RECORD on the Push to record what you play on the pads into a clip, as in Ableton Live. A take is one recording, from the first press of RECORD to its end. A take records into the selected slot, which is the selected track and the selected scene at the moment you press RECORD. The take stays with that slot even if you select another one afterwards. Only one take can run at a time.
+
+**What is recorded.** Tart records the pads you play on the track of the take: the keyboard pads of [Note mode](#note-mode) and the lane pads of a [drum track](#drum-tracks). The pads of the sequencers are steps, not played notes, so they are not recorded as played, but a step you tap during a take is put into the clip as usual. Pads you play on another track are not recorded, and neither are touch strip bends. A note starts where you pressed the pad, rounded to the nearest tick (there are 96 ticks in a beat). Its length is the time until you let go of the pad, and at least one tick. Its velocity is the velocity of your press. The note goes into the clip when you let go of the pad, so you hear the pad while you play and the new note from the next time the clip comes round. If a note with the same pitch already starts on the same tick, the old note stays and the new one is dropped. A clip holds at most 4096 notes. When it is full, the note is not added and the display says "Clip full".
+
+**An empty slot with Fixed Length off.** The take makes a clip with an open length. It runs for as long as you record, up to 32 bars. The clip is launched like any launch: at the next point of the [launch quantization](#session-mode) while the transport is playing, and at once when the transport is stopped, which starts the transport. Until the clip starts, nothing is recorded. Press RECORD again to end the take. The take does not end at that moment but at the next whole unit counted from the start of the clip. The unit is the launch quantization, or one beat if that is shorter. With the standard 1 Bar, a take ends at the next bar line, so if you press RECORD one bar and a little later, it ends after two bars. The clip is as long as the take and goes on playing, and you can go on playing over it. While the end is waiting, RECORD blinks. If the take has not started yet, pressing RECORD cancels it, and the slot is empty again. The take also ends by itself when it reaches 32 bars, and then the clip is 32 bars long.
+
+**An empty slot with Fixed Length on.** The take makes a clip of the length chosen for [Fixed Length](#fixed-length) and launches it in the same way. The clip loops, and everything you play is added in every pass, until you press RECORD again. The take then ends at once.
+
+**A slot with a clip.** The take is an overdub: what you play is added to the clip at its own length, and the notes that are there stay. A clip that is not playing is launched first, in the same way, and recording starts when it begins. The clip loops, so a note that you play in the second pass is put at its place in the clip, not after its end. Press RECORD to end the take at once. If you want to take away a note, use a sequencer or Undo.
+
+**Other ways a take ends.** A take also ends in these cases:
+
+- You press NEW, on any track.
+- You stop the transport with PLAY or the STOP jack.
+- You launch or stop a clip on the track of the take, in any way: with a pad, a scene button, or STOP CLIP.
+- You delete the slot of the take with DELETE, or copy a clip over it with DUPLICATE.
+- You press UNDO, or SHIFT with UNDO when there is a step to do again.
+- The take reaches 32 bars (a take with an open length).
+
+When a take with an open length ends in one of these ways, other than the 32 bars, its length is rounded up in the same way as for a second press of RECORD, so the clip is at least one unit long. A take that never started, because its launch was still waiting, leaves nothing behind: a clip it made is removed, and a launch it was waiting for is canceled.
+
+**Pads you still hold.** A pad that you still hold when the take ends is recorded all the same when you let go of it, with its real length, in the clip of the take. The exceptions are the ends by UNDO, by deleting the slot and by copying over it, which throw such a note away.
+
+**Undo.** A take is one step of [Undo and Redo](#undo-and-redo), however many notes it recorded. The step is made when you press RECORD. Pressing UNDO during a take ends the take and takes it back at once.
+
+**The lights and the display.** RECORD is dim white while there is no take, red during a take, and it blinks between red and dark while the take waits to start or to end. The pad of the slot of the take in Session mode pulses between red and the color of the clip, and it blinks between red and dark while the take waits to start. During a take on the selected track, a pad that you hold, the lane that sounds on a drum track and the playhead of the sequencers are red instead of green. On the [Home screen](#the-home-screen), the red word REC is shown next to the length of the clip of the take, and for a take with an open length, which has no length yet, the word Recording is shown instead of the length.
+
+**Differences from Ableton Live.**
+
+- There is no count-in. Recording starts when the clip starts.
+- RECORD acts when you press it. Live's Capture MIDI, which keeps what you played before you pressed RECORD, is not there.
+- There is no Arrangement recording and no automation recording.
+- The rounding of the end of a take with an open length is Tart's reading of Live's behavior, which is not confirmed: it ends at the next whole unit, not at once and not at the nearest one.
+- Record Quantize and Double Loop are not there yet, so recorded notes keep the tick where you played them.
+- Notes you play a little before the clip starts are not recorded, because nothing is recorded until the clip has started.
 
 ## Swing
 
@@ -369,6 +410,7 @@ Press UNDO on the Push to take back the last change you made to a clip. Hold SHI
 
 These are the changes that Undo takes back, each as one step:
 
+- A [recording](#recording), which is one step for the whole take, however many notes it recorded.
 - Tapping a step in the [Melodic Sequencer](#the-melodic-sequencer) or the [Drum Sequencer](#the-drum-sequencer), which puts a note on it or takes it away. Making a long note. Holding a step and turning the encoders is one step, however many times you turn them. If the press also put a note on the step, that note is part of the same step. When a tap on a step made the first note of a new clip, undoing it takes the clip away again.
 - DELETE with a step, a lane pad or a loop pad of a drum track.
 - A loop pad that makes a clip, or that changes the length of a clip. Turning encoder 1 on the [Clip screen](#clip-mode) is one step for each press of CLIP.
@@ -394,6 +436,8 @@ The Push display is 960 pixels wide and 160 pixels high. The mirror on the panel
 **The middle** shows "Track 1 · Scene 1", the selected track and scene, with "· Drum" after them when the track is a [drum track](#drum-tracks). Under it is the clip in that slot. When the slot is empty, it says "Empty slot". Otherwise the length of the clip is at the right ("2 Bars", "1 Beat" and so on), and a box shows the notes of the clip over time in the color of the track, with the pitch going up. The box shows from the lowest note to the highest, and at least an octave. For a drum track it shows the pitches from 36 to 51, one row for each lane. While the clip plays, a green line moves across the box.
 
 **While you hold a step** in the Melodic Sequencer, the top row shows NUDGE (the distance from the step in ticks), LENGTH (in steps), FINE (the length in ticks) and VELOCITY of its note over the first four encoders.
+
+**While a take runs** in the selected slot, the red word REC is shown next to the length of the clip. A take with an open length has no length yet, so the red word Recording is shown instead. See [Recording](#recording).
 
 **While you hold FIXED LENGTH**, the top row shows FIXED LENGTH with On or Off, and the bottom row shows the eight [lengths](#fixed-length) instead of the track names.
 
@@ -424,6 +468,7 @@ Tart lights the Push buttons that do something in this version. All other button
 - **LAYOUT** is dim white in Note mode, and full white while the [Melodic Sequencer](#the-melodic-sequencer) is open. On a [drum track](#drum-tracks), LAYOUT, **OCTAVE UP** and **OCTAVE DOWN** are dark.
 - **UNDO** is dim white while there is a step to undo, or, while you hold SHIFT, a step to redo, and dark when there is none. It is full white while you hold it.
 - **BROWSE** is dim white, and full white while the [Browse screen](#track-types-and-browse) is open. While it is open, the last button below the display (LOAD) and the first button above it (CLOSE) are white, and the other buttons above and below the display are dark.
+- **RECORD** is dim white while there is no [take](#recording), red during a take, and blinking between red and dark while a take waits to start or to end.
 - **FIXED LENGTH** is full white while [Fixed Length](#fixed-length) is on and dim white while it is off.
 - In the Melodic Sequencer and the Drum Sequencer, **PAGE LEFT** and **PAGE RIGHT** are dim white when there is a page to go to, and the eight scene buttons show the step size. The pads are described in [The Melodic Sequencer](#the-melodic-sequencer) and [The Drum Sequencer](#the-drum-sequencer).
 - The eight buttons below the display are white for the selected track and in their own color for the others. While the Scale screen is open they are the option buttons described in [Scale mode](#scale-mode), and so are the upper buttons 2 to 7.
@@ -445,6 +490,7 @@ Tart lights the Push buttons that do something in this version. All other button
 | SCALE | Opens or closes the [Scale screen](#scale-mode). Held for 0.3 seconds or longer, it is open only while you hold it. |
 | CLIP | Opens or closes the [Clip screen](#clip-mode), where encoder 1 sets the length of the selected clip. Held for 0.3 seconds or longer, it is open only while you hold it. |
 | Pads | In Session mode, launch clips. In Note mode, play notes on the selected track, or in the Melodic Sequencer, the steps of its clip. On a [drum track](#drum-tracks), the lower left 4 by 4 pads play and select the 16 lanes, the 4 rows above are the steps of the selected lane, and the lower right 4 by 4 pads are the loop selector. See [The Drum Sequencer](#the-drum-sequencer). |
+| RECORD | Starts a [take](#recording) on the selected slot, or ends the one that runs. |
 | UNDO | Takes back the last change to a clip. With SHIFT held, does a change again that you took back. See [Undo and Redo](#undo-and-redo). |
 | BROWSE | Opens or closes the [Browse screen](#track-types-and-browse), where you choose the type of the selected track. On the screen, UP and DOWN and encoders 1 to 7 move the cursor, the last button below the display loads the type, and the first button above the display closes the screen. |
 | LAYOUT | In Note mode, switches the pads between 64 Notes and the [Melodic Sequencer](#the-melodic-sequencer). It does nothing on a drum track. |
@@ -507,16 +553,16 @@ If you duplicate the owning Tart, the copy closes the ports it copied and stays 
 
 ## What is saved with the patch
 
-Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices, the octave, the type and the selected drum lane, and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty. It also saves the selected track and scene, the pad mode, the launch quantization, whether the Melodic Sequencer is open, and whether Fixed Length is on and its length. A patch from an older version has no types, and all its tracks are Melodic. The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. The steps of [Undo](#undo-and-redo) are not saved. See [Limitations](#limitations). The Scale screen, the Clip screen and the Browse screen are not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
+Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices, the octave, the type and the selected drum lane, and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty. It also saves the selected track and scene, the pad mode, the launch quantization, whether the Melodic Sequencer is open, and whether Fixed Length is on and its length. A patch from an older version has no types, and all its tracks are Melodic. The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. The steps of [Undo](#undo-and-redo) are not saved, and neither is a running take: a patch that you save during a take with an open length keeps the clip with a length of 32 bars. See [Limitations](#limitations). The Scale screen, the Clip screen and the Browse screen are not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
 
 ## Limitations
 
 - After STOP, or after you load a patch, no clip plays. Launch the clips again in Session mode. See [Session mode](#session-mode) for the ways it differs from Live.
 - [Undo](#undo-and-redo) takes back the last 32 changes to clips, and nothing else. It is not saved with the patch and does not use Rack's own Cmd/Ctrl+Z.
-- Nothing is recorded: the pads you play in 64 Notes make no clip, and the sequencer has no recording.
+- [Recording](#recording) has no count-in, no Capture MIDI, no Arrangement recording and no Record Quantize. Only the keyboard pads of Note mode and the lane pads of a drum track are recorded, not the touch strip or the sequencer pads. A take with an open length can be 32 bars at most.
 - The sequencer makes notes of velocity 100 and edits one step at a time. You cannot select several steps, and a second pad that you hold at the same time does nothing, unless it is a later step in the row of the first one.
 - A clip holds at most 4096 notes, and a track plays at most 64 notes at once. When a clip is full, a new note is not added and the display says "Clip full". A 32-bar drum clip with a note on every sixteenth of every lane would need twice that.
-- A [drum track](#drum-tracks) has no recording, and the Melodic Sequencer does not work on it: its notes come from the [Drum Sequencer](#the-drum-sequencer). It has no Euclid type, no 16 Velocities or 64 Pads layout, and no mute or solo for single pads. The Drum Sequencer has no loop start, no page that follows the playhead, no double tap and no Duplicate for a page. The Browse screen lists only the two types.
+- The Melodic Sequencer does not work on a [drum track](#drum-tracks): its notes come from the [Drum Sequencer](#the-drum-sequencer). A drum track has no Euclid type, no 16 Velocities or 64 Pads layout, and no mute or solo for single pads. The Drum Sequencer has no loop start, no page that follows the playhead, no double tap and no Duplicate for a page. The Browse screen lists only the two types.
 - Tart sends the notes of the tracks only through [Slice](slice.md) modules. A Slice sends a fixed 10 V on LEVEL and 0 V on PAN and CC for now.
 - A pad that sounds when you change the number of voices of its track is cut off.
 - Push buttons other than the ones in the table above do nothing, and so does the master volume encoder.
