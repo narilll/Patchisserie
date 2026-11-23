@@ -7,3 +7,6 @@
 [submodule "vendor/orca-c"]
 	path = vendor/orca-c
 	url = https://github.com/hundredrabbits/Orca-c.git
+[submodule "vendor/libusb"]
+	path = vendor/libusb
+	url = https://github.com/libusb/libusb.git

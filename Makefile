@@ -21,6 +21,24 @@ SOURCES += $(VENDOR_SOURCES)
 FLAGS += -isystem $(QJS_DIR) -isystem vendor/dr_libs -isystem $(ORCA_DIR)
 build/vendor/%.o: FLAGS += $(VENDOR_FLAGS)
 
+# libusb (vendor/libusb, unmodified) sends frames to the Push 2 display: its core and this OS's backend, configured by
+# vendor/libusb-config/config.h instead of autotools; hidden symbols, so no other libusb in Rack binds to ours.
+include $(RACK_DIR)/arch.mk
+USB_DIR := vendor/libusb/libusb
+USB_SOURCES := $(addprefix $(USB_DIR)/,core.c descriptor.c hotplug.c io.c strerror.c sync.c)
+ifdef ARCH_MAC
+USB_SOURCES += $(addprefix $(USB_DIR)/os/,darwin_usb.c events_posix.c threads_posix.c)
+endif
+ifdef ARCH_LIN
+USB_SOURCES += $(addprefix $(USB_DIR)/os/,linux_usbfs.c linux_netlink.c events_posix.c threads_posix.c)
+endif
+ifdef ARCH_WIN
+USB_SOURCES += $(addprefix $(USB_DIR)/os/,windows_common.c windows_usbdk.c windows_winusb.c events_windows.c threads_windows.c)
+endif
+SOURCES += $(USB_SOURCES)
+FLAGS += -isystem $(USB_DIR)
+build/vendor/libusb/%.o: FLAGS += -Ivendor/libusb-config -I$(USB_DIR) -fvisibility=hidden
+
 DISTRIBUTABLES += LICENSE res
 
 include $(RACK_DIR)/plugin.mk
@@ -28,6 +46,12 @@ include $(RACK_DIR)/plugin.mk
 # hydra.cpp calls OpenGL 1.x directly: on Windows those come from opengl32.dll (not libRack).
 ifdef ARCH_WIN
 LDFLAGS += -lopengl32
+endif
+
+# libusb's macOS backend talks to IOKit (configure.ac).
+ifdef ARCH_MAC
+USB_LIBS := -framework IOKit -framework CoreFoundation -framework Security
+LDFLAGS += $(USB_LIBS)
 endif
 
 # Host-built unit tests: pure logic only, no Rack UI, sanitizers on.
@@ -122,7 +146,7 @@ render: build/test/render
 GLCHECK_OBJECTS := $(filter-out build/src/plugin.cpp.o,$(OBJECTS))
 GLCHECK_LIBS := -L$(RACK_DIR) -lRack
 ifdef ARCH_MAC
-GLCHECK_LIBS += -framework OpenGL -lobjc
+GLCHECK_LIBS += -framework OpenGL -lobjc $(USB_LIBS)
 RACK_SYSTEM_DIR ?= /Applications/VCV Rack 2 Free.app/Contents/Resources
 endif
 ifdef ARCH_LIN

@@ -123,5 +123,7 @@ ${vendor('vendor/quickjs-ng/LICENSE')}${sep}dr_libs (vendor/dr_libs: dr_wav, dr_
 
 ${vendor('vendor/dr_libs/LICENSE')}${sep}orca-c (vendor/orca-c: the Orca VM, sim.c and vmio.c) \u2014 MIT
 
-${vendor('vendor/orca-c/LICENSE.md')}`,
+${vendor('vendor/orca-c/LICENSE.md')}${sep}libusb (vendor/libusb: USB transport for the Push 2 display) \u2014 LGPL-2.1-or-later
+
+${vendor('vendor/libusb/COPYING')}`,
 );
