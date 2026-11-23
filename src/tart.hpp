@@ -82,7 +82,7 @@ struct Ui {
 	uint8_t pads = kSession, noteLayout = 0, screen = 0, track = 0, scene = 0, fixedBars = 3;
 	bool fixedOn = false;
 	// transient
-	uint8_t page = 0;      // the sequencer's page of 8 steps
+	uint8_t page = 0;      // the sequencer's page of 8 steps (a drum track: 32)
 	uint8_t pad[64] = {};  // velocity of each held pad, row * 8 + col
 	bool button[128] = {}; // held buttons by CC
 	uint32_t touched = 0;  // bit per push2 encoder id
@@ -221,6 +221,7 @@ class Machine {
 	void sequencer(State& st, int index, int vel);
 	void play(Session& s, int index, int pitch, int vel);
 	void drumPad(State& st, int index, int vel);
+	void loopPad(State& st, int index, int vel);
 	bool browseButton(State& st, int button);
 	void noteEncoder(State& st, int encoder, int delta);
 	void session(State& st, int index);
@@ -233,7 +234,7 @@ class Machine {
 	void leds(const State& st, push2::Leds& out) const;
 	bool scaleButton(Scale& sc, int button); // on the Scale screen: whether it was one of its buttons
 	void tap(Transport& t);
-	void setLength(State& st, int beats);
+	void setLength(State& st, int ticks);
 	void tick(State& st, int64_t k, Outputs& out);
 
 	// ponytail: one lock, as lattice::Machine; the audio side only try-locks and never waits.

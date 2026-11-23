@@ -27,6 +27,11 @@ constexpr int kSwingUnits = 2;
 constexpr int kNoteUnits[4] = {2, 8, 2, 1};
 // The ticks of a step by resolution (the scene buttons from the top): 1/4, 1/4t, 1/8, 1/8t, 1/16, 1/16t, 1/32, 1/32t.
 constexpr int kGrid[8] = {96, 64, 48, 32, 24, 16, 12, 8};
+// The steps of a drum track's page, and what one pad of its loop selector covers at a step size: a page, up to a bar.
+constexpr int kDrumSteps = 32;
+constexpr int loopTicks(int grid) {
+	return std::min(kDrumSteps * grid, kBar);
+}
 // The launch quantization in ticks, by Transport::quant.
 constexpr int kQuant[14] = {0, 3072, 1536, 768, 384, 192, 128, 96, 64, 48, 32, 24, 16, 12};
 
@@ -36,6 +41,28 @@ int seqPitch(const Session& s, int row, bool& root, bool& inScale) {
 	Scale sq = s.scale;
 	sq.layout = 1; // "right" with the row as the column: step = row
 	return padPitch(sq, s.track[s.ui.track].octave, row, 0, root, inScale);
+}
+
+/** The pitch and the start tick of a sequencer pad of the selected track: a melodic row and column of the page of 8
+ * steps, or a drum lane's step in the page of 32 (the top row is steps 1..8). The pitch is -1 for a pad that is no step
+ * or is above 127. */
+int stepOf(const Session& s, int pad, int& start) {
+	const Ui& u = s.ui;
+	const Track& tr = s.track[u.track];
+	if (tr.type != Drum) {
+		bool root, inScale;
+		start = (u.page * 8 + pad % 8) * kGrid[tr.grid];
+		return seqPitch(s, pad / 8, root, inScale);
+	}
+	start = (u.page * kDrumSteps + (7 - pad / 8) * 8 + pad % 8) * kGrid[tr.grid];
+	return pad / 8 >= 4 ? kDrumNote + tr.lane : -1;
+}
+
+/** The loop pad (counted from the clip's start) under a pad of the lower right 4 x 4: the pads show the group of 16
+ * that holds the viewed page. */
+int loopIndex(const Session& s, int pad) {
+	int grid = kGrid[s.track[s.ui.track].grid];
+	return s.ui.page * kDrumSteps * grid / loopTicks(grid) / 16 * 16 + (3 - pad / 8) * 4 + pad % 8 - 4;
 }
 
 /** The note of `pitch` on the step that starts at `start` (its tick within half a step), or -1. ponytail: a scan, as it
@@ -70,9 +97,20 @@ void eraseNote(Clip& c, int i) {
 	c.nNotes--;
 }
 
-/** The last page of the clip at this step size. */
-int lastPage(const Clip& c, int grid) {
-	return c.length ? std::max(((c.length + grid - 1) / grid + 7) / 8 - 1, 0) : 0;
+/** Takes off the notes that start in [t0, t1) with a pitch in [p0, p1]. */
+void eraseNotes(Clip& c, int t0, int t1, int p0, int p1) {
+	auto in = [=](const Note& n) { return n.tick >= t0 && n.tick < t1 && n.pitch >= p0 && n.pitch <= p1; };
+	c.nNotes = (uint16_t)(std::remove_if(c.notes, c.notes + c.nNotes, in) - c.notes);
+}
+
+/** The last page of the clip at this step size, `perPage` steps to a page. */
+int lastPage(const Clip& c, int grid, int perPage) {
+	return c.length ? std::max(((c.length + grid - 1) / grid + perPage - 1) / perPage - 1, 0) : 0;
+}
+
+/** The steps on a page of the selected track. */
+int pageSteps(const Track& tr) {
+	return tr.type == Drum ? kDrumSteps : 8;
 }
 
 /** Selects a slot: a held step belongs to the clip it was pressed on. */
@@ -306,7 +344,7 @@ bool Machine::browseButton(State& st, int button) {
 	if (button == Up || button == Down) {
 		ui.browse = (uint8_t)std::min(std::max(ui.browse + (button == Down ? 1 : -1), 0), kBrowseTypes - 1);
 	} else if (button == Track8Below) {
-		st.s.track[ui.track].type = ui.browse, ui.heldStep = -1, ui.screen = kHome;
+		st.s.track[ui.track].type = ui.browse, ui.heldStep = -1, ui.page = 0, ui.screen = kHome;
 	} else if (button == Track1Above) {
 		ui.screen = kHome;
 	} else if (button < Left || button > Down) {
@@ -423,15 +461,16 @@ void Machine::handle(State& st, const push2::Event& e) {
 			o = (int8_t)std::min(std::max(o + (e.index == push2::cc::OctaveUp ? 1 : -1), 0), kMaxOctave);
 		} else if (e.index == push2::cc::Layout)
 			ui.noteLayout ^= 1, ui.heldStep = -1, ui.page = 0;
-		else if (ui.noteLayout && !drum &&
-				 ui.heldStep < 0) { // the sequencer: pages and step sizes (not while a step is held)
+		else if ((ui.noteLayout || drum) &&
+				 ui.heldStep < 0) { // the sequencers: pages and step sizes (not while a step is held)
 			Track& tr = s.track[ui.track];
-			int last = lastPage(st.clip[ui.track][ui.scene], kGrid[tr.grid]);
+			int last = lastPage(st.clip[ui.track][ui.scene], kGrid[tr.grid], pageSteps(tr));
 			if (e.index == push2::cc::PageLeft || e.index == push2::cc::PageRight)
 				ui.page = (uint8_t)std::min(std::max(ui.page + (e.index == push2::cc::PageRight ? 1 : -1), 0), last);
 			else if (e.index >= push2::cc::Scene8 && e.index <= push2::cc::Scene1) {
 				tr.grid = (uint8_t)(push2::cc::Scene1 - e.index);
-				ui.page = (uint8_t)std::min<int>(ui.page, lastPage(st.clip[ui.track][ui.scene], kGrid[tr.grid]));
+				ui.page = (uint8_t)std::min<int>(ui.page,
+												 lastPage(st.clip[ui.track][ui.scene], kGrid[tr.grid], pageSteps(tr)));
 			}
 		}
 		break;
@@ -465,7 +504,7 @@ void Machine::handle(State& st, const push2::Event& e) {
 		} else if (e.index == 0 && ui.screen == kClipScreen) { // the Clip screen: the length of the selected clip
 			int n = steps(accClip_, e.value, kLengthUnits);
 			if (n)
-				setLength(st, st.clip[ui.track][ui.scene].length / kPpqn + n);
+				setLength(st, (st.clip[ui.track][ui.scene].length / kPpqn + n) * kPpqn);
 		} else if (e.index < 4 && ui.heldStep >= 0) { // a held step: Nudge, Length, Length fine, Velocity
 			noteEncoder(st, e.index, e.value);
 		} else if (e.index == push2::kSwingId) {
@@ -488,16 +527,16 @@ void Machine::handle(State& st, const push2::Event& e) {
 	}
 }
 
-/** Sets the length of the selected clip to `beats` (1..128, at most kMaxLength); an empty slot stays empty. Notes
+/** Sets the length of the selected clip to `ticks` (1 beat to kMaxLength); an empty slot stays empty. Notes
  * beyond the new end are kept but don't play. A clip that plays on is cut at once: when its position is past the new
  * end, the loop wraps and the notes that began in the cut part end. */
-void Machine::setLength(State& st, int beats) {
+void Machine::setLength(State& st, int ticks) {
 	Ui& ui = st.s.ui;
 	Clip& c = st.clip[ui.track][ui.scene];
 	if (!c.length)
 		return;
 	int old = c.length;
-	c.length = (uint16_t)std::min(std::max(beats, 1) * kPpqn, std::min(128 * kPpqn, kMaxLength));
+	c.length = (uint16_t)std::min(std::max(ticks, kPpqn), kMaxLength);
 	Track& tr = st.s.track[ui.track];
 	if (tr.playing == ui.scene && (st.s.transport.tick - tr.startTick) % old >= c.length) {
 		for (int i = 0; i < nActive_[ui.track]; i++)
@@ -512,7 +551,8 @@ void Machine::pad(State& st, int i, int vel) {
 	Session& s = st.s;
 	Live& l = live_[i];
 	if (l.id)
-		voice_[l.track].noteOff(l.id), l = Live(), s.ui.pad[i] = 0;
+		voice_[l.track].noteOff(l.id), l = Live();
+	s.ui.pad[i] = 0;
 	if (s.ui.pads == kSession) {
 		if (vel)
 			session(st, i);
@@ -544,15 +584,54 @@ void Machine::play(Session& s, int i, int pitch, int vel) {
 }
 
 /** A pad of a drum track: the lower left 4 x 4 are the lanes (row * 4 + col, from the bottom left), which a press
- * selects and plays; with Select held it only selects. */
+ * selects and plays (with Select held it only selects, with Delete held it takes the lane's notes off the clip), the
+ * four rows above are the steps of the selected lane, and the lower right 4 x 4 the loop selector. */
 void Machine::drumPad(State& st, int i, int vel) {
 	Session& s = st.s;
-	if (!vel || i / 8 > 3 || i % 8 > 3)
+	if (i / 8 > 3) {
+		sequencer(st, i, vel);
+	} else if (i % 8 > 3) {
+		loopPad(st, i, vel);
+	} else if (vel) {
+		int lane = i / 8 * 4 + i % 8;
+		if (s.ui.button[push2::cc::Delete]) {
+			eraseNotes(st.clip[s.ui.track][s.ui.scene], 0, kMaxLength, kDrumNote + lane, kDrumNote + lane);
+			return;
+		}
+		s.track[s.ui.track].lane = (uint8_t)lane;
+		if (!s.ui.button[push2::cc::Select])
+			play(s, i, kDrumNote + lane, vel);
+	}
+}
+
+/** A loop pad covers loopTicks of the clip (a page of steps, up to a bar). A press inside the clip views its page, one
+ * outside makes the clip end with it (an empty slot gets a clip up to there, in whole bars, and launches it), holding
+ * one pad and pressing another ends the clip with the later one, and with Delete held it takes the pad's notes off. */
+void Machine::loopPad(State& st, int i, int vel) {
+	Session& s = st.s;
+	Ui& ui = s.ui;
+	ui.pad[i] = (uint8_t)vel;
+	Clip& c = st.clip[ui.track][ui.scene];
+	int grid = kGrid[s.track[ui.track].grid], len = loopTicks(grid), p = loopIndex(s, i);
+	if (!vel || p * len >= kMaxLength)
 		return;
-	int lane = i / 8 * 4 + i % 8;
-	s.track[s.ui.track].lane = (uint8_t)lane;
-	if (!s.ui.button[push2::cc::Select])
-		play(s, i, kDrumNote + lane, vel);
+	int end = (p + 1) * len, held = -1; // the later of the other pads that are held
+	for (int j = 0; j < 32; j++)
+		if (j / 8 < 4 && j % 8 > 3 && j != i && ui.pad[j])
+			held = std::max(held, loopIndex(s, j));
+	if (ui.button[push2::cc::Delete]) {
+		eraseNotes(c, p * len, end, 0, 127);
+	} else if (held >= 0 && c.length) {
+		setLength(st, (std::max(p, held) + 1) * len);
+	} else if (p * len < c.length) {
+		ui.page = (uint8_t)(p * len / (kDrumSteps * grid)), ui.heldStep = -1;
+	} else if (c.length) {
+		setLength(st, end);
+	} else {
+		c.length = (uint16_t)std::min((end + kBar - 1) / kBar * kBar, kMaxLength);
+		launch(s, ui.track, ui.scene);
+	}
+	ui.page = (uint8_t)std::min<int>(ui.page, lastPage(c, grid, kDrumSteps));
 }
 
 /** Starts the clip of `scene` on `track` at the launch quantization, at once when the transport is stopped. */
@@ -667,15 +746,13 @@ void Machine::sceneButton(State& st, int scene) {
 }
 
 /** A sequencer pad: tap a step to put a note on it (the first one makes the clip) or to take it off, hold it and turn
- * an encoder to edit it, or hold it and press a later step of its row for a long note. */
+ * an encoder to edit it, or hold it and press a later step of its row (a drum lane: of the page) for a long note. */
 void Machine::sequencer(State& st, int i, int vel) {
 	Session& s = st.s;
 	Ui& ui = s.ui;
-	Track& tr = s.track[ui.track];
 	Clip& c = st.clip[ui.track][ui.scene];
-	int grid = kGrid[tr.grid], start = (ui.page * 8 + i % 8) * grid;
-	bool root, inScale;
-	int pitch = seqPitch(s, i / 8, root, inScale);
+	int grid = kGrid[s.track[ui.track].grid], start;
+	int pitch = stepOf(s, i, start);
 	if (!vel) { // a tap on a note that was there takes it off, unless the hold edited it
 		if (i == ui.heldStep) {
 			int n = findNote(c, pitch, start, grid);
@@ -693,9 +770,9 @@ void Machine::sequencer(State& st, int i, int vel) {
 	if (ui.button[push2::cc::Delete]) {
 		if (n >= 0)
 			eraseNote(c, n);
-	} else if (ui.heldStep >= 0) { // ponytail: one held step; a press in its row to the right stretches its note
-		int h = findNote(c, pitch, (ui.page * 8 + ui.heldStep % 8) * grid, grid);
-		if (i / 8 == ui.heldStep / 8 && i % 8 > ui.heldStep % 8 && h >= 0)
+	} else if (ui.heldStep >= 0) { // ponytail: one held step; a press on a later step of its row stretches its note
+		int heldStart, heldPitch = stepOf(s, ui.heldStep, heldStart), h = findNote(c, heldPitch, heldStart, grid);
+		if (pitch == heldPitch && start > heldStart && h >= 0)
 			c.notes[h].len = (uint16_t)(std::min(start + grid, length) - c.notes[h].tick), ui.heldEdited = true;
 	} else if (n >= 0) {
 		ui.heldStep = (int8_t)i, ui.heldHad = true, ui.heldEdited = false;
@@ -717,9 +794,8 @@ void Machine::sequencer(State& st, int i, int vel) {
 void Machine::noteEncoder(State& st, int encoder, int delta) {
 	Ui& ui = st.s.ui;
 	Clip& c = st.clip[ui.track][ui.scene];
-	int grid = kGrid[st.s.track[ui.track].grid], start = (ui.page * 8 + ui.heldStep % 8) * grid;
-	bool root, inScale;
-	int h = findNote(c, seqPitch(st.s, ui.heldStep / 8, root, inScale), start, grid);
+	int grid = kGrid[st.s.track[ui.track].grid], start;
+	int h = findNote(c, stepOf(st.s, ui.heldStep, start), start, grid);
 	int n = steps(accNote_[encoder], delta, kNoteUnits[encoder]);
 	if (h < 0 || !n)
 		return;
@@ -768,6 +844,21 @@ static void sessionLeds(const State& st, push2::Leds& out) {
 	}
 }
 
+/** The page buttons (lit where there is a page to go to) and the step sizes on the scene buttons, for both sequencers.
+ */
+static void pageLeds(const State& st, push2::Leds& out) {
+	const Ui& u = st.s.ui;
+	const Track& tr = st.s.track[u.track];
+	int last = lastPage(st.clip[u.track][u.scene], kGrid[tr.grid], pageSteps(tr));
+	auto white = [&](int b, bool full) { out.cc[b] = {full ? push2::kWhiteFull : push2::kWhiteDark, push2::kStatic}; };
+	if (u.page > 0)
+		white(push2::cc::PageLeft, u.button[push2::cc::PageLeft]);
+	if (u.page < last)
+		white(push2::cc::PageRight, u.button[push2::cc::PageRight]);
+	for (int i = 0; i < 8; i++)
+		out.cc[push2::cc::Scene1 - i] = {i == tr.grid ? push2::kRgbWhite : push2::kRgbDarkGray, push2::kStatic};
+}
+
 /** The sequencer's LEDs: notes in the track's color (dim for soft ones), the empty steps dark gray (white in a root
  * row), nothing past the end of the clip, the playhead green (white on a note), the held step white; page, step size
  * and Delete buttons. */
@@ -776,14 +867,8 @@ static void seqLeds(const State& st, push2::Leds& out) {
 	const Ui& u = s.ui;
 	const Track& tr = s.track[u.track];
 	const Clip& c = st.clip[u.track][u.scene];
-	int grid = kGrid[tr.grid], last = lastPage(c, grid);
-	auto white = [&](int b, bool full) { out.cc[b] = {full ? push2::kWhiteFull : push2::kWhiteDark, push2::kStatic}; };
-	if (u.page > 0)
-		white(push2::cc::PageLeft, u.button[push2::cc::PageLeft]);
-	if (u.page < last)
-		white(push2::cc::PageRight, u.button[push2::cc::PageRight]);
-	for (int i = 0; i < 8; i++)
-		out.cc[push2::cc::Scene1 - i] = {i == tr.grid ? push2::kRgbWhite : push2::kRgbDarkGray, push2::kStatic};
+	int grid = kGrid[tr.grid];
+	pageLeds(st, out);
 
 	int pitch[8];
 	bool root[8], inScale[8];
@@ -817,6 +902,62 @@ static void seqLeds(const State& st, push2::Leds& out) {
 									   : push2::kBlack;
 			}
 			out.note[push2::padNote(row, col)] = {color, push2::kStatic};
+		}
+}
+
+/** A drum track's LEDs. Lanes: the selected one white, a sounding one green, else the track's colour, dim when the
+ * clip has no note on it. Steps of the selected lane: the playhead green, a held one white, a note in the track's
+ * colour (dim for soft ones), an empty one dark gray, nothing past the end of the clip. Loop pads: the playing one
+ * green, those of the viewed page white, the rest of the clip light gray, black past its end. */
+static void drumLeds(const State& st, const filo::VoiceAllocator& voice, push2::Leds& out) {
+	const Session& s = st.s;
+	const Ui& u = s.ui;
+	const Track& tr = s.track[u.track];
+	const Clip& c = st.clip[u.track][u.scene];
+	int grid = kGrid[tr.grid], len = loopTicks(grid);
+	pageLeds(st, out);
+	bool has[kLanes] = {};
+	uint8_t vel[kDrumSteps] = {}; // the velocity of the selected lane's note on each step of the page, 0: none
+	for (int i = 0; i < c.nNotes; i++) {
+		const Note& n = c.notes[i];
+		if (n.pitch >= kDrumNote && n.pitch < kDrumNote + kLanes)
+			has[n.pitch - kDrumNote] = true;
+		int step = (n.tick + grid / 2) / grid - u.page * kDrumSteps;
+		if (n.pitch == kDrumNote + tr.lane && step >= 0 && step < kDrumSteps)
+			vel[step] = n.vel;
+	}
+	for (int lane = 0; lane < kLanes; lane++)
+		out.note[push2::padNote(lane / 4, lane % 4)] = {voice.gate(lane)  ? push2::kGreen
+														: lane == tr.lane ? push2::kRgbWhite
+														: has[lane]       ? (uint8_t)(kPaletteFull + u.track)
+																		  : (uint8_t)(kPaletteDim + u.track),
+														push2::kStatic};
+	int pos = -1; // where the clip is
+	if (s.transport.playing && tr.playing == u.scene && c.length)
+		pos = (int)(std::max<int64_t>(s.transport.tick - tr.startTick, 0) % c.length);
+	for (int k = 0; k < kDrumSteps; k++) {
+		int step = u.page * kDrumSteps + k, pad = (7 - k / 8) * 8 + k % 8;
+		uint8_t color = push2::kRgbDarkGray;
+		if (c.length && step * grid >= c.length)
+			color = push2::kBlack;
+		else if (pad == u.heldStep)
+			color = push2::kRgbWhite;
+		else if (pos >= 0 && pos / grid == step)
+			color = push2::kGreen;
+		else if (vel[k])
+			color = vel[k] < 64 ? (uint8_t)(kPaletteDim + u.track) : (uint8_t)(kPaletteFull + u.track);
+		out.note[push2::padNote(pad / 8, pad % 8)] = {color, push2::kStatic};
+	}
+	int page = kDrumSteps * grid;
+	for (int row = 0; row < 4; row++)
+		for (int col = 4; col < 8; col++) {
+			int p = loopIndex(s, row * 8 + col);
+			bool inside = p * len < c.length, viewed = p * len < (u.page + 1) * page && (p + 1) * len > u.page * page;
+			out.note[push2::padNote(row, col)] = {pos >= 0 && pos / len == p ? push2::kGreen
+												  : inside && viewed         ? push2::kRgbWhite
+												  : inside                   ? push2::kRgbLightGray
+																			 : push2::kBlack,
+												  push2::kStatic};
 		}
 }
 
@@ -874,12 +1015,8 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 		sessionLeds(st, out);
 		return;
 	}
-	if (tr.type == Drum) { // the lanes: the selected one white, a sounding one green; no octave, no layout
-		for (int lane = 0; lane < kLanes; lane++)
-			out.note[push2::padNote(lane / 4, lane % 4)] = {voice_[u.track].gate(lane) ? push2::kGreen
-															: lane == tr.lane          ? push2::kRgbWhite
-																			  : (uint8_t)(kPaletteFull + u.track),
-															push2::kStatic};
+	if (tr.type == Drum) { // no octave, no layout
+		drumLeds(st, voice_[u.track], out);
 		return;
 	}
 	if (tr.octave > 0)
@@ -1098,11 +1235,9 @@ void Machine::view(View& v) {
 	v.nNotes = clip.nNotes;
 	std::copy(clip.notes, clip.notes + clip.nNotes, v.notes);
 	v.held = -1;
-	if (u.pads == kNote && u.noteLayout && u.heldStep >= 0) {
-		int grid = kGrid[v.s.track[u.track].grid];
-		bool root, inScale;
-		v.held = (int16_t)findNote(clip, seqPitch(v.s, u.heldStep / 8, root, inScale),
-								   (u.page * 8 + u.heldStep % 8) * grid, grid);
+	if (u.pads == kNote && (u.noteLayout || v.s.track[u.track].type == Drum) && u.heldStep >= 0) {
+		int start, pitch = stepOf(v.s, u.heldStep, start);
+		v.held = (int16_t)findNote(clip, pitch, start, kGrid[v.s.track[u.track].grid]);
 	}
 	unlock();
 }

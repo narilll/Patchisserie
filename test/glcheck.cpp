@@ -631,7 +631,7 @@ int main() {
 							   tart::kBrowseScreen, tart::kHome}) {
 				view->s.ui.screen = id, view->s.scale.scale = 20, view->s.ui.browse = 1;
 				view->s.track[0].type = pass == 6 ? tart::Drum : tart::Melodic;
-				view->held = pass == 2 ? 1 : -1, view->s.ui.button[push2::cc::FixedLength] = pass++ == 3;
+				view->held = pass == 2 || pass == 6 ? 1 : -1, view->s.ui.button[push2::cc::FixedLength] = pass++ == 3;
 				if (!screen.begin(vg, fbVg)) {
 					why = "no framebuffer";
 					break;

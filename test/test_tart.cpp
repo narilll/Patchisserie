@@ -1746,10 +1746,8 @@ TEST(drum_pads_slice) {
 	r.pad(0, 0, 0), r.pad(1, 3, 0), r.pad(3, 3, 0);
 	for (int c = 0; c < 16; c++)
 		CHECK(t.gate[c] == 0);
-	// Outside the 4 x 4: silent and the lane stays. Select: selects without playing.
-	r.pad(0, 4, 100), r.pad(4, 0, 100), r.pad(7, 7, 100);
-	for (int c = 0; c < 16; c++)
-		CHECK(t.gate[c] == 0);
+	// Select: selects without playing.
+	r.pad(3, 3, 100), r.pad(3, 3, 0);
 	CHECK(r.view().s.track[0].lane == 15);
 	r.press(push2::cc::Select);
 	r.pad(0, 2, 100);
@@ -1768,11 +1766,11 @@ TEST(drum_pads_slice) {
 	r.in.leds = true;
 	r.step();
 	auto led = [&](int row, int col) { return r.want.note[push2::padNote(row, col)].color; };
-	CHECK(led(0, 2) == push2::kRgbWhite && led(0, 0) == tart::kPaletteFull && led(3, 3) == tart::kPaletteFull);
-	CHECK(led(0, 4) == 0 && led(4, 0) == 0 && led(7, 7) == 0);
+	CHECK(led(0, 2) == push2::kRgbWhite && led(0, 0) == tart::kPaletteDim && led(3, 3) == tart::kPaletteDim);
+	CHECK(led(0, 4) == 0 && led(4, 0) == push2::kRgbDarkGray && led(7, 7) == push2::kRgbDarkGray);
 	CHECK(r.want.cc[push2::cc::OctaveUp].color == 0 && r.want.cc[push2::cc::Layout].color == 0);
 	r.pad(2, 1, 100); // lane 9 sounds: green, the selected lane white
-	CHECK(led(2, 1) == push2::kGreen && led(0, 2) == tart::kPaletteFull); // pressing selects it too
+	CHECK(led(2, 1) == push2::kGreen && led(0, 2) == tart::kPaletteDim); // pressing selects it too
 	r.pad(2, 1, 0);
 	// A melodic track (track 2) keeps its rotating voices.
 	r.click(push2::cc::Track1Below + 1);
@@ -1907,4 +1905,303 @@ TEST(type_switch_silences) {
 	CHECK(r.f.track[1].channels == 16);
 	for (int c = 0; c < 16; c++)
 		CHECK(r.f.track[1].gate[c] == 0);
+}
+
+namespace {
+
+/** The drum sequencer: step k (0..31) of the page is the pad (7 - k / 8, k % 8), loop pad p (0..15) is (3 - p / 4, 4 +
+ * p % 4), lane n is (n / 4, n % 4). */
+void drumTrack(Rig& r, int track = 0) {
+	r.m.edit([=](tart::State& st) { st.s.track[track].type = tart::Drum; });
+}
+void dstep(Rig& r, int k, int vel = 100) {
+	r.pad(7 - k / 8, k % 8, vel);
+}
+void dtap(Rig& r, int k) {
+	dstep(r, k), dstep(r, k, 0);
+}
+void dloop(Rig& r, int p, int vel = 100) {
+	r.pad(3 - p / 4, 4 + p % 4, vel);
+}
+void dlane(Rig& r, int n) {
+	r.tap(n / 4, n % 4);
+}
+
+} // namespace
+
+TEST(drum_steps_and_lanes) {
+	Rig r;
+	drumTrack(r);
+	dlane(r, 5);
+	dtap(r, 0); // an empty slot: the Fixed Length setting's 2 Bars, launched
+	auto v = r.view();
+	CHECK(v.length[0][0] == 768 && v.nNotes == 1 && v.s.track[0].playing == 0);
+	CHECK(v.notes[0].tick == 0 && v.notes[0].len == 24 && v.notes[0].pitch == 41 && v.notes[0].vel == 100);
+	dtap(r, 9); // the second row, column 1
+	v = r.view();
+	CHECK(v.nNotes == 2 && v.notes[1].tick == 216 && v.notes[1].pitch == 41);
+	dtap(r, 0); // a tap on a note takes it off
+	CHECK(r.view().nNotes == 1);
+	dlane(r, 0); // another lane: its own steps
+	dtap(r, 0);
+	dtap(r, 31);
+	v = r.view();
+	CHECK(v.nNotes == 3 && v.notes[0].pitch == 36 && v.notes[0].tick == 0 && v.notes[2].tick == 31 * 24);
+	dlane(r, 5); // Delete and a step: that lane's note
+	r.press(push2::cc::Delete);
+	dtap(r, 9);
+	dtap(r, 31); // not a note of lane 5
+	r.press(push2::cc::Delete, 0);
+	v = r.view();
+	CHECK(v.nNotes == 3 - 1 && v.s.ui.heldStep == -1);
+	// Step size: the scene buttons, as the melodic sequencer.
+	r.click(push2::cc::Scene1 - 2); // 1/8
+	CHECK(r.view().s.track[0].grid == 2);
+	dtap(r, 1);
+	v = r.view();
+	CHECK(v.nNotes == 3 && v.notes[1].tick == 48 && v.notes[1].len == 48 && v.notes[1].pitch == 41);
+	// Pages: 4 Bars is 64 steps of 1/16.
+	r.m.edit([](tart::State& st) { st.s.ui.fixedBars = 4; });
+	r.click(push2::cc::Scene1 - 4);
+	r.click(push2::cc::Track1Below + 1);
+	drumTrack(r, 1);
+	dtap(r, 0);
+	CHECK(r.view().length[1][0] == 1536);
+	r.click(push2::cc::PageRight);
+	CHECK(r.view().s.ui.page == 1);
+	r.click(push2::cc::PageRight); // the last page
+	CHECK(r.view().s.ui.page == 1);
+	dtap(r, 3);
+	v = r.view();
+	CHECK(v.nNotes == 2 && v.notes[1].tick == (32 + 3) * 24);
+	// A page of 1 bar: the steps past its end do nothing.
+	r.m.edit([](tart::State& st) { st.s.ui.fixedBars = 2; });
+	r.click(push2::cc::Track1Below + 2);
+	drumTrack(r, 2);
+	dtap(r, 15);
+	dtap(r, 16);
+	v = r.view();
+	CHECK(v.length[2][0] == 384 && v.nNotes == 1 && v.notes[0].tick == 15 * 24);
+}
+
+TEST(drum_hold_encoders) {
+	Rig r;
+	drumTrack(r);
+	dlane(r, 2);
+	dtap(r, 2); // tick 48
+	dstep(r, 2);
+	auto v = r.view();
+	CHECK(v.s.ui.heldStep == (7 - 0) * 8 + 2 && v.held == 0);
+	r.turn(0, 6); // Nudge: 2 raw units a tick
+	CHECK(r.view().notes[0].tick == 51);
+	r.turn(0, 60);
+	CHECK(r.view().notes[0].tick == 59); // half a step on, no further
+	r.turn(1, 8);                        // Length: a step
+	CHECK(r.view().notes[0].len == 48);
+	r.turn(2, 6); // Length fine
+	CHECK(r.view().notes[0].len == 51);
+	r.turn(3, 10); // Velocity
+	CHECK(r.view().notes[0].vel == 110);
+	dstep(r, 2, 0); // the hold edited it: it stays
+	v = r.view();
+	CHECK(v.nNotes == 1 && v.s.ui.heldStep == -1 && v.held == -1);
+	r.turn(3, -5); // not held: nothing
+	CHECK(r.view().notes[0].vel == 110);
+	// A long note: hold a step and press a later one, in another row of the page; an earlier one does nothing.
+	dtap(r, 0);
+	dstep(r, 0);
+	dtap(r, 12);
+	dstep(r, 0, 0);
+	v = r.view();
+	CHECK(v.nNotes == 2 && v.notes[0].tick == 0 && v.notes[0].len == 13 * 24 && v.notes[1].tick == 59);
+	dtap(r, 0); // a tap on a long note takes it off
+	CHECK(r.view().nNotes == 1);
+	// A hold with no note on it makes one that the encoder edits.
+	dstep(r, 7);
+	r.turn(3, -20);
+	dstep(r, 7, 0);
+	v = r.view();
+	CHECK(v.nNotes == 2 && v.notes[1].tick == 168 && v.notes[1].vel == 80);
+}
+
+TEST(loop_selector) {
+	Rig r;
+	drumTrack(r);
+	r.m.edit([](tart::State& st) { st.s.ui.fixedBars = 5; }); // not what a loop pad makes
+	dloop(r, 0), dloop(r, 0, 0);                              // an empty slot: 1 bar, launched
+	auto v = r.view();
+	CHECK(v.length[0][0] == 384 && v.s.track[0].playing == 0 && v.nNotes == 0 && v.s.ui.page == 0);
+	dloop(r, 0); // hold 0, tap 3: 4 bars
+	dloop(r, 3), dloop(r, 3, 0);
+	dloop(r, 0, 0);
+	v = r.view();
+	CHECK(v.length[0][0] == 4 * 384 && v.s.ui.pad[3 * 8 + 4] == 0 && v.s.ui.pad[3 * 8 + 7] == 0);
+	dloop(r, 2), dloop(r, 2, 0); // inside: views page 1 (768 ticks a page)
+	CHECK(r.view().s.ui.page == 1 && r.view().length[0][0] == 4 * 384);
+	dloop(r, 7), dloop(r, 7, 0); // outside: the clip ends with it
+	v = r.view();
+	CHECK(v.length[0][0] == 8 * 384 && v.s.ui.page == 1);
+	dloop(r, 1), dloop(r, 1, 0);
+	CHECK(r.view().s.ui.page == 0);
+	dloop(r, 1); // hold 1, tap 0: ends with the later one
+	dloop(r, 0), dloop(r, 0, 0);
+	dloop(r, 1, 0);
+	CHECK(r.view().length[0][0] == 2 * 384);
+	dloop(r, 5), dloop(r, 5, 0); // outside, on a clip: 6 bars exactly
+	CHECK(r.view().length[0][0] == 6 * 384);
+	// An empty slot and pad 5: 6 bars; the clip is empty and launched.
+	r.click(push2::cc::Track1Below + 1);
+	drumTrack(r, 1);
+	dloop(r, 5), dloop(r, 5, 0);
+	v = r.view();
+	CHECK(v.length[1][0] == 6 * 384 && v.s.track[1].playing == 0);
+	// Shortening to a page that is not the one viewed brings the view back.
+	dloop(r, 2), dloop(r, 2, 0);
+	CHECK(r.view().s.ui.page == 1);
+	r.m.edit([](tart::State& st) { st.clip[1][0].nNotes = 1, st.clip[1][0].notes[0] = {1000, 24, 36, 100}; });
+	dloop(r, 0);
+	dloop(r, 1), dloop(r, 1, 0);
+	dloop(r, 0, 0);
+	v = r.view();
+	CHECK(v.length[1][0] == 768 && v.s.ui.page == 0);
+	auto st = r.state();
+	CHECK(st->clip[1][0].nNotes == 1); // the note past the new end stays
+}
+
+TEST(drum_delete_lane_and_page) {
+	SliceRig r;
+	drumTrack(r);
+	r.m.edit([](tart::State& st) {
+		tart::Clip& c = st.clip[0][0];
+		c.length = 4 * tart::kBar;
+		for (int k = 0; k < 4; k++) // notes on lanes 0 and 1 at ticks 0, 300, 600 and 900
+			c.notes[c.nNotes++] = {(uint16_t)(k * 300), 24, 36, 100},
+			c.notes[c.nNotes++] = {(uint16_t)(k * 300), 24, 37, 100};
+		std::sort(c.notes, c.notes + c.nNotes, [](const tart::Note& a, const tart::Note& b) {
+			return a.tick != b.tick ? a.tick < b.tick : a.pitch < b.pitch;
+		});
+		st.s.track[0].lane = 7;
+	});
+	r.press(push2::cc::Delete);
+	dlane(r, 1); // no sound, the lane selected stays
+	r.press(push2::cc::Delete, 0);
+	auto v = r.view();
+	CHECK(v.nNotes == 4 && v.s.track[0].lane == 7 && r.f.track[0].gate[1] == 0);
+	for (int i = 0; i < v.nNotes; i++)
+		CHECK(v.notes[i].pitch == 36);
+	r.press(push2::cc::Delete); // a loop pad is a bar: 0..383 holds the notes at 0 and 300
+	dloop(r, 0), dloop(r, 0, 0);
+	r.press(push2::cc::Delete, 0);
+	v = r.view();
+	CHECK(v.nNotes == 2 && v.notes[0].tick == 600 && v.s.ui.page == 0 && v.length[0][0] == 4 * 384);
+	r.press(push2::cc::Delete);
+	dloop(r, 1), dloop(r, 1, 0); // 384..767: 600
+	r.press(push2::cc::Delete, 0);
+	v = r.view();
+	CHECK(v.nNotes == 1 && v.notes[0].tick == 900);
+	r.press(push2::cc::Delete); // an empty slot: Delete and a loop pad makes no clip
+	r.click(push2::cc::Track1Below + 1);
+	drumTrack(r, 1);
+	dloop(r, 3), dloop(r, 3, 0);
+	r.press(push2::cc::Delete, 0);
+	CHECK(r.view().length[1][0] == 0);
+}
+
+TEST(drum_triplet_loop_pad) {
+	Rig r;
+	drumTrack(r);
+	r.click(push2::cc::Scene1 - 7); // 1/32t: 8 ticks, a page of 32 steps is 256 ticks
+	CHECK(r.view().s.track[0].grid == 7);
+	dloop(r, 0), dloop(r, 0, 0); // 256 ticks round up to a bar
+	CHECK(r.view().length[0][0] == 384);
+	dloop(r, 5), dloop(r, 5, 0); // outside: it ends with the pad, 6 * 256
+	CHECK(r.view().length[0][0] == 1536);
+	dloop(r, 3), dloop(r, 3, 0); // inside: its page (768 ticks is page 3)
+	CHECK(r.view().s.ui.page == 3);
+	// A step: all 8 columns, 8 ticks each.
+	dtap(r, 7);
+	auto v = r.view();
+	CHECK(v.nNotes == 1 && v.notes[0].tick == (3 * 32 + 7) * 8 && v.notes[0].len == 8);
+	// The pads show the group of 16 that holds the viewed page: 16..31 from page 16 on.
+	r.m.edit([](tart::State& st) {
+		st.clip[0][0].length = tart::kMaxLength;
+		st.s.ui.page = 17;
+	});
+	r.in.leds = true;
+	r.step();
+	auto led = [&](int row, int col) { return r.want.note[push2::padNote(row, col)].color; };
+	CHECK(led(3, 4) == push2::kRgbLightGray && led(3, 5) == push2::kRgbWhite && led(3, 6) == push2::kRgbLightGray);
+	CHECK(led(0, 7) == push2::kRgbLightGray); // pad 31, inside: 31 * 256 = 7936 < 12288
+	r.m.edit([](tart::State& st) { st.clip[0][0].length = 20 * 256; });
+	r.step();
+	CHECK(led(3, 4) == push2::kRgbLightGray && led(3, 7) == push2::kRgbLightGray && led(2, 4) == push2::kBlack);
+	dloop(r, 0), dloop(r, 0, 0); // pad 16 of the group: page 16
+	CHECK(r.view().s.ui.page == 16);
+	dloop(r, 15), dloop(r, 15, 0); // pad 31: 32 * 256 = 8192 bars... ends there
+	CHECK(r.view().length[0][0] == 32 * 256);
+}
+
+TEST(drum_leds) {
+	Rig r;
+	drumTrack(r);
+	r.m.edit([](tart::State& st) {
+		tart::Clip& c = st.clip[0][0];
+		c.length = 4 * tart::kBar;
+		c.nNotes = 4;
+		c.notes[0] = {0, 24, 37, 100};  // lane 1, step 0
+		c.notes[1] = {24, 24, 37, 50};  // lane 1, step 1, soft
+		c.notes[2] = {48, 24, 40, 100}; // lane 4
+		c.notes[3] = {72, 24, 37, 100}; // lane 1, step 3
+		st.s.track[0].lane = 1;
+	});
+	r.in.leds = true;
+	r.step();
+	auto led = [&](int row, int col) { return r.want.note[push2::padNote(row, col)].color; };
+	// Lanes: the selected one white, with notes the track's colour, the rest dim.
+	CHECK(led(0, 1) == push2::kRgbWhite && led(1, 0) == tart::kPaletteFull && led(0, 0) == tart::kPaletteDim);
+	// Steps of lane 1: the top row is steps 1..8.
+	CHECK(led(7, 0) == tart::kPaletteFull && led(7, 1) == tart::kPaletteDim && led(7, 2) == push2::kRgbDarkGray &&
+		  led(7, 3) == tart::kPaletteFull && led(6, 0) == push2::kRgbDarkGray && led(4, 7) == push2::kRgbDarkGray);
+	// Loop pads: 4 bars is pads 0..3, the viewed page (768 ticks) is pads 0 and 1.
+	CHECK(led(3, 4) == push2::kRgbWhite && led(3, 5) == push2::kRgbWhite && led(3, 6) == push2::kRgbLightGray &&
+		  led(3, 7) == push2::kRgbLightGray && led(2, 4) == push2::kBlack && led(0, 7) == push2::kBlack);
+	// Past the end of a 1 bar clip: black, and the steps it holds.
+	r.m.edit([](tart::State& st) { st.clip[0][0].length = tart::kBar; });
+	r.step();
+	CHECK(led(6, 7) == push2::kRgbDarkGray && led(5, 0) == push2::kBlack && led(4, 0) == push2::kBlack);
+	CHECK(led(3, 4) == push2::kRgbWhite && led(3, 5) == push2::kBlack);
+	// A held step is white; the page buttons and the step size follow the melodic sequencer.
+	dstep(r, 3);
+	r.step();
+	CHECK(led(7, 3) == push2::kRgbWhite);
+	dstep(r, 3, 0);
+	CHECK(r.want.cc[push2::cc::Scene1 - 4].color == push2::kRgbWhite && r.want.cc[push2::cc::PageRight].color == 0);
+	// The playhead: green on its step and its loop pad (a bar of 1/16: step 1 from tick 24).
+	r.m.edit([](tart::State& st) { st.s.track[0].playing = 0; });
+	r.in.play = true;
+	r.run_(250 * 30); // tick 30
+	r.step();
+	CHECK(led(7, 1) == push2::kGreen && led(3, 4) == push2::kGreen && led(7, 0) == tart::kPaletteFull);
+	// A lane that sounds is green: lane 4 at its note, tick 48.
+	r.run_(250 * 20);
+	r.step();
+	CHECK(led(1, 0) == push2::kGreen);
+}
+
+TEST(drum_step_gates_slice_channel) {
+	SliceRig r;
+	drumTrack(r);
+	dlane(r, 3);
+	dtap(r, 1); // lane 3 at tick 24
+	int up = -1;
+	bool other = false;
+	for (int i = 0; i < 7000; i++) {
+		r.in.play = i == 0;
+		r.step();
+		for (int c = 0; c < 16; c++)
+			if (r.f.track[0].gate[c] > 5)
+				c == 3 ? up = up < 0 ? i : up : other = true;
+	}
+	CHECK(up == 24 * 250 && !other);
+	CHECK_NEAR(r.f.track[0].voct[3], (39 - 60) / 12.f, 1e-6);
 }
