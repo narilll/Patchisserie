@@ -21,16 +21,18 @@ Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad contro
 15. [Swing](#swing)
 16. [Scale mode](#scale-mode)
 17. [Clip mode](#clip-mode)
-18. [Undo and Redo](#undo-and-redo)
-19. [The Home screen](#the-home-screen)
-20. [The lights](#the-lights)
-21. [The Push controls](#the-push-controls)
-22. [Context menu reference](#context-menu-reference)
-23. [Display status words](#display-status-words)
-24. [More than one Tart](#more-than-one-tart)
-25. [What is saved with the patch](#what-is-saved-with-the-patch)
-26. [Limitations](#limitations)
-27. [Credits and licenses](#credits-and-licenses)
+18. [Quantize](#quantize)
+19. [Double Loop](#double-loop)
+20. [Undo and Redo](#undo-and-redo)
+21. [The Home screen](#the-home-screen)
+22. [The lights](#the-lights)
+23. [The Push controls](#the-push-controls)
+24. [Context menu reference](#context-menu-reference)
+25. [Display status words](#display-status-words)
+26. [More than one Tart](#more-than-one-tart)
+27. [What is saved with the patch](#what-is-saved-with-the-patch)
+28. [Limitations](#limitations)
+29. [Credits and licenses](#credits-and-licenses)
 
 ## Quick start
 
@@ -324,7 +326,7 @@ The chosen length is used for every clip that you make in the [Melodic Sequencer
 
 Press RECORD on the Push to record what you play on the pads into a clip, as in Ableton Live. A take is one recording, from the first press of RECORD to its end. A take records into the selected slot, which is the selected track and the selected scene at the moment you press RECORD. The take stays with that slot even if you select another one afterwards. Only one take can run at a time.
 
-**What is recorded.** Tart records the pads you play on the track of the take: the keyboard pads of [Note mode](#note-mode) and the lane pads of a [drum track](#drum-tracks). The pads of the sequencers are steps, not played notes, so they are not recorded as played, but a step you tap during a take is put into the clip as usual. Pads you play on another track are not recorded, and neither are touch strip bends. A note starts where you pressed the pad, rounded to the nearest tick (there are 96 ticks in a beat). Its length is the time until you let go of the pad, and at least one tick. Its velocity is the velocity of your press. The note goes into the clip when you let go of the pad, so you hear the pad while you play and the new note from the next time the clip comes round. If a note with the same pitch already starts on the same tick, the old note stays and the new one is dropped. A clip holds at most 4096 notes. When it is full, the note is not added and the display says "Clip full".
+**What is recorded.** Tart records the pads you play on the track of the take: the keyboard pads of [Note mode](#note-mode) and the lane pads of a [drum track](#drum-tracks). The pads of the sequencers are steps, not played notes, so they are not recorded as played, but a step you tap during a take is put into the clip as usual. Pads you play on another track are not recorded, and neither are touch strip bends. A note starts where you pressed the pad, rounded to the nearest tick (there are 96 ticks in a beat). Its length is the time until you let go of the pad, and at least one tick. Its velocity is the velocity of your press. With [Record Quantize](#quantize) on, the start is moved onto the grid of your choice instead. The note goes into the clip when you let go of the pad, so you hear the pad while you play and the new note from the next time the clip comes round. If a note with the same pitch already starts on the same tick, the old note stays and the new one is dropped. A clip holds at most 4096 notes. When it is full, the note is not added and the display says "Clip full".
 
 **An empty slot with Fixed Length off.** The take makes a clip with an open length. It runs for as long as you record, up to 32 bars. The clip is launched like any launch: at the next point of the [launch quantization](#session-mode) while the transport is playing, and at once when the transport is stopped, which starts the transport. Until the clip starts, nothing is recorded. Press RECORD again to end the take. The take does not end at that moment but at the next whole unit counted from the start of the clip. The unit is the launch quantization, or one beat if that is shorter. With the standard 1 Bar, a take ends at the next bar line, so if you press RECORD one bar and a little later, it ends after two bars. The clip is as long as the take and goes on playing, and you can go on playing over it. While the end is waiting, RECORD blinks. If the take has not started yet, pressing RECORD cancels it, and the slot is empty again. The take also ends by itself when it reaches 32 bars, and then the clip is 32 bars long.
 
@@ -355,7 +357,7 @@ When a take with an open length ends in one of these ways, other than the 32 bar
 - RECORD acts when you press it. Live's Capture MIDI, which keeps what you played before you pressed RECORD, is not there.
 - There is no Arrangement recording and no automation recording.
 - The rounding of the end of a take with an open length is Tart's reading of Live's behavior, which is not confirmed: it ends at the next whole unit, not at once and not at the nearest one.
-- Record Quantize and Double Loop are not there yet, so recorded notes keep the tick where you played them.
+- Record Quantize is off at the start, and it only moves the start of a note, not its end. See [Quantize](#quantize).
 - Notes you play a little before the clip starts are not recorded, because nothing is recorded until the clip has started.
 
 ## Swing
@@ -404,6 +406,48 @@ An empty slot shows "Empty slot", and the encoder does nothing there. Make a cli
 
 **Differences from Ableton Live.** The Clip screen of Live also has the start of the loop, the loop on or off, and the position. Tart's Clip screen has only the length. A clip always starts at its first beat and always loops.
 
+## Quantize
+
+Quantize moves the notes of a clip toward a grid, so that they sound tighter. Tap QUANTIZE on the Push to quantize every note of the selected clip. The popup in the middle of the display says, for example, "Quantized to: 1/16, 100%" for one second. Quantizing changes only where a note starts. Its length stays as it is, so the end of the note moves with the start. This is the same as on the Push in Ableton Live. Quantizing is one step of [Undo and Redo](#undo-and-redo).
+
+**How a note moves.** Each note moves toward the nearest line of the grid you chose with QUANTIZE TO. The AMOUNT says how far: at 100 percent the note lands on the line, at 50 percent it moves half of the way, and at 0 percent it does not move. The choices of QUANTIZE TO are 1/4, 1/8, 1/8T, 1/8+T, 1/16, 1/16T, 1/16+T and 1/32. The letter T means triplets, which divide a beat in three. A choice with +T, such as 1/8+T, has two grids, the straight one and the triplet one, and each note goes to the nearer line of the two. At the start, QUANTIZE TO is 1/16 and AMOUNT is 100 percent. A note that is moved to the end of the clip goes to the start of the clip instead, because the clip loops. If two notes of the same pitch end up on the same tick, only one of them is kept. Notes that start after the end of the clip, which do not play, are left alone.
+
+**The settings.** Hold QUANTIZE for 0.3 seconds or longer to see the settings on the display, for as long as you hold the button. These controls work while QUANTIZE is held:
+
+| Control | What it does |
+|---|---|
+| Encoder 1, SWING | Sets the swing, the same global setting as the swing encoder (see [Swing](#swing)). |
+| Encoder 2, QUANTIZE TO | Chooses the grid, from the eight choices above. |
+| Encoder 3, AMOUNT | Sets the amount, from 0 to 100 percent. |
+| Encoder 5, REC QUANT | Chooses the grid of Record Quantize. It has the same eight choices. |
+| Fifth button above the display | Switches Record Quantize on or off. It is lit white while it is on and dark gray while it is off. |
+
+When you let go of QUANTIZE after a hold, nothing is quantized. The same is true if you turn an encoder or press a pad while you hold the button, even for a short time: only a tap that is shorter than 0.3 seconds, with nothing else touched, quantizes the clip. While you hold QUANTIZE, the pads do nothing else: a pad doesn't launch a clip in Session mode or change a step in a sequencer. Only the lane pads of a drum track react, as described next.
+
+**One drum lane.** On a [drum track](#drum-tracks), hold QUANTIZE and press a lane pad to quantize the notes of that lane only. The pad does not play and does not select the lane, and letting go of QUANTIZE afterwards does not quantize the other lanes.
+
+**Record Quantize.** When it is on, the notes you [record](#recording) are moved onto the grid of REC QUANT at once, all the way, whatever the AMOUNT is. It uses the start of the note only. A note that you play just before the end of the clip goes to the start of the clip. Record Quantize is off at the start. It does not change notes that you add with the sequencers.
+
+**Differences from Ableton Live.**
+
+- The hold time is 0.3 seconds, as in Live.
+- The swing stays a playback effect, as described in [Swing](#swing). Quantize does not move notes by it, and the SWING encoder of the settings is the global swing.
+- Only the start of a note moves, not its end, as on the Push in Live.
+- A note that is moved to the end of the clip goes to the start. This is Tart's reading, and it is not confirmed that Live does the same.
+- The grids have no 1/4T or 1/32T, as on the Push.
+
+## Double Loop
+
+Press DOUBLE LOOP on the Push to make the selected clip twice as long, with its notes repeated. The notes of the clip are copied after its end, and the length doubles, so a 1 Bar clip becomes a 2 Bar clip with the same bar twice. The popup says "New loop length: 2 Bars" for one second. Double Loop is one step of [Undo and Redo](#undo-and-redo).
+
+Notes that start after the end of the clip, which do not play, are removed when you double the loop. Double Loop does nothing on an empty slot. It is refused in these cases:
+
+- The clip would be longer than 32 bars. The popup says "Loop is 32 Bars at most".
+- The notes would not fit. A clip holds at most 4096 notes, and the popup says "Clip full".
+- A take with an open length is running in the slot, because the take sets the length. There is no popup then.
+
+A clip that plays goes on playing without a break. Its position in the loop does not change.
+
 ## Undo and Redo
 
 Press UNDO on the Push to take back the last change you made to a clip. Hold SHIFT and press UNDO to do again a change that you took back (redo). You can go back up to 32 changes. A popup in the middle of the display says "Undo: Reverted last action" or "Redo: Re-performed last undone action" for one second. When there is nothing to undo or redo, nothing happens and there is no popup.
@@ -439,13 +483,15 @@ The Push display is 960 pixels wide and 160 pixels high. The mirror on the panel
 
 **While a take runs** in the selected slot, the red word REC is shown next to the length of the clip. A take with an open length has no length yet, so the red word Recording is shown instead. See [Recording](#recording).
 
+**While you hold QUANTIZE** for 0.3 seconds or longer, the top row shows SWING, QUANTIZE TO, AMOUNT and REC QUANT over the encoders 1, 2, 3 and 5, and a box over the fifth button above the display that says REC QUANT ON or REC QUANT OFF. See [Quantize](#quantize).
+
 **While you hold FIXED LENGTH**, the top row shows FIXED LENGTH with On or Off, and the bottom row shows the eight [lengths](#fixed-length) instead of the track names.
 
 **The bottom row** shows the names of the eight tracks, each in its own [color](#colors). The selected track is drawn as a filled box. A small triangle in front of a name means that a clip plays on that track, and a blinking square means that its stop is waiting. See [Tracks](#tracks).
 
 **The Browse screen.** While [Browse](#track-types-and-browse) is open, the display shows CLOSE over the first button above it, TYPE with the type of the selected track over encoder 1, the list of types with a filled box on the cursor and a dot on the current type, and LOAD over the last button below it.
 
-**The popup.** While you touch the tempo encoder, and for one second after you turn it or tap, a box in the middle shows "Tempo 120.0 BPM", with EXT after it when a cable is in CLOCK. The swing encoder shows "Swing 25 %" in the same way. When you tap a step in a clip that already has 4096 notes, the box says "Clip full" for one second and the note is not added. UNDO and SHIFT with UNDO show the box described in [Undo and Redo](#undo-and-redo), a little wider.
+**The popup.** While you touch the tempo encoder, and for one second after you turn it or tap, a box in the middle shows "Tempo 120.0 BPM", with EXT after it when a cable is in CLOCK. The swing encoder shows "Swing 25 %" in the same way. When you tap a step in a clip that already has 4096 notes, the box says "Clip full" for one second and the note is not added. UNDO and SHIFT with UNDO show the box described in [Undo and Redo](#undo-and-redo), a little wider, and so do QUANTIZE and DOUBLE LOOP: "Quantized to: 1/16, 100%", "New loop length: 2 Bars", and the refusals "Loop is 32 Bars at most" and "Clip full".
 
 **The status line.** When the display or one of the MIDI ports is not connected, a dim line over the middle shows the display status, the name of the MIDI input port and the name of the MIDI output port, separated by vertical bars, for example `no display | in Ableton Push 2 User Port | out -`. A dash means that the port is not open. The words for the display status are listed [below](#display-status-words). When everything is connected, the line is hidden.
 
@@ -467,6 +513,8 @@ Tart lights the Push buttons that do something in this version. All other button
 - **OCTAVE UP** and **OCTAVE DOWN** are dim white while the selected track can move in that direction, and dark when it cannot.
 - **LAYOUT** is dim white in Note mode, and full white while the [Melodic Sequencer](#the-melodic-sequencer) is open. On a [drum track](#drum-tracks), LAYOUT, **OCTAVE UP** and **OCTAVE DOWN** are dark.
 - **UNDO** is dim white while there is a step to undo, or, while you hold SHIFT, a step to redo, and dark when there is none. It is full white while you hold it.
+- **QUANTIZE** is dim white, and full white while you hold it. While its settings show, the fifth button above the display is white when Record Quantize is on and dark gray when it is off.
+- **DOUBLE LOOP** is dim white while the selected slot has a clip, full white while you hold it, and dark otherwise.
 - **BROWSE** is dim white, and full white while the [Browse screen](#track-types-and-browse) is open. While it is open, the last button below the display (LOAD) and the first button above it (CLOSE) are white, and the other buttons above and below the display are dark.
 - **RECORD** is dim white while there is no [take](#recording), red during a take, and blinking between red and dark while a take waits to start or to end.
 - **FIXED LENGTH** is full white while [Fixed Length](#fixed-length) is on and dim white while it is off.
@@ -492,6 +540,8 @@ Tart lights the Push buttons that do something in this version. All other button
 | Pads | In Session mode, launch clips. In Note mode, play notes on the selected track, or in the Melodic Sequencer, the steps of its clip. On a [drum track](#drum-tracks), the lower left 4 by 4 pads play and select the 16 lanes, the 4 rows above are the steps of the selected lane, and the lower right 4 by 4 pads are the loop selector. See [The Drum Sequencer](#the-drum-sequencer). |
 | RECORD | Starts a [take](#recording) on the selected slot, or ends the one that runs. |
 | UNDO | Takes back the last change to a clip. With SHIFT held, does a change again that you took back. See [Undo and Redo](#undo-and-redo). |
+| QUANTIZE | Tap to quantize the selected clip. Hold for 0.3 seconds or longer to show the settings: encoder 1 SWING, encoder 2 QUANTIZE TO, encoder 3 AMOUNT, encoder 5 REC QUANT, and the fifth button above the display for Record Quantize. With a lane pad on a drum track, quantizes that lane. See [Quantize](#quantize). |
+| DOUBLE LOOP | Doubles the length of the selected clip and repeats its notes. See [Double Loop](#double-loop). |
 | BROWSE | Opens or closes the [Browse screen](#track-types-and-browse), where you choose the type of the selected track. On the screen, UP and DOWN and encoders 1 to 7 move the cursor, the last button below the display loads the type, and the first button above the display closes the screen. |
 | LAYOUT | In Note mode, switches the pads between 64 Notes and the [Melodic Sequencer](#the-melodic-sequencer). It does nothing on a drum track. |
 | PAGE LEFT, PAGE RIGHT | In the Melodic Sequencer, move to the previous or the next page of 8 steps. In the Drum Sequencer, of 32 steps. |
@@ -553,13 +603,13 @@ If you duplicate the owning Tart, the copy closes the ports it copied and stays 
 
 ## What is saved with the patch
 
-Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices, the octave, the type and the selected drum lane, and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty. It also saves the selected track and scene, the pad mode, the launch quantization, whether the Melodic Sequencer is open, and whether Fixed Length is on and its length. A patch from an older version has no types, and all its tracks are Melodic. The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. The steps of [Undo](#undo-and-redo) are not saved, and neither is a running take: a patch that you save during a take with an open length keeps the clip with a length of 32 bars. See [Limitations](#limitations). The Scale screen, the Clip screen and the Browse screen are not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
+Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices, the octave, the type and the selected drum lane, and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty. It also saves the settings of [Quantize](#quantize): QUANTIZE TO, AMOUNT, REC QUANT and whether Record Quantize is on. It also saves the selected track and scene, the pad mode, the launch quantization, whether the Melodic Sequencer is open, and whether Fixed Length is on and its length. A patch from an older version has no types, and all its tracks are Melodic. The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. The steps of [Undo](#undo-and-redo) are not saved, and neither is a running take: a patch that you save during a take with an open length keeps the clip with a length of 32 bars. See [Limitations](#limitations). The Scale screen, the Clip screen and the Browse screen are not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
 
 ## Limitations
 
 - After STOP, or after you load a patch, no clip plays. Launch the clips again in Session mode. See [Session mode](#session-mode) for the ways it differs from Live.
 - [Undo](#undo-and-redo) takes back the last 32 changes to clips, and nothing else. It is not saved with the patch and does not use Rack's own Cmd/Ctrl+Z.
-- [Recording](#recording) has no count-in, no Capture MIDI, no Arrangement recording and no Record Quantize. Only the keyboard pads of Note mode and the lane pads of a drum track are recorded, not the touch strip or the sequencer pads. A take with an open length can be 32 bars at most.
+- [Recording](#recording) has no count-in, no Capture MIDI and no Arrangement recording. Only the keyboard pads of Note mode and the lane pads of a drum track are recorded, not the touch strip or the sequencer pads. A take with an open length can be 32 bars at most.
 - The sequencer makes notes of velocity 100 and edits one step at a time. You cannot select several steps, and a second pad that you hold at the same time does nothing, unless it is a later step in the row of the first one.
 - A clip holds at most 4096 notes, and a track plays at most 64 notes at once. When a clip is full, a new note is not added and the display says "Clip full". A 32-bar drum clip with a note on every sixteenth of every lane would need twice that.
 - The Melodic Sequencer does not work on a [drum track](#drum-tracks): its notes come from the [Drum Sequencer](#the-drum-sequencer). A drum track has no Euclid type, no 16 Velocities or 64 Pads layout, and no mute or solo for single pads. The Drum Sequencer has no loop start, no page that follows the playhead, no double tap and no Duplicate for a page. The Browse screen lists only the two types.
@@ -569,6 +619,7 @@ Tart saves these things with the patch: the internal tempo, the swing, the metro
 - The list of scales is Live's list as far as it is known, and it may be missing scales that Live added lately. If the encoders on the Scale screen move too fast or too slow on your Push, tell the author.
 - The length encoder of the Clip screen takes 4 steps for one beat. This is a guess too. The Clip screen has no start, loop or position, and the length is in whole beats.
 - The tempo encoder takes each step it receives as 1 BPM, and the swing encoder takes two steps for one percent. If the step sizes feel wrong on your Push, tell the author.
+- The encoders of the Quantize settings take 8 steps for a choice of QUANTIZE TO or REC QUANT and 2 steps for a percent of AMOUNT. These are guesses too.
 - The note encoders of the sequencer take 2 steps for a tick of Nudge, 8 steps for a step of Length, 2 steps for a tick of Length fine and 1 step for a velocity. These are guesses too.
 - The step page does not follow the playhead as it does in Ableton Live, and the dim color of a soft note has only one level.
 - Tart does not receive MIDI clock. Its clock comes from the CLOCK input or the internal tempo.

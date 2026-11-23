@@ -102,6 +102,20 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 			std::snprintf(buf, sizeof buf, "%d.%d.%d", length / kBar, length / kPpqn % 4, length % kPpqn);
 			cell(0, 1, "LENGTH", buf);
 		}
+	} else if (quantizeSettings(ui)) { // SWING, QUANTIZE TO, AMOUNT and REC QUANT over their encoders, the switch above
+		auto setting = [&](int column, const char* label, const char* value) {
+			text(120.f * column + 6, 40, label, 12, NVG_ALIGN_LEFT, dim, sans);
+			text(120.f * (column + 1) - 6, 60, value, 18, NVG_ALIGN_RIGHT, white, mono);
+		};
+		std::snprintf(buf, sizeof buf, "%d %%", t.swing);
+		setting(0, "SWING", buf);
+		setting(1, "QUANTIZE TO", kQuantToNames[std::min<int>(ui.quantTo, 7)]);
+		std::snprintf(buf, sizeof buf, "%d %%", ui.quantAmount);
+		setting(2, "AMOUNT", buf);
+		setting(4, "REC QUANT", kQuantToNames[std::min<int>(ui.recQuant, 7)]);
+		rect(120.f * 4 + 3, 2, 114, 20, ui.recQuantOn ? white : nvgRGB(0x30, 0x32, 0x36));
+		text(120.f * 4 + 60, 18, ui.recQuantOn ? "REC QUANT ON" : "REC QUANT OFF", 15, NVG_ALIGN_CENTER,
+			 ui.recQuantOn ? black : white, sans);
 	} else if (ui.button[push2::cc::FixedLength]) {
 		cell(0, 1, "FIXED LENGTH", ui.fixedOn ? "On" : "Off");
 	} else if (v.held >= 0) { // a held step: its note
@@ -151,12 +165,7 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 		if (!length) {
 			text(480, 96, "Empty slot", 24, NVG_ALIGN_CENTER, dim, sans);
 		} else {
-			if (length % kPpqn)
-				std::snprintf(buf, sizeof buf, "%d ticks", length);
-			else if (length % kBar)
-				std::snprintf(buf, sizeof buf, "%d Beats", length / kPpqn);
-			else
-				std::snprintf(buf, sizeof buf, length == kBar ? "1 Bar" : "%d Bars", length / kBar);
+			lengthName(buf, sizeof buf, length);
 			const NVGcolor red = nvgRGB(0xff, 0x30, 0x30);
 			if (rec && ui.recOpen) { // the length is not known yet
 				text(952, 46, "Recording", 18, NVG_ALIGN_RIGHT, red, sans);
@@ -232,22 +241,11 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 	}
 
 	// Popup: while the encoder is touched and for a second after a turn.
-	bool tempo = ui.popup == kTempoPopup, undo = ui.popup == kUndoPopup || ui.popup == kRedoPopup,
-		 full = ui.popup == kClipFullPopup || undo;
+	bool tempo = ui.popup == kTempoPopup, undo = ui.popup >= kUndoPopup, full = ui.popup >= kClipFullPopup;
 	if (full ? ui.now - ui.popupAt < 1
 			 : (tempo || ui.popup == kSwingPopup) &&
 				   (ui.touched >> (tempo ? push2::kTempoId : push2::kSwingId) & 1 || ui.now - ui.popupAt < 1)) {
-		if (undo) // Live's texts, in a wider box
-			std::snprintf(buf, sizeof buf,
-						  ui.popup == kUndoPopup ? "Undo: Reverted last action"
-												 : "Redo: Re-performed last undone action");
-		else if (full)
-			std::snprintf(buf, sizeof buf, "Clip full");
-		else if (tempo)
-			std::snprintf(buf, sizeof buf, t.external ? "Tempo %.1f BPM EXT" : "Tempo %.1f BPM",
-						  t.external ? t.shownBpm : t.bpm);
-		else
-			std::snprintf(buf, sizeof buf, "Swing %d %%", t.swing);
+		popupText(v, buf, sizeof buf);
 		rect(undo ? 150 : 270, 45, undo ? 660 : 420, 70, nvgRGB(0x30, 0x32, 0x36));
 		text(480, 94, buf, undo ? 28 : 36, NVG_ALIGN_CENTER, white, sans);
 	}

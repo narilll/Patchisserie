@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <thread>
 
@@ -17,9 +18,6 @@ constexpr int kTempoUnits = 1; // raw encoder deltas per detent: 1 BPM
 constexpr int kScaleUnits = 8, kLayoutUnits = 30;
 // ponytail: raw encoder deltas per beat of a clip's length on the Clip screen; a guess, calibrate on the hardware.
 constexpr int kLengthUnits = 4;
-// Ableton's MOMENTARY_DELAY: a button held this long is momentary (Session, Note, Scale, Clip) or not a tap (Fixed
-// Length).
-constexpr double kHoldSeconds = 0.3;
 // ponytail: 2 raw deltas per percent, from the manual's "about 210 steps per turn"; calibrate on the hardware.
 constexpr int kSwingUnits = 2;
 // ponytail: raw encoder deltas per change of a held step's Nudge, Length (a step), Length fine (a tick) and Velocity
@@ -32,6 +30,11 @@ constexpr int kDrumSteps = 32;
 constexpr int loopTicks(int grid) {
 	return std::min(kDrumSteps * grid, kBar);
 }
+// The grids of Quantize To and Record Quantize (kQuantToNames): the straight step and the triplet one (0: none). "+T"
+// takes the nearer of the two.
+constexpr int kQuantTo[8][2] = {{96, 0}, {48, 0}, {32, 0}, {48, 32}, {24, 0}, {16, 0}, {24, 16}, {12, 0}};
+// ponytail: raw encoder deltas per change of Quantize To and Record Quantize; a guess, calibrate on the hardware.
+constexpr int kQuantUnits = 8;
 // The launch quantization in ticks, by Transport::quant.
 constexpr int kQuant[14] = {0, 3072, 1536, 768, 384, 192, 128, 96, 64, 48, 32, 24, 16, 12};
 
@@ -76,6 +79,30 @@ int findNote(const Clip& c, int pitch, int start, int grid) {
 
 bool before(const Note& a, const Note& b) {
 	return a.tick != b.tick ? a.tick < b.tick : a.pitch < b.pitch;
+}
+
+/** Sorts the first `n` notes and drops the repeats of a tick and pitch: the clip's notes again. In place, as a sort
+ * that allocates would not do on the audio thread. */
+void settle(Clip& c, int n) {
+	std::sort(c.notes, c.notes + n, before);
+	c.nNotes = (uint16_t)(std::unique(c.notes, c.notes + n,
+									  [](const Note& a, const Note& b) { return !before(a, b) && !before(b, a); }) -
+						  c.notes);
+}
+
+/** Where a note that starts at `tick` goes in a clip of `length`: `amount` percent of the way to the nearest line of
+ * the grid `to` (of both grids, the nearer line). A line at the end of the clip is its start. */
+int quantized(int tick, int to, int amount, int length) {
+	int target = 0, best = 1 << 30;
+	for (int g : kQuantTo[to]) {
+		if (!g)
+			continue;
+		int line = (tick + g / 2) / g * g;
+		if (std::abs(line - tick) < best)
+			best = std::abs(line - tick), target = line;
+	}
+	int moved = tick + (target - tick) * amount / 100;
+	return moved >= length ? moved - length : moved;
 }
 
 /** Puts `n` in its place in the sorted notes: its index, or -1 when the clip is full or has that tick and pitch. */
@@ -151,6 +178,8 @@ int steps(int& acc, int delta, int units) {
 } // namespace
 
 const char* const kTypeNames[kBrowseTypes] = {"Melodic", "Drum"};
+
+const char* const kQuantToNames[8] = {"1/4", "1/8", "1/8T", "1/8+T", "1/16", "1/16T", "1/16+T", "1/32"};
 
 const char* const kQuantNames[14] = {"None", "8 Bars", "4 Bars", "2 Bars", "1 Bar", "1/2",   "1/2T",
 									 "1/4",  "1/4T",   "1/8",    "1/8T",   "1/16",  "1/16T", "1/32"};
@@ -281,6 +310,9 @@ void sanitize(State& st) {
 	u.scene = std::min<uint8_t>(u.scene, kScenes - 1);
 	u.fixedBars = std::min<uint8_t>(u.fixedBars, 7);
 	u.fixedOn = u.fixedOn != 0;
+	u.quantTo = std::min<uint8_t>(u.quantTo, 7), u.quantAmount = std::min<uint8_t>(u.quantAmount, 100);
+	u.recQuant = std::min<uint8_t>(u.recQuant, 7), u.recQuantOn = u.recQuantOn != 0;
+	u.quantizeAt = -1, u.quantizeUsed = false;
 	u.page = 0, u.heldStep = -1, u.heldHad = u.heldEdited = false, u.fixedAt = -1, u.bend = 0;
 	std::fill(u.pad, u.pad + 64, 0);
 	std::fill(u.button, u.button + 128, false);
@@ -300,11 +332,7 @@ void sanitize(State& st) {
 				x.len = std::min<uint16_t>(std::max<uint16_t>(x.len, 1), kMaxLength);
 				c.notes[n++] = x;
 			}
-			std::sort(c.notes, c.notes + n, before);
-			c.nNotes =
-				(uint16_t)(std::unique(c.notes, c.notes + n,
-									   [](const Note& a, const Note& b) { return !before(a, b) && !before(b, a); }) -
-						   c.notes);
+			settle(c, n);
 		}
 	for (Track& t : st.s.track) {
 		char name[kNameBytes + 1] = {};
@@ -318,6 +346,47 @@ void sanitize(State& st) {
 		t.octave = (int8_t)std::min<int>(std::max<int>(t.octave, 0), kMaxOctave);
 		t.playing = t.queued = kNone;
 		t.launchTick = t.startTick = 0;
+	}
+}
+
+void lengthName(char* buf, size_t size, int length) {
+	if (length % kPpqn)
+		std::snprintf(buf, size, "%d ticks", length);
+	else if (length % kBar)
+		std::snprintf(buf, size, "%d Beats", length / kPpqn);
+	else
+		std::snprintf(buf, size, length == kBar ? "1 Bar" : "%d Bars", length / kBar);
+}
+
+void popupText(const View& v, char* buf, size_t size) {
+	const Ui& ui = v.s.ui;
+	const Transport& t = v.s.transport;
+	char name[24];
+	switch (ui.popup) {
+	case kUndoPopup:
+		std::snprintf(buf, size, "Undo: Reverted last action"); // Live's texts
+		break;
+	case kRedoPopup:
+		std::snprintf(buf, size, "Redo: Re-performed last undone action");
+		break;
+	case kQuantizedPopup:
+		std::snprintf(buf, size, "Quantized to: %s, %d%%", kQuantToNames[std::min<int>(ui.quantTo, 7)], ui.quantAmount);
+		break;
+	case kLoopLengthPopup:
+		lengthName(name, sizeof name, v.length[ui.track][ui.scene]);
+		std::snprintf(buf, size, "New loop length: %s", name);
+		break;
+	case kLoopTooLongPopup:
+		std::snprintf(buf, size, "Loop is 32 Bars at most");
+		break;
+	case kClipFullPopup:
+		std::snprintf(buf, size, "Clip full");
+		break;
+	case kTempoPopup:
+		std::snprintf(buf, size, t.external ? "Tempo %.1f BPM EXT" : "Tempo %.1f BPM", t.external ? t.shownBpm : t.bpm);
+		break;
+	default:
+		std::snprintf(buf, size, "Swing %d %%", t.swing);
 	}
 }
 
@@ -416,6 +485,11 @@ void Machine::handle(State& st, const push2::Event& e) {
 					ui.pads = ui.prevPads; // held: the mode was only there for as long as the button
 				ui.padsAt = -1;
 			}
+			if (e.index == push2::cc::Quantize) { // a tap quantizes; a hold, or a turn or a pad meanwhile, doesn't
+				if (ui.quantizeAt >= 0 && !ui.quantizeUsed && ui.now - ui.quantizeAt < kHoldSeconds)
+					quantizeClip(st, 0, 127);
+				ui.quantizeAt = -1;
+			}
 			if (e.index == push2::cc::Duplicate)
 				ui.dup = -1;
 			if (e.index == push2::cc::FixedLength) { // a tap toggles; a hold, or choosing a length, doesn't
@@ -443,6 +517,12 @@ void Machine::handle(State& st, const push2::Event& e) {
 		} else if (e.index == push2::cc::FixedLength)
 			ui.fixedAt = ui.now;
 		else if (ui.button[push2::cc::FixedLength] && fixedLengthButton(ui, e.index)) {
+		} else if (e.index == push2::cc::Quantize) {
+			ui.quantizeAt = ui.now, ui.quantizeUsed = false;
+		} else if (e.index == push2::cc::DoubleLoop) {
+			doubleLoop(st);
+		} else if (ui.button[push2::cc::Quantize] && e.index == push2::cc::Track1Above + 4) { // Record Quantize
+			ui.recQuantOn = !ui.recQuantOn, ui.quantizeUsed = true;
 		} else if (e.index == push2::cc::Scale || e.index == push2::cc::Clip) {
 			uint8_t to = e.index == push2::cc::Scale ? kScaleScreen : kClipScreen;
 			ui.screen = ui.screen == to ? (uint8_t)kHome : to;
@@ -505,7 +585,11 @@ void Machine::handle(State& st, const push2::Event& e) {
 		ui.bend = std::min(std::max((float)(e.value - 8192) / 8192.f, -1.f), 1.f);
 		break;
 	case Event::Encoder:
-		if (e.index == push2::kTempoId) {
+		if (ui.button[push2::cc::Quantize])
+			ui.quantizeUsed = true;
+		if (e.index < 8 && ui.button[push2::cc::Quantize]) { // the Quantize settings
+			quantizeEncoder(st, e.index, e.value);
+		} else if (e.index == push2::kTempoId) {
 			float step = ui.button[push2::cc::Shift] ? 0.1f : 1.f;
 			float bpm = t.bpm + (float)steps(accTempo_, e.value, kTempoUnits) * step;
 			t.bpm = std::min(std::max(std::round(bpm * 10.f) / 10.f, 20.f), 300.f);
@@ -551,6 +635,66 @@ void Machine::handle(State& st, const push2::Event& e) {
 	}
 }
 
+/** An encoder turned while Quantize is held: 1 Swing, 2 Quantize To, 3 Amount, 5 Record Quantize. */
+void Machine::quantizeEncoder(State& st, int encoder, int delta) {
+	Ui& ui = st.s.ui;
+	auto pick = [&](uint8_t& v, int& acc, int units, int max) {
+		v = (uint8_t)std::min(std::max(v + steps(acc, delta, units), 0), max);
+	};
+	if (encoder == 0)
+		pick(st.s.transport.swing, accSwing_, kSwingUnits, 100);
+	else if (encoder == 1)
+		pick(ui.quantTo, accQuantTo_, kQuantUnits, 7);
+	else if (encoder == 2)
+		pick(ui.quantAmount, accAmount_, kSwingUnits, 100);
+	else if (encoder == 4)
+		pick(ui.recQuant, accRecQuant_, kQuantUnits, 7);
+}
+
+/** Quantize: moves the starts of the selected clip's notes with a pitch in [p0, p1] toward the grid (Quantize To,
+ * Amount), one undo step. The ends stay where they are, as on Live's Push. Two notes that land on the same tick and
+ * pitch become one. */
+void Machine::quantizeClip(State& st, int p0, int p1) {
+	Ui& ui = st.s.ui;
+	Clip& c = st.clip[ui.track][ui.scene];
+	if (!c.length)
+		return;
+	checkpoint(ui.track, ui.scene);
+	for (int i = 0; i < c.nNotes; i++)
+		if (c.notes[i].pitch >= p0 && c.notes[i].pitch <= p1 && c.notes[i].tick < c.length)
+			c.notes[i].tick = (uint16_t)quantized(c.notes[i].tick, ui.quantTo, ui.quantAmount, c.length);
+	settle(c, c.nNotes);
+	ui.heldStep = -1;
+	ui.popup = kQuantizedPopup, ui.popupAt = ui.now;
+}
+
+/** Double Loop: the notes from the clip's end on are dropped, the clip is copied after its end and its length doubles.
+ * Not past 32 bars, not when the notes would not fit, not while an open take sets the length. */
+void Machine::doubleLoop(State& st) {
+	Ui& ui = st.s.ui;
+	Clip& c = st.clip[ui.track][ui.scene];
+	if (!c.length || (ui.recOpen && ui.recTrack == ui.track && ui.recScene == ui.scene))
+		return;
+	ui.popupAt = ui.now;
+	if (c.length * 2 > kMaxLength) {
+		ui.popup = kLoopTooLongPopup;
+		return;
+	}
+	int keep = 0; // the notes are sorted: those inside the clip come first
+	while (keep < c.nNotes && c.notes[keep].tick < c.length)
+		keep++;
+	if (keep * 2 > kMaxNotes) {
+		ui.popup = kClipFullPopup;
+		return;
+	}
+	checkpoint(ui.track, ui.scene);
+	for (int i = 0; i < keep; i++)
+		c.notes[keep + i] = {(uint16_t)(c.notes[i].tick + c.length), c.notes[i].len, c.notes[i].pitch, c.notes[i].vel};
+	c.nNotes = (uint16_t)(keep * 2), c.length = (uint16_t)(c.length * 2);
+	ui.heldStep = -1;
+	ui.popup = kLoopLengthPopup;
+}
+
 /** Sets the length of the selected clip to `ticks` (1 beat to kMaxLength); an empty slot stays empty. Notes
  * beyond the new end are kept but don't play. A clip that plays on is cut at once: when its position is past the new
  * end, the loop wraps and the notes that began in the cut part end. */
@@ -582,6 +726,12 @@ void Machine::pad(State& st, int i, int vel) {
 		l = Live();
 	}
 	s.ui.pad[i] = 0;
+	if (vel && s.ui.button[push2::cc::Quantize]) {
+		s.ui.quantizeUsed = true; // a pad while Quantize is held: no tap
+		// Only a drum lane does something with Quantize held (that lane is quantized): other pads don't launch or edit.
+		if (s.ui.pads == kSession || s.track[s.ui.track].type != Drum || i / 8 >= 4 || i % 8 >= 4)
+			return;
+	}
 	if (s.ui.pads == kSession) {
 		if (vel)
 			session(st, i);
@@ -631,6 +781,10 @@ void Machine::drumPad(State& st, int i, int vel) {
 		if (s.ui.button[push2::cc::Delete]) {
 			checkpoint(s.ui.track, s.ui.scene);
 			eraseNotes(st.clip[s.ui.track][s.ui.scene], 0, kMaxLength, kDrumNote + lane, kDrumNote + lane);
+			return;
+		}
+		if (s.ui.button[push2::cc::Quantize]) {
+			quantizeClip(st, kDrumNote + lane, kDrumNote + lane);
 			return;
 		}
 		s.track[s.ui.track].lane = (uint8_t)lane;
@@ -1051,6 +1205,9 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 	} else {
 		white(push2::cc::Record, u.button[push2::cc::Record]);
 	}
+	white(push2::cc::Quantize, u.button[push2::cc::Quantize]);
+	if (st.clip[u.track][u.scene].length || u.button[push2::cc::DoubleLoop])
+		white(push2::cc::DoubleLoop, u.button[push2::cc::DoubleLoop]);
 	white(push2::cc::Browse, u.screen == kBrowseScreen || u.button[push2::cc::Browse]);
 	if (u.screen == kBrowseScreen) { // LOAD and CLOSE; the other buttons stay dark
 		out.cc[push2::cc::Track8Below] = out.cc[push2::cc::Track1Above] = {push2::kRgbWhite, push2::kStatic};
@@ -1063,6 +1220,8 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 			option(i < 6 ? push2::cc::Track1Above + 1 + i : push2::cc::Track1Below - 5 + i, kRoots[i] == sc.root);
 		option(push2::cc::Track1Below, true);
 		option(push2::cc::Track8Below, sc.fixed);
+	} else if (quantizeSettings(u)) { // Record Quantize on the fifth upper button
+		out.cc[push2::cc::Track1Above + 4] = {u.recQuantOn ? push2::kRgbWhite : push2::kRgbDarkGray, push2::kStatic};
 	} else if (u.button[push2::cc::FixedLength]) { // the lengths (the chosen one white) and the switch
 		for (int i = 0; i < 8; i++)
 			out.cc[push2::cc::Track1Below + i] = {i == u.fixedBars ? push2::kRgbWhite : push2::kRgbDarkGray,
@@ -1234,14 +1393,17 @@ void Machine::endTake(bool discard) {
 void Machine::recordNote(State& st, int pad) {
 	const Live& l = live_[pad];
 	Clip& c = st.clip[l.track][l.rec];
-	if (l.pos >= c.length)
+	const Ui& ui = st.s.ui;
+	int pos = l.pos >= c.length || !ui.recQuantOn ? l.pos : quantized(l.pos, ui.recQuant, 100, c.length);
+	if (pos >= c.length)
 		return;
 	if (c.nNotes >= kMaxNotes) {
 		st.s.ui.popup = kClipFullPopup, st.s.ui.popupAt = st.s.ui.now;
 		return;
 	}
 	int len = (int)std::min<int64_t>(std::max<int64_t>(atTicks_ - l.at, 1), c.length);
-	insertNote(c, {l.pos, (uint16_t)len, l.pitch, l.vel}); // the same tick and pitch as a note there: left as it was
+	insertNote(
+		c, {(uint16_t)pos, (uint16_t)len, l.pitch, l.vel}); // the same tick and pitch as a note there: left as it was
 }
 
 /** Keeps the slot's clip as it is now, before an edit. One entry for a slot and a gesture (hold + encoder turns); a new

@@ -13,6 +13,9 @@
 
 namespace tart {
 
+// Ableton's MOMENTARY_DELAY: a button held this long is momentary (Session, Note, Scale, Clip, Quantize) or not a tap
+// (Fixed Length).
+constexpr double kHoldSeconds = 0.3;
 constexpr int kTracks = 8, kScenes = 8, kPpqn = 96, kBar = 4 * kPpqn, kMaxLength = 32 * kBar; // 12288 fits uint16_t
 // ponytail: per-clip ceilings. 4096 notes (Clip 32.8 KB, State 2.1 MB) = 32 bars of 16ths in 8-note chords or a 16-bar
 // 16-lane drum clip; a full 32-bar one needs 8192 (+36 KB/clip, State 4.2 MB), and a clip past the ceiling says "Clip
@@ -56,7 +59,17 @@ struct Track {
 	// E4 adds ccName[8][16], ccRange[8], level, pan, mute, solo
 };
 
-enum Popup : uint8_t { kNoPopup, kTempoPopup, kSwingPopup, kClipFullPopup, kUndoPopup, kRedoPopup };
+enum Popup : uint8_t {
+	kNoPopup,
+	kTempoPopup,
+	kSwingPopup,
+	kClipFullPopup,
+	kUndoPopup,
+	kRedoPopup,
+	kQuantizedPopup,
+	kLoopLengthPopup,
+	kLoopTooLongPopup
+};
 enum Pads : uint8_t { kSession, kNote };
 enum Screens : uint8_t { kHome, kScaleScreen, kClipScreen, kBrowseScreen };
 
@@ -81,6 +94,9 @@ struct Ui {
 	// noteLayout: 0 64 notes, 1 the Melodic Sequencer. fixedBars: Fixed Length, 0..7 = 1 Beat, 2 Beats, 1 .. 32 Bars.
 	uint8_t pads = kSession, noteLayout = 0, screen = 0, track = 0, scene = 0, fixedBars = 3;
 	bool fixedOn = false;
+	// Quantize: quantTo and recQuant index kQuantToNames, quantAmount is a percent, recQuantOn is Record Quantize.
+	uint8_t quantTo = 4 /*1/16*/, quantAmount = 100, recQuant = 4;
+	bool recQuantOn = false;
 	// transient
 	uint8_t page = 0;      // the sequencer's page of 8 steps (a drum track: 32)
 	uint8_t pad[64] = {};  // velocity of each held pad, row * 8 + col
@@ -98,6 +114,8 @@ struct Ui {
 	uint8_t prevPads = kSession; // the mode before that press
 	int8_t dup = -1;             // Duplicate held: the slot to copy (track * 8 + scene), -1: none yet
 	uint8_t browse = 0;          // the Browse screen's cursor (a type)
+	double quantizeAt = -1;      // when the press of Quantize began (-1: none)
+	bool quantizeUsed = false;   // that press turned an encoder or pressed a pad: no tap
 	// The take (RECORD): its slot (recTrack -1: none), whether the clip was made by it, whether its length is open
 	// (kMaxLength until it ends) and the tick at which an open take ends once RECORD is pressed again (-1: not yet).
 	int8_t recTrack = -1, recScene = 0;
@@ -135,6 +153,20 @@ extern const uint8_t kLiveColors[kColors][3];
 /** Palette slots of the Push's LEDs for the tracks: 100 + t full, 108 + t a quarter of it. They avoid the white LEDs'
  * indices (16, 48, 127) and the fixed colours 122..127. */
 constexpr uint8_t kPaletteFull = 100, kPaletteDim = kPaletteFull + kTracks;
+
+/** A length as the Home screen names it: "1 Bar", "2 Bars", "3 Beats" or "100 ticks". */
+void lengthName(char* buf, size_t size, int length);
+
+/** The text of the popup that `v.s.ui.popup` is. */
+void popupText(const View& v, char* buf, size_t size);
+
+/** What Ui::quantTo and Ui::recQuant are called, in order. */
+extern const char* const kQuantToNames[8];
+
+/** Whether the Quantize settings show: Quantize is held, and for kHoldSeconds already (a shorter press is a tap). */
+inline bool quantizeSettings(const Ui& u) {
+	return u.button[push2::cc::Quantize] && u.quantizeAt >= 0 && u.now - u.quantizeAt >= kHoldSeconds;
+}
 
 /** What Transport::quant (the launch quantization) is called, in order: None, 8 Bars ... 1/32. */
 extern const char* const kQuantNames[14];
@@ -246,6 +278,9 @@ class Machine {
 	void record(State& st);
 	void endTake(bool discard = false);
 	void recordNote(State& st, int pad);
+	void quantizeClip(State& st, int p0, int p1);
+	void doubleLoop(State& st);
+	void quantizeEncoder(State& st, int encoder, int delta);
 	bool undo(State& st, bool redo);
 
 	// ponytail: one lock, as lattice::Machine; the audio side only try-locks and never waits.
@@ -299,7 +334,8 @@ class Machine {
 	double lastAt_ = -1;
 	Request request_ = Request::None;
 	bool sync_ = true; // take the lock this sample
-	int accTempo_ = 0, accSwing_ = 0, accScale_[8] = {}, accNote_[4] = {}, accClip_ = 0, accBrowse_ = 0;
+	int accTempo_ = 0, accSwing_ = 0, accScale_[8] = {}, accNote_[4] = {}, accClip_ = 0, accBrowse_ = 0,
+		accQuantTo_ = 0, accAmount_ = 0, accRecQuant_ = 0;
 	uint8_t sentColor_[kTracks] = {255, 255, 255, 255, 255, 255, 255, 255}; // what the Push's palette has; 255: none
 	int64_t taps_[5] = {};
 	int nTaps_ = 0;

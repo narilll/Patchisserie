@@ -626,10 +626,14 @@ int main() {
 			view->notes[0] = {0, 24, 36, 100}, view->notes[1] = {96, 48, 43, 60}, view->notes[2] = {200, 24, 40, 100};
 			int pass = 0;
 			// the Home screen with a clip, the Scale screen, the Home screen with a step held, then Fixed Length held,
-			// then the Clip screen, the Browse screen and the Home screen of a drum track
+			// then the Clip screen, the Browse screen, the Home screen of a drum track, and the Home screen with
+			// Quantize held (its settings) and with the Quantized popup
 			for (uint8_t id : {tart::kHome, tart::kScaleScreen, tart::kHome, tart::kHome, tart::kClipScreen,
-							   tart::kBrowseScreen, tart::kHome}) {
+							   tart::kBrowseScreen, tart::kHome, tart::kHome, tart::kHome}) {
 				view->s.ui.screen = id, view->s.scale.scale = 20, view->s.ui.browse = 1;
+				view->s.ui.button[push2::cc::Quantize] = pass == 7, view->s.ui.quantizeAt = 0;
+				view->s.ui.now = pass == 7 ? 1 : 0.5, view->s.ui.recQuantOn = pass == 7;
+				view->s.ui.popup = pass == 8 ? tart::kQuantizedPopup : tart::kTempoPopup, view->s.ui.popupAt = 0;
 				view->s.track[0].type = pass == 6 ? tart::Drum : tart::Melodic;
 				view->held = pass == 2 || pass == 6 ? 1 : -1, view->s.ui.button[push2::cc::FixedLength] = pass++ == 3;
 				if (!screen.begin(vg, fbVg)) {

@@ -1,4 +1,5 @@
 // Tart: the Push 2 decoder, LED diff, display frame and the echo state.
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstring>
@@ -2897,4 +2898,264 @@ TEST(record_state_is_transient) {
 	st->s.ui.recTrack = 3, st->s.ui.recOpen = st->s.ui.recFresh = true, st->s.ui.recEnd = 99;
 	tart::sanitize(*st);
 	CHECK(st->s.ui.recTrack == -1 && !st->s.ui.recOpen && !st->s.ui.recFresh && st->s.ui.recEnd == -1);
+}
+
+namespace {
+
+/** The clip of slot (0, 0): `length` ticks and the notes. */
+void setNotes(Rig& r, int length, std::initializer_list<tart::Note> notes) {
+	r.m.edit([=](tart::State& st) {
+		tart::Clip& c = st.clip[0][0];
+		c = tart::Clip();
+		c.length = (uint16_t)length;
+		for (const tart::Note& n : notes)
+			c.notes[c.nNotes++] = n;
+	});
+}
+void setQuantize(Rig& r, int to, int amount, int recTo = 4, bool recOn = false) {
+	r.m.edit([=](tart::State& st) {
+		st.s.ui.quantTo = (uint8_t)to, st.s.ui.quantAmount = (uint8_t)amount, st.s.ui.recQuant = (uint8_t)recTo;
+		st.s.ui.recQuantOn = recOn;
+	});
+}
+/** Quantize held for `seconds`, with the Push's LEDs refreshed on the way, then let go. */
+void holdQuantize(Rig& r, double seconds) {
+	r.press(push2::cc::Quantize);
+	r.in.leds = true;
+	r.run_((int)(48000 * seconds));
+}
+std::string popupOf(Rig& r) {
+	char buf[64];
+	tart::popupText(r.view(), buf, sizeof buf);
+	return buf;
+}
+
+} // namespace
+
+TEST(quantize_clip) {
+	Rig r;
+	setNotes(r, 384, {{5, 10, 60, 100}, {30, 10, 61, 100}, {50, 10, 62, 100}});
+	r.click(push2::cc::Quantize); // 1/16 at 100 %
+	auto v = r.view();
+	CHECK(v.nNotes == 3 && v.notes[0].tick == 0 && v.notes[1].tick == 24 && v.notes[2].tick == 48);
+	CHECK(v.notes[0].len == 10 && v.notes[1].len == 10); // the ends move with the starts: lengths stay
+	CHECK(v.s.ui.popup == tart::kQuantizedPopup && popupOf(r) == "Quantized to: 1/16, 100%");
+	setNotes(r, 384, {{5, 10, 60, 100}});
+	setQuantize(r, 4, 50);
+	r.click(push2::cc::Quantize);
+	CHECK(r.view().notes[0].tick == 3 && popupOf(r) == "Quantized to: 1/16, 50%");
+	setNotes(r, 384, {{30, 10, 60, 100}, {10, 10, 61, 100}});
+	setQuantize(r, 3, 100); // 1/8+T: the nearer of the 8th and the triplet 8th
+	r.click(push2::cc::Quantize);
+	v = r.view();
+	CHECK(v.notes[0].tick == 0 && v.notes[0].pitch == 61 && v.notes[1].tick == 32 && v.notes[1].pitch == 60);
+	CHECK(popupOf(r) == "Quantized to: 1/8+T, 100%");
+	setNotes(r, 384, {{20, 10, 60, 100}, {380, 10, 61, 100}}); // 380 is nearest the line at the end: tick 0
+	setQuantize(r, 4, 100);
+	r.click(push2::cc::Quantize);
+	v = r.view();
+	CHECK(v.nNotes == 2 && v.notes[0].tick == 0 && v.notes[0].pitch == 61 && v.notes[1].tick == 24);
+	setNotes(r, 384,
+			 {{0, 10, 60, 100}, {5, 10, 60, 90}, {5, 10, 61, 100}, {500, 10, 60, 100}}); // collision; one past the end
+	r.click(push2::cc::Quantize);
+	v = r.view();
+	CHECK(v.nNotes == 3 && v.notes[0].tick == 0 && v.notes[0].pitch == 60 && v.notes[1].tick == 0 &&
+		  v.notes[1].pitch == 61 && v.notes[2].tick == 500);
+	r.click(push2::cc::Undo); // one undo step brings every note back
+	v = r.view();
+	CHECK(v.nNotes == 4 && v.notes[0].tick == 0 && v.notes[1].tick == 5 && v.notes[2].tick == 5);
+	setNotes(r, 0, {}); // an empty slot: nothing happens
+	r.m.edit([](tart::State& st) { st.s.ui.popup = tart::kNoPopup; });
+	r.click(push2::cc::Quantize);
+	CHECK(r.view().s.ui.popup == tart::kNoPopup);
+}
+
+TEST(quantize_hold_no_tap) {
+	Rig r;
+	setNotes(r, 384, {{5, 10, 60, 100}});
+	holdQuantize(r, 0.35); // the settings show while held; letting go does nothing
+	r.step();
+	CHECK(tart::quantizeSettings(r.view().s.ui) && r.want.cc[push2::cc::Quantize].color == push2::kWhiteFull);
+	r.press(push2::cc::Quantize, 0);
+	CHECK(r.view().notes[0].tick == 5 && r.view().s.ui.popup == tart::kNoPopup);
+	CHECK(!tart::quantizeSettings(r.view().s.ui));
+	holdQuantize(r, 0.1); // a short press is not the settings
+	CHECK(!tart::quantizeSettings(r.view().s.ui));
+	r.press(push2::cc::Quantize, 0);
+	CHECK(r.view().notes[0].tick == 0); // a tap
+	setNotes(r, 384, {{5, 10, 60, 100}});
+	r.press(push2::cc::Quantize); // an encoder turned meanwhile cancels the tap
+	r.turn(1, 8);
+	r.press(push2::cc::Quantize, 0);
+	CHECK(r.view().notes[0].tick == 5);
+	r.press(push2::cc::Quantize); // so does a pad
+	r.pad(0, 0, 100), r.pad(0, 0, 0);
+	r.press(push2::cc::Quantize, 0);
+	CHECK(r.view().notes[0].tick == 5);
+	r.press(push2::cc::Quantize); // and the upper button 5
+	r.press(push2::cc::Track1Above + 4), r.press(push2::cc::Track1Above + 4, 0);
+	r.press(push2::cc::Quantize, 0);
+	CHECK(r.view().notes[0].tick == 5 && r.view().s.ui.recQuantOn);
+	r.click(push2::cc::Quantize); // the next press is a tap again
+	CHECK(r.view().notes[0].tick == 0);
+}
+
+TEST(quantize_settings) {
+	Rig r;
+	r.press(push2::cc::Quantize);
+	r.turn(0, 4); // SWING: the global swing, 2 raw steps for a percent
+	CHECK(r.view().s.transport.swing == 2);
+	r.turn(1, 8), r.turn(1, 8); // QUANTIZE TO: 8 steps for a choice, from 1/16
+	CHECK(r.view().s.ui.quantTo == 6);
+	r.turn(1, 40);
+	CHECK(r.view().s.ui.quantTo == 7);
+	r.turn(1, -60);
+	CHECK(r.view().s.ui.quantTo == 0);
+	r.turn(2, -20); // AMOUNT
+	CHECK(r.view().s.ui.quantAmount == 90);
+	r.turn(2, 30);
+	CHECK(r.view().s.ui.quantAmount == 100);
+	r.turn(4, -8); // REC QUANT
+	CHECK(r.view().s.ui.recQuant == 3);
+	r.turn(3, 8), r.turn(5, 8); // the other encoders do nothing
+	CHECK(r.view().s.ui.quantTo == 0 && r.view().s.ui.quantAmount == 100 && r.view().s.ui.recQuant == 3);
+	r.press(push2::cc::Track1Above + 4), r.press(push2::cc::Track1Above + 4, 0);
+	CHECK(r.view().s.ui.recQuantOn);
+	r.in.leds = true;
+	r.run_((int)(48000 * 0.35));
+	CHECK(r.want.cc[push2::cc::Track1Above + 4].color == push2::kRgbWhite);
+	r.press(push2::cc::Track1Above + 4), r.press(push2::cc::Track1Above + 4, 0);
+	r.step();
+	CHECK(!r.view().s.ui.recQuantOn && r.want.cc[push2::cc::Track1Above + 4].color == push2::kRgbDarkGray);
+	r.press(push2::cc::Quantize, 0);
+	r.step();
+	CHECK(r.want.cc[push2::cc::Track1Above + 4].color == push2::kBlack);
+	r.turn(1, 8); // not held: Quantize To stays
+	CHECK(r.view().s.ui.quantTo == 0);
+	auto st = std::make_unique<tart::State>();
+	st->s.ui.quantTo = 200, st->s.ui.quantAmount = 250, st->s.ui.recQuant = 9, st->s.ui.recQuantOn = true;
+	st->s.ui.quantizeAt = 5, st->s.ui.quantizeUsed = true;
+	tart::sanitize(*st);
+	CHECK(st->s.ui.quantTo == 7 && st->s.ui.quantAmount == 100 && st->s.ui.recQuant == 7 && st->s.ui.recQuantOn);
+	CHECK(st->s.ui.quantizeAt == -1 && !st->s.ui.quantizeUsed);
+	tart::State fresh;
+	CHECK(fresh.s.ui.quantTo == 4 && fresh.s.ui.quantAmount == 100 && fresh.s.ui.recQuant == 4 &&
+		  !fresh.s.ui.recQuantOn);
+	CHECK(std::string(tart::kQuantToNames[4]) == "1/16" && std::string(tart::kQuantToNames[6]) == "1/16+T");
+}
+
+TEST(quantize_lane) {
+	Rig r;
+	drumTrack(r);
+	setNotes(r, 384, {{5, 10, 36, 100}, {5, 10, 37, 100}, {30, 10, 37, 100}});
+	r.press(push2::cc::Quantize);
+	dlane(r, 1); // Quantize + a lane pad: that lane only, and it neither plays nor selects
+	r.press(push2::cc::Quantize, 0);
+	auto v = r.view();
+	CHECK(v.nNotes == 3 && v.notes[0].tick == 0 && v.notes[0].pitch == 37 && v.notes[1].tick == 5 &&
+		  v.notes[1].pitch == 36 && v.notes[2].tick == 24 && v.notes[2].pitch == 37);
+	CHECK(v.s.track[0].lane == 0 && v.s.ui.popup == tart::kQuantizedPopup); // the release was no tap: still 36 at 5
+	r.click(push2::cc::Quantize);                                           // a tap does all lanes
+	CHECK(r.view().notes[0].tick == 0 && r.view().notes[1].tick == 0);
+}
+
+TEST(quantize_held_pads_do_nothing) {
+	Rig r(false); // Session: a clip pad with Quantize held doesn't launch
+	setNotes(r, 384, {{0, 24, 60, 100}});
+	r.press(push2::cc::Quantize);
+	r.pad(7, 0, 100);
+	r.pad(7, 0, 0);
+	r.press(push2::cc::Quantize, 0);
+	auto v = r.view();
+	CHECK(v.s.track[0].playing == tart::kNone && v.s.track[0].queued == tart::kNone && !v.s.transport.playing);
+	Rig q; // the Melodic Sequencer: a step with Quantize held neither removes its note nor adds one
+	q.m.edit([](tart::State& st) { st.s.ui.noteLayout = 1; });
+	setNotes(q, 384, {{0, 24, 36, 100}});
+	q.press(push2::cc::Quantize);
+	q.pad(0, 0, 100);
+	q.pad(0, 1, 100);
+	q.press(push2::cc::Quantize, 0);
+	q.pad(0, 0, 0);
+	q.pad(0, 1, 0);
+	v = q.view();
+	CHECK(v.nNotes == 1 && v.notes[0].tick == 0 && v.notes[0].pitch == 36);
+}
+
+TEST(rec_quant) {
+	Rig r;
+	setQuantize(r, 4, 100, 7, true); // Record Quantize on, 1/32
+	r.click(push2::cc::Record);
+	hold(r, 30, 60);
+	runTo(r, 70);
+	auto v = r.view();
+	CHECK(v.nNotes == 1 && v.notes[0].tick == 36 && v.notes[0].len >= 29 && v.notes[0].len <= 31);
+	setQuantize(r, 4, 100, 4, false); // off: the played tick
+	hold(r, 100, 120, 1);
+	v = r.view();
+	CHECK(v.nNotes == 2 && v.notes[1].tick >= 99 && v.notes[1].tick <= 101);
+	setQuantize(r, 4, 100, 4, true); // 1/16: 140 is nearest 144
+	hold(r, 140, 150, 2);
+	v = r.view();
+	CHECK(v.nNotes == 3 && v.notes[2].tick == 144);
+	Rig w; // near the end of the clip: the line at the end is the start
+	fill(w, 0, 0);
+	setQuantize(w, 4, 100, 4, true);
+	w.click(push2::cc::Record);
+	hold(w, 380, 390);
+	v = w.view();
+	CHECK(v.nNotes == 2 && v.notes[0].tick == 0 && v.notes[0].pitch == 36 && v.notes[1].pitch == 60);
+}
+
+TEST(double_loop) {
+	Rig r;
+	setNotes(r, 384, {{0, 24, 60, 100}, {100, 10, 61, 90}, {400, 10, 62, 80}}); // the last starts past the end
+	CHECK(r.want.cc[push2::cc::DoubleLoop].color == push2::kBlack);
+	r.in.leds = true;
+	r.step();
+	CHECK(r.want.cc[push2::cc::DoubleLoop].color == push2::kWhiteDark);
+	r.press(push2::cc::DoubleLoop);
+	CHECK(r.want.cc[push2::cc::DoubleLoop].color == push2::kWhiteFull);
+	r.press(push2::cc::DoubleLoop, 0);
+	auto v = r.view();
+	CHECK(v.length[0][0] == 768 && v.nNotes == 4 && v.s.ui.popup == tart::kLoopLengthPopup);
+	CHECK(v.notes[0].tick == 0 && v.notes[1].tick == 100 && v.notes[2].tick == 384 && v.notes[3].tick == 484);
+	CHECK(v.notes[3].len == 10 && v.notes[3].pitch == 61 && v.notes[3].vel == 90);
+	CHECK(popupOf(r) == "New loop length: 2 Bars");
+	r.click(push2::cc::DoubleLoop);
+	CHECK(r.view().length[0][0] == 1536 && popupOf(r) == "New loop length: 4 Bars");
+	r.click(push2::cc::Undo); // each is one undo step
+	v = r.view();
+	CHECK(v.length[0][0] == 768 && v.nNotes == 4);
+	r.click(push2::cc::Undo);
+	v = r.view();
+	CHECK(v.length[0][0] == 384 && v.nNotes == 3 && v.notes[2].tick == 400); // the note past the end is back
+	setNotes(r, 17 * 384, {{0, 24, 60, 100}});                               // 34 bars would be too long
+	r.click(push2::cc::DoubleLoop);
+	v = r.view();
+	CHECK(v.length[0][0] == 17 * 384 && v.s.ui.popup == tart::kLoopTooLongPopup);
+	CHECK(popupOf(r) == "Loop is 32 Bars at most");
+	setNotes(r, 384, {});
+	r.m.edit([](tart::State& st) {
+		tart::Clip& c = st.clip[0][0];
+		for (int i = 0; i < tart::kMaxNotes / 2 + 1; i++)
+			c.notes[c.nNotes++] = {(uint16_t)(i % 384), 1, (uint8_t)(i / 384), 100};
+		std::sort(c.notes, c.notes + c.nNotes, [](const tart::Note& a, const tart::Note& b) {
+			return a.tick != b.tick ? a.tick < b.tick : a.pitch < b.pitch;
+		});
+	});
+	r.click(push2::cc::DoubleLoop); // the notes would not fit
+	v = r.view();
+	CHECK(v.length[0][0] == 384 && v.nNotes == tart::kMaxNotes / 2 + 1 && v.s.ui.popup == tart::kClipFullPopup);
+	r.m.edit([](tart::State& st) { st.clip[0][0].nNotes--; }); // exactly half: fits
+	r.click(push2::cc::DoubleLoop);
+	v = r.view();
+	CHECK(v.length[0][0] == 768 && v.nNotes == tart::kMaxNotes);
+	r.click(push2::cc::Track1Below + 1); // an empty slot: nothing
+	r.m.edit([](tart::State& st) { st.s.ui.popup = tart::kNoPopup; });
+	r.click(push2::cc::DoubleLoop);
+	CHECK(r.view().length[1][0] == 0 && r.view().s.ui.popup == tart::kNoPopup);
+	Rig t; // an open-length take sets the length: refused
+	t.click(push2::cc::Record);
+	t.click(push2::cc::DoubleLoop);
+	CHECK(t.view().length[0][0] == tart::kMaxLength && t.view().s.ui.popup == tart::kNoPopup);
 }
