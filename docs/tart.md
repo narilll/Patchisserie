@@ -58,7 +58,9 @@ The PUSH light has three states:
 
 - **Green**: both the MIDI connection and the display are connected.
 - **Red**: only MIDI is connected. The display is missing, so check the [status words](#display-status-words).
-- **Off**: there is no Push, or another Tart owns it (see [More than one Tart](#more-than-one-tart)).
+- **Off**: there is no Push, another Tart owns it (see [More than one Tart](#more-than-one-tart)), or Rack's engine is not running.
+
+Rack's engine runs every module in your patch, and your Audio module drives it. When the Audio module has no audio device chosen, the engine stops and no module does anything. The Push display still shows the test pattern, because Tart draws it outside the engine, but the PUSH light stays off, the pads and buttons stay dark, and the pattern doesn't react to the Push. Choose an audio device on your Audio module, and Tart starts at once.
 
 Tart looks for the Push every two seconds, so the light may take a moment to change after you plug in the Push.
 
