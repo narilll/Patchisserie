@@ -1467,14 +1467,17 @@ struct TartWidget : ModuleWidget {
 		if (now - lastPaint < 1.0 / 75)
 			return;
 		lastPaint = now;
+		// Drawn with fbVg, not vg, like Rack's FramebufferWidget: a frame leaves its context with our state (ratio 1,
+		// text settings), and Rack measures menu items with vg between its frames, so that must stay untouched.
 		NVGcontext* vg = APP->window->vg;
-		if (!screen.begin(vg))
+		NVGcontext* fbVg = APP->window->fbVg ? APP->window->fbVg : vg;
+		if (!screen.begin(vg, fbVg))
 			return;
-		paint(vg, m, own);
+		paint(fbVg, m, own);
 		bool send = own && display.status() == push2::Display::Connected;
 		if (send)
 			rgba.resize((size_t)push2::kWidth * push2::kHeight * 4);
-		screen.end(vg, send ? rgba.data() : nullptr);
+		screen.end(fbVg, send ? rgba.data() : nullptr);
 		if (send)
 			display.submit(rgba.data());
 	}

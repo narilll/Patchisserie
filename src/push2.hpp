@@ -273,12 +273,15 @@ inline void toFrame(const uint8_t* rgba, uint8_t* frame) {
 /** The 960x160 render target. UI thread only (GL). */
 class Screen {
   public:
-	/** Creates the FBO on first use, binds it (saving the previous binding and viewport), nvgBeginFrame at kWidth x
-	 * kHeight, ratio 1. False if the FBO can't be created (logged once). */
-	bool begin(NVGcontext* vg);
-	/** nvgEndFrame; if rgba, glReadPixels the whole target into it (kWidth*kHeight*4, bottom row first, as toFrame
-	 * expects); restores the binding and viewport. */
-	void end(NVGcontext* vg, uint8_t* rgba);
+	/** Creates the FBO with vg on first use (so vg's drawMirror can show it), binds it (saving the previous binding
+	 * and viewport), nvgBeginFrame on drawVg at kWidth x kHeight, ratio 1. drawVg is a context sharing vg's fonts and
+	 * images, not vg itself: Rack measures text with vg between its frames, and a frame of ours (ratio 1, our state)
+	 * would leave vg with the wrong metrics (Rack's APP->window->fbVg). False if the FBO can't be created (logged
+	 * once). */
+	bool begin(NVGcontext* vg, NVGcontext* drawVg);
+	/** nvgEndFrame on drawVg; if rgba, glReadPixels the whole target into it (kWidth*kHeight*4, bottom row first, as
+	 * toFrame expects); restores the binding and viewport. */
+	void end(NVGcontext* drawVg, uint8_t* rgba);
 	/** The last rendered image scaled into the rect (black if none). */
 	void drawMirror(NVGcontext* vg, float x, float y, float w, float h) const;
 	void destroy(); // the GL context is going away (onContextDestroy) or the widget is

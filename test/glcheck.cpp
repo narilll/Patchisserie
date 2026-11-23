@@ -419,6 +419,8 @@ int main() {
 	glewExperimental = GL_TRUE;
 	glewInit();
 	NVGcontext* vg = nvgCreateGL2(NVG_ANTIALIAS | NVG_STENCIL_STROKES);
+	// Rack's APP->window->fbVg: Tart draws the Push's display with it, vg stays Rack's.
+	NVGcontext* fbVg = nvgCreateSharedGL2(vg, NVG_ANTIALIAS | NVG_STENCIL_STROKES);
 	std::printf("GL %s, GLSL %s, %s\n", glGetString(GL_VERSION), glGetString(GL_SHADING_LANGUAGE_VERSION),
 				glGetString(GL_RENDERER));
 
@@ -539,21 +541,53 @@ int main() {
 		std::printf("  -> %s\n", why.empty() ? "ok" : ("FAIL " + why).c_str());
 		failures += !why.empty();
 	}
+	// Rack measures menu items between its frames with bndLabelWidth(APP->window->vg, ...): the Tart widget rendering
+	// the Push's display must not change what vg measures. Rack's frame first (ratio 2, scaled), then the widget's.
+	std::printf("tart leaves vg's text metrics alone\n");
+	std::string why;
+	{
+		int font = nvgCreateFont(vg, "ui", "res/fonts/IBMPlexSansCondensed-SemiBold.ttf");
+		int mono = nvgCreateFont(vg, "mono", "res/fonts/IBMPlexMono-Regular.ttf");
+		auto labelWidth = [&](const char* text) {
+			float b[4];
+			nvgFontFaceId(vg, font);
+			nvgFontSize(vg, 13);
+			nvgTextBounds(vg, 0, 0, text, nullptr, b);
+			return b[2] - b[0];
+		};
+		nvgBeginFrame(vg, 800, 600, 2);
+		nvgScale(vg, 2, 2);
+		nvgEndFrame(vg);
+		float w0 = labelWidth("Audio output device");
+		push2::Screen screen;
+		auto view = std::make_unique<tart::View>();
+		if (font < 0 || mono < 0 || !screen.begin(vg, fbVg)) {
+			why = "no fonts or framebuffer";
+		} else {
+			tart::paint(fbVg, *view, font, mono, "no display | in - | out -", nullptr);
+			screen.end(fbVg, nullptr);
+			float w1 = labelWidth("Audio output device");
+			std::printf("  label width %.2f before, %.2f after\n", w0, w1);
+			why = std::fabs(w1 - w0) < 0.5f ? "" : "the Push frame changed vg's text metrics";
+		}
+		screen.destroy();
+	}
+	std::printf("  -> %s\n", why.empty() ? "ok" : ("FAIL " + why).c_str());
+	failures += !why.empty();
 	// Tart's display: a red 10x10 square top left on black, rendered into push2::Screen, read back and converted. Pins
 	// the orientation and the colour order of what the Push gets; then the mirror draws the framebuffer.
 	std::printf("push2 screen\n");
-	std::string why;
 	{
 		push2::Screen screen;
 		std::vector<uint8_t> rgba((size_t)push2::kWidth * push2::kHeight * 4), frame(push2::kFrameBytes);
-		if (!screen.begin(vg)) {
+		if (!screen.begin(vg, fbVg)) {
 			why = "no framebuffer";
 		} else {
-			nvgBeginPath(vg);
-			nvgRect(vg, 0, 0, 10, 10);
-			nvgFillColor(vg, nvgRGB(255, 0, 0));
-			nvgFill(vg);
-			screen.end(vg, rgba.data());
+			nvgBeginPath(fbVg);
+			nvgRect(fbVg, 0, 0, 10, 10);
+			nvgFillColor(fbVg, nvgRGB(255, 0, 0));
+			nvgFill(fbVg);
+			screen.end(fbVg, rgba.data());
 			push2::toFrame(rgba.data(), frame.data());
 			const uint8_t* last = &frame[(size_t)(push2::kHeight - 1) * push2::kLineBytes];
 			nvgBeginFrame(vg, 64, 64, 1);
@@ -595,12 +629,12 @@ int main() {
 			for (uint8_t id : {tart::kHome, tart::kScaleScreen, tart::kHome, tart::kHome}) {
 				view->s.ui.screen = id, view->s.scale.scale = 20;
 				view->held = pass == 2 ? 1 : -1, view->s.ui.button[push2::cc::FixedLength] = pass++ == 3;
-				if (!screen.begin(vg)) {
+				if (!screen.begin(vg, fbVg)) {
 					why = "no framebuffer";
 					break;
 				}
-				tart::paint(vg, *view, sans, mono, "no display | in - | out -", nullptr);
-				screen.end(vg, rgba.data());
+				tart::paint(fbVg, *view, sans, mono, "no display | in - | out -", nullptr);
+				screen.end(fbVg, rgba.data());
 				size_t lit = 0;
 				for (size_t i = 0; i < rgba.size(); i += 4)
 					lit += rgba[i] || rgba[i + 1] || rgba[i + 2];
@@ -626,6 +660,7 @@ int main() {
 	std::printf("  -> %s\n", why.empty() ? "ok" : ("FAIL " + why).c_str());
 	failures += !why.empty();
 	renderer.destroy();
+	nvgDeleteGL2(fbVg);
 	nvgDeleteGL2(vg);
 	glfwDestroyWindow(win);
 	glfwTerminate();

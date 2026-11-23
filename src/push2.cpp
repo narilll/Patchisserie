@@ -9,7 +9,7 @@ namespace push2 {
 
 // --- Screen
 
-bool Screen::begin(NVGcontext* vg) {
+bool Screen::begin(NVGcontext* vg, NVGcontext* drawVg) {
 	if (!fb_ && !failed_ && !(fb_ = nvgluCreateFramebuffer(vg, kWidth, kHeight, 0))) {
 		WARN("Tart: cannot create the %dx%d display framebuffer", kWidth, kHeight);
 		failed_ = true;
@@ -23,12 +23,12 @@ bool Screen::begin(NVGcontext* vg) {
 	glViewport(0, 0, kWidth, kHeight);
 	glClearColor(0, 0, 0, 1);
 	glClear(GL_COLOR_BUFFER_BIT);
-	nvgBeginFrame(vg, kWidth, kHeight, 1);
+	nvgBeginFrame(drawVg, kWidth, kHeight, 1);
 	return true;
 }
 
-void Screen::end(NVGcontext* vg, uint8_t* rgba) {
-	nvgEndFrame(vg);
+void Screen::end(NVGcontext* drawVg, uint8_t* rgba) {
+	nvgEndFrame(drawVg);
 	if (rgba)
 		glReadPixels(0, 0, kWidth, kHeight, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
 	glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
