@@ -121,6 +121,38 @@ TEST(push2_diff) {
 	CHECK(big[0][0] == 0x90 && big[128][0] == 0xB0);
 }
 
+TEST(push2_diff_base) {
+	push2::Leds want, sent;
+	uint8_t out[8][3];
+	// An animation whose base is not what was last sent static: the base goes first, then the animation.
+	want.note[40] = {push2::kBlack, push2::kPulseHalf, 60};
+	CHECK(push2::diff(want, sent, false, out, 8) == 2);
+	CHECK(out[0][0] == 0x90 && out[0][1] == 40 && out[0][2] == 60);
+	CHECK(out[1][0] == (0x90 | push2::kPulseHalf) && out[1][1] == 40 && out[1][2] == push2::kBlack);
+	CHECK(push2::diff(want, sent, false, out, 8) == 0);
+	// The same base again (the colour changed): only the animation.
+	want.note[40].color = 7;
+	CHECK(push2::diff(want, sent, false, out, 8) == 1 && out[0][0] == (0x90 | push2::kPulseHalf) && out[0][2] == 7);
+	// Another base: both again.
+	want.note[40].base = 61;
+	CHECK(push2::diff(want, sent, false, out, 8) == 2 && out[0][0] == 0x90 && out[0][2] == 61);
+	// Back to static: one message, and the next animation from a base it sent before needs no base.
+	want.note[40] = {61, 0};
+	CHECK(push2::diff(want, sent, false, out, 8) == 1 && out[0][0] == 0x90 && out[0][2] == 61);
+	want.note[40] = {9, push2::kBlinkQuarter, 61};
+	CHECK(push2::diff(want, sent, false, out, 8) == 1 && out[0][0] == (0x90 | push2::kBlinkQuarter));
+	// Both count toward max: with room for one, the base goes now and the animation next time.
+	want.cc[30] = {5, push2::kPulseHalf, 3};
+	CHECK(push2::diff(want, sent, false, out, 1) == 1 && out[0][0] == 0xB0 && out[0][2] == 3);
+	CHECK(push2::diff(want, sent, false, out, 1) == 1 && out[0][0] == (0xB0 | push2::kPulseHalf) && out[0][2] == 5);
+	CHECK(push2::diff(want, sent, false, out, 8) == 0);
+	// All of it: an animation sends its base too, even when the base is what was sent.
+	push2::Leds all, known = {};
+	all.note[0] = {5, push2::kPulseHalf, 0};
+	CHECK(push2::diff(all, known, true, out, 8) == 8);
+	CHECK(out[0][0] == 0x90 && out[0][2] == 0 && out[1][0] == (0x90 | push2::kPulseHalf) && out[1][2] == 5);
+}
+
 TEST(push2_to_frame) {
 	std::vector<uint8_t> rgba((size_t)push2::kWidth * push2::kHeight * 4, 0);
 	std::vector<uint8_t> frame(push2::kFrameBytes);
@@ -154,7 +186,12 @@ struct Rig {
 	bool run = false;
 	tart::SliceFrame* slice = nullptr;
 
-	Rig() { in.sampleRate = 48000; }
+	/** Most tests play in Note mode; Session is the default of a new module. */
+	explicit Rig(bool note = true) {
+		in.sampleRate = 48000;
+		if (note)
+			m.edit([](tart::State& st) { st.s.ui.pads = tart::kNote; });
+	}
 	void step(const push2::Event* ev = nullptr, int n = 1) {
 		in.events = ev, in.nEvents = ev ? n : 0;
 		m.process(in, out, want, slice);
@@ -206,7 +243,7 @@ struct Rig {
 /** A Rig with a Slice on its right: `f` is the frame a Slice would read. */
 struct SliceRig : Rig {
 	tart::SliceFrame f = {};
-	SliceRig() { slice = &f; }
+	explicit SliceRig(bool note = true) : Rig(note) { slice = &f; }
 };
 
 } // namespace
@@ -353,7 +390,7 @@ TEST(tart_leds) {
 	CHECK(r.out.ledsDone);
 	CHECK(r.want.cc[push2::cc::Shift].color == push2::kWhiteDark &&
 		  r.want.cc[push2::cc::TapTempo].color == push2::kWhiteDark);
-	CHECK(r.want.cc[push2::cc::Undo].color == 0 && r.want.cc[push2::cc::Session].color == 0);
+	CHECK(r.want.cc[push2::cc::Undo].color == 0 && r.want.cc[push2::cc::Session].color == push2::kWhiteDark);
 	r.press(push2::cc::Shift);
 	CHECK(r.want.cc[push2::cc::Shift].color == push2::kWhiteFull);
 	r.press(push2::cc::Metronome);
@@ -545,7 +582,8 @@ TEST(track_buttons_and_octave) {
 	// pad LEDs: the root (C) is lit in the track's colour (selected track 0), other in-key notes white
 	CHECK(r.want.note[push2::padNote(0, 0)].color == tart::kPaletteFull &&
 		  r.want.note[push2::padNote(0, 1)].color == push2::kRgbWhite);
-	CHECK(r.want.cc[push2::cc::Note].color == push2::kWhiteFull && r.want.cc[push2::cc::Session].color == 0);
+	CHECK(r.want.cc[push2::cc::Note].color == push2::kWhiteFull &&
+		  r.want.cc[push2::cc::Session].color == push2::kWhiteDark);
 }
 
 TEST(bend) {
@@ -1175,4 +1213,349 @@ TEST(sanitize_clips) {
 	CHECK(e.nNotes == 0);
 	CHECK(s.nNotes == 2 && s.notes[0].tick == 10 && s.notes[1].tick == 50);
 	CHECK(st->s.track[0].playing == tart::kNone); // a patch loads stopped
+}
+
+namespace {
+
+/** A clip of `bars` bars with one note on its first tick (pitch 60 + track), in the slot. */
+void fill(Rig& r, int track, int scene, int bars = 1) {
+	r.m.edit([=](tart::State& st) {
+		tart::Clip& c = st.clip[track][scene];
+		c.length = (uint16_t)(bars * tart::kBar), c.nNotes = 1;
+		c.notes[0] = {0, 24, (uint8_t)(60 + track), 100};
+	});
+}
+
+/** The Session pad of a slot: row 0 is the bottom pad row, scene 1 the top one. */
+void slot(Rig& r, int track, int scene, int vel) {
+	r.pad(7 - scene, track, vel);
+}
+void tapSlot(Rig& r, int track, int scene) {
+	slot(r, track, scene, 100);
+	slot(r, track, scene, 0);
+}
+void setQuant(Rig& r, int quant) {
+	r.m.edit([=](tart::State& st) { st.s.transport.quant = (uint8_t)quant; });
+}
+
+} // namespace
+
+TEST(launch_quant) {
+	Rig r(false);
+	fill(r, 0, 0);
+	setQuant(r, 4);
+	r.in.play = true;
+	while (r.view().s.transport.tick < 100)
+		r.step();
+	CHECK(r.view().s.transport.tick == 100);
+	tapSlot(r, 0, 0);
+	auto v = r.view();
+	CHECK(v.s.track[0].queued == 0 && v.s.track[0].launchTick == 384 && v.s.track[0].playing == tart::kNone); // 1 Bar
+	setQuant(r, 0);
+	tapSlot(r, 0, 0);
+	CHECK(r.view().s.track[0].launchTick == 101); // None: the next tick
+	setQuant(r, 8);
+	tapSlot(r, 0, 0);
+	CHECK(r.view().s.track[0].launchTick == 128); // 1/4T: 64 ticks
+	setQuant(r, 1);
+	tapSlot(r, 0, 0);
+	CHECK(r.view().s.track[0].launchTick == 3072); // 8 Bars
+	setQuant(r, 8);
+	tapSlot(r, 0, 0);
+	r.run_(48000); // it starts at its tick, from the start of the clip
+	v = r.view();
+	CHECK(v.s.track[0].playing == 0 && v.s.track[0].startTick == 128 && v.s.track[0].queued == tart::kNone);
+}
+
+TEST(launch_while_stopped) {
+	SliceRig r(false);
+	fill(r, 0, 0);
+	CHECK(!r.view().s.transport.playing);
+	tapSlot(r, 0, 0);
+	r.run_(3000);
+	auto v = r.view();
+	CHECK(v.s.transport.playing && v.s.track[0].playing == 0 && v.s.track[0].startTick == 0);
+	CHECK(r.f.track[0].gate[0] == 10); // from tick 0, whatever the quantization
+	CHECK(v.s.ui.track == 0 && v.s.ui.scene == 0);
+	// a pad of an empty slot does not start it
+	r.click(push2::cc::Play);
+	r.run_(10);
+	CHECK(!r.view().s.transport.playing);
+	tapSlot(r, 1, 3);
+	r.run_(10);
+	CHECK(!r.view().s.transport.playing && r.view().s.ui.track == 1 && r.view().s.ui.scene == 3);
+}
+
+TEST(scene_launch_stops_empty) {
+	Rig r(false);
+	setQuant(r, 0);
+	fill(r, 0, 1);
+	fill(r, 1, 1);
+	fill(r, 2, 0);
+	fill(r, 3, 0);
+	r.in.play = true;
+	r.step();
+	tapSlot(r, 2, 0);
+	tapSlot(r, 3, 0);
+	r.run_(1000);
+	CHECK(r.view().s.track[2].playing == 0 && r.view().s.track[3].playing == 0);
+	r.click(push2::cc::Scene1 - 1); // scene 2
+	auto v = r.view();
+	CHECK(v.s.ui.scene == 1 && v.s.track[0].queued == 1 && v.s.track[1].queued == 1);
+	CHECK(v.s.track[2].queued == tart::kStopQueued && v.s.track[3].queued == tart::kStopQueued);
+	CHECK(v.s.track[4].queued == tart::kNone); // nothing played there
+	r.run_(1000);
+	v = r.view();
+	CHECK(v.s.track[0].playing == 1 && v.s.track[1].playing == 1);
+	CHECK(v.s.track[2].playing == tart::kNone && v.s.track[3].playing == tart::kNone &&
+		  v.s.track[2].queued == tart::kNone);
+}
+
+TEST(stop_clip_track_and_all) {
+	SliceRig r(false);
+	setQuant(r, 0);
+	for (int t = 0; t < 3; t++)
+		fill(r, t, 0);
+	r.click(push2::cc::Scene1);
+	r.run_(1000);
+	auto v = r.view();
+	CHECK(v.s.track[0].playing == 0 && v.s.track[1].playing == 0 && v.s.track[2].playing == 0);
+	r.press(push2::cc::StopClip);
+	r.in.leds = true;
+	r.step();
+	auto lower = [&](int t) { return r.want.cc[push2::cc::Track1Below + t]; };
+	CHECK(lower(0).channel == push2::kPulseHalf && lower(0).base == push2::kRed && lower(5).channel == 0 &&
+		  lower(5).color == 0);
+	r.click(push2::cc::Track1Below + 1); // stops track 2; does not select it
+	v = r.view();
+	CHECK(v.s.track[1].queued == tart::kStopQueued && v.s.ui.track == 0);
+	r.step();
+	CHECK(lower(1).channel == push2::kBlinkQuarter && lower(1).base == push2::kRed);
+	r.press(push2::cc::StopClip, 0);
+	r.run_(1000);
+	v = r.view();
+	CHECK(v.s.track[0].playing == 0 && v.s.track[1].playing == tart::kNone && v.s.track[2].playing == 0);
+	r.press(push2::cc::Shift);
+	r.click(push2::cc::StopClip);
+	r.press(push2::cc::Shift, 0);
+	r.run_(1000);
+	v = r.view();
+	CHECK(v.s.track[0].playing == tart::kNone && v.s.track[2].playing == tart::kNone && v.s.transport.playing);
+	// without Stop Clip a track button selects
+	r.click(push2::cc::Track1Below + 4);
+	CHECK(r.view().s.ui.track == 4);
+}
+
+TEST(empty_pad_stops) {
+	SliceRig r(false);
+	fill(r, 0, 0);
+	r.click(push2::cc::Scene1);
+	r.run_(1000);
+	CHECK(r.view().s.track[0].playing == 0 && r.f.track[0].gate[0] == 10);
+	tapSlot(r, 0, 3); // an empty slot of that track: its stop is queued at the quantization (1 Bar)
+	auto v = r.view();
+	CHECK(v.s.track[0].queued == tart::kStopQueued && v.s.track[0].launchTick == 384 && v.s.track[0].playing == 0);
+	CHECK(v.s.ui.scene == 3);
+	r.run_(48000 * 2);
+	CHECK(r.view().s.track[0].playing == tart::kNone && r.view().s.track[0].queued == tart::kNone);
+	tapSlot(r, 5, 5); // nothing plays on that track: nothing to stop
+	CHECK(r.view().s.track[5].queued == tart::kNone);
+}
+
+TEST(delete_pad_and_scene) {
+	SliceRig r(false);
+	setQuant(r, 0);
+	for (int t = 0; t < 3; t++)
+		fill(r, t, 0), fill(r, t, 1);
+	r.click(push2::cc::Scene1);
+	r.run_(1000);
+	CHECK(r.f.track[0].gate[0] == 10);
+	r.press(push2::cc::Delete);
+	tapSlot(r, 0, 0); // the clip goes, and with it its notes, at once
+	r.run_(3);
+	auto v = r.view();
+	CHECK(v.length[0][0] == 0 && v.length[0][1] == tart::kBar && v.s.track[0].playing == tart::kNone);
+	CHECK(r.f.track[0].gate[0] == 0 && v.s.track[1].playing == 0);
+	CHECK(r.state()->clip[0][0].nNotes == 0);
+	r.click(push2::cc::Scene1 - 1); // Delete and a scene button empty the row
+	r.press(push2::cc::Delete, 0);
+	v = r.view();
+	CHECK(v.length[0][1] == 0 && v.length[1][1] == 0 && v.length[2][1] == 0 && v.length[1][0] == tart::kBar);
+	CHECK(v.s.track[1].queued == tart::kNone);
+}
+
+TEST(duplicate_pad_and_scene) {
+	Rig r(false);
+	fill(r, 0, 0, 2);
+	r.m.edit([](tart::State& st) { st.clip[0][0].nNotes = 1, st.clip[0][0].notes[0].vel = 77; });
+	fill(r, 1, 0);
+	r.press(push2::cc::Duplicate);
+	slot(r, 0, 0, 100); // the source, then two destinations
+	slot(r, 0, 0, 0);
+	tapSlot(r, 0, 3);
+	tapSlot(r, 2, 5);
+	tapSlot(r, 0, 0); // onto itself: nothing
+	r.press(push2::cc::Duplicate, 0);
+	auto st = r.state();
+	CHECK(st->clip[0][3].length == 768 && st->clip[0][3].notes[0].vel == 77 && st->clip[2][5].length == 768);
+	CHECK(st->clip[0][0].length == 768 && st->s.ui.track == 0 && st->s.ui.scene == 0);
+	CHECK(st->s.transport.playing == false && st->s.track[0].playing == tart::kNone);
+	// an empty source copies nothing and the next press is not a destination
+	r.press(push2::cc::Duplicate);
+	tapSlot(r, 6, 6);
+	tapSlot(r, 0, 3);
+	r.press(push2::cc::Duplicate, 0);
+	CHECK(r.view().length[0][3] == 768);
+	// Duplicate and a scene button: the row goes into the next scene, over what was there
+	r.press(push2::cc::Duplicate);
+	r.click(push2::cc::Scene1);
+	r.press(push2::cc::Duplicate, 0);
+	auto v = r.view();
+	CHECK(v.length[0][1] == 768 && v.length[1][1] == tart::kBar && v.length[2][1] == 0);
+	r.press(push2::cc::Duplicate);
+	r.click(push2::cc::Scene1 - 7); // the last scene: nowhere to go
+	r.press(push2::cc::Duplicate, 0);
+	CHECK(!r.view().s.transport.playing);
+}
+
+TEST(new_selects_empty) {
+	Rig r(false);
+	setQuant(r, 0);
+	fill(r, 0, 0);
+	fill(r, 0, 1);
+	fill(r, 0, 3);
+	r.click(push2::cc::Scene1);
+	r.in.play = true;
+	r.run_(1000);
+	r.click(push2::cc::New); // the playing clip stops and the next empty slot below is selected
+	auto v = r.view();
+	CHECK(v.s.ui.track == 0 && v.s.ui.scene == 2 && v.s.track[0].queued == tart::kStopQueued);
+	r.run_(1000);
+	CHECK(r.view().s.track[0].playing == tart::kNone);
+	r.click(push2::cc::New); // already on an empty slot: it stays
+	CHECK(r.view().s.ui.scene == 2);
+	r.click(push2::cc::Down);
+	r.click(push2::cc::Down);
+	r.click(push2::cc::New);
+	CHECK(r.view().s.ui.scene == 4); // 3 is a clip, 4 is not
+	for (int sc = 0; sc < 8; sc++)
+		fill(r, 0, sc);
+	r.click(push2::cc::New); // none below: it stays
+	CHECK(r.view().s.ui.scene == 4);
+}
+
+TEST(select_without_launch) {
+	Rig r(false);
+	fill(r, 2, 4);
+	r.press(push2::cc::Select);
+	tapSlot(r, 2, 4);
+	auto v = r.view();
+	CHECK(v.s.ui.track == 2 && v.s.ui.scene == 4);
+	CHECK(v.s.track[2].playing == tart::kNone && v.s.track[2].queued == tart::kNone && !v.s.transport.playing);
+	tapSlot(r, 6, 7);               // empty slots too, and no stop is queued
+	r.click(push2::cc::Scene1 - 2); // and a scene button selects its scene without launching
+	r.press(push2::cc::Select, 0);
+	v = r.view();
+	CHECK(v.s.ui.track == 6 && v.s.ui.scene == 2 && !v.s.transport.playing && v.s.track[2].queued == tart::kNone);
+	// the arrows move the slot, with no scrolling and no wrapping
+	r.click(push2::cc::Up);
+	r.click(push2::cc::Right);
+	CHECK(r.view().s.ui.scene == 1 && r.view().s.ui.track == 7);
+	r.click(push2::cc::Right);
+	r.click(push2::cc::Up);
+	r.click(push2::cc::Up);
+	CHECK(r.view().s.ui.scene == 0 && r.view().s.ui.track == 7);
+	r.click(push2::cc::Left);
+	r.click(push2::cc::Down);
+	CHECK(r.view().s.ui.scene == 1 && r.view().s.ui.track == 6);
+}
+
+TEST(momentary_mode) {
+	Rig r(false);
+	CHECK(r.view().s.ui.pads == tart::kSession); // the default
+	r.press(push2::cc::Note);                    // held for 0.6 s: Note only while it is down
+	CHECK(r.view().s.ui.pads == tart::kNote);
+	r.run_(30000);
+	r.press(push2::cc::Note, 0);
+	CHECK(r.view().s.ui.pads == tart::kSession);
+	r.click(push2::cc::Note); // a tap stays
+	CHECK(r.view().s.ui.pads == tart::kNote);
+	r.press(push2::cc::Session);
+	r.run_(30000);
+	CHECK(r.view().s.ui.pads == tart::kSession);
+	r.press(push2::cc::Session, 0);
+	CHECK(r.view().s.ui.pads == tart::kNote);
+	r.click(push2::cc::Session);
+	CHECK(r.view().s.ui.pads == tart::kSession);
+}
+
+TEST(session_leds) {
+	Rig r(false);
+	setQuant(r, 0);
+	fill(r, 0, 0);
+	fill(r, 1, 0);
+	fill(r, 1, 2);
+	r.in.leds = true;
+	r.step();
+	auto pad = [&](int t, int sc) { return r.want.note[push2::padNote(7 - sc, t)]; };
+	auto scene = [&](int sc) { return r.want.cc[push2::cc::Scene1 - sc]; };
+	push2::Led still = {(uint8_t)tart::kPaletteFull, push2::kStatic};
+	CHECK(pad(0, 0).color == still.color && pad(0, 0).channel == 0); // stopped: the track's color, static
+	CHECK(pad(1, 2).color == tart::kPaletteFull + 1 && pad(0, 1).color == 0 && pad(5, 5).color == 0);
+	CHECK(scene(0).color == push2::kGreen && scene(2).color == push2::kGreen && scene(1).color == 0 &&
+		  scene(0).channel == 0);
+	CHECK(r.want.cc[push2::cc::Session].color == push2::kWhiteFull &&
+		  r.want.cc[push2::cc::Note].color == push2::kWhiteDark);
+	CHECK(r.want.cc[push2::cc::Delete].color == push2::kWhiteDark &&
+		  r.want.cc[push2::cc::StopClip].color == push2::kWhiteDark);
+	r.press(push2::cc::Duplicate);
+	CHECK(r.want.cc[push2::cc::Duplicate].color == push2::kWhiteFull);
+	r.press(push2::cc::Duplicate, 0);
+	r.in.play = true;
+	r.step();
+	r.in.leds = true;
+	tapSlot(r, 0, 0); // queued for the next tick: blinking green from the color
+	CHECK(pad(0, 0).channel == push2::kBlinkQuarter && pad(0, 0).color == push2::kGreen &&
+		  pad(0, 0).base == tart::kPaletteFull);
+	CHECK(scene(0).channel == push2::kBlinkQuarter && scene(0).color == push2::kBlack &&
+		  scene(0).base == push2::kGreen);
+	r.run_(1000);
+	r.in.leds = true;
+	r.step();
+	CHECK(pad(0, 0).channel == push2::kPulseHalf && pad(0, 0).color == tart::kPaletteDim &&
+		  pad(0, 0).base == tart::kPaletteFull); // playing: pulses
+	CHECK(pad(1, 0).channel == 0 && pad(1, 0).color == tart::kPaletteFull + 1);
+	CHECK(scene(0).channel == 0 && scene(0).color == push2::kGreen);
+	tapSlot(r, 0, 1); // a stop queued: the playing clip blinks to dark
+	r.in.leds = true;
+	r.step();
+	CHECK(pad(0, 0).channel == push2::kBlinkQuarter && pad(0, 0).color == push2::kBlack);
+	r.run_(1000);
+	r.in.leds = true;
+	r.step();
+	CHECK(pad(0, 0).channel == 0 && pad(0, 0).color == tart::kPaletteFull);
+	r.click(push2::cc::Note); // Note mode: no more session pads
+	r.in.leds = true;
+	r.step();
+	CHECK(r.want.cc[push2::cc::Scene1].color == 0);
+}
+
+TEST(note_added_to_a_stopped_clip_does_not_launch) {
+	SliceRig r;
+	fill(r, 0, 0);
+	r.click(push2::cc::Layout);
+	r.tap(1, 1); // the slot has a clip: a note goes in, the clip does not start
+	auto v = r.view();
+	CHECK(v.nNotes == 2 && v.s.track[0].playing == tart::kNone && v.s.track[0].queued == tart::kNone);
+	r.in.play = true;
+	r.run_(3000);
+	r.tap(2, 2);
+	v = r.view();
+	CHECK(v.nNotes == 3 && v.s.track[0].playing == tart::kNone && v.s.track[0].queued == tart::kNone);
+	CHECK(r.f.track[0].gate[0] == 0);
+	// another slot, edited through the selection: the first step of an empty slot creates the clip and launches it
+	r.click(push2::cc::Down);
+	r.tap(0, 0);
+	v = r.view();
+	CHECK(v.s.ui.scene == 1 && v.length[0][1] == tart::kBar && v.s.track[0].queued == 1);
 }

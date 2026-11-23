@@ -1,6 +1,7 @@
 // Tart's display: what push2::Screen shows on the Push (960x160: 8 columns of 120 px, the top band over the encoders
 // and upper buttons, the bottom band over the lower buttons) and in the panel's mirror.
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 
 #include <nanovg.h>
@@ -14,9 +15,6 @@ namespace {
 const char* const kLayoutNames[] = {"4ths", "3rds", "Sequential"};
 // What the Scale screen's root buttons show, in kRoots order. ASCII flats: the fonts may lack the flat sign.
 const char* const kRootNames[] = {"C", "G", "D", "A", "E", "B", "F", "Bb", "Eb", "Ab", "Db", "Gb"};
-
-const char* const kQuantNames[] = {"None", "8 Bars", "4 Bars", "2 Bars", "1 Bar", "1/2",   "1/2T",
-								   "1/4",  "1/4T",   "1/8",    "1/8T",   "1/16",  "1/16T", "1/32"};
 
 const char* const kFixedNames[] = {"1 BEAT", "2 BEATS", "1 BAR", "2 BARS", "4 BARS", "8 BARS", "16 BARS", "32 BARS"};
 const int kGrids[8] = {96, 64, 48, 32, 24, 16, 12, 8}; // ticks of a step, as in tart.cpp
@@ -174,6 +172,23 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 			if (selected)
 				rect(120.f * i + 3, 138, 114, 20, color);
 			text(120.f * i + 60, 154, v.s.track[i].name, 15, NVG_ALIGN_CENTER, selected ? black : color, sans);
+			// A triangle where a clip plays, a blinking square where its stop is queued.
+			const Track& k = v.s.track[i];
+			bool stopQueued = k.queued == kStopQueued;
+			if (stopQueued ? std::fmod(ui.now, 0.5) < 0.25 : k.playing != kNone) {
+				float x = 120.f * i + 8;
+				nvgBeginPath(vg);
+				if (stopQueued) {
+					nvgRect(vg, x, 142, 10, 10);
+				} else {
+					nvgMoveTo(vg, x, 141);
+					nvgLineTo(vg, x, 153);
+					nvgLineTo(vg, x + 11, 147);
+					nvgClosePath(vg);
+				}
+				nvgFillColor(vg, selected ? black : color);
+				nvgFill(vg);
+			}
 		}
 	}
 

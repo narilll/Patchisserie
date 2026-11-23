@@ -1,8 +1,8 @@
 #pragma once
-// Tart: the Push 2 as a Rack controller. E2.4: transport and clock, tracks, Note mode, colours, Scale mode, clips. The
-// Session (what the Push shows and saves) is owned by Machine under one lock; the audio thread (Machine::process)
-// handles the Push's events and runs the clock, the UI thread reads a View copy and edits through Machine::edit.
-// Audio-thread paths never allocate, wait on a lock, throw or log.
+// Tart: the Push 2 as a Rack controller. E2.5: transport and clock, tracks, Session and Note modes, colours, Scale
+// mode, clips. The Session (what the Push shows and saves) is owned by Machine under one lock; the audio thread
+// (Machine::process) handles the Push's events and runs the clock, the UI thread reads a View copy and edits through
+// Machine::edit. Audio-thread paths never allocate, wait on a lock, throw or log.
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -73,9 +73,8 @@ struct Scale {
 
 struct Ui {
 	// saved
-	// ponytail: Note until Session mode exists (E2.5 makes Session the default).
 	// noteLayout: 0 64 notes, 1 the Melodic Sequencer. fixedBars: Fixed Length, 0..7 = 1 Beat, 2 Beats, 1 .. 32 Bars.
-	uint8_t pads = kNote, noteLayout = 0, screen = 0, track = 0, scene = 0, fixedBars = 3;
+	uint8_t pads = kSession, noteLayout = 0, screen = 0, track = 0, scene = 0, fixedBars = 3;
 	bool fixedOn = false;
 	// transient
 	uint8_t page = 0;      // the sequencer's page of 8 steps
@@ -90,6 +89,9 @@ struct Ui {
 	uint8_t popup = kNoPopup;
 	double popupAt = 0, now = 0; // seconds of audio time
 	double scaleAt = -1;         // when the press that opened the Scale screen began (-1: none)
+	double padsAt = -1;          // when the press of Session or Note began (-1: none); held 0.5 s: momentary
+	uint8_t prevPads = kSession; // the mode before that press
+	int8_t dup = -1;             // Duplicate held: the slot to copy (track * 8 + scene), -1: none yet
 };
 
 struct Session {
@@ -122,6 +124,9 @@ extern const uint8_t kLiveColors[kColors][3];
 /** Palette slots of the Push's LEDs for the tracks: 100 + t full, 108 + t a quarter of it. They avoid the white LEDs'
  * indices (16, 48, 127) and the fixed colours 122..127. */
 constexpr uint8_t kPaletteFull = 100, kPaletteDim = kPaletteFull + kTracks;
+
+/** What Transport::quant (the launch quantization) is called, in order: None, 8 Bars ... 1/32. */
+extern const char* const kQuantNames[14];
 
 /** Where the Scale screen's root buttons go: the six upper buttons (2..7), then the six lower ones (2..7). */
 constexpr uint8_t kRoots[12] = {0, 7, 2, 9, 4, 11, 5, 10, 3, 8, 1, 6};
@@ -209,8 +214,13 @@ class Machine {
 	void pad(State& st, int index, int vel);
 	void sequencer(State& st, int index, int vel);
 	void noteEncoder(State& st, int encoder, int delta);
+	void session(State& st, int index);
+	void sceneButton(State& st, int scene);
 	void launch(Session& s, int track, int scene);
+	void stopTrack(Session& s, int track, bool now);
 	void stopClips(Session& s);
+	void clear(State& st, int track, int scene);
+	void copy(State& st, int track, int scene, int toTrack, int toScene);
 	void leds(const State& st, push2::Leds& out) const;
 	bool scaleButton(Scale& sc, int button); // on the Scale screen: whether it was one of its buttons
 	void tap(Transport& t);

@@ -71,6 +71,19 @@ int lastPage(const Clip& c, int grid) {
 	return c.length ? std::max(((c.length + grid - 1) / grid + 7) / 8 - 1, 0) : 0;
 }
 
+/** Selects a slot: a held step belongs to the clip it was pressed on. */
+void select(Ui& ui, int track, int scene) {
+	ui.heldStep = -1;
+	if (track != ui.track || scene != ui.scene)
+		ui.track = (uint8_t)track, ui.scene = (uint8_t)scene, ui.page = 0;
+}
+
+/** The tick a launch or stop happens at: the next multiple of the launch quantization after `tick`. */
+int64_t launchAt(const Transport& t) {
+	int q = kQuant[t.quant];
+	return q ? (t.tick / q + 1) * q : t.tick + 1;
+}
+
 /** Whole detents of an encoder: `delta` raw units added to the remainder `acc`, `units` per detent. */
 int steps(int& acc, int delta, int units) {
 	acc += delta;
@@ -80,6 +93,9 @@ int steps(int& acc, int delta, int units) {
 }
 
 } // namespace
+
+const char* const kQuantNames[14] = {"None", "8 Bars", "4 Bars", "2 Bars", "1 Bar", "1/2",   "1/2T",
+									 "1/4",  "1/4T",   "1/8",    "1/8T",   "1/16",  "1/16T", "1/32"};
 
 // The Push's screen colours for Live's 70 clip colours (Ableton's Push 2 script, colors.py), 14 to a row as Live shows
 // them. ponytail: the Push palette has few distinct colours, so many indices repeat.
@@ -210,7 +226,8 @@ void sanitize(State& st) {
 	u.page = 0, u.heldStep = -1, u.heldHad = u.heldEdited = false, u.fixedAt = -1, u.bend = 0;
 	std::fill(u.pad, u.pad + 64, 0);
 	std::fill(u.button, u.button + 128, false);
-	u.touched = 0, u.popup = kNoPopup, u.popupAt = u.now = 0, u.scaleAt = -1;
+	u.touched = 0, u.popup = kNoPopup, u.popupAt = u.now = 0, u.scaleAt = u.padsAt = -1;
+	u.prevPads = kSession, u.dup = -1;
 	for (auto& row : st.clip)
 		for (Clip& c : row) { // `playing` is transient, so a clip needs no more than sorted notes of sound values
 			c.length = std::min<uint16_t>(c.length, kMaxLength);
@@ -305,11 +322,6 @@ void Machine::handle(State& st, const push2::Event& e) {
 	Transport& t = s.transport;
 	Ui& ui = s.ui;
 	auto show = [&](Popup p) { ui.popup = p, ui.popupAt = ui.now; };
-	auto select = [&](int track) { // a held step belongs to the clip it was pressed on
-		ui.heldStep = -1;
-		if (track != ui.track)
-			ui.track = (uint8_t)track, ui.page = 0;
-	};
 	switch (e.type) {
 	case Event::Button:
 		ui.button[e.index & 127] = e.value != 0;
@@ -318,6 +330,13 @@ void Machine::handle(State& st, const push2::Event& e) {
 				ui.screen = kHome; // held: the screen was only there for as long as the button
 			if (e.index == push2::cc::Scale)
 				ui.scaleAt = -1;
+			if (e.index == push2::cc::Session || e.index == push2::cc::Note) {
+				if (ui.padsAt >= 0 && ui.now - ui.padsAt >= kHoldSeconds)
+					ui.pads = ui.prevPads; // held: the mode was only there for as long as the button
+				ui.padsAt = -1;
+			}
+			if (e.index == push2::cc::Duplicate)
+				ui.dup = -1;
 			if (e.index == push2::cc::FixedLength) { // a tap toggles; a hold, or choosing a length, doesn't
 				if (ui.fixedAt >= 0 && ui.now - ui.fixedAt < kHoldSeconds)
 					ui.fixedOn = !ui.fixedOn;
@@ -331,22 +350,41 @@ void Machine::handle(State& st, const push2::Event& e) {
 			t.metronome = !t.metronome;
 		else if (e.index == push2::cc::TapTempo)
 			tap(t), show(kTempoPopup); // never starts the transport
-		else if (e.index == push2::cc::Note)
-			ui.pads = kNote;
-		else if (e.index == push2::cc::FixedLength)
+		else if (e.index == push2::cc::Note || e.index == push2::cc::Session) {
+			ui.prevPads = ui.pads, ui.pads = e.index == push2::cc::Note ? kNote : kSession;
+			ui.padsAt = ui.now, ui.heldStep = -1;
+		} else if (e.index == push2::cc::FixedLength)
 			ui.fixedAt = ui.now;
 		else if (ui.button[push2::cc::FixedLength] && fixedLengthButton(ui, e.index)) {
 		} else if (e.index == push2::cc::Scale) {
 			ui.screen = ui.screen == kScaleScreen ? kHome : kScaleScreen;
 			ui.scaleAt = ui.screen == kScaleScreen ? ui.now : -1;
 		} else if (ui.screen == kScaleScreen && scaleButton(s.scale, e.index)) {
-		} else if (e.index >= push2::cc::Track1Below && e.index <= push2::cc::Track8Below)
-			select(e.index - push2::cc::Track1Below);
-		else if (ui.pads != kNote)
-			break;
-		else if (e.index == push2::cc::Left || e.index == push2::cc::Right)
-			select(std::min(std::max(ui.track + (e.index == push2::cc::Right ? 1 : -1), 0), kTracks - 1));
-		else if (e.index == push2::cc::OctaveUp || e.index == push2::cc::OctaveDown) {
+		} else if (e.index == push2::cc::StopClip) {
+			if (ui.button[push2::cc::Shift])
+				for (int k = 0; k < kTracks; k++)
+					stopTrack(s, k, false);
+		} else if (e.index >= push2::cc::Track1Below && e.index <= push2::cc::Track8Below) {
+			if (ui.button[push2::cc::StopClip])
+				stopTrack(s, e.index - push2::cc::Track1Below, false);
+			else
+				select(ui, e.index - push2::cc::Track1Below, ui.scene);
+		} else if (e.index >= push2::cc::Left && e.index <= push2::cc::Down) { // no scrolling: all 64 slots fit
+			int d = e.index == push2::cc::Left ? -1 : e.index == push2::cc::Right ? 1 : 0;
+			int v = e.index == push2::cc::Up ? -1 : e.index == push2::cc::Down ? 1 : 0;
+			select(ui, std::min(std::max(ui.track + d, 0), kTracks - 1),
+				   std::min(std::max(ui.scene + v, 0), kScenes - 1));
+		} else if (e.index == push2::cc::New) { // stops the track and moves to the next empty slot
+			stopTrack(s, ui.track, false);
+			int sc = ui.scene;
+			while (sc < kScenes && st.clip[ui.track][sc].length)
+				sc++;
+			if (sc < kScenes)
+				select(ui, ui.track, sc);
+		} else if (ui.pads == kSession) {
+			if (e.index >= push2::cc::Scene8 && e.index <= push2::cc::Scene1)
+				sceneButton(st, push2::cc::Scene1 - e.index);
+		} else if (e.index == push2::cc::OctaveUp || e.index == push2::cc::OctaveDown) {
 			int8_t& o = s.track[ui.track].octave;
 			o = (int8_t)std::min(std::max(o + (e.index == push2::cc::OctaveUp ? 1 : -1), 0), kMaxOctave);
 		} else if (e.index == push2::cc::Layout)
@@ -415,11 +453,16 @@ void Machine::pad(State& st, int i, int vel) {
 	Live& l = live_[i];
 	if (l.id)
 		voice_[l.track].noteOff(l.id), l = Live(), s.ui.pad[i] = 0;
-	if (s.ui.pads == kNote && s.ui.noteLayout) {
+	if (s.ui.pads == kSession) {
+		if (vel)
+			session(st, i);
+		return;
+	}
+	if (s.ui.noteLayout) {
 		sequencer(st, i, vel);
 		return;
 	}
-	if (!vel || s.ui.pads != kNote)
+	if (!vel)
 		return;
 	bool root, inScale;
 	int p = padPitch(s.scale, s.track[s.ui.track].octave, i / 8, i % 8, root, inScale);
@@ -437,18 +480,107 @@ void Machine::launch(Session& s, int track, int scene) {
 		tr.playing = (int8_t)scene, tr.queued = kNone, tr.startTick = 0;
 		return;
 	}
-	int q = kQuant[s.transport.quant];
 	tr.queued = (int8_t)scene;
-	tr.launchTick = q ? (s.transport.tick / q + 1) * q : s.transport.tick + 1;
+	tr.launchTick = launchAt(s.transport);
+}
+
+/** Stops the track's clip at the launch quantization (at once when `now` or the transport is stopped) and cancels a
+ * launch that is waiting. */
+void Machine::stopTrack(Session& s, int track, bool now) {
+	Track& tr = s.track[track];
+	if (!now && clock_.started()) {
+		if (tr.playing != kNone || tr.queued != kNone)
+			tr.queued = kStopQueued, tr.launchTick = launchAt(s.transport);
+		return;
+	}
+	for (int i = 0; i < nActive_[track]; i++)
+		voice_[track].noteOff(active_[track][i].id);
+	nActive_[track] = 0;
+	tr.playing = tr.queued = kNone;
 }
 
 /** The transport stopped: every clip stops (as in Live) and its notes end. Pads you hold go on sounding. */
 void Machine::stopClips(Session& s) {
+	for (int t = 0; t < kTracks; t++)
+		stopTrack(s, t, true);
+}
+
+/** Empties a slot; a clip that was playing there stops at once. */
+void Machine::clear(State& st, int track, int scene) {
+	Session& s = st.s;
+	if (s.track[track].playing == scene)
+		stopTrack(s, track, true);
+	if (s.track[track].queued == scene)
+		s.track[track].queued = kNone;
+	if (track == s.ui.track && scene == s.ui.scene)
+		s.ui.heldStep = -1;
+	std::memset(&st.clip[track][scene], 0, sizeof(Clip)); // all zero is the empty clip
+}
+
+/** Copies a slot (an empty one empties the destination). */
+void Machine::copy(State& st, int track, int scene, int toTrack, int toScene) {
+	if (st.clip[track][scene].length)
+		st.clip[toTrack][toScene] = st.clip[track][scene];
+	else
+		clear(st, toTrack, toScene);
+}
+
+/** A Session pad: launches its clip (an empty slot stops the track); Select, Delete and Duplicate make it select,
+ * delete or copy instead. */
+void Machine::session(State& st, int i) {
+	Session& s = st.s;
+	Ui& ui = s.ui;
+	int t = i % 8, sc = 7 - i / 8;
+	bool full = st.clip[t][sc].length != 0;
+	if (ui.button[push2::cc::Select]) {
+		select(ui, t, sc);
+	} else if (ui.button[push2::cc::Delete]) {
+		clear(st, t, sc);
+	} else if (ui.button[push2::cc::Duplicate]) { // the first slot is the source, every one after it a destination
+		if (ui.dup < 0 && full)
+			ui.dup = (int8_t)(t * 8 + sc);
+		else if (ui.dup >= 0 && ui.dup != t * 8 + sc)
+			copy(st, ui.dup / 8, ui.dup % 8, t, sc);
+		if (ui.dup >= 0)
+			select(ui, t, sc);
+	} else {
+		select(ui, t, sc);
+		if (full) {
+			launch(s, t, sc);
+			if (!clock_.started())
+				request_ = Request::Play;
+		} else {
+			stopTrack(s, t, false);
+		}
+	}
+}
+
+/** A Session scene button: launches the row (the tracks with an empty slot stop); Select, Delete and Duplicate make it
+ * select the scene, empty the row or copy it into the next scene. */
+void Machine::sceneButton(State& st, int scene) {
+	Session& s = st.s;
+	if (s.ui.button[push2::cc::Select]) {
+		select(s.ui, s.ui.track, scene);
+		return;
+	}
+	bool launched = false;
 	for (int t = 0; t < kTracks; t++) {
-		for (int i = 0; i < nActive_[t]; i++)
-			voice_[t].noteOff(active_[t][i].id);
-		nActive_[t] = 0;
-		s.track[t].playing = s.track[t].queued = kNone;
+		if (s.ui.button[push2::cc::Delete]) {
+			clear(st, t, scene);
+		} else if (s.ui.button[push2::cc::Duplicate]) {
+			if (scene + 1 < kScenes)
+				copy(st, t, scene, t, scene + 1);
+		} else if (st.clip[t][scene].length) {
+			launch(s, t, scene);
+			launched = true;
+		} else {
+			stopTrack(s, t, false);
+		}
+	}
+	if (!s.ui.button[push2::cc::Delete] && !s.ui.button[push2::cc::Duplicate]) {
+		select(s.ui, s.ui.track, scene);
+		if (launched && !clock_.started())
+			request_ = Request::Play;
 	}
 }
 
@@ -471,6 +603,7 @@ void Machine::sequencer(State& st, int i, int vel) {
 		}
 		return;
 	}
+	bool created = !c.length; // the first note makes the clip and launches it
 	int length = c.length ? c.length : ui.fixedOn ? kPpqn << ui.fixedBars : kBar;
 	if (pitch < 0 || start >= length)
 		return;
@@ -490,9 +623,7 @@ void Machine::sequencer(State& st, int i, int vel) {
 			return;
 		ui.heldStep = (int8_t)i, ui.heldHad = ui.heldEdited = false;
 		c.length = (uint16_t)length;
-		// ponytail: until Session mode (E2.5) is there to launch it, a clip you add notes to plays when its track has
-		// none.
-		if (tr.playing == kNone && tr.queued == kNone)
+		if (created)
 			launch(s, ui.track, ui.scene);
 	}
 }
@@ -526,6 +657,33 @@ void Machine::noteEncoder(State& st, int encoder, int delta) {
 	}
 }
 
+/** The Session's LEDs: the pads in the track's color, pulsing on the clip that plays, blinking green on one that is
+ * queued (the playing clip blinks to dark when a stop is queued); the scene buttons green where the scene has clips,
+ * blinking where one is queued. */
+static void sessionLeds(const State& st, push2::Leds& out) {
+	const Session& s = st.s;
+	for (int sc = 0; sc < kScenes; sc++) {
+		bool clips = false, queued = false;
+		for (int t = 0; t < kTracks; t++) {
+			const Track& tr = s.track[t];
+			uint8_t full = (uint8_t)(kPaletteFull + t);
+			push2::Led led = {push2::kBlack, push2::kStatic};
+			if (st.clip[t][sc].length) {
+				led = {full, push2::kStatic};
+				if (tr.playing == sc)
+					led = tr.queued == kStopQueued ? push2::Led{push2::kBlack, push2::kBlinkQuarter, full}
+												   : push2::Led{(uint8_t)(kPaletteDim + t), push2::kPulseHalf, full};
+				if (tr.queued == sc)
+					led = {push2::kGreen, push2::kBlinkQuarter, full};
+			}
+			out.note[push2::padNote(7 - sc, t)] = led;
+			clips |= st.clip[t][sc].length != 0, queued |= tr.queued == sc;
+		}
+		out.cc[push2::cc::Scene1 - sc] = queued ? push2::Led{push2::kBlack, push2::kBlinkQuarter, push2::kGreen}
+												: push2::Led{clips ? push2::kGreen : push2::kBlack, push2::kStatic};
+	}
+}
+
 /** The sequencer's LEDs: notes in the track's color (dim for soft ones), the empty steps dark gray (white in a root
  * row), nothing past the end of the clip, the playhead green (white on a note), the held step white; page, step size
  * and Delete buttons. */
@@ -540,7 +698,6 @@ static void seqLeds(const State& st, push2::Leds& out) {
 		white(push2::cc::PageLeft, u.button[push2::cc::PageLeft]);
 	if (u.page < last)
 		white(push2::cc::PageRight, u.button[push2::cc::PageRight]);
-	white(push2::cc::Delete, u.button[push2::cc::Delete]);
 	for (int i = 0; i < 8; i++)
 		out.cc[push2::cc::Scene1 - i] = {i == tr.grid ? push2::kRgbWhite : push2::kRgbDarkGray, push2::kStatic};
 
@@ -587,13 +744,15 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 	auto white = [&](int c, bool full) { out.cc[c] = {full ? push2::kWhiteFull : push2::kWhiteDark, push2::kStatic}; };
 	out = push2::Leds();
 	out.cc[Play] = {s.transport.playing ? push2::kGreen : push2::kRgbWhite, push2::kStatic};
-	// Metronome: solid white off, pulsing between white and dim as fast as the Push goes on (the static white is sent
-	// first)
-	out.cc[Metronome] = s.transport.metronome ? push2::Led{push2::kWhiteDark, push2::kPulse24th}
+	// Metronome: solid white off, pulsing between white and dim as fast as the Push goes on
+	out.cc[Metronome] = s.transport.metronome ? push2::Led{push2::kWhiteDark, push2::kPulse24th, push2::kWhiteFull}
 											  : push2::Led{push2::kWhiteFull, push2::kStatic};
 	white(TapTempo, u.button[TapTempo]);
 	white(Shift, u.button[Shift]);
 	white(push2::cc::Note, u.pads == kNote);
+	white(push2::cc::Session, u.pads == kSession);
+	for (int b : {push2::cc::Select, push2::cc::Delete, push2::cc::Duplicate, push2::cc::New, push2::cc::StopClip})
+		white(b, u.button[b]);
 	white(push2::cc::Scale, u.screen == kScaleScreen || u.button[push2::cc::Scale]);
 	white(push2::cc::FixedLength, u.fixedOn || u.button[push2::cc::FixedLength]);
 	if (u.screen == kScaleScreen) { // the roots (the selected one white), In Key (always on) and Fixed
@@ -610,13 +769,23 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 			out.cc[push2::cc::Track1Below + i] = {i == u.fixedBars ? push2::kRgbWhite : push2::kRgbDarkGray,
 												  push2::kStatic};
 		out.cc[push2::cc::Track1Above] = {u.fixedOn ? push2::kRgbWhite : push2::kRgbDarkGray, push2::kStatic};
+	} else if (u.button[push2::cc::StopClip]) { // red: pulsing where a clip plays, blinking where a stop is queued
+		for (int t = 0; t < kTracks; t++) {
+			const Track& k = s.track[t];
+			if (k.queued == kStopQueued)
+				out.cc[push2::cc::Track1Below + t] = {push2::kBlack, push2::kBlinkQuarter, push2::kRed};
+			else if (k.playing != kNone)
+				out.cc[push2::cc::Track1Below + t] = {push2::kBlack, push2::kPulseHalf, push2::kRed};
+		}
 	} else {
 		for (int t = 0; t < kTracks; t++)
 			out.cc[push2::cc::Track1Below + t] = {t == u.track ? push2::kRgbWhite : (uint8_t)(kPaletteFull + t),
 												  push2::kStatic};
 	}
-	if (u.pads != kNote)
+	if (u.pads == kSession) {
+		sessionLeds(st, out);
 		return;
+	}
 	if (tr.octave > 0)
 		white(push2::cc::OctaveDown, u.button[push2::cc::OctaveDown]);
 	if (tr.octave < kMaxOctave)
@@ -652,7 +821,7 @@ void Machine::tick(State& st, int64_t k, Outputs& out) {
 		filo::VoiceAllocator& v = voice_[t];
 		if (tr.queued != kNone && k >= tr.launchTick) {
 			if (tr.queued == kStopQueued)
-				tr.playing = kNone;
+				stopTrack(s, t, true);
 			else
 				tr.playing = tr.queued, tr.startTick = k;
 			tr.queued = kNone;

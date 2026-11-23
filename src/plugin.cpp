@@ -1039,7 +1039,8 @@ struct LatticeWidget : ModuleWidget {
 	}
 };
 
-// --- Tart: Ableton Push 2 as a Rack controller (E2.4: transport and clock, tracks, Note mode, colours, scales, clips)
+// --- Tart: Ableton Push 2 as a Rack controller (E2.5: transport and clock, tracks, Session and Note modes, colours,
+// scales, clips)
 // ---
 
 static Model *modelTart, *modelSlice;
@@ -1143,9 +1144,9 @@ struct Tart : Module {
 				one.setFrame(args.frame);
 				pushOut.sendMessage(one);
 				for (push2::Led& l : sent.note) // none matches `want`: all of it goes out, 32 messages at a time
-					l = {255, 255};
+					l = {255, 255, 255};
 				for (push2::Led& l : sent.cc)
-					l = {255, 255};
+					l = {255, 255, 255};
 			}
 		}
 		if (own && !sync && out.palette) // a track colour changed
@@ -1516,6 +1517,14 @@ struct TartWidget : ModuleWidget {
 				return v.s.transport.bpm;
 			},
 			[=](float bpm) { m->machine.edit([=](tart::State& st) { st.s.transport.bpm = bpm; }); })));
+		menu->addChild(createIndexSubmenuItem(
+			"Launch quantization", std::vector<std::string>(tart::kQuantNames, tart::kQuantNames + 14),
+			[=] {
+				tart::View v;
+				m->machine.view(v);
+				return (size_t)v.s.transport.quant;
+			},
+			[=](size_t i) { m->machine.edit([=](tart::State& st) { st.s.transport.quant = (uint8_t)i; }); }));
 		std::vector<std::string> divisions;
 		for (int d : kDivisions)
 			divisions.push_back(std::to_string(d));

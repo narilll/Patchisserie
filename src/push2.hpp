@@ -199,12 +199,13 @@ constexpr uint8_t kWhiteDark = 16, kWhiteLight = 48,
 
 // LED animation channels: 0 none, 1..5 one-shot, 6..10 pulsing, 11..15 blinking; within each, 24th, 16th, 8th, quarter,
 // half note.
-constexpr uint8_t kStatic = 0, kPulse24th = 6, kBlinkQuarter = 14;
+constexpr uint8_t kStatic = 0, kPulse24th = 6, kPulseHalf = 10, kBlinkQuarter = 14;
 
 struct Led {
-	uint8_t color = 0; // palette index (RGB LEDs) or brightness (white LEDs)
-	uint8_t channel =
-		0; // 0 static, 1..15 animation: `color` is the second colour; the first is the static colour sent before
+	uint8_t color = 0;   // palette index (RGB LEDs) or brightness (white LEDs)
+	uint8_t channel = 0; // 0 static, 1..15 animation: `color` is the second colour, `base` the first
+	// Wanted: the static colour an animation starts from. In `sent`: the static colour last sent (the device keeps it).
+	uint8_t base = 0;
 };
 struct Leds {
 	Led note[128]; // pads (note-on)
@@ -213,21 +214,28 @@ struct Leds {
 
 /** Writes up to `max` 3-byte messages (status | channel, number, colour) for the entries of `want` that differ from
  * `sent` (all of them when `all`), updates `sent` for those only and returns the count; the rest go out on the next
- * call. An animation starts from the colour last sent static, which the device keeps (the manual: the second colour on
- * channels 1..15 transitions from the one on channel 0), so no extra base message is needed.
- * ponytail: an LED that is animated twice in a row has no known static colour; it keeps the one before the first. */
+ * call. An animation starts from the colour last sent static (the manual: the second colour on channels 1..15
+ * transitions from the one on channel 0), so when that is not its `base`, the base goes out first; both count toward
+ * `max`, and with room for one only the base goes out now. */
 inline int diff(const Leds& want, Leds& sent, bool all, uint8_t (*out)[3], int max) {
 	int n = 0;
 	for (int k = 0; k < 256 && n < max; k++) {
 		const Led& w = k < 128 ? want.note[k] : want.cc[k - 128];
 		Led& s = k < 128 ? sent.note[k] : sent.cc[k - 128];
-		if (!all && w.color == s.color && w.channel == s.channel)
+		bool base = w.channel && (all || s.base != w.base);
+		if (!all && !base && w.color == s.color && w.channel == s.channel)
 			continue;
-		out[n][0] = (uint8_t)((k < 128 ? 0x90 : 0xB0) | w.channel);
-		out[n][1] = (uint8_t)(k & 127);
-		out[n][2] = w.color;
-		n++;
-		s = w;
+		uint8_t status = k < 128 ? 0x90 : 0xB0;
+		if (base) {
+			out[n][0] = status, out[n][1] = (uint8_t)(k & 127), out[n][2] = w.base;
+			n++;
+			s = {w.base, 0, w.base};
+		}
+		if (n < max) {
+			out[n][0] = (uint8_t)(status | w.channel), out[n][1] = (uint8_t)(k & 127), out[n][2] = w.color;
+			n++;
+			s = {w.color, w.channel, w.channel ? w.base : w.color};
+		}
 	}
 	return n;
 }
