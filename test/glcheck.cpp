@@ -11,6 +11,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <memory>
 #include <thread>
 
 #include <stb_image_write.h>
@@ -19,6 +20,7 @@
 #include "engine.hpp"
 #include "lattice.hpp"
 #include "push2.hpp"
+#include "tart.hpp"
 
 rack::plugin::Plugin* pluginInstance = nullptr; // view.cpp's (plugin.cpp's in the plugin): no docs here
 
@@ -564,6 +566,36 @@ int main() {
 				  : frame[0] != (0x1F ^ 0xE7) || frame[1] != (0x00 ^ 0xF3) ? "the top left is not red"
 				  : last[0] != 0xE7 || last[1] != 0xF3                     ? "the bottom left is not black"
 																		   : "";
+		}
+		screen.destroy();
+	}
+	std::printf("  -> %s\n", why.empty() ? "ok" : ("FAIL " + why).c_str());
+	failures += !why.empty();
+	// Tart's Home screen from a sample View, through tart::paint into the Push's target: no GL error, something drawn.
+	std::printf("tart home screen\n");
+	why.clear();
+	{
+		push2::Screen screen;
+		std::vector<uint8_t> rgba((size_t)push2::kWidth * push2::kHeight * 4);
+		int sans = nvgCreateFont(vg, "sans", "res/fonts/IBMPlexSansCondensed-SemiBold.ttf");
+		int mono = nvgCreateFont(vg, "mono", "res/fonts/IBMPlexMono-Regular.ttf");
+		auto view = std::make_unique<tart::View>();
+		view->s.transport.playing = true, view->s.transport.tick = 500, view->s.transport.metronome = true;
+		view->s.ui.popup = tart::kTempoPopup, view->s.ui.touched = 1u << push2::kTempoId;
+		for (int i = 0; i < tart::kTracks; i++)
+			std::snprintf(view->s.track[i].name, tart::kNameBytes, "Track %d", i + 1),
+				view->s.track[i].color = (uint8_t)i;
+		if (sans < 0 || mono < 0 || !screen.begin(vg)) {
+			why = "no fonts or no framebuffer";
+		} else {
+			tart::paint(vg, *view, sans, mono, "no display | in - | out -", nullptr);
+			screen.end(vg, rgba.data());
+			size_t lit = 0;
+			for (size_t i = 0; i < rgba.size(); i += 4)
+				lit += rgba[i] || rgba[i + 1] || rgba[i + 2];
+			GLenum error = glGetError();
+			std::printf("  %.1f %% lit\n", 100.0 * lit / ((double)rgba.size() / 4));
+			why = error ? "GL error " + std::to_string(error) : lit < 1000 ? "nothing drawn" : "";
 		}
 		screen.destroy();
 	}

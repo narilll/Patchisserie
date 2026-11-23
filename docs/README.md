@@ -10,7 +10,7 @@ Patchisserie is a plugin for VCV Rack 2 that lets you live code music and visual
 
 **Lattice** is an Orca live coding module. You type into a grid of letters and symbols, and the grid turns into V/OCT pitches, gates, triggers, CC messages and a clock. It runs the original Orca engine, so most patches from the Orca community work as written. The Lattice manual lists the differences. Read [the Lattice manual](lattice.md).
 
-**Tart** connects an Ableton Push 2 to Rack. This first version is a hardware test: it has no jacks yet, and it lights the Push's pads and buttons as you press them and draws a test pattern on the Push display and on its own panel. It is meant to become an 8-track Session sequencer. Read [the Tart manual](tart.md).
+**Tart** connects an Ableton Push 2 to Rack. This version is its transport and clock: you start, stop and set the tempo from the Push, and Tart sends a clock, a run signal and a metronome to your patch through its jacks. It has no clips or notes yet, and it is meant to become an 8-track Session sequencer. Read [the Tart manual](tart.md).
 
 ## Installing
 

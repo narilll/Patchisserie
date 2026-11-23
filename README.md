@@ -8,7 +8,7 @@ VCV Rack 2 plugin that runs [Strudel](https://strudel.cc) and [Orca](https://100
 - **[Icing](docs/icing.md)**: Hydra visuals expander for Filo, with audio input for `a.fft`.
 - **[Lattice](docs/lattice.md)**: Orca's grid (on the orca-c VM). V/OCT, gate, velocity, triggers, CC and clock from
   the grid's MIDI operators; clock/reset.
-- **[Tart](docs/tart.md)**: Ableton Push 2 as a Rack controller (hardware test: lights and display, no jacks yet).
+- **[Tart](docs/tart.md)**: Ableton Push 2 as a Rack controller (transport and clock, driven from the Push).
 
 Status: early development.
 

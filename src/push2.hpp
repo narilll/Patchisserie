@@ -199,7 +199,7 @@ constexpr uint8_t kWhiteDark = 16, kWhiteLight = 48,
 
 // LED animation channels: 0 none, 1..5 one-shot, 6..10 pulsing, 11..15 blinking; within each, 24th, 16th, 8th, quarter,
 // half note.
-constexpr uint8_t kStatic = 0, kBlinkQuarter = 14;
+constexpr uint8_t kStatic = 0, kPulse24th = 6, kBlinkQuarter = 14;
 
 struct Led {
 	uint8_t color = 0; // palette index (RGB LEDs) or brightness (white LEDs)

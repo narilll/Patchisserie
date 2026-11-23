@@ -781,12 +781,13 @@ struct Lattice : Module {
 	}
 };
 
-/** The BPM slider of the module's menu: Rack's ui::Slider over `module->bpm`; the slider owns the quantity. */
+/** The BPM slider of the module's menu: Rack's ui::Slider over a tempo held elsewhere; the slider owns the quantity. */
 struct BpmQuantity : Quantity {
-	float* bpm;
-	explicit BpmQuantity(float* bpm) : bpm(bpm) {}
-	void setValue(float v) override { *bpm = clamp(v, 20.f, 300.f); }
-	float getValue() override { return *bpm; }
+	std::function<float()> get;
+	std::function<void(float)> set;
+	BpmQuantity(std::function<float()> get, std::function<void(float)> set) : get(get), set(set) {}
+	void setValue(float v) override { set(clamp(v, 20.f, 300.f)); }
+	float getValue() override { return get(); }
 	float getMinValue() override { return 20.f; }
 	float getMaxValue() override { return 300.f; }
 	float getDefaultValue() override { return 120.f; }
@@ -795,9 +796,9 @@ struct BpmQuantity : Quantity {
 };
 
 struct BpmSlider : ui::Slider {
-	explicit BpmSlider(float* bpm) {
+	explicit BpmSlider(Quantity* q) {
 		box.size.x = 200;
-		quantity = new BpmQuantity(bpm);
+		quantity = q;
 	}
 	~BpmSlider() override { delete quantity; }
 };
@@ -923,7 +924,7 @@ struct LatticeWidget : ModuleWidget {
 		menu->addChild(createBoolPtrMenuItem("Grid window", "", &m->windowOpen));
 		menu->addChild(createBoolPtrMenuItem("Grid window fullscreen", "F11", &m->window.fullscreen));
 		menu->addChild(new MenuSeparator);
-		menu->addChild(new BpmSlider(&m->bpm));
+		menu->addChild(new BpmSlider(new BpmQuantity([=] { return m->bpm; }, [=](float v) { m->bpm = v; })));
 		std::vector<std::string> counts, divisions;
 		for (int i = 1; i <= 16; i++)
 			counts.push_back(std::to_string(i));
@@ -1038,19 +1039,25 @@ struct LatticeWidget : ModuleWidget {
 	}
 };
 
-// --- Tart: Ableton Push 2 as a Rack controller (E1: the hardware echo test) ---
+// --- Tart: Ableton Push 2 as a Rack controller (E2.1: transport and clock) ---
 
 struct Tart : Module {
+	enum InputId { PLAY_INPUT, STOP_INPUT, CLOCK_INPUT, RESET_INPUT, TEMPO_INPUT, INPUTS_LEN };
+	enum OutputId { CLK_OUTPUT, RESET_OUTPUT, RUN_OUTPUT, METRO_OUTPUT, OUTPUTS_LEN };
 	enum LightId { PUSH_LIGHT, PUSH_RED_LIGHT, LIGHTS_LEN }; // one green-red light: green first
 
 	// The Push's User port, both directions: ports found by name or picked in the menu, saved in the patch.
 	midi::InputQueue pushIn;
 	midi::Output pushOut;
 	tart::Machine machine;
-	push2::Event pending[64]; // decoded, not yet applied: the machine's lock was busy
+	push2::Event pending[64]; // decoded, not yet handled: the machine's lock was busy
 	int nPending = 0;
-	push2::Leds want, sent; // the LEDs the state asks for, the ones the Push has been sent
-	float clockPhase = 0;
+	push2::Leds want, sent;       // the LEDs the state asks for, the ones the Push has been sent
+	int clkDivision = 4, ppc = 4; // CLK output and CLOCK input pulses per beat: set by the UI thread, read by process()
+	dsp::SchmittTrigger playIn, stopIn, clockIn, resetIn;
+	dsp::PulseGenerator clkPulse, resetPulse, metroPulse;
+	float metroV = 0;
+	tart::Outputs out{};
 	// process()'s messages, reused so the audio thread doesn't allocate: LEDs, MIDI clock and start, the User-mode
 	// SysEx. ponytail: sendMessage() and tryPop() lock inside Rack's MIDI drivers, as in every Rack MIDI module.
 	midi::Message in, led, one, userMode;
@@ -1060,7 +1067,16 @@ struct Tart : Module {
 	bool pushAuto = true;            // UI thread only
 
 	Tart() {
-		config(0, 0, 0, LIGHTS_LEN);
+		config(0, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
+		configInput(PLAY_INPUT, "Play trigger (from the start)");
+		configInput(STOP_INPUT, "Stop trigger");
+		configInput(CLOCK_INPUT, "Clock (pulses per beat: menu)");
+		configInput(RESET_INPUT, "Reset to the start");
+		configInput(TEMPO_INPUT, "Tempo (0 V = 120 BPM, 1 V/oct)");
+		configOutput(CLK_OUTPUT, "Clock (pulses per beat: menu)");
+		configOutput(RESET_OUTPUT, "Reset (on play and reset)");
+		configOutput(RUN_OUTPUT, "Run (high while playing)");
+		configOutput(METRO_OUTPUT, "Metronome (10 V downbeat, 5 V other beats)");
 		configLight(PUSH_LIGHT, "Push 2 (green: MIDI and display, red: MIDI only)");
 		pushOut.channel = -1; // else Rack overwrites the channel byte, which carries the LED animation
 		one.setSize(1);
@@ -1068,20 +1084,32 @@ struct Tart : Module {
 	}
 
 	void process(const ProcessArgs& args) override {
-		if (!owner.load(std::memory_order_relaxed)) { // another Tart's: keep the queue empty
-			while (pushIn.tryPop(&in, args.frame)) {
-			}
-			lights[PUSH_LIGHT].setBrightness(0.f);
-			lights[PUSH_RED_LIGHT].setBrightness(0.f);
-			return;
-		}
-		while (pushIn.tryPop(&in, args.frame)) { // Rack filters the menu's channel
+		bool own = owner.load(std::memory_order_relaxed); // another Tart's Push: the queue stays empty, the clock runs
+		while (pushIn.tryPop(&in, args.frame)) {          // Rack filters the menu's channel
 			push2::Event e;
-			if (nPending < 64 && push2::decode(in.bytes.data(), in.bytes.size(), e))
+			if (own && nPending < 64 && push2::decode(in.bytes.data(), in.bytes.size(), e))
 				pending[nPending++] = e;
 		}
-		if (resync.load(std::memory_order_relaxed) && resync.exchange(false)) {
-			if (!machine.apply(nullptr, 0, want)) {
+		bool sync = own && resync.load(std::memory_order_relaxed) && resync.exchange(false);
+		tart::Inputs ti;
+		ti.sampleRate = args.sampleRate;
+		ti.frame = args.frame;
+		ti.play = playIn.process(inputs[PLAY_INPUT].getVoltage(), 0.1f, 1.f); // all triggers see every sample
+		ti.stop = stopIn.process(inputs[STOP_INPUT].getVoltage(), 0.1f, 1.f);
+		ti.reset = resetIn.process(inputs[RESET_INPUT].getVoltage(), 0.1f, 1.f);
+		ti.clockConnected = inputs[CLOCK_INPUT].isConnected();
+		ti.clockEdge = clockIn.process(inputs[CLOCK_INPUT].getVoltage(), 0.1f, 1.f);
+		ti.tempoCv = inputs[TEMPO_INPUT].getVoltage();
+		ti.ppqnIn = ppc;
+		ti.ppqnOut = clkDivision;
+		ti.events = pending;
+		ti.nEvents = nPending;
+		ti.leds = sync || args.frame % 256 == 0;
+		machine.process(ti, out, want);
+		if (out.consumed)
+			nPending = 0;
+		if (sync) {
+			if (!out.ledsDone) {
 				resync.store(true); // the UI thread holds the lock: again next sample
 			} else {
 				userMode.setFrame(args.frame);
@@ -1095,44 +1123,73 @@ struct Tart : Module {
 					l = {255, 255};
 			}
 		}
-		if (nPending && machine.apply(pending, nPending, want))
-			nPending = 0;
-		clockPhase += args.sampleTime * 48.f; // 24 pulses per quarter note
-		if (clockPhase >= 1.f) {              // ponytail: fixed 120 BPM until E2's transport drives it
-			clockPhase -= 1.f;
-			one.bytes[0] = 0xF8;
+		if (own && (out.midiStart || out.midiClock)) {
+			one.bytes[0] = out.midiStart ? 0xFA : 0xF8; // a Start and a Clock on one sample: Start, the Clock next
 			one.setFrame(args.frame);
 			pushOut.sendMessage(one);
 		}
+		if (out.reset)
+			resetPulse.trigger(1e-3f);
+		if (out.clk)
+			clkPulse.trigger(1e-3f);
+		if (out.metro)
+			metroPulse.trigger(1e-3f), metroV = out.metroV;
+		outputs[CLK_OUTPUT].setVoltage(clkPulse.process(args.sampleTime) ? 10.f : 0.f);
+		outputs[RESET_OUTPUT].setVoltage(resetPulse.process(args.sampleTime) ? 10.f : 0.f);
+		outputs[RUN_OUTPUT].setVoltage(out.run ? 10.f : 0.f);
+		outputs[METRO_OUTPUT].setVoltage(metroPulse.process(args.sampleTime) ? metroV : 0.f);
 		if (args.frame % 256 == 0) {
-			uint8_t out[32][3];
-			int n = push2::diff(want, sent, false, out, 32);
+			uint8_t msg[32][3];
+			int n = own ? push2::diff(want, sent, false, msg, 32) : 0;
 			for (int i = 0; i < n; i++) {
-				std::copy(out[i], out[i] + 3, led.bytes.begin());
+				std::copy(msg[i], msg[i] + 3, led.bytes.begin());
 				led.setFrame(args.frame);
 				pushOut.sendMessage(led);
 			}
-			int state = pushState.load(std::memory_order_relaxed);
+			int state = own ? pushState.load(std::memory_order_relaxed) : 0;
 			lights[PUSH_LIGHT].setBrightness(state == 2 ? 1.f : 0.f);
 			lights[PUSH_RED_LIGHT].setBrightness(state == 1 ? 1.f : 0.f);
 		}
 	}
 
 	json_t* dataToJson() override {
-		return json_pack("{s:b, s:o, s:o}", "pushAuto", pushAuto, "pushIn", pushIn.toJson(), "pushOut",
-						 pushOut.toJson());
+		auto st = std::make_unique<tart::State>(); // large: never on the stack
+		machine.save(*st);
+		const tart::Transport& t = st->s.transport;
+		return json_pack("{s:b, s:o, s:o, s:{s:f, s:i, s:i, s:b}, s:i, s:i}", "pushAuto", pushAuto, "pushIn",
+						 pushIn.toJson(), "pushOut", pushOut.toJson(), "transport", "bpm", (double)t.bpm, "swing",
+						 (int)t.swing, "quant", (int)t.quant, "metronome", t.metronome, "clkDivision", clkDivision,
+						 "ppc", ppc);
 	}
 
 	void dataFromJson(json_t* root) override {
 		int autoFind = pushAuto;
-		json_t *inJ = nullptr, *outJ = nullptr;
-		json_unpack(root, "{s?b, s?o, s?o}", "pushAuto", &autoFind, "pushIn", &inJ, "pushOut", &outJ);
+		json_t *inJ = nullptr, *outJ = nullptr, *transportJ = nullptr;
+		json_unpack(root, "{s?b, s?o, s?o, s?o, s?i, s?i}", "pushAuto", &autoFind, "pushIn", &inJ, "pushOut", &outJ,
+					"transport", &transportJ, "clkDivision", &clkDivision, "ppc", &ppc);
 		pushAuto = autoFind;
 		if (inJ)
 			pushIn.fromJson(inJ);
 		if (outJ)
 			pushOut.fromJson(outJ);
 		pushOut.channel = -1;
+		if (std::find(kDivisions.begin(), kDivisions.end(), clkDivision) == kDivisions.end())
+			clkDivision = 4;
+		if (std::find(kDivisions.begin(), kDivisions.end(), ppc) == kDivisions.end())
+			ppc = 4;
+		auto st = std::make_unique<tart::State>();
+		machine.save(*st);
+		tart::Transport& t = st->s.transport;
+		double bpm = t.bpm;
+		int swing = t.swing, quant = t.quant, metronome = t.metronome;
+		json_unpack(transportJ, "{s?F, s?i, s?i, s?b}", "bpm", &bpm, "swing", &swing, "quant", &quant, "metronome",
+					&metronome);
+		t.bpm = (float)bpm;
+		t.swing = (uint8_t)clamp(swing, 0, 100); // patch data is a real boundary: sanitize() clamps the rest
+		t.quant = (uint8_t)clamp(quant, 0, 255);
+		t.metronome = metronome;
+		tart::sanitize(*st);
+		machine.load(*st);
 	}
 };
 
@@ -1182,6 +1239,7 @@ struct TartWidget : ModuleWidget {
 	push2::Screen screen;
 	push2::Display display;
 	std::vector<uint8_t> rgba;
+	tart::View view; // the Session as drawn
 	bool wasOwner = false;
 	uint32_t connectionsSeen = 0, frames = 0;
 	int outSeen = -1;
@@ -1199,6 +1257,16 @@ struct TartWidget : ModuleWidget {
 		text->band("TART");
 		text->label(kPushLightMm, "PUSH");
 		addChild(text);
+		const char* inputs[] = {"PLAY", "STOP", "CLOCK", "RESET", "TEMPO"};
+		for (int i = 0; i < Tart::INPUTS_LEN; i++) {
+			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(kRow1X(i), 100)), module, i));
+			text->label(Vec(kRow1X(i), 100), inputs[i]);
+		}
+		const char* outputs[] = {"CLK", "RESET", "RUN", "METRO"};
+		for (int i = 0; i < Tart::OUTPUTS_LEN; i++) {
+			addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(kRow1X(i), 117)), module, i));
+			text->label(Vec(kRow1X(i), 117), outputs[i], true);
+		}
 	}
 
 	~TartWidget() override {
@@ -1271,8 +1339,7 @@ struct TartWidget : ModuleWidget {
 			display.submit(rgba.data());
 	}
 
-	/** The E1 test pattern: colour bars and an orientation mark (colours and orientation), each encoder's total, the
-	touch strip, the last MIDI bytes, a frame counter and the status line. */
+	/** The Home screen, with the status line when the display or a port isn't connected, or a message instead. */
 	void paint(NVGcontext* vg, Tart* m, bool own) {
 		std::shared_ptr<window::Font> mono =
 			APP->window->loadFont(asset::plugin(pluginInstance, "res/fonts/IBMPlexMono-Regular.ttf"));
@@ -1280,69 +1347,44 @@ struct TartWidget : ModuleWidget {
 			APP->window->loadFont(asset::plugin(pluginInstance, "res/fonts/IBMPlexSansCondensed-SemiBold.ttf"));
 		if (!mono || !sans)
 			return;
-		const NVGcolor white = nvgRGB(255, 255, 255), dim = nvgRGB(0x90, 0x92, 0x8c);
-		auto text = [&](float x, float y, const std::string& s, float size, int align, NVGcolor c, bool numbers) {
-			nvgFontFaceId(vg, (numbers ? mono : sans)->handle);
-			nvgFontSize(vg, size);
-			nvgFillColor(vg, c);
-			nvgTextAlign(vg, align | NVG_ALIGN_BASELINE);
-			nvgText(vg, x, y, s.c_str(), nullptr);
-		};
-		auto rect = [&](float x, float y, float w, float h, NVGcolor c) {
-			nvgBeginPath(vg);
-			nvgRect(vg, x, y, w, h);
-			nvgFillColor(vg, c);
-			nvgFill(vg);
-		};
 		auto portName = [](midi::Port* p) {
 			return p->getDeviceId() >= 0 ? p->getDeviceName(p->getDeviceId()) : std::string("-");
 		};
 		bool noPush =
 			m->pushIn.getDeviceId() < 0 && m->pushOut.getDeviceId() < 0 && display.status() <= push2::Display::NoDevice;
-		if (!own || noPush) {
-			text(480, 90, own ? "No Push 2" : "Push in use by another Tart", 40, NVG_ALIGN_CENTER, white, false);
-			return;
-		}
-		tart::State s = m->machine.snapshot();
-		// The orientation mark and the colour bars: red, green, blue, white.
-		rect(0, 0, 10, 10, white);
-		text(16, 12, "TOP LEFT", 14, NVG_ALIGN_LEFT, white, false);
-		const NVGcolor bars[4] = {nvgRGB(255, 0, 0), nvgRGB(0, 255, 0), nvgRGB(0, 0, 255), white};
-		for (int i = 0; i < 4; i++)
-			rect(840.f + 30 * i, 0, 30, 20, bars[i]);
-		// Track encoders: the total of their turns, lit while touched.
-		for (int i = 0; i < 8; i++) {
-			bool touched = s.touched >> i & 1;
-			rect(120.f * i + 4, 26, 112, 60, touched ? nvgRGB(0x30, 0x60, 0xa0) : nvgRGB(0x20, 0x20, 0x20));
-			text(120.f * i + 10, 42, string::f("ENC %d", i + 1), 14, NVG_ALIGN_LEFT, dim, false);
-			text(120.f * i + 60, 76, string::f("%d", s.encoder[i]), 26, NVG_ALIGN_CENTER, white, true);
-		}
-		// The touch strip's bend, then master volume, swing and tempo.
-		rect(4, 94, 580, 20, nvgRGB(0x20, 0x20, 0x20));
-		rect(4, 94, 580.f * s.bend / 16383, 20, s.touched >> push2::kStrip & 1 ? nvgRGB(0x40, 0xa0, 0xff) : dim);
-		const char* names[3] = {"MASTER", "SWING", "TEMPO"};
-		for (int i = 0; i < 3; i++) {
-			float x = 600.f + 120 * i;
-			rect(x + 4, 94, 112, 20,
-				 s.touched >> (push2::kMasterId + i) & 1 ? nvgRGB(0x30, 0x60, 0xa0) : nvgRGB(0x20, 0x20, 0x20));
-			text(x + 8, 109, names[i], 12, NVG_ALIGN_LEFT, dim, false);
-			text(x + 112, 109, string::f("%d", s.encoder[push2::kMasterId + i]), 14, NVG_ALIGN_RIGHT, white, true);
-		}
-		std::string hex;
-		for (int i = 0; i < s.lastSize; i++)
-			hex += string::f("%02X ", s.last[i]);
-		text(8, 134, "LAST " + hex + string::f(" EVENTS %u", s.events), 16, NVG_ALIGN_LEFT, white, true);
-		text(952, 134, string::f("FRAME %u", frames++), 16, NVG_ALIGN_RIGHT, white, true);
-		static const char* const status[] = {"display off",  "no display",        "no access",        "no driver",
-											 "display busy", "display USB error", "display connected"};
-		text(8, 154,
-			 string::f("%s | in %s | out %s", status[display.status()], portName(&m->pushIn).c_str(),
-					   portName(&m->pushOut).c_str()),
-			 14, NVG_ALIGN_LEFT, dim, false);
+		const char* message = !own ? "Push in use by another Tart" : noPush ? "No Push 2" : nullptr;
+		static const char* const names[] = {"display off",  "no display",        "no access",        "no driver",
+											"display busy", "display USB error", "display connected"};
+		bool connected = display.status() == push2::Display::Connected && m->pushIn.getDeviceId() >= 0 &&
+						 m->pushOut.getDeviceId() >= 0;
+		std::string status = string::f("%s | in %s | out %s", names[display.status()], portName(&m->pushIn).c_str(),
+									   portName(&m->pushOut).c_str());
+		m->machine.view(view);
+		tart::paint(vg, view, sans->handle, mono->handle, connected ? nullptr : status.c_str(), message);
 	}
 
 	void appendContextMenu(Menu* menu) override {
 		Tart* m = static_cast<Tart*>(module);
+		menu->addChild(new MenuSeparator);
+		menu->addChild(new BpmSlider(new BpmQuantity(
+			[=] {
+				tart::View v;
+				m->machine.view(v);
+				return v.s.transport.bpm;
+			},
+			[=](float bpm) { m->machine.edit([=](tart::State& st) { st.s.transport.bpm = bpm; }); })));
+		std::vector<std::string> divisions;
+		for (int d : kDivisions)
+			divisions.push_back(std::to_string(d));
+		auto index = [](int value) {
+			return (size_t)(std::find(kDivisions.begin(), kDivisions.end(), value) - kDivisions.begin());
+		};
+		menu->addChild(createIndexSubmenuItem(
+			"CLK output: pulses per beat", divisions, [=] { return index(m->clkDivision); },
+			[=](size_t i) { m->clkDivision = kDivisions[i]; }));
+		menu->addChild(createIndexSubmenuItem(
+			"CLOCK input: pulses per beat", divisions, [=] { return index(m->ppc); },
+			[=](size_t i) { m->ppc = kDivisions[i]; }));
 		menu->addChild(new MenuSeparator);
 		menu->addChild(createBoolPtrMenuItem("Find Push automatically", "", &m->pushAuto));
 		menu->addChild(createMenuLabel("Push MIDI input (User Port)"));
