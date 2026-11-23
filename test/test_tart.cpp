@@ -420,15 +420,24 @@ TEST(tart_machine_threads) {
 		tart::Inputs in;
 		tart::Outputs out;
 		push2::Leds want;
-		push2::Event ev[4];
+		push2::Event ev[13];
 		ev[0] = dec({0xB0, push2::cc::kTempo, 1});
 		ev[1] = dec({0xB0, push2::cc::Metronome, 127});
 		ev[2] = dec({0x90, 36, 100}); // a pad and the touch strip
 		ev[3] = dec({0xE0, 0, 0x60});
+		ev[4] = dec({0xB0, push2::cc::Delete, 127}); // Delete on a slot the UI thread fills: a checkpoint
+		ev[5] = dec({0x90, 36, 90});
+		ev[6] = dec({0xB0, push2::cc::Delete, 0});
+		ev[7] = dec({0xB0, push2::cc::Undo, 127}); // Undo, then Shift + Undo
+		ev[8] = dec({0xB0, push2::cc::Undo, 0});
+		ev[9] = dec({0xB0, push2::cc::Shift, 127});
+		ev[10] = dec({0xB0, push2::cc::Undo, 127});
+		ev[11] = dec({0xB0, push2::cc::Undo, 0});
+		ev[12] = dec({0xB0, push2::cc::Shift, 0});
 		tart::SliceFrame frame;
 		in.play = true;
 		for (int i = 0; i < 20000; i++) {
-			in.events = ev, in.nEvents = i % 7 == 0 ? 4 : 0, in.frame = i;
+			in.events = ev, in.nEvents = i % 7 == 0 ? 13 : 0, in.frame = i;
 			m.process(in, out, want, &frame);
 			in.play = false;
 		}
@@ -440,6 +449,7 @@ TEST(tart_machine_threads) {
 		m.view(*v);
 		m.edit([&](tart::State& st) {
 			st.s.transport.swing = (uint8_t)(n % 100), st.s.track[0].voices = (uint8_t)(n % 16 + 1);
+			st.clip[0][7].length = (uint16_t)(n % 3 * tart::kBar);
 			st.s.track[1].type = (uint8_t)(n++ / 7 % 2);
 		});
 	}
@@ -2204,4 +2214,245 @@ TEST(drum_step_gates_slice_channel) {
 	}
 	CHECK(up == 24 * 250 && !other);
 	CHECK_NEAR(r.f.track[0].voct[3], (39 - 60) / 12.f, 1e-6);
+}
+
+namespace {
+
+/** Undo, or Shift + Undo (redo), as a Push press. */
+void undoClick(Rig& r, bool redo = false) {
+	if (redo)
+		r.press(push2::cc::Shift);
+	r.click(push2::cc::Undo);
+	if (redo)
+		r.press(push2::cc::Shift, 0);
+}
+
+} // namespace
+
+TEST(undo_redo_steps) {
+	Rig r;
+	r.click(push2::cc::Layout);
+	CHECK(r.want.cc[push2::cc::Undo].color == push2::kBlack); // nothing to undo: dark
+	r.tap(0, 0), r.tap(0, 1), r.tap(0, 2);
+	CHECK(r.view().nNotes == 3 && r.want.cc[push2::cc::Undo].color == push2::kWhiteDark);
+	r.press(push2::cc::Undo);
+	CHECK(r.want.cc[push2::cc::Undo].color == push2::kWhiteFull); // held
+	r.press(push2::cc::Undo, 0);
+	auto v = r.view();
+	CHECK(v.nNotes == 2 && v.s.ui.popup == tart::kUndoPopup);
+	r.press(push2::cc::Shift);
+	CHECK(r.want.cc[push2::cc::Undo].color == push2::kWhiteDark); // there is something to redo
+	r.press(push2::cc::Shift, 0);
+	undoClick(r);
+	CHECK(r.view().nNotes == 1);
+	undoClick(r);
+	v = r.view();
+	CHECK(v.nNotes == 0 && v.length[0][0] == 0 && r.want.cc[push2::cc::Undo].color == push2::kBlack);
+	undoClick(r); // nothing left
+	CHECK(r.view().nNotes == 0);
+	undoClick(r, true);
+	v = r.view();
+	CHECK(v.nNotes == 1 && v.length[0][0] == 768 && v.s.ui.popup == tart::kRedoPopup);
+	undoClick(r, true), undoClick(r, true);
+	CHECK(r.view().nNotes == 3);
+	undoClick(r, true); // nothing more to redo
+	CHECK(r.view().nNotes == 3);
+	undoClick(r), undoClick(r);
+	r.tap(1, 0); // a new edit drops what could be redone
+	CHECK(r.view().nNotes == 2);
+	undoClick(r, true);
+	CHECK(r.view().nNotes == 2);
+	undoClick(r);
+	CHECK(r.view().nNotes == 1);
+}
+
+TEST(undo_hold_encoder_one_step) {
+	Rig r;
+	r.click(push2::cc::Layout);
+	r.tap(0, 2); // tick 48
+	r.pad(0, 2, 100);
+	r.turn(0, 6), r.turn(0, 6), r.turn(1, 8), r.turn(3, 10);
+	r.pad(0, 2, 0);
+	auto v = r.view();
+	CHECK(v.nNotes == 1 && v.notes[0].tick == 51 + 3 && v.notes[0].len == 48 && v.notes[0].vel == 110);
+	undoClick(r); // all the turns at once
+	v = r.view();
+	CHECK(v.nNotes == 1 && v.notes[0].tick == 48 && v.notes[0].len == 24 && v.notes[0].vel == 100);
+	undoClick(r, true);
+	CHECK(r.view().notes[0].vel == 110);
+	undoClick(r), undoClick(r); // the note itself
+	CHECK(r.view().nNotes == 0);
+	// A tap on a note takes it off: one step; so is a long note.
+	r.tap(0, 0);
+	r.tap(0, 0);
+	CHECK(r.view().nNotes == 0);
+	undoClick(r);
+	CHECK(r.view().nNotes == 1);
+	r.pad(0, 0, 100), r.tap(0, 3), r.pad(0, 0, 0);
+	CHECK(r.view().notes[0].len == 4 * 24);
+	undoClick(r);
+	CHECK(r.view().notes[0].len == 24);
+}
+
+TEST(undo_delete_clip_and_row) {
+	SliceRig r(false);
+	setQuant(r, 0);
+	for (int t = 0; t < 3; t++)
+		fill(r, t, 0), fill(r, t, 1, 2);
+	r.click(push2::cc::Scene1);
+	r.run_(1000);
+	r.press(push2::cc::Delete);
+	tapSlot(r, 0, 0);
+	r.run_(3);
+	CHECK(r.view().length[0][0] == 0 && r.f.track[0].gate[0] == 0);
+	undoClick(r); // the clip is back, stopped
+	auto v = r.view();
+	auto st = r.state();
+	CHECK(v.length[0][0] == tart::kBar && v.s.track[0].playing == tart::kNone);
+	CHECK(st->clip[0][0].nNotes == 1 && st->clip[0][0].notes[0].pitch == 60);
+	r.press(push2::cc::Delete); // a row: one step for the three clips
+	r.click(push2::cc::Scene1 - 1);
+	r.press(push2::cc::Delete, 0);
+	CHECK(r.view().length[0][1] == 0 && r.view().length[2][1] == 0);
+	undoClick(r);
+	v = r.view();
+	CHECK(v.length[0][1] == 2 * tart::kBar && v.length[1][1] == 2 * tart::kBar && v.length[2][1] == 2 * tart::kBar);
+	undoClick(r, true);
+	v = r.view();
+	CHECK(v.length[0][1] == 0 && v.length[1][1] == 0 && v.length[2][1] == 0 && v.length[0][0] == tart::kBar);
+	undoClick(r);
+	// Duplicate a row over the next scene, undone in one step.
+	r.press(push2::cc::Duplicate);
+	r.click(push2::cc::Scene1);
+	r.press(push2::cc::Duplicate, 0);
+	CHECK(r.view().length[0][1] == tart::kBar && r.view().length[1][1] == tart::kBar);
+	undoClick(r);
+	v = r.view();
+	CHECK(v.length[0][1] == 2 * tart::kBar && v.length[1][1] == 2 * tart::kBar && v.length[2][1] == 2 * tart::kBar);
+	// Duplicate a pad.
+	r.press(push2::cc::Duplicate);
+	tapSlot(r, 0, 0);
+	tapSlot(r, 5, 5);
+	r.press(push2::cc::Duplicate, 0);
+	CHECK(r.view().length[5][5] == tart::kBar);
+	undoClick(r);
+	CHECK(r.view().length[5][5] == 0);
+}
+
+TEST(undo_capacity_32) {
+	Rig r;
+	r.click(push2::cc::Layout);
+	fill(r, 0, 0, 8);
+	for (int i = 0; i < 33; i++)
+		r.tap(i / 8, i % 8);
+	CHECK(r.view().nNotes == 34);
+	for (int i = 0; i < 32; i++)
+		undoClick(r);
+	CHECK(r.view().nNotes == 2); // the oldest checkpoint is gone
+	undoClick(r);
+	CHECK(r.view().nNotes == 2);
+	for (int i = 0; i < 32; i++)
+		undoClick(r, true);
+	CHECK(r.view().nNotes == 34);
+}
+
+TEST(undo_created_clip_stops_track) {
+	Rig r;
+	r.click(push2::cc::Layout);
+	r.tap(0, 0);
+	CHECK(r.view().s.track[0].playing == 0);
+	undoClick(r);
+	auto v = r.view();
+	CHECK(v.length[0][0] == 0 && v.s.track[0].playing == tart::kNone && v.s.ui.heldStep == -1);
+	// Running: the clip is only queued, and the launch is cancelled.
+	r.click(push2::cc::Play);
+	r.run_(10);
+	r.click(push2::cc::Track1Below + 1);
+	r.tap(0, 0);
+	CHECK(r.view().s.track[1].queued == 0);
+	undoClick(r);
+	v = r.view();
+	CHECK(v.length[1][0] == 0 && v.s.track[1].queued == tart::kNone);
+	// A clip that plays: undoing its creation stops it at once.
+	r.click(push2::cc::Track1Below + 2);
+	r.tap(0, 0);
+	r.run_(120000); // the next bar line
+	CHECK(r.view().s.track[2].playing == 0);
+	undoClick(r);
+	CHECK(r.view().s.track[2].playing == tart::kNone);
+}
+
+TEST(undo_cleared_by_load) {
+	Rig r;
+	r.click(push2::cc::Layout);
+	r.tap(0, 0), r.tap(0, 1);
+	undoClick(r);
+	auto st = r.state();
+	r.m.load(*st);
+	undoClick(r), undoClick(r, true);
+	CHECK(r.view().nNotes == 1);
+	CHECK(r.want.cc[push2::cc::Undo].color == push2::kBlack);
+	r.tap(0, 2);
+	undoClick(r);
+	CHECK(r.view().nNotes == 1);
+}
+
+TEST(undo_drum_step) {
+	Rig r;
+	drumTrack(r);
+	dlane(r, 5);
+	dtap(r, 0), dtap(r, 9);
+	undoClick(r);
+	auto v = r.view();
+	CHECK(v.nNotes == 1 && v.notes[0].tick == 0);
+	undoClick(r, true);
+	CHECK(r.view().nNotes == 2);
+	r.press(push2::cc::Delete); // a lane
+	dlane(r, 5);
+	r.press(push2::cc::Delete, 0);
+	CHECK(r.view().nNotes == 0);
+	undoClick(r);
+	CHECK(r.view().nNotes == 2);
+	dstep(r, 9); // hold + encoder: one step
+	r.turn(3, 10);
+	dstep(r, 9, 0);
+	CHECK(r.view().notes[1].vel == 110);
+	undoClick(r);
+	CHECK(r.view().notes[1].vel == 100);
+}
+
+TEST(undo_loop_selector_length) {
+	Rig r;
+	drumTrack(r);
+	dloop(r, 0), dloop(r, 0, 0); // creates a bar
+	dloop(r, 2), dloop(r, 2, 0); // ends the clip with page 2: 3 bars
+	CHECK(r.view().length[0][0] == 3 * 384);
+	undoClick(r);
+	CHECK(r.view().length[0][0] == 384);
+	undoClick(r, true);
+	CHECK(r.view().length[0][0] == 3 * 384);
+	undoClick(r), undoClick(r);
+	auto v = r.view();
+	CHECK(v.length[0][0] == 0 && v.s.track[0].playing == tart::kNone);
+	// Delete + a loop pad
+	fill(r, 0, 0, 4);
+	r.press(push2::cc::Delete);
+	dloop(r, 0), dloop(r, 0, 0);
+	r.press(push2::cc::Delete, 0);
+	CHECK(r.view().nNotes == 0);
+	undoClick(r);
+	CHECK(r.view().nNotes == 1);
+}
+
+TEST(undo_clip_mode_length) {
+	Rig r(false);
+	fill(r, 0, 0);
+	r.press(push2::cc::Clip);
+	r.turn(0, 4), r.turn(0, 4);
+	CHECK(r.view().length[0][0] == 576);
+	r.turn(0, 4); // still the same press of CLIP
+	undoClick(r);
+	CHECK(r.view().length[0][0] == tart::kBar);
+	undoClick(r, true);
+	CHECK(r.view().length[0][0] == 672);
 }

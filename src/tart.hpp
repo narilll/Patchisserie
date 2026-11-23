@@ -56,7 +56,7 @@ struct Track {
 	// E4 adds ccName[8][16], ccRange[8], level, pan, mute, solo
 };
 
-enum Popup : uint8_t { kNoPopup, kTempoPopup, kSwingPopup, kClipFullPopup };
+enum Popup : uint8_t { kNoPopup, kTempoPopup, kSwingPopup, kClipFullPopup, kUndoPopup, kRedoPopup };
 enum Pads : uint8_t { kSession, kNote };
 enum Screens : uint8_t { kHome, kScaleScreen, kClipScreen, kBrowseScreen };
 
@@ -191,7 +191,7 @@ struct Outputs {
 
 class Machine {
   public:
-	Machine() : state_(new State) { push_.setDivision(24); }
+	Machine() : state_(new State), undo_(new Snapshot[kUndo]) { push_.setDivision(24); }
 	Machine(const Machine&) = delete;
 	Machine& operator=(const Machine&) = delete;
 
@@ -229,6 +229,7 @@ class Machine {
 	void launch(Session& s, int track, int scene);
 	void stopTrack(Session& s, int track, bool now);
 	void stopClips(Session& s);
+	void vacate(State& st, int track, int scene);
 	void clear(State& st, int track, int scene);
 	void copy(State& st, int track, int scene, int toTrack, int toScene);
 	void leds(const State& st, push2::Leds& out) const;
@@ -236,11 +237,24 @@ class Machine {
 	void tap(Transport& t);
 	void setLength(State& st, int ticks);
 	void tick(State& st, int64_t k, Outputs& out);
+	void checkpoint(int track, int scene);
+	bool undo(State& st, bool redo);
 
 	// ponytail: one lock, as lattice::Machine; the audio side only try-locks and never waits.
 	std::atomic<bool> busy_{false};
-	std::atomic<bool> dirty_{false};   // the UI thread changed the state: the audio thread re-reads what it mirrors
-	std::unique_ptr<State> state_;     // under busy_
+	std::atomic<bool> dirty_{false}; // the UI thread changed the state: the audio thread re-reads what it mirrors
+	std::unique_ptr<State> state_;   // under busy_
+	// Undo: a ring of the clips as they were before each edit (the entries of one gesture, a scene row's, share a
+	// step), under busy_. Monotonic counters: [bottom, top) can be undone, [top, end) redone. ponytail: whole-clip
+	// snapshots, 32 of them, ~1.05 MB allocated once here; a delta log if a deeper history is wanted.
+	struct Snapshot {
+		uint32_t step;
+		uint8_t track, scene;
+		Clip clip;
+	};
+	static constexpr int kUndo = 32;
+	std::unique_ptr<Snapshot[]> undo_;
+	uint32_t undoBottom_ = 0, undoTop_ = 0, undoEnd_ = 0, gesture_ = 0; // gesture_: bumped by every pad or button press
 	std::atomic<bool> silence_{false}; // UI -> audio: load() replaced the state, drop the notes
 
 	// Audio thread only.

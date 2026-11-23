@@ -385,6 +385,8 @@ void Machine::handle(State& st, const push2::Event& e) {
 	Ui& ui = s.ui;
 	auto show = [&](Popup p) { ui.popup = p, ui.popupAt = ui.now; };
 	bool drum = s.track[ui.track].type == Drum;
+	if ((e.type == Event::Button || e.type == Event::Pad) && e.value)
+		gesture_++; // a press starts a gesture; releases and encoder turns belong to the one before
 	switch (e.type) {
 	case Event::Button:
 		ui.button[e.index & 127] = e.value != 0;
@@ -414,7 +416,11 @@ void Machine::handle(State& st, const push2::Event& e) {
 			t.metronome = !t.metronome;
 		else if (e.index == push2::cc::TapTempo)
 			tap(t), show(kTempoPopup); // never starts the transport
-		else if (e.index == push2::cc::Note || e.index == push2::cc::Session) {
+		else if (e.index == push2::cc::Undo) {
+			bool redo = ui.button[push2::cc::Shift];
+			if (undo(st, redo))
+				show(redo ? kRedoPopup : kUndoPopup);
+		} else if (e.index == push2::cc::Note || e.index == push2::cc::Session) {
 			ui.prevPads = ui.pads, ui.pads = e.index == push2::cc::Note ? kNote : kSession;
 			ui.padsAt = ui.now, ui.heldStep = -1;
 		} else if (e.index == push2::cc::FixedLength)
@@ -535,6 +541,7 @@ void Machine::setLength(State& st, int ticks) {
 	Clip& c = st.clip[ui.track][ui.scene];
 	if (!c.length)
 		return;
+	checkpoint(ui.track, ui.scene);
 	int old = c.length;
 	c.length = (uint16_t)std::min(std::max(ticks, kPpqn), kMaxLength);
 	Track& tr = st.s.track[ui.track];
@@ -595,6 +602,7 @@ void Machine::drumPad(State& st, int i, int vel) {
 	} else if (vel) {
 		int lane = i / 8 * 4 + i % 8;
 		if (s.ui.button[push2::cc::Delete]) {
+			checkpoint(s.ui.track, s.ui.scene);
 			eraseNotes(st.clip[s.ui.track][s.ui.scene], 0, kMaxLength, kDrumNote + lane, kDrumNote + lane);
 			return;
 		}
@@ -620,6 +628,7 @@ void Machine::loopPad(State& st, int i, int vel) {
 		if (j / 8 < 4 && j % 8 > 3 && j != i && ui.pad[j])
 			held = std::max(held, loopIndex(s, j));
 	if (ui.button[push2::cc::Delete]) {
+		checkpoint(ui.track, ui.scene);
 		eraseNotes(c, p * len, end, 0, 127);
 	} else if (held >= 0 && c.length) {
 		setLength(st, (std::max(p, held) + 1) * len);
@@ -628,6 +637,7 @@ void Machine::loopPad(State& st, int i, int vel) {
 	} else if (c.length) {
 		setLength(st, end);
 	} else {
+		checkpoint(ui.track, ui.scene);
 		c.length = (uint16_t)std::min((end + kBar - 1) / kBar * kBar, kMaxLength);
 		launch(s, ui.track, ui.scene);
 	}
@@ -666,8 +676,8 @@ void Machine::stopClips(Session& s) {
 		stopTrack(s, t, true);
 }
 
-/** Empties a slot; a clip that was playing there stops at once. */
-void Machine::clear(State& st, int track, int scene) {
+/** A slot is empty: a clip that was playing there stops at once, a launch that was waiting is dropped. */
+void Machine::vacate(State& st, int track, int scene) {
 	Session& s = st.s;
 	if (s.track[track].playing == scene)
 		stopTrack(s, track, true);
@@ -675,14 +685,22 @@ void Machine::clear(State& st, int track, int scene) {
 		s.track[track].queued = kNone;
 	if (track == s.ui.track && scene == s.ui.scene)
 		s.ui.heldStep = -1;
+}
+
+/** Empties a slot. */
+void Machine::clear(State& st, int track, int scene) {
+	if (st.clip[track][scene].length)
+		checkpoint(track, scene);
+	vacate(st, track, scene);
 	std::memset(&st.clip[track][scene], 0, sizeof(Clip)); // all zero is the empty clip
 }
 
 /** Copies a slot (an empty one empties the destination). */
 void Machine::copy(State& st, int track, int scene, int toTrack, int toScene) {
-	if (st.clip[track][scene].length)
+	if (st.clip[track][scene].length) {
+		checkpoint(toTrack, toScene);
 		st.clip[toTrack][toScene] = st.clip[track][scene];
-	else
+	} else
 		clear(st, toTrack, toScene);
 }
 
@@ -757,7 +775,7 @@ void Machine::sequencer(State& st, int i, int vel) {
 		if (i == ui.heldStep) {
 			int n = findNote(c, pitch, start, grid);
 			if (ui.heldHad && !ui.heldEdited && n >= 0)
-				eraseNote(c, n);
+				checkpoint(ui.track, ui.scene), eraseNote(c, n);
 			ui.heldStep = -1;
 		}
 		return;
@@ -769,19 +787,23 @@ void Machine::sequencer(State& st, int i, int vel) {
 	int n = findNote(c, pitch, start, grid);
 	if (ui.button[push2::cc::Delete]) {
 		if (n >= 0)
-			eraseNote(c, n);
+			checkpoint(ui.track, ui.scene), eraseNote(c, n);
 	} else if (ui.heldStep >= 0) { // ponytail: one held step; a press on a later step of its row stretches its note
 		int heldStart, heldPitch = stepOf(s, ui.heldStep, heldStart), h = findNote(c, heldPitch, heldStart, grid);
-		if (pitch == heldPitch && start > heldStart && h >= 0)
+		if (pitch == heldPitch && start > heldStart && h >= 0) {
+			checkpoint(ui.track, ui.scene);
 			c.notes[h].len = (uint16_t)(std::min(start + grid, length) - c.notes[h].tick), ui.heldEdited = true;
+		}
 	} else if (n >= 0) {
 		ui.heldStep = (int8_t)i, ui.heldHad = true, ui.heldEdited = false;
 	} else {
-		Note note = {(uint16_t)start, (uint16_t)std::min(grid, length - start), (uint8_t)pitch, 100};
-		if (insertNote(c, note) < 0) {
-			ui.popup = kClipFullPopup, ui.popupAt = ui.now; // it can't be a duplicate: findNote found none
+		if (c.nNotes >= kMaxNotes) {
+			ui.popup = kClipFullPopup, ui.popupAt = ui.now;
 			return;
 		}
+		checkpoint(ui.track, ui.scene);
+		Note note = {(uint16_t)start, (uint16_t)std::min(grid, length - start), (uint8_t)pitch, 100};
+		insertNote(c, note); // there is room, and findNote found no note there
 		ui.heldStep = (int8_t)i, ui.heldHad = ui.heldEdited = false;
 		c.length = (uint16_t)length;
 		if (created)
@@ -799,6 +821,7 @@ void Machine::noteEncoder(State& st, int encoder, int delta) {
 	int n = steps(accNote_[encoder], delta, kNoteUnits[encoder]);
 	if (h < 0 || !n)
 		return;
+	checkpoint(ui.track, ui.scene);
 	Note note = c.notes[h];
 	ui.heldEdited = true;
 	if (encoder == 0) { // moves it in the order of the notes
@@ -981,6 +1004,8 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 	white(push2::cc::Scale, u.screen == kScaleScreen || u.button[push2::cc::Scale]);
 	white(push2::cc::Clip, u.screen == kClipScreen || u.button[push2::cc::Clip]);
 	white(push2::cc::FixedLength, u.fixedOn || u.button[push2::cc::FixedLength]);
+	if (u.button[push2::cc::Undo] || (u.button[Shift] ? undoTop_ != undoEnd_ : undoTop_ != undoBottom_))
+		white(push2::cc::Undo, u.button[push2::cc::Undo]); // dim: there is something to undo (Shift: to redo)
 	white(push2::cc::Browse, u.screen == kBrowseScreen || u.button[push2::cc::Browse]);
 	if (u.screen == kBrowseScreen) { // LOAD and CLOSE; the other buttons stay dark
 		out.cc[push2::cc::Track8Below] = out.cc[push2::cc::Track1Above] = {push2::kRgbWhite, push2::kStatic};
@@ -1095,6 +1120,46 @@ void Machine::tick(State& st, int64_t k, Outputs& out) {
 	}
 	if (s.transport.metronome && k % kPpqn == 0)
 		out.metro = true, out.metroV = k % kBar == 0 ? 10.f : 5.f;
+}
+
+/** Keeps the slot's clip as it is now, before an edit. One entry for a slot and a gesture (hold + encoder turns); a new
+ * one drops the redo entries, and a full ring its oldest. */
+void Machine::checkpoint(int track, int scene) {
+	if (undoTop_ != undoBottom_) {
+		const Snapshot& top = undo_[(undoTop_ - 1) % kUndo];
+		if (top.step == gesture_ && top.track == track && top.scene == scene)
+			return;
+	}
+	if (undoTop_ - undoBottom_ == kUndo)
+		undoBottom_++;
+	Snapshot& e = undo_[undoTop_++ % kUndo];
+	undoEnd_ = undoTop_;
+	e.step = gesture_, e.track = (uint8_t)track, e.scene = (uint8_t)scene;
+	e.clip = state_->clip[track][scene];
+}
+
+/** Undoes (or redoes) every entry of the step at the top: each swaps with its slot, so the other direction is the same
+ * walk. A slot that ends up empty is vacated. False when there is nothing to do. */
+bool Machine::undo(State& st, bool redo) {
+	if (redo ? undoTop_ == undoEnd_ : undoTop_ == undoBottom_)
+		return false;
+	Ui& ui = st.s.ui;
+	uint32_t step = undo_[(redo ? undoTop_ : undoTop_ - 1) % kUndo].step;
+	while (redo ? undoTop_ != undoEnd_ : undoTop_ != undoBottom_) {
+		Snapshot& e = undo_[(redo ? undoTop_ : undoTop_ - 1) % kUndo];
+		if (e.step != step)
+			break;
+		redo ? undoTop_++ : undoTop_--;
+		Clip& c = st.clip[e.track][e.scene];
+		std::swap_ranges((uint8_t*)&e.clip, (uint8_t*)&e.clip + sizeof(Clip), (uint8_t*)&c); // no 33 KB temporary
+		if (!c.length)
+			vacate(st, e.track, e.scene);
+		if (e.track == ui.track && e.scene == ui.scene) {
+			const Track& tr = st.s.track[e.track];
+			ui.heldStep = -1, ui.page = (uint8_t)std::min<int>(ui.page, lastPage(c, kGrid[tr.grid], pageSteps(tr)));
+		}
+	}
+	return true;
 }
 
 void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFrame* slice) {
@@ -1251,6 +1316,7 @@ void Machine::save(State& st) {
 void Machine::load(const State& st) {
 	lock();
 	*state_ = st;
+	undoBottom_ = undoTop_ = undoEnd_ = 0; // the clips are not the ones the history is of
 	unlock();
 	silence_.store(true, std::memory_order_relaxed);
 	dirty_.store(true, std::memory_order_release);

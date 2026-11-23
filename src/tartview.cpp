@@ -223,19 +223,24 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 	}
 
 	// Popup: while the encoder is touched and for a second after a turn.
-	bool tempo = ui.popup == kTempoPopup, full = ui.popup == kClipFullPopup;
+	bool tempo = ui.popup == kTempoPopup, undo = ui.popup == kUndoPopup || ui.popup == kRedoPopup,
+		 full = ui.popup == kClipFullPopup || undo;
 	if (full ? ui.now - ui.popupAt < 1
 			 : (tempo || ui.popup == kSwingPopup) &&
 				   (ui.touched >> (tempo ? push2::kTempoId : push2::kSwingId) & 1 || ui.now - ui.popupAt < 1)) {
-		if (full)
+		if (undo) // Live's texts, in a wider box
+			std::snprintf(buf, sizeof buf,
+						  ui.popup == kUndoPopup ? "Undo: Reverted last action"
+												 : "Redo: Re-performed last undone action");
+		else if (full)
 			std::snprintf(buf, sizeof buf, "Clip full");
 		else if (tempo)
 			std::snprintf(buf, sizeof buf, t.external ? "Tempo %.1f BPM EXT" : "Tempo %.1f BPM",
 						  t.external ? t.shownBpm : t.bpm);
 		else
 			std::snprintf(buf, sizeof buf, "Swing %d %%", t.swing);
-		rect(270, 45, 420, 70, nvgRGB(0x30, 0x32, 0x36));
-		text(480, 94, buf, 36, NVG_ALIGN_CENTER, white, sans);
+		rect(undo ? 150 : 270, 45, undo ? 660 : 420, 70, nvgRGB(0x30, 0x32, 0x36));
+		text(480, 94, buf, undo ? 28 : 36, NVG_ALIGN_CENTER, white, sans);
 	}
 }
 

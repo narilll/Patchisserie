@@ -20,15 +20,16 @@ Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad contro
 14. [Swing](#swing)
 15. [Scale mode](#scale-mode)
 16. [Clip mode](#clip-mode)
-17. [The Home screen](#the-home-screen)
-18. [The lights](#the-lights)
-19. [The Push controls](#the-push-controls)
-20. [Context menu reference](#context-menu-reference)
-21. [Display status words](#display-status-words)
-22. [More than one Tart](#more-than-one-tart)
-23. [What is saved with the patch](#what-is-saved-with-the-patch)
-24. [Limitations](#limitations)
-25. [Credits and licenses](#credits-and-licenses)
+17. [Undo and Redo](#undo-and-redo)
+18. [The Home screen](#the-home-screen)
+19. [The lights](#the-lights)
+20. [The Push controls](#the-push-controls)
+21. [Context menu reference](#context-menu-reference)
+22. [Display status words](#display-status-words)
+23. [More than one Tart](#more-than-one-tart)
+24. [What is saved with the patch](#what-is-saved-with-the-patch)
+25. [Limitations](#limitations)
+26. [Credits and licenses](#credits-and-licenses)
 
 ## Quick start
 
@@ -362,6 +363,21 @@ An empty slot shows "Empty slot", and the encoder does nothing there. Make a cli
 
 **Differences from Ableton Live.** The Clip screen of Live also has the start of the loop, the loop on or off, and the position. Tart's Clip screen has only the length. A clip always starts at its first beat and always loops.
 
+## Undo and Redo
+
+Press UNDO on the Push to take back the last change you made to a clip. Hold SHIFT and press UNDO to do again a change that you took back (redo). You can go back up to 32 changes. A popup in the middle of the display says "Undo: Reverted last action" or "Redo: Re-performed last undone action" for one second. When there is nothing to undo or redo, nothing happens and there is no popup.
+
+These are the changes that Undo takes back, each as one step:
+
+- Tapping a step in the [Melodic Sequencer](#the-melodic-sequencer) or the [Drum Sequencer](#the-drum-sequencer), which puts a note on it or takes it away. Making a long note. Holding a step and turning the encoders is one step, however many times you turn them. If the press also put a note on the step, that note is part of the same step. When a tap on a step made the first note of a new clip, undoing it takes the clip away again.
+- DELETE with a step, a lane pad or a loop pad of a drum track.
+- A loop pad that makes a clip, or that changes the length of a clip. Turning encoder 1 on the [Clip screen](#clip-mode) is one step for each press of CLIP.
+- Deleting a clip with DELETE in [Session mode](#session-mode). Deleting a whole row with a scene button is one step for the whole row, and so is copying a row with DUPLICATE and a scene button. Copying a clip into one slot is one step, so copying it into more slots takes one UNDO for each.
+
+Undo and redo work on the clip contents only. If a clip is empty after Undo, the slot is empty again: a clip that was playing there stops at once, and a launch that was waiting is cancelled. A clip that Undo brings back does not start playing.
+
+**Differences from Ableton Live.** Undo in Tart does not take back the tempo, the swing, the scale, the settings or the type of a track, or launching and stopping clips. It remembers 32 steps and no more, and the oldest step is forgotten when you make a new one. Making a change after an undo ends the steps you could redo. The steps are not saved with the patch, and loading a patch forgets them. Tart's Undo is independent of Undo in Rack (Cmd/Ctrl+Z), which does not touch the clips.
+
 ## The Home screen
 
 The Push display is 960 pixels wide and 160 pixels high. The mirror on the panel shows the same picture. The display is split into eight columns, one above each encoder and one above each button of the rows above and below the display.
@@ -385,7 +401,7 @@ The Push display is 960 pixels wide and 160 pixels high. The mirror on the panel
 
 **The Browse screen.** While [Browse](#track-types-and-browse) is open, the display shows CLOSE over the first button above it, TYPE with the type of the selected track over encoder 1, the list of types with a filled box on the cursor and a dot on the current type, and LOAD over the last button below it.
 
-**The popup.** While you touch the tempo encoder, and for one second after you turn it or tap, a box in the middle shows "Tempo 120.0 BPM", with EXT after it when a cable is in CLOCK. The swing encoder shows "Swing 25 %" in the same way. When you tap a step in a clip that already has 4096 notes, the box says "Clip full" for one second and the note is not added.
+**The popup.** While you touch the tempo encoder, and for one second after you turn it or tap, a box in the middle shows "Tempo 120.0 BPM", with EXT after it when a cable is in CLOCK. The swing encoder shows "Swing 25 %" in the same way. When you tap a step in a clip that already has 4096 notes, the box says "Clip full" for one second and the note is not added. UNDO and SHIFT with UNDO show the box described in [Undo and Redo](#undo-and-redo), a little wider.
 
 **The status line.** When the display or one of the MIDI ports is not connected, a dim line over the middle shows the display status, the name of the MIDI input port and the name of the MIDI output port, separated by vertical bars, for example `no display | in Ableton Push 2 User Port | out -`. A dash means that the port is not open. The words for the display status are listed [below](#display-status-words). When everything is connected, the line is hidden.
 
@@ -406,6 +422,7 @@ Tart lights the Push buttons that do something in this version. All other button
 - **SCALE** is full white while the [Scale screen](#scale-mode) is open and dim white otherwise, and **CLIP** is the same for the [Clip screen](#clip-mode).
 - **OCTAVE UP** and **OCTAVE DOWN** are dim white while the selected track can move in that direction, and dark when it cannot.
 - **LAYOUT** is dim white in Note mode, and full white while the [Melodic Sequencer](#the-melodic-sequencer) is open. On a [drum track](#drum-tracks), LAYOUT, **OCTAVE UP** and **OCTAVE DOWN** are dark.
+- **UNDO** is dim white while there is a step to undo, or, while you hold SHIFT, a step to redo, and dark when there is none. It is full white while you hold it.
 - **BROWSE** is dim white, and full white while the [Browse screen](#track-types-and-browse) is open. While it is open, the last button below the display (LOAD) and the first button above it (CLOSE) are white, and the other buttons above and below the display are dark.
 - **FIXED LENGTH** is full white while [Fixed Length](#fixed-length) is on and dim white while it is off.
 - In the Melodic Sequencer and the Drum Sequencer, **PAGE LEFT** and **PAGE RIGHT** are dim white when there is a page to go to, and the eight scene buttons show the step size. The pads are described in [The Melodic Sequencer](#the-melodic-sequencer) and [The Drum Sequencer](#the-drum-sequencer).
@@ -428,6 +445,7 @@ Tart lights the Push buttons that do something in this version. All other button
 | SCALE | Opens or closes the [Scale screen](#scale-mode). Held for 0.3 seconds or longer, it is open only while you hold it. |
 | CLIP | Opens or closes the [Clip screen](#clip-mode), where encoder 1 sets the length of the selected clip. Held for 0.3 seconds or longer, it is open only while you hold it. |
 | Pads | In Session mode, launch clips. In Note mode, play notes on the selected track, or in the Melodic Sequencer, the steps of its clip. On a [drum track](#drum-tracks), the lower left 4 by 4 pads play and select the 16 lanes, the 4 rows above are the steps of the selected lane, and the lower right 4 by 4 pads are the loop selector. See [The Drum Sequencer](#the-drum-sequencer). |
+| UNDO | Takes back the last change to a clip. With SHIFT held, does a change again that you took back. See [Undo and Redo](#undo-and-redo). |
 | BROWSE | Opens or closes the [Browse screen](#track-types-and-browse), where you choose the type of the selected track. On the screen, UP and DOWN and encoders 1 to 7 move the cursor, the last button below the display loads the type, and the first button above the display closes the screen. |
 | LAYOUT | In Note mode, switches the pads between 64 Notes and the [Melodic Sequencer](#the-melodic-sequencer). It does nothing on a drum track. |
 | PAGE LEFT, PAGE RIGHT | In the Melodic Sequencer, move to the previous or the next page of 8 steps. In the Drum Sequencer, of 32 steps. |
@@ -489,11 +507,12 @@ If you duplicate the owning Tart, the copy closes the ports it copied and stays 
 
 ## What is saved with the patch
 
-Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices, the octave, the type and the selected drum lane, and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty. It also saves the selected track and scene, the pad mode, the launch quantization, whether the Melodic Sequencer is open, and whether Fixed Length is on and its length. A patch from an older version has no types, and all its tracks are Melodic. The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. See [Limitations](#limitations). The Scale screen, the Clip screen and the Browse screen are not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
+Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices, the octave, the type and the selected drum lane, and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty. It also saves the selected track and scene, the pad mode, the launch quantization, whether the Melodic Sequencer is open, and whether Fixed Length is on and its length. A patch from an older version has no types, and all its tracks are Melodic. The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. The steps of [Undo](#undo-and-redo) are not saved. See [Limitations](#limitations). The Scale screen, the Clip screen and the Browse screen are not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
 
 ## Limitations
 
 - After STOP, or after you load a patch, no clip plays. Launch the clips again in Session mode. See [Session mode](#session-mode) for the ways it differs from Live.
+- [Undo](#undo-and-redo) takes back the last 32 changes to clips, and nothing else. It is not saved with the patch and does not use Rack's own Cmd/Ctrl+Z.
 - Nothing is recorded: the pads you play in 64 Notes make no clip, and the sequencer has no recording.
 - The sequencer makes notes of velocity 100 and edits one step at a time. You cannot select several steps, and a second pad that you hold at the same time does nothing, unless it is a later step in the row of the first one.
 - A clip holds at most 4096 notes, and a track plays at most 64 notes at once. When a clip is full, a new note is not added and the display says "Clip full". A 32-bar drum clip with a note on every sixteenth of every lane would need twice that.
