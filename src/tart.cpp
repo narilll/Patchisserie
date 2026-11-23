@@ -445,7 +445,7 @@ void Machine::handle(State& st, const push2::Event& e) {
 		else if (ui.button[push2::cc::FixedLength] && fixedLengthButton(ui, e.index)) {
 		} else if (e.index == push2::cc::Scale || e.index == push2::cc::Clip) {
 			uint8_t to = e.index == push2::cc::Scale ? kScaleScreen : kClipScreen;
-			ui.screen = ui.screen == to ? kHome : to;
+			ui.screen = ui.screen == to ? (uint8_t)kHome : to;
 			ui.screenAt = ui.screen == to ? ui.now : -1;
 		} else if (e.index == push2::cc::Browse) {
 			ui.screen = ui.screen == kBrowseScreen ? kHome : kBrowseScreen;
@@ -725,7 +725,7 @@ void Machine::clear(State& st, int track, int scene) {
 	if (st.clip[track][scene].length)
 		checkpoint(track, scene);
 	vacate(st, track, scene);
-	std::memset(&st.clip[track][scene], 0, sizeof(Clip)); // all zero is the empty clip
+	std::memset(static_cast<void*>(&st.clip[track][scene]), 0, sizeof(Clip)); // all zero is the empty clip
 }
 
 /** Copies a slot (an empty one empties the destination). */
@@ -1219,7 +1219,7 @@ void Machine::endTake(bool discard) {
 		if (tr.queued == u.recScene)
 			tr.queued = kNone;
 		if (u.recFresh)
-			std::memset(&c, 0, sizeof(Clip));
+			std::memset(static_cast<void*>(&c), 0, sizeof(Clip));
 	} else if (u.recOpen) {
 		c.length = (uint16_t)((u.recEnd >= 0 ? u.recEnd : takeEnd(st.s, tr)) - tr.startTick);
 	}
