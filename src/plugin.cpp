@@ -1199,12 +1199,33 @@ struct Tart : Module {
 						json_array_append_new(notes, json_pack("[i, i, i, i]", c.notes[i].tick, c.notes[i].len,
 															   c.notes[i].pitch, c.notes[i].vel));
 					clip = json_pack("{s:i, s:o}", "length", c.length, "notes", notes);
+					// "automation": a list of [tick, value] points for each of the 10 lanes (8 CCs, LEVEL, PAN), only
+					// when some lane has points.
+					if (std::any_of(c.nPoints, c.nPoints + tart::kAutos, [](uint16_t n) { return n > 0; })) {
+						json_t* lanes = json_array();
+						for (int j = 0; j < tart::kAutos; j++) {
+							json_t* points = json_array();
+							for (int i = 0; i < c.nPoints[j]; i++)
+								json_array_append_new(points,
+													  json_pack("[i, i]", c.points[j][i].tick, c.points[j][i].value));
+							json_array_append_new(lanes, points);
+						}
+						json_object_set_new(clip, "automation", lanes);
+					}
 				}
 				json_array_append_new(clips, clip);
 			}
-			json_array_append_new(tracks, json_pack("{s:s, s:i, s:i, s:i, s:i, s:i, s:o}", "name", tr.name, "color",
-													tr.color, "voices", tr.voices, "octave", tr.octave, "type", tr.type,
-													"lane", tr.lane, "clips", clips));
+			json_t* trackJ = json_pack("{s:s, s:i, s:i, s:i, s:i, s:i, s:o, s:i}", "name", tr.name, "color", tr.color,
+									   "voices", tr.voices, "octave", tr.octave, "type", tr.type, "lane", tr.lane,
+									   "clips", clips, "bipolar", tr.bipolar);
+			json_t *ccNames = json_array(), *values = json_array();
+			for (const auto& name : tr.ccName)
+				json_array_append_new(ccNames, json_string(name));
+			for (uint16_t v : tr.value)
+				json_array_append_new(values, json_integer(v));
+			json_object_set_new(trackJ, "ccNames", ccNames);
+			json_object_set_new(trackJ, "values", values);
+			json_array_append_new(tracks, trackJ);
 		}
 		return json_pack("{s:b, s:o, s:o, s:{s:f, s:i, s:i, s:b}, s:{s:i, s:i, s:i, s:b, s:b}, "
 						 "s:{s:i, s:i, s:i, s:i, s:i, s:b, s:i, s:i, s:i, s:i, s:b}, s:o, s:i, s:i}",
@@ -1275,12 +1296,24 @@ struct Tart : Module {
 				tart::setName(tr, name);
 			tr.color = u8(color), tr.voices = u8(voices), tr.octave = (int8_t)clamp(octave, -128, 127);
 			tr.type = u8(type), tr.lane = u8(lane);
-			json_t* clipsJ = json_object_get(json_array_get(tracksJ, i), "clips");
+			json_t* trackJ = json_array_get(tracksJ, i);
+			int bipolar = tr.bipolar;
+			json_unpack(trackJ, "{s?i}", "bipolar", &bipolar);
+			tr.bipolar = u8(bipolar);
+			json_t *namesJ = json_object_get(trackJ, "ccNames"), *valuesJ = json_object_get(trackJ, "values");
+			for (int c = 0; c < tart::kCcs; c++)
+				if (const char* text = json_string_value(json_array_get(namesJ, c)))
+					tart::setText(tr.ccName[c], tart::kCcNameBytes, text);
+			for (int j = 0; j < tart::kAutos; j++)
+				if (json_t* v = json_array_get(valuesJ, j))
+					tr.value[j] = (uint16_t)clamp((int)json_integer_value(v), 0, 65535);
+			json_t* clipsJ = json_object_get(trackJ, "clips");
 			for (size_t j = 0; j < tart::kScenes && json_is_array(clipsJ); j++) {
 				tart::Clip& c = st->clip[i][j];
 				json_t* clipJ = json_array_get(clipsJ, j);
 				json_t* notesJ = json_object_get(clipJ, "notes");
 				c.length = c.nNotes = 0;
+				std::fill(c.nPoints, c.nPoints + tart::kAutos, 0);
 				if (!json_is_object(clipJ))
 					continue;
 				c.length =
@@ -1294,6 +1327,18 @@ struct Tart : Module {
 					};
 					c.notes[c.nNotes++] = {(uint16_t)at(0, 65535), (uint16_t)at(1, 65535), (uint8_t)at(2, 255),
 										   (uint8_t)at(3, 255)};
+				}
+				json_t* lanesJ = json_object_get(clipJ, "automation");
+				for (size_t l = 0; l < tart::kAutos && l < json_array_size(lanesJ); l++) {
+					json_t* pointsJ = json_array_get(lanesJ, l);
+					for (size_t k = 0; k < json_array_size(pointsJ) && c.nPoints[l] < tart::kMaxPoints; k++) {
+						json_t* p = json_array_get(pointsJ, k);
+						if (json_array_size(p) < 2)
+							continue;
+						c.points[l][c.nPoints[l]++] = {
+							(uint16_t)clamp((int)json_integer_value(json_array_get(p, 0)), 0, 65535),
+							(uint16_t)clamp((int)json_integer_value(json_array_get(p, 1)), 0, 65535)};
+					}
 				}
 			}
 		}
@@ -1591,6 +1636,40 @@ struct TartWidget : ModuleWidget {
 							m->machine.edit(
 								[=](tart::State& st) { st.s.track[t].type = (uint8_t)i, st.s.ui.heldStep = -1; });
 						}));
+					sub2->addChild(createSubmenuItem("CC", "", [=](Menu* sub3) {
+						for (int c = 0; c < tart::kCcs; c++) {
+							tart::View cc;
+							m->machine.view(cc);
+							sub3->addChild(createSubmenuItem(
+								"CC " + std::to_string(c + 1), cc.s.track[t].ccName[c], [=](Menu* sub4) {
+									tart::View now;
+									m->machine.view(now);
+									sub4->addChild(createMenuLabel("Name"));
+									auto* field = new TrackNameField;
+									field->setText(now.s.track[t].ccName[c]);
+									field->set = [=](const std::string& name) {
+										m->machine.edit([&](tart::State& st) {
+											tart::setText(st.s.track[t].ccName[c], tart::kCcNameBytes, name.c_str());
+										});
+									};
+									sub4->addChild(field);
+									sub4->addChild(createIndexSubmenuItem(
+										"Range", {"0 V to 10 V", "-5 V to +5 V"},
+										[=] {
+											tart::View now;
+											m->machine.view(now);
+											return (size_t)(now.s.track[t].bipolar >> c & 1);
+										},
+										[=](size_t i) {
+											m->machine.edit([=](tart::State& st) {
+												tart::Track& tr = st.s.track[t];
+												if ((size_t)(tr.bipolar >> c & 1) != i) // a new range starts at 0 V
+													tr.bipolar ^= (uint8_t)(1 << c), tr.value[c] = i ? 32768 : 0;
+											});
+										}));
+								}));
+						}
+					}));
 				}));
 		}));
 		menu->addChild(new MenuSeparator);
@@ -1618,9 +1697,9 @@ struct Slice : Module {
 		configOutput(VOCT_OUTPUT, "V/OCT (one channel per voice)");
 		configOutput(GATE_OUTPUT, "Gate (one channel per voice)");
 		configOutput(VEL_OUTPUT, "Velocity (one channel per voice)");
-		configOutput(CC_OUTPUT, "CC (8 channels, 0 V for now)");
-		configOutput(LEVEL_OUTPUT, "Level (10 V for now)");
-		configOutput(PAN_OUTPUT, "Pan (0 V for now)");
+		configOutput(CC_OUTPUT, "CC 1 to 8 (one channel each)");
+		configOutput(LEVEL_OUTPUT, "Level (0 to 10 V)");
+		configOutput(PAN_OUTPUT, "Pan (-5 to +5 V)");
 		leftExpander.producerMessage = &msg[0];
 		leftExpander.consumerMessage = &msg[1];
 	}

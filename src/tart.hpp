@@ -17,10 +17,13 @@ namespace tart {
 // (Fixed Length).
 constexpr double kHoldSeconds = 0.3;
 constexpr int kTracks = 8, kScenes = 8, kPpqn = 96, kBar = 4 * kPpqn, kMaxLength = 32 * kBar; // 12288 fits uint16_t
-// ponytail: per-clip ceilings. 4096 notes (Clip 32.8 KB, State 2.1 MB) = 32 bars of 16ths in 8-note chords or a 16-bar
+// ponytail: per-clip ceilings. 4096 notes (Clip 34.9 KB, State 2.2 MB) = 32 bars of 16ths in 8-note chords or a 16-bar
 // 16-lane drum clip; a full 32-bar one needs 8192 (+36 KB/clip, State 4.2 MB), and a clip past the ceiling says "Clip
 // full".
 constexpr int kMaxNotes = 4096, kCcs = 8, kMaxPoints = 256, kNameBytes = 32, kColors = 70, kMaxOctave = 10;
+// The automation lanes of a clip: the 8 CCs, then LEVEL and PAN. ponytail: 256 points a lane is about 64 isolated step
+// locks.
+constexpr int kAutos = kCcs + 2, kLevel = kCcs, kPan = kCcs + 1, kCcNameBytes = 16;
 
 // The clips. The layout is final: later commits only fill it.
 struct Note {
@@ -28,7 +31,7 @@ struct Note {
 	uint8_t pitch, vel; // pitch = MIDI note; on a drum track lane n is pitch kDrumNote + n
 };
 struct Point {
-	uint16_t tick, value; // E4
+	uint16_t tick, value; // value: 0..65535 across the lane's range
 };
 struct Euclid {
 	uint8_t mode, steps, pulses, rotation, probability, velocity, octaves, change;
@@ -37,8 +40,8 @@ struct Euclid {
 struct Clip {
 	uint16_t length = 0, nNotes = 0; // length 0 = empty slot
 	Note notes[kMaxNotes] = {};      // sorted (tick, pitch), unique
-	uint16_t nPoints[kCcs] = {};
-	Point points[kCcs][kMaxPoints] = {};
+	uint16_t nPoints[kAutos] = {};
+	Point points[kAutos][kMaxPoints] = {}; // per lane sorted by tick; two on one tick are a jump (arriving, leaving)
 	Euclid euclid = {};
 };
 
@@ -56,7 +59,10 @@ struct Track {
 	int8_t playing = kNone; // launched scene; Stop clears it (as Live)
 	int8_t queued = kNone;  // transient from here on
 	int64_t launchTick = 0, startTick = 0;
-	// E4 adds ccName[8][16], ccRange[8], level, pan, mute, solo
+	char ccName[kCcs][kCcNameBytes] = {}; // "" shows "CC n"
+	uint8_t bipolar = 0;                  // bit c: CC c is -5 V to +5 V (else 0 V to 10 V)
+	uint16_t value[kAutos] = {};          // what each lane outputs without automation; a playing clip writes it
+										  // E4 adds mute, solo
 };
 
 enum Popup : uint8_t {
@@ -189,8 +195,18 @@ extern const int kScaleCount;
  * `inScale`: it is in the scale (for Chromatic, which lights them). */
 int padPitch(const Scale& sc, int octave, int row, int col, bool& root, bool& inScale);
 
+/** Copies `text` (UTF-8) into `dst` of `size` bytes, cut on a character boundary, the rest zero. */
+void setText(char* dst, size_t size, const char* text);
+
 /** Copies `name` (UTF-8) into the track, cut on a character boundary. */
 void setName(Track& t, const char* name);
+
+/** The volts of a lane's value `v`: LEVEL 0 to 10 V, PAN and bipolar CCs -5 to +5 V, other CCs 0 to 10 V. */
+float volts(const Track& t, int lane, int v);
+
+/** The clip's envelope on `lane` at `tick`: linear between points, the first value before the first and the last after
+ * the last. Where two points share a tick, `arriving` takes the first, else the second. -1: the lane has no points. */
+int envelope(const Clip& c, int lane, int tick, bool arriving = false);
 
 /** Clamps everything that came from a patch, resets what is transient. */
 void sanitize(State& st);
@@ -293,7 +309,7 @@ class Machine {
 	std::unique_ptr<State> state_;   // under busy_
 	// Undo: a ring of the clips as they were before each edit (the entries of one gesture, a scene row's, share a
 	// step), under busy_. Monotonic counters: [bottom, top) can be undone, [top, end) redone. ponytail: whole-clip
-	// snapshots, 32 of them, ~1.05 MB allocated once here; a delta log if a deeper history is wanted.
+	// snapshots, 32 of them, ~1.4 MB allocated once here; a delta log if a deeper history is wanted.
 	struct Snapshot {
 		uint32_t step;
 		uint8_t track, scene;
@@ -340,6 +356,9 @@ class Machine {
 	bool sync_ = true; // take the lock this sample
 	int accTempo_ = 0, accSwing_ = 0, accScale_[8] = {}, accNote_[4] = {}, accClip_ = 0, accBrowse_ = 0,
 		accQuantTo_ = 0, accAmount_ = 0, accRecQuant_ = 0;
+	// What the Slice reads: each lane's volts at the last tick and at the next, mirrored under the lock.
+	float from_[kTracks][kAutos] = {}, to_[kTracks][kAutos] = {};
+	int64_t lastTick_ = 0;
 	uint8_t sentColor_[kTracks] = {255, 255, 255, 255, 255, 255, 255, 255}; // what the Push's palette has; 255: none
 	int64_t taps_[5] = {};
 	int nTaps_ = 0;

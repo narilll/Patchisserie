@@ -25,15 +25,16 @@ Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad contro
 19. [Quantize](#quantize)
 20. [Double Loop](#double-loop)
 21. [Undo and Redo](#undo-and-redo)
-22. [The Home screen](#the-home-screen)
-23. [The lights](#the-lights)
-24. [The Push controls](#the-push-controls)
-25. [Context menu reference](#context-menu-reference)
-26. [Display status words](#display-status-words)
-27. [More than one Tart](#more-than-one-tart)
-28. [What is saved with the patch](#what-is-saved-with-the-patch)
-29. [Limitations](#limitations)
-30. [Credits and licenses](#credits-and-licenses)
+22. [CC and automation](#cc-and-automation)
+23. [The Home screen](#the-home-screen)
+24. [The lights](#the-lights)
+25. [The Push controls](#the-push-controls)
+26. [Context menu reference](#context-menu-reference)
+27. [Display status words](#display-status-words)
+28. [More than one Tart](#more-than-one-tart)
+29. [What is saved with the patch](#what-is-saved-with-the-patch)
+30. [Limitations](#limitations)
+31. [Credits and licenses](#credits-and-licenses)
 
 ## Quick start
 
@@ -489,6 +490,18 @@ Undo and redo work on the clip contents only. If a clip is empty after Undo, the
 
 **Differences from Ableton Live.** Undo in Tart does not take back the tempo, the swing, the scale, the settings or the type of a track, or launching and stopping clips. It remembers 32 steps and no more, and the oldest step is forgotten when you make a new one. Making a change after an undo ends the steps you could redo. The steps are not saved with the patch, and loading a patch forgets them. Tart's Undo is independent of Undo in Rack (Cmd/Ctrl+Z), which does not touch the clips.
 
+## CC and automation
+
+Each track has 8 CC lanes, numbered CC 1 to CC 8, and two more lanes, LEVEL and PAN. A lane is a control signal that a [Slice](slice.md) sends out as a voltage: the CC output of the Slice has 8 channels, one for each CC lane, and the LEVEL and PAN outputs have one channel each. You can patch them to anything that takes a control voltage, for example a filter cutoff, a volume or a panner.
+
+**Names and ranges.** A CC lane has a name, which is empty at the start and shows as "CC 1" to "CC 8", and a range. The range is either 0 V to 10 V, which is the start, or -5 V to +5 V. Set both with **CC** in the **Track** menu. See the [Context menu reference](#context-menu-reference). A name can have 15 bytes at most. The range of LEVEL is always 0 V to 10 V, and the range of PAN is always -5 V to +5 V.
+
+**The value of a lane.** When a lane has no automation, it sends the value that the track has for it. The start values are 0 V for each CC lane (the middle, 0 V, for a lane with the range -5 V to +5 V), 10 V for LEVEL and 0 V for PAN. Changing the range of a CC lane in the menu sets that lane back to the start value of the new range.
+
+**Automation.** Each clip can store automation: for every lane, a line of points that goes through a value at each point, and rises or falls in a straight line between two points. When a clip with automation plays, the lane follows its line while the clip loops, and the outputs of the Slice move smoothly between the ticks of the clock. Before the first point the lane holds the value of the first point, and after the last point it holds the last value. A lane that the playing clip has no points for keeps its value. When the clip stops, each lane stays at the last value it had. Automation is part of the clip: it is copied with DUPLICATE, deleted with the clip, doubled by [Double Loop](#double-loop) and taken back by [Undo](#undo-and-redo) together with the notes. A lane holds at most 256 points, and Double Loop says "Clip full" when the doubled points would not fit.
+
+**Editing automation.** You cannot edit automation on the Push yet. For now, automation exists only in a clip that was stored in a patch. Editing it on the Push comes in a later version.
+
 ## The Home screen
 
 The Push display is 960 pixels wide and 160 pixels high. The mirror on the panel shows the same picture. The display is split into eight columns, one above each encoder and one above each button of the rows above and below the display.
@@ -597,7 +610,7 @@ Right-click the panel to open the context menu. Tart adds these entries below Ra
 | **Launch quantization** | A submenu with 14 choices: None, 8 Bars, 4 Bars, 2 Bars, 1 Bar, 1/2, 1/2T, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T and 1/32. It sets when a launch or a stop happens (see [Session mode](#session-mode)). The default is 1 Bar. |
 | **CLK output: pulses per beat** | A submenu with 1, 2, 4, 8, 16, 24, 32, 48 and 96. It sets how many pulses the CLK output sends in each beat. The default is 4. |
 | **CLOCK input: pulses per beat** | A submenu with the same numbers. It tells Tart how many pulses of an external clock make a beat. The default is 4. Use 24 for a clock at 24 PPQN (pulses per quarter note, which is the same as a beat). |
-| **Track** | A submenu with one entry for each track, "Track 1" to "Track 8", which shows the track's name. Each entry has a **Name** text field, where each change renames the track at once, a **Color** grid of 70 swatches, where a click sets the track's color at once (see [Colors](#colors)), a **Voices** submenu with 1 to 16 voices, which a drum track ignores (the default is 1), and a **Type** submenu with Melodic and Drum (the default is Melodic). See [Track types and Browse](#track-types-and-browse). |
+| **Track** | A submenu with one entry for each track, "Track 1" to "Track 8", which shows the track's name. Each entry has a **Name** text field, where each change renames the track at once, a **Color** grid of 70 swatches, where a click sets the track's color at once (see [Colors](#colors)), a **Voices** submenu with 1 to 16 voices, which a drum track ignores (the default is 1), and a **Type** submenu with Melodic and Drum (the default is Melodic). See [Track types and Browse](#track-types-and-browse). The last entry is **CC**: a submenu with "CC 1" to "CC 8", each showing the name of the CC lane. Each has a **Name** text field, where each change renames the lane at once, and a **Range** submenu with "0 V to 10 V" (the default) and "-5 V to +5 V". Changing the range sets that lane back to the start value of the new range. See [CC and automation](#cc-and-automation). |
 | **Find Push automatically** | When ticked (the default), Tart looks for the Push's User port every two seconds and opens it, and it reopens it when you unplug and replug the Push. Untick it to choose the ports yourself. |
 | **Push MIDI input (User Port)** | The MIDI port that Tart reads the Push's pads, buttons, encoders and touch strip from. Below the heading are Rack's usual MIDI choices: the driver, then the device. Pick the port whose name ends in "User Port". Leave the channel on its default so that every message arrives. |
 | **Push MIDI output (User Port)** | The MIDI port that Tart sends light messages and the switch to User mode to. Below the heading are Rack's usual MIDI choices. Pick the Push's User Port here as well. Ignore the channel choice: Tart always overrides it, because the Push needs the channel byte of each message for its light animations. |
@@ -628,7 +641,7 @@ If you duplicate the owning Tart, the copy closes the ports it copied and stays 
 
 ## What is saved with the patch
 
-Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices, the octave, the type and the selected drum lane, and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty. It also saves the settings of [Quantize](#quantize): QUANTIZE TO, AMOUNT, REC QUANT and whether Record Quantize is on. It also saves the selected track and scene, the pad mode, the launch quantization, which layout of Note mode is open (64 Notes, the Melodic Sequencer or Melodic Sequencer + 32 Notes), and whether Fixed Length is on and its length. A patch from an older version has no types, and all its tracks are Melodic. The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. The steps of [Undo](#undo-and-redo) are not saved, and neither is a running take: a patch that you save during a take with an open length keeps the clip with a length of 32 bars. See [Limitations](#limitations). The Scale screen, the Clip screen and the Browse screen are not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
+Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices, the octave, the type and the selected drum lane, the names and ranges of its 8 CC lanes and the current value of each of its 10 lanes (the 8 CC lanes, LEVEL and PAN), and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty, and the [automation](#cc-and-automation) of every clip that has some. It also saves the settings of [Quantize](#quantize): QUANTIZE TO, AMOUNT, REC QUANT and whether Record Quantize is on. It also saves the selected track and scene, the pad mode, the launch quantization, which layout of Note mode is open (64 Notes, the Melodic Sequencer or Melodic Sequencer + 32 Notes), and whether Fixed Length is on and its length. A patch from an older version has no types, and all its tracks are Melodic. It also has no CC names, ranges, values or automation, and the lanes start as described in [CC and automation](#cc-and-automation). The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. The steps of [Undo](#undo-and-redo) are not saved, and neither is a running take: a patch that you save during a take with an open length keeps the clip with a length of 32 bars. See [Limitations](#limitations). The Scale screen, the Clip screen and the Browse screen are not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
 
 ## Limitations
 
@@ -638,7 +651,7 @@ Tart saves these things with the patch: the internal tempo, the swing, the metro
 - The sequencers make notes of velocity 100 and edit one step at a time. In Melodic Sequencer + 32 Notes, the encoders change at most 16 notes of the step, the chord is shared by all tracks and is not saved, and there is no Shift+OCTAVE. You cannot select several steps, and a second pad that you hold at the same time does nothing, unless it is a later step in the row of the first one.
 - A clip holds at most 4096 notes, and a track plays at most 64 notes at once. When a clip is full, a new note is not added and the display says "Clip full". A 32-bar drum clip with a note on every sixteenth of every lane would need twice that.
 - The Melodic Sequencer and Melodic Sequencer + 32 Notes do not work on a [drum track](#drum-tracks): its notes come from the [Drum Sequencer](#the-drum-sequencer). A drum track has no Euclid type, no 16 Velocities or 64 Pads layout, and no mute or solo for single pads. The Drum Sequencer has no loop start, no page that follows the playhead, no double tap and no Duplicate for a page. The Browse screen lists only the two types.
-- Tart sends the notes of the tracks only through [Slice](slice.md) modules. A Slice sends a fixed 10 V on LEVEL and 0 V on PAN and CC for now.
+- Tart sends the notes and the CC, LEVEL and PAN signals of the tracks only through [Slice](slice.md) modules. [Automation](#cc-and-automation) cannot be edited on the Push yet, so it only comes from a loaded patch, and there is no way yet to change a lane's value from the Push, to mute a track or to set its level.
 - A pad that sounds when you change the number of voices of its track is cut off.
 - Push buttons other than the ones in the table above do nothing, and so does the master volume encoder.
 - The list of scales is Live's list as far as it is known, and it may be missing scales that Live added lately. If the encoders on the Scale screen move too fast or too slow on your Push, tell the author.

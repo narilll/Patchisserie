@@ -37,15 +37,15 @@ The panel shows the name SLICE, the track window and six output jacks, two to a 
 | V/OCT | Output | The pitch of each voice, 1 V per octave, with 0 V as C4 (MIDI note 60). It is a polyphonic cable with one channel for each voice of the track. The touch strip of the Push bends it by up to 2 semitones. |
 | GATE | Output | 10 V while a note is held on that voice and 0 V otherwise. Polyphonic, one channel for each voice. When a voice plays a new note while the old one is still held, the gate drops for one sample so that envelopes start again. |
 | VEL | Output | The velocity of the note on each voice, from 0 V to 10 V. Polyphonic, one channel for each voice. The voltage stays after the note ends, until the voice plays again. |
-| CC | Output | 8 channels, all at 0 V for now. |
-| LEVEL | Output | 10 V for now. |
-| PAN | Output | 0 V for now. |
+| CC | Output | The 8 CC lanes of the track, one channel each, CC 1 on channel 1. Each channel is 0 V to 10 V or -5 V to +5 V, as the **Range** of that CC says in the **Track** menu of the Tart. 0 V at the start. |
+| LEVEL | Output | The level of the track, 0 V to 10 V. 10 V at the start. |
+| PAN | Output | The pan of the track, -5 V to +5 V. 0 V (the middle) at the start. |
 
 The number of channels on V/OCT, GATE and VEL is the number of voices of the track, set with **Voices** in the **Track** menu of the Tart. The default is 1.
 
 **Drum tracks.** When the track is a Drum track (see [Drum tracks](tart.md#drum-tracks) in the Tart manual), the three outputs always have 16 channels, and **Voices** is ignored. Channel 1 is the first drum pad, channel 2 the second, and channel 16 the sixteenth. The V/OCT of each channel does not change: it is the pitch of the pad's MIDI note, 1 V per octave with 0 V as MIDI note 60, so channel 1 is -2 V (MIDI note 36), channel 2 is -1.917 V and channel 16 is -0.75 V (MIDI note 51). GATE of a channel is 10 V while that pad's note sounds, and VEL is its velocity. The touch strip does not bend a drum track.
 
-CC, LEVEL and PAN are there for later versions of Tart, where clips will control them. For now they stay at the values in the table.
+**CC, LEVEL and PAN.** These three follow the automation of the clip that the track is playing, and move smoothly between the ticks of the clock. A lane without automation sends the value the track has for it, and it stays there when the clip stops. See [CC and automation](tart.md#cc-and-automation) in the Tart manual. Automation cannot be edited on the Push yet, so with a new patch these three stay at the values in the table.
 
 ## Context menu reference
 
@@ -70,4 +70,4 @@ A Slice saves its **Track** setting. Which track it plays by position follows fr
 - A Slice plays one track. For all eight tracks you need eight Slices in a row, or Slices with chosen tracks.
 - Slices work only on the right of a Tart or of another Slice. They do not work on its left.
 - The chain passes on the tracks one sample later for each Slice, because Rack passes messages between modules with one sample of delay. You will not hear this.
-- CC, LEVEL and PAN have fixed values for now.
+- CC, LEVEL and PAN only move when a clip has automation, which comes from a loaded patch for now. There is no mute, and no way yet to change them from the Push.

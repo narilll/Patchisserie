@@ -474,8 +474,9 @@ TEST(tart_machine_threads) {
 TEST(state_layout) {
 	CHECK(std::is_trivially_copyable<tart::State>::value);
 	CHECK(tart::kMaxNotes == 4096);
-	CHECK(sizeof(tart::State) < 3 * 1024 * 1024); // heap only: ~2.1 MB
-	CHECK(sizeof(tart::Machine) < 16 * 1024);
+	CHECK(sizeof(tart::State) < 3 * 1024 * 1024);                // heap only: ~2.2 MB
+	CHECK(sizeof(tart::Machine) < 16 * 1024);                    // ~14.4 KB: from_/to_ add 640 bytes
+	CHECK(sizeof(tart::Clip) < 36 * 1024 && tart::kAutos == 10); // ~34.9 KB: 8 CCs, LEVEL, PAN
 	CHECK(sizeof(tart::SliceFrame) < 2048);
 	CHECK(sizeof(tart::State) > 2 * 1024 * 1024);
 	auto st = std::make_unique<tart::State>();
@@ -3326,4 +3327,181 @@ TEST(split_undo) {
 	CHECK(r.view().nNotes == 0 && r.view().length[0][0] == 0);
 	undoClick(r, true), undoClick(r, true);
 	CHECK(r.view().nNotes == 2);
+}
+
+namespace {
+
+/** Lane `lane` of the clip in slot (0, 0): a 1-bar clip with these points. */
+void setPoints(Rig& r, int lane, std::initializer_list<tart::Point> pts, int length = tart::kBar) {
+	r.m.edit([=](tart::State& st) {
+		tart::Clip& c = st.clip[0][0];
+		c.length = (uint16_t)length;
+		c.nPoints[lane] = 0;
+		for (const tart::Point& p : pts)
+			c.points[lane][c.nPoints[lane]++] = p;
+	});
+}
+
+} // namespace
+
+TEST(envelope_semantics) {
+	auto c = std::make_unique<tart::Clip>();
+	CHECK(tart::envelope(*c, 0, 10) == -1);
+	c->nPoints[0] = 4;
+	c->points[0][0] = {10, 100}, c->points[0][1] = {20, 200}, c->points[0][2] = {20, 1000}, c->points[0][3] = {30, 500};
+	CHECK(tart::envelope(*c, 0, 0) == 100 &&
+		  tart::envelope(*c, 0, 10) == 100); // the first value before the first point
+	CHECK(tart::envelope(*c, 0, 15) == 150);
+	CHECK(tart::envelope(*c, 0, 20, true) == 200 && tart::envelope(*c, 0, 20) == 1000); // a jump: arriving, leaving
+	CHECK(tart::envelope(*c, 0, 19) == 190 && tart::envelope(*c, 0, 25) == 750);
+	CHECK(tart::envelope(*c, 0, 30) == 500 && tart::envelope(*c, 0, 9999) == 500); // the last value after the last
+	c->nPoints[1] = 2; // the 64-bit interpolation: the full range over many ticks
+	c->points[1][0] = {0, 0}, c->points[1][1] = {12000, 65535};
+	CHECK(tart::envelope(*c, 1, 6000) == 32767 && tart::envelope(*c, 1, 11999) == 65529);
+	tart::Track t;
+	CHECK_NEAR(tart::volts(t, 0, 65535), 10.f, 1e-5);
+	CHECK_NEAR(tart::volts(t, tart::kLevel, 0), 0.f, 1e-6);
+	CHECK_NEAR(tart::volts(t, tart::kPan, 0), -5.f, 1e-5);
+	CHECK_NEAR(tart::volts(t, tart::kPan, 32768), 0.f, 1e-6);
+	t.bipolar = 1 << 3;
+	CHECK_NEAR(tart::volts(t, 3, 0), -5.f, 1e-5);
+	CHECK_NEAR(tart::volts(t, 3, 32768), 0.f, 1e-6);
+	CHECK_NEAR(tart::volts(t, 2, 32768), 5.f, 1e-3); // another CC is still unipolar
+}
+
+TEST(automation_playback_sample_exact) {
+	SliceRig r(false);
+	fill(r, 0, 0);
+	setPoints(r, 0, {{0, 0}, {96, 65535}}, 4 * tart::kPpqn);
+	setPoints(r, tart::kLevel, {{0, 65535}, {96, 0}}, 4 * tart::kPpqn);
+	r.m.edit([](tart::State& st) { st.s.track[0].playing = 0; }); // playing, the transport stopped: Play starts at 0
+	r.in.play = true;
+	float cc0 = -1, ccMid = -1, ccMid2 = -1, level = -1;
+	for (int i = 0; i <= 12000 + 200; i++) {
+		r.step();
+		if (i == 0)
+			cc0 = r.f.track[0].cc[0];
+		if (i == 12000)
+			ccMid = r.f.track[0].cc[0], level = r.f.track[0].level;
+		if (i == 12000 + 125) // half a tick on (one tick is 250 samples)
+			ccMid2 = r.f.track[0].cc[0];
+	}
+	CHECK(r.view().s.transport.playing);
+	CHECK_NEAR(cc0, 0.f, 1e-6);
+	CHECK_NEAR(ccMid, 5.f, 0.01);
+	CHECK_NEAR(level, 5.f, 0.01);
+	CHECK_NEAR(ccMid2, 5.f + 10.f / 96 / 2, 0.01); // between two ticks it is interpolated
+	CHECK(r.f.track[0].cc[1] == 0 && r.f.track[1].level == 10 && r.f.track[0].pan == 0); // other lanes and tracks
+	r.run_(20000); // past the last point: held at 10 V; the value stays when the clip stops
+	CHECK_NEAR(r.f.track[0].cc[0], 10.f, 0.01);
+	r.click(push2::cc::Play);
+	r.run_(100);
+	CHECK_NEAR(r.f.track[0].cc[0], 10.f, 0.01);
+	CHECK(r.state()->s.track[0].value[0] == 65535);
+}
+
+TEST(automation_value_without_points) {
+	SliceRig r;
+	r.m.edit([](tart::State& st) {
+		tart::Track& t = st.s.track[1];
+		t.value[0] = 65535, t.value[1] = 32768, t.bipolar = 1 << 1, t.value[tart::kLevel] = 0,
+		t.value[tart::kPan] = 65535;
+	});
+	r.run_(3);
+	const tart::SliceTrack& s = r.f.track[1];
+	CHECK_NEAR(s.cc[0], 10.f, 1e-4);
+	CHECK_NEAR(s.cc[1], 0.f, 1e-6); // bipolar: the middle is 0 V
+	CHECK_NEAR(s.level, 0.f, 1e-6);
+	CHECK_NEAR(s.pan, 5.f, 1e-3);
+	r.m.edit([](tart::State& st) { st.s.track[1].value[1] = 0; });
+	r.run_(3);
+	CHECK_NEAR(s.cc[1], -5.f, 1e-4);
+	CHECK(r.f.track[0].level == 10 && r.f.track[0].pan == 0 && r.f.track[0].cc[1] == 0);
+}
+
+TEST(sanitize_automation) {
+	auto st = std::make_unique<tart::State>();
+	CHECK(st->s.track[3].value[tart::kLevel] == 65535 && st->s.track[3].value[tart::kPan] == 32768);
+	tart::Clip& c = st->clip[0][0];
+	c.length = 384;
+	c.nPoints[0] = 5;
+	c.points[0][0] = {300, 5}, c.points[0][1] = {100, 6}, c.points[0][2] = {20000, 7}, c.points[0][3] = {200, 8},
+	c.points[0][4] = {100, 9};
+	c.nPoints[1] = 9999; // more than a lane holds
+	for (int i = 0; i < tart::kMaxPoints; i++)
+		c.points[1][i] = {(uint16_t)i, (uint16_t)i};
+	c.nPoints[tart::kLevel] = 1; // a lane of an empty slot goes
+	st->clip[1][0].nPoints[2] = 3;
+	std::memset(st->s.track[0].ccName[0], 'a', tart::kCcNameBytes); // no terminator
+	std::memset(st->s.track[0].ccName[1], 'b', 14);
+	st->s.track[0].ccName[1][14] = (char)0xC3, st->s.track[0].ccName[1][15] = (char)0xA9; // cut inside a character
+	tart::sanitize(*st);
+	CHECK(c.nPoints[0] == 4 && c.points[0][0].tick == 100 && c.points[0][1].tick == 100 && c.points[0][2].tick == 200 &&
+		  c.points[0][3].tick == 300); // the point past 32 bars is dropped, the rest sorted
+	CHECK(c.nPoints[1] == tart::kMaxPoints && c.nPoints[tart::kLevel] == 1);
+	CHECK(st->clip[1][0].nPoints[2] == 0);
+	CHECK(std::strlen(st->s.track[0].ccName[0]) == tart::kCcNameBytes - 1);
+	CHECK(std::strlen(st->s.track[0].ccName[1]) == 14);
+	st->clip[0][0].length = 0;
+	tart::sanitize(*st);
+	CHECK(c.nPoints[1] == 0 && c.nPoints[tart::kLevel] == 0);
+}
+
+TEST(double_loop_automation) {
+	Rig r;
+	setNotes(r, 384, {{0, 24, 60, 100}});
+	setPoints(r, 0, {{0, 1000}, {100, 2000}, {300, 4000}}, 384);
+	setPoints(r, 3, {{0, 7}, {384 + 10, 9}}, 384); // a point past the end isn't kept
+	r.click(push2::cc::DoubleLoop);
+	auto st = r.state();
+	const tart::Clip& c = st->clip[0][0];
+	CHECK(c.length == 768 && c.nPoints[0] == 8 && c.nPoints[tart::kLevel] == 0);
+	CHECK(c.points[0][0].tick == 0 && c.points[0][0].value == 1000 && c.points[0][3].tick == 384 &&
+		  c.points[0][3].value == 4000); // the end of the first half holds the last value
+	CHECK(c.points[0][4].tick == 384 && c.points[0][4].value == 1000 && c.points[0][5].tick == 484 &&
+		  c.points[0][7].tick == 768 && c.points[0][7].value == 4000);
+	CHECK(tart::envelope(c, 0, 384, true) == 4000 && tart::envelope(c, 0, 384) == 1000); // a jump at the seam
+	CHECK(c.nPoints[3] == 4 && c.points[3][1].tick == 384 &&
+		  c.points[3][1].value == 8); // 9 is a point at 394, 10 ticks on
+	r.click(push2::cc::Undo);         // the points come back with the clip
+	st = r.state();
+	CHECK(st->clip[0][0].length == 384 && st->clip[0][0].nPoints[0] == 3 && st->clip[0][0].nPoints[3] == 2);
+	// a lane that would not fit refuses, whole
+	setPoints(r, 0, {}, 384);
+	r.m.edit([](tart::State& st) {
+		tart::Clip& c = st.clip[0][0];
+		c.nPoints[0] = tart::kMaxPoints / 2 - 1; // 127 isolated points + 2 frame points = 129: doubled is too many
+		for (int i = 0; i < c.nPoints[0]; i++)
+			c.points[0][i] = {(uint16_t)(i + 1), 5};
+		c.nPoints[1] = 3, c.points[1][0] = {1, 1}, c.points[1][1] = {2, 2}, c.points[1][2] = {3, 3};
+	});
+	r.m.edit([](tart::State& st) { st.s.ui.popup = tart::kNoPopup; });
+	r.click(push2::cc::DoubleLoop);
+	CHECK(r.view().length[0][0] == 384 && r.view().s.ui.popup == tart::kClipFullPopup);
+	r.m.edit([](tart::State& st) { st.clip[0][0].nPoints[0]--; }); // 126 + 2 = 128: doubled is exactly 256
+	r.click(push2::cc::DoubleLoop);
+	st = r.state();
+	CHECK(st->clip[0][0].length == 768 && st->clip[0][0].nPoints[0] == tart::kMaxPoints &&
+		  st->clip[0][0].nPoints[1] == 10);
+}
+
+TEST(automation_undo_and_copy) {
+	Rig r(false);
+	fill(r, 0, 0);
+	setPoints(r, 2, {{0, 5}, {50, 9}});
+	r.press(push2::cc::Duplicate);
+	slot(r, 0, 0, 100);
+	slot(r, 0, 0, 0);
+	tapSlot(r, 3, 4);
+	r.press(push2::cc::Duplicate, 0);
+	auto st = r.state();
+	CHECK(st->clip[3][4].nPoints[2] == 2 && st->clip[3][4].points[2][1].value == 9); // the copy carries them
+	r.press(push2::cc::Delete);                                                      // delete the slot, then undo it
+	slot(r, 0, 0, 100);
+	slot(r, 0, 0, 0);
+	r.press(push2::cc::Delete, 0);
+	CHECK(r.state()->clip[0][0].nPoints[2] == 0);
+	r.click(push2::cc::Undo);
+	st = r.state();
+	CHECK(st->clip[0][0].nPoints[2] == 2 && st->clip[0][0].points[2][0].value == 5);
 }

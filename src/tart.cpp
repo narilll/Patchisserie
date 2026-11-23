@@ -298,18 +298,43 @@ int padPitch(const Scale& sc, int octave, int row, int col, bool& root, bool& in
 	return p > 127 ? -1 : p;
 }
 
-void setName(Track& t, const char* name) {
-	size_t n = std::min(std::strlen(name), (size_t)kNameBytes - 1);
-	while (n && (name[n] & 0xC0) == 0x80) // inside a character: leave it out
+void setText(char* dst, size_t size, const char* text) {
+	size_t n = std::min(std::strlen(text), size - 1);
+	while (n && (text[n] & 0xC0) == 0x80) // inside a character: leave it out
 		n--;
-	std::memmove(t.name, name, n);
-	std::memset(t.name + n, 0, kNameBytes - n);
+	std::memmove(dst, text, n);
+	std::memset(dst + n, 0, size - n);
+}
+
+void setName(Track& t, const char* name) {
+	setText(t.name, kNameBytes, name);
+}
+
+float volts(const Track& t, int lane, int v) {
+	bool bipolar = lane == kPan || (lane < kCcs && t.bipolar >> lane & 1);
+	return bipolar ? (float)(v - 32768) * 5.f / 32768.f : (float)v * 10.f / 65535.f;
+}
+
+int envelope(const Clip& c, int lane, int tick, bool arriving) {
+	const Point *p = c.points[lane], *e = p + c.nPoints[lane];
+	if (p == e)
+		return -1;
+	auto lower = [](const Point& a, int t) { return a.tick < t; };
+	auto upper = [](int t, const Point& a) { return t < a.tick; };
+	const Point* b = arriving ? std::lower_bound(p, e, tick, lower) : std::upper_bound(p, e, tick, upper);
+	if (b == p)
+		return p->value;
+	if (b == e)
+		return e[-1].value;
+	const Point* a = b - 1; // a.tick < b.tick: a jump is never between them
+	return a->value + (int)((int64_t)(b->value - a->value) * (tick - a->tick) / (b->tick - a->tick));
 }
 
 State::State() {
 	for (int i = 0; i < kTracks; i++) {
 		std::snprintf(s.track[i].name, kNameBytes, "Track %d", i + 1);
 		s.track[i].color = kDefaultColors[i];
+		s.track[i].value[kLevel] = 65535, s.track[i].value[kPan] = 32768; // 10 V, 0 V
 	}
 }
 
@@ -358,11 +383,27 @@ void sanitize(State& st) {
 				c.notes[n++] = x;
 			}
 			settle(c, n);
+			for (int j = 0; j < kAutos; j++) { // ponytail: a jump's order is lost only in a hand-edited patch
+				Point* p = c.points[j];
+				int m = 0;
+				for (int i = 0, k = c.length ? std::min<int>(c.nPoints[j], kMaxPoints) : 0; i < k; i++)
+					if (p[i].tick < kMaxLength)
+						p[m++] = p[i];
+				c.nPoints[j] = (uint16_t)m;
+				auto by = [](const Point& a, const Point& b) { return a.tick < b.tick; };
+				if (!std::is_sorted(p, p + m, by))
+					std::sort(p, p + m, by);
+			}
 		}
 	for (Track& t : st.s.track) {
 		char name[kNameBytes + 1] = {};
 		std::memcpy(name, t.name, kNameBytes); // not necessarily terminated
 		setName(t, name);
+		for (char (&cc)[kCcNameBytes] : t.ccName) {
+			char text[kCcNameBytes + 1] = {};
+			std::memcpy(text, cc, kCcNameBytes);
+			setText(cc, kCcNameBytes, text);
+		}
 		t.color = std::min<uint8_t>(t.color, kColors - 1);
 		t.type = t.type == Drum ? Drum : Melodic; // ponytail: Euclid comes with E5
 		t.lane = std::min<uint8_t>(t.lane, kLanes - 1);
@@ -712,7 +753,31 @@ void Machine::doubleLoop(State& st) {
 		ui.popup = kClipFullPopup;
 		return;
 	}
+	// A lane with points is framed (0, start) ... (length, end) and then repeated: two more points a half.
+	for (int j = 0; j < kAutos; j++) {
+		int inside = 0;
+		for (int i = 0; i < c.nPoints[j]; i++)
+			inside += c.points[j][i].tick > 0 && c.points[j][i].tick < c.length;
+		if (c.nPoints[j] && 2 * (inside + 2) > kMaxPoints) {
+			ui.popup = kClipFullPopup;
+			return;
+		}
+	}
 	checkpoint(ui.track, ui.scene);
+	for (int j = 0; j < kAutos; j++) {
+		if (!c.nPoints[j])
+			continue;
+		Point half[kMaxPoints / 2];
+		int n = 0;
+		half[n++] = {0, (uint16_t)envelope(c, j, 0)};
+		for (int i = 0; i < c.nPoints[j]; i++)
+			if (c.points[j][i].tick > 0 && c.points[j][i].tick < c.length)
+				half[n++] = c.points[j][i];
+		half[n++] = {c.length, (uint16_t)envelope(c, j, c.length, true)};
+		for (int i = 0; i < n; i++)
+			c.points[j][i] = half[i], c.points[j][n + i] = {(uint16_t)(half[i].tick + c.length), half[i].value};
+		c.nPoints[j] = (uint16_t)(n * 2);
+	}
 	for (int i = 0; i < keep; i++)
 		c.notes[keep + i] = {(uint16_t)(c.notes[i].tick + c.length), c.notes[i].len, c.notes[i].pitch, c.notes[i].vel};
 	c.nNotes = (uint16_t)(keep * 2), c.length = (uint16_t)(c.length * 2);
@@ -1474,6 +1539,11 @@ void Machine::tick(State& st, int64_t k, Outputs& out) {
 		if (!c.length)
 			continue;
 		int pos = (int)((k - tr.startTick) % c.length);
+		for (int j = 0; j < kAutos; j++) { // a lane with points plays them, the others keep their value
+			int e = envelope(c, j, pos);
+			if (e >= 0)
+				tr.value[j] = (uint16_t)e;
+		}
 		bool drum = tr.type == Drum;
 		// Swing delays the notes exactly on an even sixteenth (tick 24 of 48) by up to 12 ticks, where they start late.
 		int d = (s.transport.swing * 12 + 50) / 100;
@@ -1690,6 +1760,18 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 		bpm_ = t.bpm;
 		t.playing = clock_.started(), t.external = in.clockConnected;
 		t.tick = std::max<int64_t>(nextTick_ - 1, 0);
+		// What the Slice interpolates: each lane from its value at the last tick towards the next tick's.
+		lastTick_ = nextTick_ - 1;
+		for (int i = 0; i < kTracks; i++) {
+			const Track& tr = s.track[i];
+			const Clip* c = tr.playing != kNone ? &state_->clip[i][tr.playing] : nullptr;
+			int pos = c && c->length ? (int)(std::max<int64_t>(lastTick_ - tr.startTick, 0) % c->length) : 0;
+			for (int j = 0; j < kAutos; j++) {
+				from_[i][j] = volts(tr, j, tr.value[j]);
+				int e = c && c->length ? envelope(*c, j, pos + 1) : -1;
+				to_[i][j] = e >= 0 ? volts(tr, j, e) : from_[i][j];
+			}
+		}
 		t.shownBpm = (in.clockConnected ? (float)clock_.cps() : cps_) * 60.f;
 		for (int i = 0; i < kTracks; i++) {
 			voices_[i] = s.track[i].voices;
@@ -1710,7 +1792,9 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 		unlock();
 	}
 
-	// The voices: the bend is on the selected track only.
+	// The voices: the bend is on the selected track only. CC, LEVEL and PAN run between the last tick's value and the
+	// next one's; a busy lock keeps the last ones.
+	float frac = clock_.started() ? (float)std::min(std::max(at * kPpqn - (double)lastTick_, 0.), 1.) : 0.f;
 	for (int t = 0; t < kTracks; t++) {
 		filo::VoiceAllocator& v = voice_[t];
 		bool drum = type_[t] == Drum; // 16 channels, one for each lane, whatever Voices says
@@ -1722,9 +1806,10 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 			for (int c = 0; c < o.channels; c++)
 				o.voct[c] = (drum ? (float)(kDrumNote + c - 60) / 12.f : v.pitchV(c)) + bend,
 				o.gate[c] = v.gate(c) ? 10.f : 0.f, o.vel[c] = v.velV(c);
-			// ponytail: CC, LEVEL and PAN stay at their defaults until E4 gives the clips automation and a mixer.
-			std::fill(o.cc, o.cc + kCcs, 0.f);
-			o.level = 10.f, o.pan = 0.f, o.rgb = rgb_[t];
+			auto lane = [&](int j) { return from_[t][j] + (to_[t][j] - from_[t][j]) * frac; };
+			for (int c = 0; c < kCcs; c++)
+				o.cc[c] = lane(c);
+			o.level = lane(kLevel), o.pan = lane(kPan), o.rgb = rgb_[t];
 		}
 		v.tick();
 	}
