@@ -1,6 +1,6 @@
 # Tart
 
-Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad controller with 64 pads, buttons, encoders (endless knobs), a touch strip and a small color display. Tart is meant to become an 8-track Session sequencer for the Push 2. This version has a transport and clock, and it turns the Push into an 8-track keyboard. The transport starts and stops, keeps the tempo, and sends a clock, a run signal and a metronome to your patch, and you drive all of it from the Push as well as from the jacks. In Note mode you play the pads in the scale and the color of your choice, and the notes go to the tracks, which you take out of Tart with [Slice](slice.md) modules placed on its right. There are no clips yet. This manual explains how to connect the Push, what the jacks and the Push controls do, and how to read the display.
+Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad controller with 64 pads, buttons, encoders (endless knobs), a touch strip and a small color display. Tart is meant to become an 8-track Session sequencer for the Push 2. This version has a transport and clock, it turns the Push into an 8-track keyboard, and it has a step sequencer that plays one clip, a loop of notes, on each track. The transport starts and stops, keeps the tempo, and sends a clock, a run signal and a metronome to your patch, and you drive all of it from the Push as well as from the jacks. In Note mode you play the pads in the scale and the color of your choice, and the notes go to the tracks, which you take out of Tart with [Slice](slice.md) modules placed on its right. You make the clips in the Melodic Sequencer, which uses the pads as steps. There is no Session view yet, so each track plays the clip in its first scene. This manual explains how to connect the Push, what the jacks and the Push controls do, and how to read the display.
 
 ## Contents
 
@@ -11,16 +11,19 @@ Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad contro
 5. [Tracks](#tracks)
 6. [Colors](#colors)
 7. [Note mode](#note-mode)
-8. [Scale mode](#scale-mode)
-9. [The Home screen](#the-home-screen)
-10. [The lights](#the-lights)
-11. [The Push controls](#the-push-controls)
-12. [Context menu reference](#context-menu-reference)
-13. [Display status words](#display-status-words)
-14. [More than one Tart](#more-than-one-tart)
-15. [What is saved with the patch](#what-is-saved-with-the-patch)
-16. [Limitations](#limitations)
-17. [Credits and licenses](#credits-and-licenses)
+8. [The Melodic Sequencer](#the-melodic-sequencer)
+9. [Fixed Length](#fixed-length)
+10. [Swing](#swing)
+11. [Scale mode](#scale-mode)
+12. [The Home screen](#the-home-screen)
+13. [The lights](#the-lights)
+14. [The Push controls](#the-push-controls)
+15. [Context menu reference](#context-menu-reference)
+16. [Display status words](#display-status-words)
+17. [More than one Tart](#more-than-one-tart)
+18. [What is saved with the patch](#what-is-saved-with-the-patch)
+19. [Limitations](#limitations)
+20. [Credits and licenses](#credits-and-licenses)
 
 ## Quick start
 
@@ -31,6 +34,7 @@ Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad contro
 5. Press PLAY on the Push. The transport starts, the PLAY button turns green, and the CLK, RESET and RUN outputs on the panel come alive. Patch CLK into a sequencer to hear it keep time.
 6. Turn the tempo encoder on the Push, at the top right, to change the tempo. Press METRONOME to hear the beat on the METRO output.
 7. To play notes, add a [Slice](slice.md) module directly to the right of Tart and patch its V/OCT and GATE outputs into a voice. Press NOTE on the Push and play the pads. The Slice shows the number 1, the first track.
+8. To make a loop, press LAYOUT so that the pads become the [Melodic Sequencer](#the-melodic-sequencer), and tap a few pads. Press PLAY, and the Slice plays the loop.
 
 ## Setup
 
@@ -85,7 +89,7 @@ Tart looks for the Push every two seconds, so the light may take a moment to cha
 
 The transport is the start, stop and clock of Tart. A clock is a steady series of pulses that keeps modules in time. Tart counts time in 96 steps per beat, and a bar is four beats.
 
-**Starting and stopping.** Press PLAY on the Push, or send a pulse to the PLAY input, to start from the beginning. The RESET output sends a pulse, the RUN output goes high, and the CLK output starts at once on the first beat. Press PLAY on the Push again to stop. A pulse to the STOP input also stops. A pulse to the RESET input takes the position back to the beginning, whether Tart is playing or stopped.
+**Starting and stopping.** Press PLAY on the Push, or send a pulse to the PLAY input, to start from the beginning. The RESET output sends a pulse, the RUN output goes high, and the CLK output starts at once on the first beat. Press PLAY on the Push again to stop. A pulse to the STOP input also stops. Stopping also stops every clip, as in Ableton Live: the notes of the clips end, and the clips do not start again when you press PLAY. See [Limitations](#limitations). A pulse to the RESET input takes the position back to the beginning, whether Tart is playing or stopped.
 
 **The internal tempo.** Tart has its own tempo in beats per minute (BPM), from 20 to 300, and 120 at the start. You change it in four ways:
 
@@ -100,7 +104,7 @@ The transport is the start, stop and clock of Tart. A clock is a steady series o
 
 **The metronome.** Press METRONOME on the Push to turn it on or off. While it is on, the METRO output pulses on every beat, with 10 V on the first beat of each bar and 5 V on the others. Tart makes no sound itself. Patch METRO into an envelope or a drum module. Nothing comes from METRO while Tart is stopped.
 
-**Swing.** The swing encoder, the one next to the tempo encoder, sets the swing from 0 to 100 percent. The display shows the value. Swing has no effect yet, because there are no clips to move. It will shift the notes on even sixteenths in a later version.
+**Swing.** The swing encoder, the one next to the tempo encoder, sets the swing from 0 to 100 percent. The display shows the value. See [Swing](#swing).
 
 **The Push's own clock.** Tart sends the Push a MIDI clock at the current tempo, and also while stopped. The Push needs it to animate its lights.
 
@@ -133,7 +137,7 @@ The Push shows the colors as Live's own control script does. Many of Live's 70 c
 
 ## Note mode
 
-In Note mode the 64 pads are a keyboard for the selected track. Press NOTE on the Push to enter it. Note mode is the only pad mode in this version, and Tart starts in it. The SESSION button does nothing yet and stays dark.
+In Note mode the 64 pads are a keyboard for the selected track. Press NOTE on the Push to enter it. Note mode is the only pad mode in this version, and Tart starts in it. The SESSION button does nothing yet and stays dark. Press LAYOUT to switch the pads between this keyboard, called 64 Notes, and the [Melodic Sequencer](#the-melodic-sequencer).
 
 **The layout.** At the start the pads are laid out in the key of C major, with only the notes of the key, and each row is a fourth higher than the row below. Going to the right, each pad is the next note of the key. The pad at the bottom left is C1, which is MIDI note 36 (Ableton names the notes so that middle C, MIDI note 60, is C3). On the V/OCT output of a Slice, MIDI note 60 is 0 V, so C1 is -2 V. The key, the scale and the arrangement of the pads are set on the [Scale screen](#scale-mode). All tracks share them.
 
@@ -146,6 +150,68 @@ In Note mode the 64 pads are a keyboard for the selected track. Press NOTE on th
 **Changing the track while you play.** A pad that you still hold when you change the track keeps sounding on the track where it started, and stops there when you let go. New pads play the new track.
 
 **The touch strip.** Slide a finger along the touch strip to bend the pitch of the selected track by up to 2 semitones up or down. The bend is added to the V/OCT signal of the voices of that track only, and the strip springs back to the middle when you lift your finger. The bend is not recorded.
+
+## The Melodic Sequencer
+
+The Melodic Sequencer turns the 64 pads into a step sequencer for the selected track. Press LAYOUT in Note mode to switch between it and the 64 Notes keyboard. LAYOUT is dim white in Note mode and full white while the sequencer is open.
+
+A clip is a loop of notes that a track plays. Each track has one clip in this version, in scene 1, and the sequencer edits it. A clip has a length, and when it reaches its end it starts again. The notes of a clip are what you put on the pads.
+
+**The pads.** The 8 columns of pads are steps, which are equal slices of time, and the 8 rows are pitches. The bottom row is the lowest pitch. In Key, each row is the next note of the scale above the one below, starting at the root note of the track's octave, so the bottom row is the root. In Chromatic, each row is the next semitone. The scale and the octave are the ones of [Note mode](#note-mode), and OCTAVE UP and OCTAVE DOWN move the rows. Rows above MIDI note 127 are dark. The eight pads of a row are the steps of the current page. A page has 8 steps, and PAGE LEFT and PAGE RIGHT move the pages. They are dim white when there is a page to go to, and dark when there is not. The page does not follow the clip while it plays.
+
+**The step size.** The eight buttons to the right of the pads, the scene buttons, set how long a step is. From the top they are 1/4, 1/4t, 1/8, 1/8t, 1/16, 1/16t, 1/32 and 1/32t, where t means triplet. The standard is 1/16. The selected size is white and the others are dark gray. Each track has its own step size.
+
+**Adding and removing notes.** Tap a pad to put a note on that step. The note starts on the step, lasts for one step, and has velocity 100. Tap a pad that shows a note to take the note away. A step that is further than the end of the clip is dark, and a tap on it does nothing.
+
+**The first note makes the clip.** If you tap a pad when the clip of the selected track is empty, Tart makes a clip. Its length is the length of [Fixed Length](#fixed-length) when that is on, and one bar when it is off. The clip also starts to play on its track: at once when the transport is stopped, and at the start of the next bar when it is playing. Tart also does this when you add a note to a clip that is not playing on a track that plays nothing. This stands in for the Session view, which is not there yet. Without it, you could not start a clip again after you pressed STOP.
+
+**Editing a note.** Hold a pad that shows a note, and turn one of the first four encoders. The top of the display shows the four values while you hold the pad. How far each encoder moves for a turn is a guess, so see [Limitations](#limitations).
+
+| Encoder | Display | What it changes |
+|---|---|---|
+| 1 | NUDGE | Moves the note in time, one tick at a time (a beat has 96 ticks). The note stays within half a step of its pad. |
+| 2 | LENGTH | Makes the note longer or shorter by one step at a time. |
+| 3 | FINE | Makes the note longer or shorter by one tick at a time. |
+| 4 | VELOCITY | Sets the velocity, from 1 to 127. |
+
+If you hold an empty step, the step gets its note at once, so you can set its values with the encoders. If you hold a step with a note and edit it, the note stays when you let go. If you hold it and let go without editing, you have tapped it, so the note goes away.
+
+**Long notes.** Hold a pad that shows a note and tap a pad to its right in the same row. The note then lasts until the end of that second step. Press only the first pad if you want a note of one step.
+
+**Delete.** Hold DELETE and tap a pad to take away the note on it. DELETE is dim white in the sequencer and full white while you hold it. DELETE does nothing to a clip that is empty.
+
+**The lights.** A note is in the color of the track, or in a dimmer version of it when its velocity is below 64. An empty step is dark gray, and white in the root row. In Chromatic, the rows of notes that are not in the scale are dark. A step that is further than the end of the clip is dark. While the clip plays, the column of the step that is playing is green, and white on a note. The step you hold is white.
+
+**Playing.** While the transport plays, the track plays its clip over and over. A note that ends on the same tick as another begins on its track gives the gate a gap of one sample, so a voice triggers again. With a single voice, a note that starts while another still sounds takes over the voice. Notes are not sent for steps that lie further than the end of the clip. See [Swing](#swing) for the swing.
+
+## Fixed Length
+
+Fixed Length makes every new clip the same length. It is a setting of the whole Tart, not of a track. It changes only clips that you make after you set it.
+
+**Switching it on and off.** Tap FIXED LENGTH on the Push. The button is full white while Fixed Length is on and dim white while it is off. You can also hold FIXED LENGTH and press the first button above the display, which is the on and off switch.
+
+**The length.** Hold FIXED LENGTH and press one of the eight buttons below the display. While you hold FIXED LENGTH, the display shows the choices over those buttons, the chosen one in a filled box, and the top left of the display shows FIXED LENGTH with On or Off. The choices are:
+
+| Button | Length |
+|---|---|
+| 1 | 1 Beat |
+| 2 | 2 Beats |
+| 3 | 1 Bar |
+| 4 | 2 Bars |
+| 5 | 4 Bars |
+| 6 | 8 Bars |
+| 7 | 16 Bars |
+| 8 | 32 Bars |
+
+The standard is 2 Bars. The chosen button is white and the others are dark gray. A press that lasts half a second or more, or that has chosen a length, does not also switch Fixed Length on or off when you let go.
+
+When Fixed Length is off, new clips are one bar long.
+
+## Swing
+
+Swing delays every second sixteenth note, to give the music a lilt. The swing encoder, next to the tempo encoder, sets it from 0 to 100 percent. At 0 percent nothing moves. At 100 percent a note on the second sixteenth of an eighth note comes 12 ticks late, which is a third of the way to the next eighth. Then each pair of sixteenths is split 3 to 1.
+
+Swing moves the notes of a clip while it plays. It does not change the notes that are saved, and it does not change the CLK output or the metronome. This differs from Ableton Live, where swing belongs to the groove of each clip: in Tart it is one global setting that is applied while the clips play. Only notes that start exactly on a second sixteenth (tick 24 of each eighth note's 48) move. Every other note stays where it is, including a note that you nudged off its step and the notes of the triplet step sizes. Swing is rounded to whole ticks, so it moves in 13 steps.
 
 ## Scale mode
 
@@ -183,12 +249,16 @@ The Push display is 960 pixels wide and 160 pixels high. The mirror on the panel
 
 - TEMPO: the tempo in BPM. With a cable in CLOCK it is the measured tempo followed by EXT.
 - SWING: the swing in percent.
-- QUANT: the launch quantization, which is "1 Bar". It does nothing yet.
+- QUANT: the launch quantization, which is "1 Bar". It decides when a new clip starts on a playing transport, and you cannot change it yet.
 - METRO: On or Off.
 - POSITION: the bar, the beat and the sixteenth note since the start, for example 3.2.1. It stays where it was when you stop.
 - At the right end, a green triangle while Tart is playing and a gray square while it is stopped.
 
-**The middle** shows "Track 1 · Scene 1". This is the selected track and scene. There are no clips yet, so nothing else is shown, and the scene cannot be changed yet.
+**The middle** shows "Track 1 · Scene 1", the selected track and scene, and you cannot change the scene yet. Under it is the clip in that slot. When the slot is empty, it says "Empty slot". Otherwise the length of the clip is at the right ("2 Bars", "1 Beat" and so on), and a box shows the notes of the clip over time in the color of the track, with the pitch going up. The box shows from the lowest note to the highest, and at least an octave. While the clip plays, a green line moves across the box.
+
+**While you hold a step** in the Melodic Sequencer, the top row shows NUDGE (the distance from the step in ticks), LENGTH (in steps), FINE (the length in ticks) and VELOCITY of its note over the first four encoders.
+
+**While you hold FIXED LENGTH**, the top row shows FIXED LENGTH with On or Off, and the bottom row shows the eight [lengths](#fixed-length) instead of the track names.
 
 **The bottom row** shows the names of the eight tracks, each in its own [color](#colors). The selected track is drawn as a filled box. See [Tracks](#tracks).
 
@@ -211,6 +281,9 @@ Tart lights the Push buttons that do something in this version. All other button
 - **NOTE** is full white in Note mode.
 - **SCALE** is full white while the [Scale screen](#scale-mode) is open and dim white otherwise.
 - **OCTAVE UP** and **OCTAVE DOWN** are dim white while the selected track can move in that direction, and dark when it cannot.
+- **LAYOUT** is dim white in Note mode, and full white while the [Melodic Sequencer](#the-melodic-sequencer) is open.
+- **FIXED LENGTH** is full white while [Fixed Length](#fixed-length) is on and dim white while it is off.
+- In the Melodic Sequencer, **PAGE LEFT** and **PAGE RIGHT** are dim white when there is a page to go to, **DELETE** is dim white, and the eight scene buttons show the step size. The pads are described in [The Melodic Sequencer](#the-melodic-sequencer).
 - The eight buttons below the display are white for the selected track and in their own color for the others. While the Scale screen is open they are the option buttons described in [Scale mode](#scale-mode), and so are the upper buttons 2 to 7.
 - The pads in Note mode are described in [Note mode](#note-mode).
 
@@ -218,17 +291,23 @@ Tart lights the Push buttons that do something in this version. All other button
 
 | Control | What it does |
 |---|---|
-| PLAY | Starts the transport from the beginning, or stops it. |
+| PLAY | Starts the transport from the beginning, or stops it. Stopping stops every clip. |
 | Tempo encoder | 1 BPM for each step. With SHIFT held, 0.1 BPM. It opens the tempo popup. |
 | TAP TEMPO | Sets the tempo from the rhythm of your presses. It never starts the transport. |
 | METRONOME | Turns the metronome on or off. |
-| Swing encoder | Sets the swing, from 0 to 100 percent, and opens the swing popup. It has no effect on the sound yet. |
+| Swing encoder | Sets the swing, from 0 to 100 percent, and opens the swing popup. See [Swing](#swing). |
 | SHIFT | Changes the tempo encoder to steps of 0.1 BPM while held. |
 | NOTE | Puts the pads in [Note mode](#note-mode). |
 | SCALE | Opens or closes the [Scale screen](#scale-mode). Held for half a second or longer, it is open only while you hold it. |
-| Pads | Play notes on the selected track. |
+| Pads | Play notes on the selected track, or in the Melodic Sequencer, the steps of its clip. |
+| LAYOUT | In Note mode, switches the pads between 64 Notes and the [Melodic Sequencer](#the-melodic-sequencer). |
+| PAGE LEFT, PAGE RIGHT | In the Melodic Sequencer, move to the previous or the next page of 8 steps. |
+| Scene buttons | In the Melodic Sequencer, set the step size: 1/4, 1/4t, 1/8, 1/8t, 1/16, 1/16t, 1/32 and 1/32t from the top. |
+| DELETE | In the Melodic Sequencer, held with a pad, takes away the note on it. |
+| FIXED LENGTH | Tap to switch [Fixed Length](#fixed-length) on or off. Hold it and use the buttons below the display to choose the length, and the first button above the display to switch it on or off. |
+| Encoders 1 to 4 | In the Melodic Sequencer, while you hold a step: Nudge, Length, Length fine and Velocity of its note. |
 | OCTAVE UP, OCTAVE DOWN | Move the pads of the selected track one octave up or down. |
-| Buttons below the display | Select the track. |
+| Buttons below the display | Select the track. While FIXED LENGTH is held, they choose the length. |
 | LEFT, RIGHT | Select the previous or the next track. On the Scale screen, they move four scales back or forward. |
 | UP, DOWN | On the Scale screen, select the previous or the next scale. |
 | Encoders and the buttons above and below the display | On the Scale screen, they set the key, the layout and the scale. See [Scale mode](#scale-mode). |
@@ -276,17 +355,22 @@ If you duplicate the owning Tart, the copy closes the ports it copied and stays 
 
 ## What is saved with the patch
 
-Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices and the octave. It also saves the selected track and the pad mode. The Scale screen is not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
+Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices and the octave, and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty. It also saves the selected track, the pad mode, whether the Melodic Sequencer is open, and whether Fixed Length is on and its length. The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. See [Limitations](#limitations). The Scale screen is not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
 
 ## Limitations
 
-- There are no clips or scenes yet. The pads play live and nothing is recorded. The scene shown on the Home screen cannot be changed yet.
-- Swing and the launch quantization (QUANT) are shown but have no effect yet.
+- There is no Session view yet, so you cannot launch, stop, copy or delete clips, or choose a scene. Each track has one clip, in scene 1, and the sequencer edits it. The scene shown on the Home screen cannot be changed. A clip plays again only when you add a note to it while its track plays nothing, so after STOP, or after you load a patch, add a note and take it away again to start the clip.
+- Nothing is recorded: the pads you play in 64 Notes make no clip, and the sequencer has no recording.
+- The sequencer makes notes of velocity 100 and edits one step at a time. You cannot select several steps, and a second pad that you hold at the same time does nothing, unless it is a later step in the row of the first one.
+- The launch quantization (QUANT) is one bar. It is shown, and you cannot change it yet.
+- A clip holds at most 2048 notes, and a track plays at most 64 notes at once.
 - Tart sends the notes of the tracks only through [Slice](slice.md) modules. A Slice sends a fixed 10 V on LEVEL and 0 V on PAN and CC for now.
 - A pad that sounds when you change the number of voices of its track is cut off.
 - Push buttons other than the ones in the table above do nothing, and so does the master volume encoder.
 - The list of scales is Live's list as far as it is known, and it may be missing scales that Live added lately. If the encoders on the Scale screen move too fast or too slow on your Push, tell the author.
 - The tempo encoder takes each step it receives as 1 BPM, and the swing encoder takes two steps for one percent. If the step sizes feel wrong on your Push, tell the author.
+- The note encoders of the sequencer take 2 steps for a tick of Nudge, 8 steps for a step of Length, 2 steps for a tick of Length fine and 1 step for a velocity. These are guesses too.
+- The step page does not follow the playhead as it does in Ableton Live, and the dim color of a soft note has only one level.
 - Tart does not receive MIDI clock. Its clock comes from the CLOCK input or the internal tempo.
 
 ## Credits and licenses

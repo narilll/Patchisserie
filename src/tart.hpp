@@ -1,8 +1,8 @@
 #pragma once
-// Tart: the Push 2 as a Rack controller. E2.3: transport and clock, tracks, Note mode, colours, Scale mode. The Session
-// (what the Push shows and saves) is owned by Machine under one lock; the audio thread (Machine::process) handles the
-// Push's events and runs the clock, the UI thread reads a View copy and edits through Machine::edit. Audio-thread paths
-// never allocate, wait on a lock, throw or log.
+// Tart: the Push 2 as a Rack controller. E2.4: transport and clock, tracks, Note mode, colours, Scale mode, clips. The
+// Session (what the Push shows and saves) is owned by Machine under one lock; the audio thread (Machine::process)
+// handles the Push's events and runs the clock, the UI thread reads a View copy and edits through Machine::edit.
+// Audio-thread paths never allocate, wait on a lock, throw or log.
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -18,7 +18,7 @@ constexpr int kTracks = 8, kScenes = 8, kPpqn = 96, kBar = 4 * kPpqn, kMaxLength
 // (E3: raise to 8192, +36 KB/clip, or cap drum clips at 8 bars).
 constexpr int kMaxNotes = 2048, kCcs = 8, kMaxPoints = 256, kNameBytes = 32, kColors = 70, kMaxOctave = 10;
 
-// The clips (empty until E2.4). The layout is final: later commits only fill it.
+// The clips. The layout is final: later commits only fill it.
 struct Note {
 	uint16_t tick, len;
 	uint8_t pitch, vel; // pitch = MIDI note (E3: drum lane)
@@ -74,15 +74,19 @@ struct Scale {
 struct Ui {
 	// saved
 	// ponytail: Note until Session mode exists (E2.5 makes Session the default).
-	uint8_t pads = kNote, noteLayout = 0, screen = 0, track = 0, scene = 0, fixedBars = 0;
+	// noteLayout: 0 64 notes, 1 the Melodic Sequencer. fixedBars: Fixed Length, 0..7 = 1 Beat, 2 Beats, 1 .. 32 Bars.
+	uint8_t pads = kNote, noteLayout = 0, screen = 0, track = 0, scene = 0, fixedBars = 3;
 	bool fixedOn = false;
 	// transient
-	uint8_t page = 0;      // E2.4
+	uint8_t page = 0;      // the sequencer's page of 8 steps
 	uint8_t pad[64] = {};  // velocity of each held pad, row * 8 + col
 	bool button[128] = {}; // held buttons by CC
 	uint32_t touched = 0;  // bit per push2 encoder id
 	float bend = 0;        // the touch strip, -1..1
-	int8_t heldStep = -1;  // E2.4
+	int8_t heldStep = -1;  // the sequencer pad (row * 8 + col) that is held, -1: none
+	bool heldHad = false,
+		 heldEdited = false; // the held step had a note when pressed; a long note or an encoder edited it
+	double fixedAt = -1;     // when the press of Fixed Length began (-1: none, or used as a menu)
 	uint8_t popup = kNoPopup;
 	double popupAt = 0, now = 0; // seconds of audio time
 	double scaleAt = -1;         // when the press that opened the Scale screen began (-1: none)
@@ -108,6 +112,7 @@ struct View {
 	uint16_t length[kTracks][kScenes];
 	uint16_t nNotes;
 	Note notes[kMaxNotes];
+	int16_t held = -1; // the index in `notes` of the note on the held sequencer step, -1: none
 };
 
 /** Live's 70 clip colours as the Push shows them, by index (a track's `color`). They are also the Slice's number
@@ -200,12 +205,16 @@ class Machine {
 	bool tryLock() { return !busy_.exchange(true, std::memory_order_acquire); }
 	void unlock() { busy_.store(false, std::memory_order_release); }
 	void lock();
-	void handle(Session& s, const push2::Event& e);
-	void pad(Session& s, int index, int vel);
-	void leds(const Session& s, push2::Leds& out) const;
+	void handle(State& st, const push2::Event& e);
+	void pad(State& st, int index, int vel);
+	void sequencer(State& st, int index, int vel);
+	void noteEncoder(State& st, int encoder, int delta);
+	void launch(Session& s, int track, int scene);
+	void stopClips(Session& s);
+	void leds(const State& st, push2::Leds& out) const;
 	bool scaleButton(Scale& sc, int button); // on the Scale screen: whether it was one of its buttons
 	void tap(Transport& t);
-	void tick(const Session& s, int64_t k, Outputs& out);
+	void tick(State& st, int64_t k, Outputs& out);
 
 	// ponytail: one lock, as lattice::Machine; the audio side only try-locks and never waits.
 	std::atomic<bool> busy_{false};
@@ -222,6 +231,17 @@ class Machine {
 		uint8_t track = 0, pitch = 0;
 	};
 	Live live_[64]; // the note each held pad started, on the track that was selected then
+	// The notes the clips have started and when they end (tick), per track. ponytail: a track that has 64 notes
+	// sounding drops new ones.
+	static constexpr int kActive = 64;
+	struct Active {
+		uint32_t id;
+		int64_t off;
+	};
+	Active active_[kTracks][kActive] = {};
+	int nActive_[kTracks] = {};
+	bool stopClips_ = false,
+		 restartClips_ = false; // the transport stopped, or went back to its start: do it under the lock
 	uint32_t nextId_ = 0;
 	// What process() reads without the lock: copies of the state, refreshed under it.
 	int voices_[kTracks] = {}, selected_ = 0;
@@ -232,7 +252,7 @@ class Machine {
 	double lastAt_ = -1;
 	Request request_ = Request::None;
 	bool sync_ = true; // take the lock this sample
-	int accTempo_ = 0, accSwing_ = 0, accScale_[8] = {};
+	int accTempo_ = 0, accSwing_ = 0, accScale_[8] = {}, accNote_[4] = {};
 	uint8_t sentColor_[kTracks] = {255, 255, 255, 255, 255, 255, 255, 255}; // what the Push's palette has; 255: none
 	int64_t taps_[5] = {};
 	int nTaps_ = 0;

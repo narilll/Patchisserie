@@ -1039,7 +1039,8 @@ struct LatticeWidget : ModuleWidget {
 	}
 };
 
-// --- Tart: Ableton Push 2 as a Rack controller (E2.3: transport and clock, tracks, Note mode, colours, scales) ---
+// --- Tart: Ableton Push 2 as a Rack controller (E2.4: transport and clock, tracks, Note mode, colours, scales, clips)
+// ---
 
 static Model *modelTart, *modelSlice;
 
@@ -1185,9 +1186,24 @@ struct Tart : Module {
 		const tart::Scale& sc = st->s.scale;
 		const tart::Ui& u = st->s.ui;
 		json_t* tracks = json_array();
-		for (const tart::Track& tr : st->s.track)
-			json_array_append_new(tracks, json_pack("{s:s, s:i, s:i, s:i}", "name", tr.name, "color", tr.color,
-													"voices", tr.voices, "octave", tr.octave));
+		for (int t = 0; t < tart::kTracks; t++) {
+			const tart::Track& tr = st->s.track[t];
+			// Each clip: null when empty, else {"length": ticks, "notes": [[tick, length, pitch, velocity], ...]}.
+			json_t* clips = json_array();
+			for (const tart::Clip& c : st->clip[t]) {
+				json_t* clip = json_null();
+				if (c.length) {
+					json_t* notes = json_array();
+					for (int i = 0; i < c.nNotes; i++)
+						json_array_append_new(notes, json_pack("[i, i, i, i]", c.notes[i].tick, c.notes[i].len,
+															   c.notes[i].pitch, c.notes[i].vel));
+					clip = json_pack("{s:i, s:o}", "length", c.length, "notes", notes);
+				}
+				json_array_append_new(clips, clip);
+			}
+			json_array_append_new(tracks, json_pack("{s:s, s:i, s:i, s:i, s:o}", "name", tr.name, "color", tr.color,
+													"voices", tr.voices, "octave", tr.octave, "clips", clips));
+		}
 		return json_pack("{s:b, s:o, s:o, s:{s:f, s:i, s:i, s:b}, s:{s:i, s:i, s:i, s:b, s:b}, "
 						 "s:{s:i, s:i, s:i, s:i, s:i, s:b, s:i}, s:o, s:i, s:i}",
 						 "pushAuto", pushAuto, "pushIn", pushIn.toJson(), "pushOut", pushOut.toJson(), "transport",
@@ -1249,6 +1265,27 @@ struct Tart : Module {
 			if (name)
 				tart::setName(tr, name);
 			tr.color = u8(color), tr.voices = u8(voices), tr.octave = (int8_t)clamp(octave, -128, 127);
+			json_t* clipsJ = json_object_get(json_array_get(tracksJ, i), "clips");
+			for (size_t j = 0; j < tart::kScenes && json_is_array(clipsJ); j++) {
+				tart::Clip& c = st->clip[i][j];
+				json_t* clipJ = json_array_get(clipsJ, j);
+				json_t* notesJ = json_object_get(clipJ, "notes");
+				c.length = c.nNotes = 0;
+				if (!json_is_object(clipJ))
+					continue;
+				c.length =
+					(uint16_t)clamp((int)json_integer_value(json_object_get(clipJ, "length")), 0, tart::kMaxLength);
+				for (size_t k = 0; k < json_array_size(notesJ) && c.nNotes < tart::kMaxNotes; k++) {
+					json_t* n = json_array_get(notesJ, k);
+					if (json_array_size(n) < 4)
+						continue;
+					auto at = [&](int x, int hi) {
+						return clamp((int)json_integer_value(json_array_get(n, x)), 0, hi);
+					};
+					c.notes[c.nNotes++] = {(uint16_t)at(0, 65535), (uint16_t)at(1, 65535), (uint8_t)at(2, 255),
+										   (uint8_t)at(3, 255)};
+				}
+			}
 		}
 		tart::sanitize(*st);
 		machine.load(*st);

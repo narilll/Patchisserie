@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstring>
 #include <memory>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
@@ -186,6 +187,19 @@ struct Rig {
 		tart::View v;
 		m.view(v);
 		return v;
+	}
+	void tap(int row, int col) {
+		pad(row, col, 100);
+		pad(row, col, 0);
+	}
+	void click(int cc) { // a button pressed and let go at once
+		press(cc);
+		press(cc, 0);
+	}
+	std::unique_ptr<tart::State> state() {
+		auto st = std::make_unique<tart::State>();
+		m.save(*st);
+		return st;
 	}
 };
 
@@ -588,7 +602,7 @@ TEST(sanitize_tracks) {
 	CHECK(t.playing == tart::kNone && t.queued == tart::kNone);
 	CHECK(st->s.track[2].voices == 16 && st->s.track[2].octave == 0);
 	CHECK(st->s.scale.root == 11 && st->s.scale.scale == 0 && st->s.scale.layout == 5);
-	CHECK(st->s.ui.pads == tart::kNote && st->s.ui.fixedBars == 5 && st->s.ui.scene == 7 && st->s.ui.bend == 0 &&
+	CHECK(st->s.ui.pads == tart::kNote && st->s.ui.fixedBars == 7 && st->s.ui.scene == 7 && st->s.ui.bend == 0 &&
 		  st->s.ui.pad[3] == 0);
 	std::string long_name = "Bass";
 	for (int i = 0; i < 20; i++)
@@ -809,4 +823,356 @@ TEST(scale_leds) {
 	CHECK(r.want.note[push2::padNote(0, 0)].color == push2::kBlack);    // C is not in D Major
 	CHECK(r.want.note[push2::padNote(0, 1)].color == push2::kRgbWhite); // C#
 	CHECK(r.want.note[push2::padNote(0, 2)].color == tart::kPaletteFull);
+}
+
+namespace {
+
+/** The samples at which a gate rose and fell. */
+struct Edges {
+	std::vector<int> up, down;
+};
+
+/** Plays (sample 0) and watches the first gate of `track` for `n` samples. */
+Edges gateEdges(SliceRig& r, int n, int track = 0) {
+	Edges e;
+	bool prev = false;
+	for (int i = 0; i < n; i++) {
+		r.in.play = i == 0;
+		r.step();
+		bool g = r.f.track[track].gate[0] > 5;
+		if (g && !prev)
+			e.up.push_back(i);
+		if (!g && prev)
+			e.down.push_back(i);
+		prev = g;
+	}
+	return e;
+}
+
+const int kMajor[8] = {0, 2, 4, 5, 7, 9, 11, 12};
+
+/** The pitch of the sequencer's row `row` in C major from C1. */
+int rowPitch(int row) {
+	return 36 + kMajor[row];
+}
+
+int rowOf(int pitch) {
+	for (int k = 0; k < 8; k++)
+		if (rowPitch(k) == pitch)
+			return k;
+	return -1;
+}
+
+} // namespace
+
+TEST(seq_toggle) {
+	SliceRig r;
+	r.click(push2::cc::Layout);
+	CHECK(r.view().s.ui.noteLayout == 1);
+	r.tap(0, 0);
+	auto v = r.view();
+	CHECK(v.length[0][0] == 384 && v.nNotes == 1); // Fixed Length off: one bar
+	CHECK(v.notes[0].tick == 0 && v.notes[0].len == 24 && v.notes[0].pitch == 36 && v.notes[0].vel == 100);
+	CHECK(v.s.track[0].playing == 0); // stopped: it is the playing clip
+	CHECK(r.f.track[0].gate[0] == 0); // the pads make no sound in the sequencer
+	r.tap(0, 0);
+	v = r.view();
+	CHECK(v.nNotes == 0 && v.length[0][0] == 384); // the clip stays, empty
+
+	// Fixed Length on, 1 Beat: the clip of another track
+	r.click(push2::cc::FixedLength);
+	r.press(push2::cc::FixedLength);
+	r.click(push2::cc::Track1Below);
+	r.press(push2::cc::FixedLength, 0);
+	v = r.view();
+	CHECK(v.s.ui.fixedOn && v.s.ui.fixedBars == 0);
+	r.click(push2::cc::Track1Below + 1);
+	r.tap(3, 2);
+	v = r.view();
+	CHECK(v.length[1][0] == 96 && v.nNotes == 1 && v.notes[0].tick == 48 && v.notes[0].pitch == rowPitch(3));
+	r.tap(0, 4); // step 4 starts at tick 96: past the end of the clip
+	CHECK(r.view().nNotes == 1);
+
+	// 1000 random taps on a 32-bar clip keep the notes sorted and unique, and agree with a model.
+	r.click(push2::cc::Track1Below + 2);
+	r.press(push2::cc::FixedLength);
+	r.click(push2::cc::Track1Below + 7);
+	r.press(push2::cc::FixedLength, 0);
+	std::set<std::pair<int, int>> model; // (step, row)
+	uint32_t rng = 12345;
+	auto next = [&] { return rng = rng * 1664525u + 1013904223u, rng >> 16; };
+	int page = 0;
+	for (int i = 0; i < 1000; i++) {
+		uint32_t x = next();
+		if (x % 8 == 0) {
+			r.click(x / 8 % 2 ? push2::cc::PageRight : push2::cc::PageLeft);
+			page = r.view().s.ui.page;
+			continue;
+		}
+		int row = x / 8 % 8, col = x / 64 % 8;
+		r.tap(row, col);
+		auto key = std::make_pair(page * 8 + col, row);
+		if (!model.erase(key))
+			model.insert(key);
+	}
+	auto st = r.state();
+	const tart::Clip& c = st->clip[2][0];
+	CHECK(c.length == 12288 && c.nNotes == model.size() && model.size() > 50);
+	bool ordered = true, same = true;
+	for (int i = 0; i < c.nNotes; i++) {
+		const tart::Note& n = c.notes[i];
+		ordered &=
+			i == 0 || c.notes[i - 1].tick < n.tick || (c.notes[i - 1].tick == n.tick && c.notes[i - 1].pitch < n.pitch);
+		same &= n.tick % 24 == 0 && n.len == 24 && model.count({n.tick / 24, rowOf(n.pitch)}) == 1;
+	}
+	CHECK(ordered && same);
+}
+
+TEST(seq_controls) {
+	Rig r;
+	r.click(push2::cc::Layout);
+	r.click(push2::cc::Scene1 - 2); // 1/8: the third scene button from the top
+	CHECK(r.view().s.track[0].grid == 2);
+	r.tap(0, 3); // step 3 of 48 ticks
+	auto v = r.view();
+	CHECK(v.nNotes == 1 && v.notes[0].tick == 144 && v.notes[0].len == 48);
+	r.press(push2::cc::Delete); // Delete and a step takes the note off, and makes no clip
+	r.tap(0, 3);
+	r.tap(5, 5);
+	r.press(push2::cc::Delete, 0);
+	v = r.view();
+	CHECK(v.nNotes == 0 && v.s.ui.heldStep == -1);
+	r.click(push2::cc::PageRight); // a bar of 1/8 steps is 8 steps: one page
+	CHECK(r.view().s.ui.page == 0);
+	r.click(push2::cc::Scene1 - 7); // 1/32t: 8 ticks, 48 steps in the bar, 6 pages
+	r.click(push2::cc::PageRight);
+	r.click(push2::cc::PageRight);
+	CHECK(r.view().s.ui.page == 2);
+	r.click(push2::cc::Scene1 - 4); // 1/16: 16 steps, 2 pages: the page is cut back
+	CHECK(r.view().s.ui.page == 1);
+	r.in.leds = true;
+	r.step();
+	auto led = [&](int row, int col) { return r.want.note[push2::padNote(row, col)].color; };
+	CHECK(led(0, 0) == push2::kRgbWhite && led(1, 0) == push2::kRgbDarkGray); // the root row, the others
+	CHECK(r.want.cc[push2::cc::Scene1 - 4].color == push2::kRgbWhite &&
+		  r.want.cc[push2::cc::Scene1].color == push2::kRgbDarkGray);
+	CHECK(r.want.cc[push2::cc::PageLeft].color == push2::kWhiteDark && r.want.cc[push2::cc::PageRight].color == 0);
+	r.click(push2::cc::PageLeft);
+	r.tap(2, 1);
+	r.step();
+	CHECK(led(2, 1) == tart::kPaletteFull);
+	r.pad(2, 1, 100); // hold it: white; softer: the dim color
+	r.step();
+	CHECK(led(2, 1) == push2::kRgbWhite);
+	r.turn(3, -60);
+	r.pad(2, 1, 0);
+	r.step();
+	CHECK(led(2, 1) == tart::kPaletteDim && r.view().nNotes == 1);
+	r.click(push2::cc::Layout);
+	CHECK(r.view().s.ui.noteLayout == 0);
+
+	// Fixed Length: its buttons while it is held, and a tap on it
+	r.press(push2::cc::FixedLength);
+	r.press(push2::cc::Track1Above);
+	r.press(push2::cc::Track1Above, 0);
+	r.step();
+	CHECK(r.view().s.ui.fixedOn && r.want.cc[push2::cc::Track1Below + 3].color == push2::kRgbWhite);
+	r.press(push2::cc::FixedLength, 0);
+	CHECK(r.view().s.ui.fixedOn); // choosing is not a tap
+	r.click(push2::cc::FixedLength);
+	CHECK(!r.view().s.ui.fixedOn);
+	r.press(push2::cc::FixedLength); // held for 0.6 s: no toggle
+	r.run_(30000);
+	r.press(push2::cc::FixedLength, 0);
+	CHECK(!r.view().s.ui.fixedOn);
+}
+
+TEST(seq_create_launch) {
+	Rig r;
+	r.click(push2::cc::Layout);
+	r.in.play = true;
+	r.run_(1000); // tick 4
+	r.tap(0, 0);
+	auto v = r.view();
+	CHECK(v.s.track[0].playing == tart::kNone && v.s.track[0].queued == 0 && v.s.track[0].launchTick == 384);
+	r.run_(48000 * 2);
+	v = r.view();
+	CHECK(v.s.track[0].playing == 0 && v.s.track[0].queued == tart::kNone && v.s.track[0].startTick == 384);
+}
+
+TEST(seq_playback_sample_exact) {
+	SliceRig r;
+	r.click(push2::cc::Layout);
+	r.tap(0, 0);
+	r.tap(0, 4);
+	Edges e = gateEdges(r, 24100);
+	CHECK(e.up.size() == 2 && e.up[0] == 0 && e.up[1] == 24000);
+	CHECK(e.down.size() == 1 && e.down[0] == 6000); // 24 ticks of a 1/16 step
+	CHECK_NEAR(r.f.track[0].vel[0], 100.f / 127 * 10, 1e-4);
+	CHECK_NEAR(r.f.track[0].voct[0], -2.f, 1e-6);
+}
+
+TEST(note_length_and_retrigger_gap) {
+	SliceRig r;
+	r.click(push2::cc::Layout);
+	r.tap(0, 0);
+	r.tap(0, 1); // the second note starts on the tick the first one ends
+	Edges e = gateEdges(r, 13000);
+	CHECK(e.up.size() == 2 && e.up[0] == 0 && e.up[1] == 6001); // one sample low between them
+	CHECK(e.down.size() == 2 && e.down[0] == 6000 && e.down[1] == 12000);
+}
+
+TEST(swing) {
+	for (int swing : {0, 50, 100}) { // the note on tick 24 starts round(swing * 12 / 100) ticks late
+		SliceRig r;
+		r.click(push2::cc::Layout);
+		r.tap(0, 1);
+		r.m.edit([=](tart::State& st) { st.s.transport.swing = (uint8_t)swing; });
+		Edges e = gateEdges(r, 12000);
+		CHECK(e.up.size() == 1 && e.up[0] == (24 + (swing * 12 + 50) / 100) * 250);
+	}
+	{ // the notes on the beat and the eighth stay where they are
+		SliceRig r;
+		r.click(push2::cc::Layout);
+		r.tap(0, 0);
+		r.tap(0, 2);
+		r.m.edit([](tart::State& st) { st.s.transport.swing = 100; });
+		Edges e = gateEdges(r, 13000);
+		CHECK(e.up.size() == 2 && e.up[0] == 0 && e.up[1] == 12000);
+	}
+	{ // a clip of 30 ticks: the note on 24 is late by 12 ticks, which is tick 6 of the next pass (from the first)
+		SliceRig r;
+		auto st = r.state();
+		st->clip[0][0].length = 30;
+		st->clip[0][0].nNotes = 1;
+		st->clip[0][0].notes[0] = {24, 4, 60, 100};
+		st->s.track[0].playing = 0;
+		st->s.transport.swing = 100;
+		r.m.load(*st);
+		Edges e = gateEdges(r, 17000);
+		CHECK(e.up.size() == 3 && e.up[0] == 6 * 250 && e.up[1] == 36 * 250 && e.up[2] == 66 * 250);
+	}
+}
+
+TEST(loop) {
+	SliceRig r;
+	r.click(push2::cc::Layout);
+	r.click(push2::cc::FixedLength);
+	r.press(push2::cc::FixedLength);
+	r.click(push2::cc::Track1Below); // 1 Beat
+	r.press(push2::cc::FixedLength, 0);
+	r.tap(0, 0);
+	CHECK(r.view().length[0][0] == 96);
+	Edges e = gateEdges(r, 48100);
+	CHECK(e.up.size() == 3 && e.up[0] == 0 && e.up[1] == 24000 && e.up[2] == 48000);
+}
+
+TEST(hold_step_encoders) {
+	Rig r;
+	r.click(push2::cc::Layout);
+	r.tap(0, 2); // tick 48
+	r.pad(0, 2, 100);
+	auto v = r.view();
+	CHECK(v.s.ui.heldStep == 2 && v.held == 0);
+	r.turn(0, 6); // Nudge: 2 raw units a tick
+	CHECK(r.view().notes[0].tick == 51);
+	r.turn(0, 60);
+	CHECK(r.view().notes[0].tick == 59); // half a step on, no further
+	r.turn(0, -63);
+	r.turn(0, -63);
+	CHECK(r.view().notes[0].tick == 36); // half a step back
+	r.turn(1, 8);                        // Length: a step
+	CHECK(r.view().notes[0].len == 48);
+	r.turn(2, 6); // Length fine: 3 ticks
+	CHECK(r.view().notes[0].len == 51);
+	r.turn(1, -63); // never below one tick
+	r.turn(1, -63);
+	CHECK(r.view().notes[0].len == 1);
+	r.turn(3, 10); // Velocity
+	CHECK(r.view().notes[0].vel == 110);
+	r.turn(3, 63);
+	r.turn(3, 63);
+	r.turn(3, 63);
+	CHECK(r.view().notes[0].vel == 127);
+	r.pad(0, 2, 0); // the hold edited it: it stays
+	v = r.view();
+	CHECK(v.nNotes == 1 && v.s.ui.heldStep == -1 && v.held == -1);
+	r.turn(3, -5); // not held: nothing
+	CHECK(r.view().notes[0].vel == 127);
+}
+
+TEST(long_note) {
+	Rig r;
+	r.click(push2::cc::Layout);
+	r.tap(0, 0);
+	r.pad(0, 0, 100);
+	r.pad(1, 3, 100); // another row: nothing
+	r.pad(1, 3, 0);
+	CHECK(r.view().notes[0].len == 24 && r.view().nNotes == 1);
+	r.pad(0, 3, 100); // the same row, later: the note reaches the end of that step
+	r.pad(0, 3, 0);
+	r.pad(0, 0, 0);
+	auto v = r.view();
+	CHECK(v.nNotes == 1 && v.notes[0].tick == 0 && v.notes[0].len == 96);
+	r.pad(0, 0, 100); // a tap on it takes it off, long as it is
+	r.pad(0, 0, 0);
+	CHECK(r.view().nNotes == 0);
+}
+
+TEST(stop_releases_clip_not_pads) {
+	SliceRig r;
+	r.click(push2::cc::Layout);
+	r.tap(0, 0);
+	r.pad(0, 0, 100);
+	r.pad(0, 7, 100); // eight steps: a long note
+	r.pad(0, 7, 0);
+	r.pad(0, 0, 0);
+	r.click(push2::cc::Layout);
+	r.click(push2::cc::Track1Below + 1); // a pad on track 2 is held through the Stop
+	r.pad(0, 0, 100);
+	r.click(push2::cc::Play);
+	r.run_(3000);
+	CHECK(r.f.track[0].gate[0] == 10 && r.f.track[1].gate[0] == 10);
+	CHECK(r.view().s.track[0].playing == 0);
+	r.click(push2::cc::Play); // Stop
+	r.run_(3);
+	CHECK(r.f.track[0].gate[0] == 0 && r.f.track[1].gate[0] == 10);
+	CHECK(r.view().s.track[0].playing == tart::kNone && !r.view().s.transport.playing);
+	r.click(push2::cc::Play); // Play again: the clips have to be launched again
+	r.run_(3000);
+	CHECK(r.f.track[0].gate[0] == 0 && r.view().s.transport.playing);
+	r.pad(0, 0, 0);
+	CHECK(r.f.track[1].gate[0] == 0);
+}
+
+TEST(sanitize_clips) {
+	auto st = std::make_unique<tart::State>();
+	tart::Clip& c = st->clip[1][2];
+	c.length = 20000, c.nNotes = 3000;
+	for (int i = 0; i < 2048; i++)
+		c.notes[i] = {(uint16_t)(2047 - i), 0, (uint8_t)(i % 100), 0};
+	c.notes[0] = {5, 10, 200, 60};   // pitch too high: dropped
+	c.notes[1] = {7, 60000, 60, 0};  // length and velocity clamped
+	c.notes[2] = {7, 3, 60, 99};     // the same tick and pitch: one of them stays
+	c.notes[3] = {20000, 3, 60, 99}; // tick beyond any clip: dropped
+	tart::Clip& e = st->clip[0][0];
+	e.length = 0, e.nNotes = 9;
+	tart::Clip& s = st->clip[0][1];
+	s.length = 96, s.nNotes = 2, s.notes[0] = {50, 3, 70, 90}, s.notes[1] = {10, 3, 71, 90};
+	st->s.track[0].playing = 1;
+	tart::sanitize(*st);
+	CHECK(c.length == tart::kMaxLength && c.nNotes == 2045);
+	bool ok = true;
+	int at7 = 0;
+	for (int i = 0; i < c.nNotes; i++) {
+		ok &= c.notes[i].pitch <= 127 && c.notes[i].vel >= 1 && c.notes[i].vel <= 127 && c.notes[i].len >= 1 &&
+			  c.notes[i].len <= tart::kMaxLength && c.notes[i].tick < tart::kMaxLength;
+		ok &= i == 0 || c.notes[i - 1].tick < c.notes[i].tick ||
+			  (c.notes[i - 1].tick == c.notes[i].tick && c.notes[i - 1].pitch < c.notes[i].pitch);
+		at7 += c.notes[i].tick == 7 && c.notes[i].pitch == 60;
+	}
+	CHECK(ok && at7 == 1);
+	CHECK(e.nNotes == 0);
+	CHECK(s.nNotes == 2 && s.notes[0].tick == 10 && s.notes[1].tick == 50);
+	CHECK(st->s.track[0].playing == tart::kNone); // a patch loads stopped
 }

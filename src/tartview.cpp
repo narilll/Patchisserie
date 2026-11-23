@@ -18,6 +18,9 @@ const char* const kRootNames[] = {"C", "G", "D", "A", "E", "B", "F", "Bb", "Eb",
 const char* const kQuantNames[] = {"None", "8 Bars", "4 Bars", "2 Bars", "1 Bar", "1/2",   "1/2T",
 								   "1/4",  "1/4T",   "1/8",    "1/8T",   "1/16",  "1/16T", "1/32"};
 
+const char* const kFixedNames[] = {"1 BEAT", "2 BEATS", "1 BAR", "2 BARS", "4 BARS", "8 BARS", "16 BARS", "32 BARS"};
+const int kGrids[8] = {96, 64, 48, 32, 24, 16, 12, 8}; // ticks of a step, as in tart.cpp
+
 } // namespace
 
 void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status, const char* message) {
@@ -75,6 +78,19 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 					rect(x + 3, y, 114, 24, white);
 				text(x + 60, y + 18, kScales[k].name, 14, NVG_ALIGN_CENTER, k == sc.scale ? black : white, sans);
 			}
+	} else if (ui.button[push2::cc::FixedLength]) {
+		cell(0, 1, "FIXED LENGTH", ui.fixedOn ? "On" : "Off");
+	} else if (v.held >= 0) { // a held step: its note
+		const Note& n = v.notes[v.held];
+		int grid = kGrids[v.s.track[ui.track].grid];
+		std::snprintf(buf, sizeof buf, "%+d", n.tick - (n.tick + grid / 2) / grid * grid);
+		cell(0, 1, "NUDGE", buf);
+		std::snprintf(buf, sizeof buf, "%.2f st", (float)n.len / grid);
+		cell(1, 1, "LENGTH", buf);
+		std::snprintf(buf, sizeof buf, "%d t", n.len);
+		cell(2, 1, "FINE", buf);
+		std::snprintf(buf, sizeof buf, "%d", n.vel);
+		cell(3, 1, "VELOCITY", buf);
 	} else {
 		std::snprintf(buf, sizeof buf, t.external ? "%.1f EXT" : "%.1f", t.shownBpm);
 		cell(0, 1, "TEMPO", buf);
@@ -96,15 +112,62 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 		}
 		nvgFillColor(vg, t.playing ? nvgRGB(0x40, 0xd0, 0x60) : dim);
 		nvgFill(vg);
-
-		// Middle: where the clips will be.
+	}
+	if (ui.screen != kScaleScreen) {
+		// Middle: the selected slot, its notes over time and the playhead.
+		const Track& tr = v.s.track[ui.track];
+		const uint8_t* tc = kLiveColors[tr.color % kColors];
 		std::snprintf(buf, sizeof buf, "Track %d \xC2\xB7 Scene %d", ui.track + 1, ui.scene + 1);
-		text(480, 90, buf, 28, NVG_ALIGN_CENTER, white, sans);
+		text(8, 46, buf, 18, NVG_ALIGN_LEFT, white, sans);
+		int length = v.length[ui.track][ui.scene];
+		const float x0 = 8, w = 944, y0 = 54, h = 62;
+		if (!length) {
+			text(480, 96, "Empty slot", 24, NVG_ALIGN_CENTER, dim, sans);
+		} else {
+			if (length % kPpqn)
+				std::snprintf(buf, sizeof buf, "%d ticks", length);
+			else if (length % kBar)
+				std::snprintf(buf, sizeof buf, "%d Beats", length / kPpqn);
+			else
+				std::snprintf(buf, sizeof buf, length == kBar ? "1 Bar" : "%d Bars", length / kBar);
+			text(952, 46, buf, 18, NVG_ALIGN_RIGHT, dim, sans);
+			rect(x0, y0, w, h, nvgRGB(0x20, 0x22, 0x26));
+			int lo = 127, hi = 0;
+			for (int i = 0; i < v.nNotes; i++)
+				lo = std::min<int>(lo, v.notes[i].pitch), hi = std::max<int>(hi, v.notes[i].pitch);
+			int span = std::max(hi - lo + 1, 12); // semitones the box shows, from the lowest note
+			float nh = std::max(h / span, 2.f);
+			for (int i = 0; i < v.nNotes; i++) {
+				const Note& n = v.notes[i];
+				if (n.tick >= length)
+					continue;
+				float x = x0 + w * n.tick / length,
+					  nw = std::max(w * std::min<int>(n.len, length - n.tick) / length, 2.f);
+				nvgBeginPath(vg);
+				nvgRect(vg, x, y0 + h - nh * (n.pitch - lo + 1), nw, nh - 1);
+				nvgFillColor(vg, nvgRGB(tc[0], tc[1], tc[2]));
+				nvgFill(vg);
+			}
+			if (t.playing && tr.playing == ui.scene) {
+				float x = x0 + w * (float)(std::max<int64_t>(t.tick - tr.startTick, 0) % length) / length;
+				nvgBeginPath(vg);
+				nvgRect(vg, x, y0, 2, h);
+				nvgFillColor(vg, nvgRGB(0x40, 0xd0, 0x60));
+				nvgFill(vg);
+			}
+		}
 		if (status)
 			text(8, 130, status, 14, NVG_ALIGN_LEFT, dim, sans);
 
-		// Bottom band: the tracks; the selected one inverted.
+		// Bottom band: the tracks, the selected one inverted; with Fixed Length held, its lengths.
 		for (int i = 0; i < kTracks; i++) {
+			if (ui.button[push2::cc::FixedLength]) {
+				bool chosen = i == ui.fixedBars;
+				if (chosen)
+					rect(120.f * i + 3, 138, 114, 20, white);
+				text(120.f * i + 60, 154, kFixedNames[i], 15, NVG_ALIGN_CENTER, chosen ? black : white, sans);
+				continue;
+			}
 			const uint8_t* c = kLiveColors[v.s.track[i].color % kColors];
 			NVGcolor color = nvgRGB(c[0], c[1], c[2]);
 			bool selected = i == ui.track;
