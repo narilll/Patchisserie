@@ -9,7 +9,7 @@ VCV Rack 2 plugin that runs [Strudel](https://strudel.cc) and [Orca](https://100
 - **[Lattice](docs/lattice.md)**: Orca's grid (on the orca-c VM). V/OCT, gate, velocity, triggers, CC and clock from
   the grid's MIDI operators; clock/reset.
 - **[Tart](docs/tart.md)**: Ableton Push 2 as a Rack controller (transport and clock, a Session clip grid, an 8-track keyboard and step sequencer, Euclid tracks).
-- **[Slice](docs/slice.md)**: expander that takes one Tart track's V/OCT, gate and velocity out as jacks.
+- **[Slice](docs/slice.md)**: takes one Tart track's V/OCT, gate and velocity out as jacks, anywhere in the patch.
 
 Status: early development.
 

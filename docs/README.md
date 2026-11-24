@@ -12,7 +12,7 @@ Patchisserie is a plugin for VCV Rack 2 that lets you live code music and visual
 
 **Tart** connects an Ableton Push 2 to Rack. You start, stop and set the tempo from the Push, and Tart sends a clock, a run signal and a metronome to your patch through its jacks. In Session mode the pads are a grid of clips, 8 tracks by 8 scenes, that you launch and stop. In Note mode they are a keyboard for the 8 tracks, a step sequencer (alone, or above 32 notes of the keyboard) that makes the clips, or, on a drum track, 16 drum pads with a drum step sequencer. A Euclid track plays rhythms and melodies from a few settings of its clip, and can hold a control value on single steps of its rhythms. Read [the Tart manual](tart.md).
 
-**Slice** is an expander that takes the notes of one Tart track out of Tart: V/OCT, gate and velocity, with one channel for each voice (a drum track has 16 channels, one for each drum pad). You place it directly to the right of a Tart, and add more Slices to the right for more tracks. Read [the Slice manual](slice.md).
+**Slice** takes the notes of one Tart track out of Tart: V/OCT, gate and velocity, with one channel for each voice (a drum track has 16 channels, one for each drum pad). You place it anywhere in the patch, pick its track with two buttons on its panel, and add more Slices for more tracks. Read [the Slice manual](slice.md).
 
 ## Installing
 
@@ -24,7 +24,7 @@ Patchisserie is free software under the AGPL-3.0-or-later license. The full text
 
 Filo and Lattice each work alone: put either one in a patch and it makes sound and signals without any other Patchisserie module.
 
-Icing is an expander. It has no code editor of its own. It draws the Hydra code of the Filo placed directly to its left, so the two modules must sit side by side with Icing on the right. If you move Icing away from a Filo, it has nothing to show. Slice is an expander too: it sits directly to the right of a Tart, or of another Slice, and without a Tart it sends 0 V.
+Icing is an expander. It has no code editor of its own. It draws the Hydra code of the Filo placed directly to its left, so the two modules must sit side by side with Icing on the right. If you move Icing away from a Filo, it has nothing to show.
 
 Filo and Lattice send out standard Rack signals: audio, V/OCT pitch, gates, triggers and CC. Icing has no outputs, because it shows visuals. Tart plays its notes through Slice. You can mix the modules freely, for example by using a Lattice to play the pitch input of any oscillator while a Filo plays drums.
 

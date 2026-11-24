@@ -2708,7 +2708,7 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 		v.tick();
 	}
 	if (slice)
-		slice->frame = (uint32_t)in.frame, slice->hop = 0;
+		slice->frame = (uint32_t)in.frame;
 
 	out.run = clock_.started();
 	if (out.run) {

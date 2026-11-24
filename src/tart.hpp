@@ -293,16 +293,33 @@ struct Inputs {
 	bool leds = false; // refresh `want` this sample
 };
 
-/** What a Slice gets on the right of a Tart: every track's voices (the audio thread fills it, ~2 KB). */
+/** What a Slice gets from a Tart: every track's voices (the audio thread fills it, ~2 KB). */
 struct SliceTrack {
 	float voct[16], gate[16], vel[16], cc[kCcs], level, pan;
 	uint8_t channels;
 	uint32_t rgb; // 0xRRGGBB
 };
 struct SliceFrame {
-	uint32_t frame; // changes every sample: a frame that doesn't is stale
-	uint8_t hop;    // Slices between this one's left neighbour and the Tart
+	uint32_t frame; // the engine's frame: a frame that isn't the previous sample's is stale
 	SliceTrack track[kTracks];
+};
+
+/** Tart to Slice, no locks: Tart writes buf[frame & 1] and a Slice reads the other one, the previous sample's. Rack
+ * finishes every module's process() for one sample before any starts the next, so that buffer is complete and stable
+ * whatever the thread or module order: one sample of latency for every Slice. */
+struct SliceBus {
+	SliceFrame buf[2] = {};
+	std::atomic<int64_t> readAt{-100}; // the last frame a Slice read at: the Tart fills a frame only while one does
+	/** The frame to fill, or null when no Slice has read in the last 2 samples (the first read is stale). */
+	SliceFrame* write(int64_t frame) {
+		return readAt.load(std::memory_order_relaxed) >= frame - 2 ? &buf[frame & 1] : nullptr;
+	}
+	/** The previous sample's frame, or null when the Tart skipped it (bypassed, removed, no reader yet). */
+	const SliceFrame* read(int64_t frame) {
+		readAt.store(frame, std::memory_order_relaxed);
+		const SliceFrame& f = buf[(frame - 1) & 1];
+		return f.frame == (uint32_t)(frame - 1) ? &f : nullptr;
+	}
 };
 
 struct Outputs {
@@ -323,7 +340,7 @@ class Machine {
 	Machine& operator=(const Machine&) = delete;
 
 	// --- Audio thread, once per sample
-	// `slice`: the Slice on the right (null: none).
+	// `slice`: the frame for the Slices (null: none).
 	void process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFrame* slice = nullptr);
 
 	// --- UI thread

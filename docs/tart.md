@@ -50,7 +50,7 @@ Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad contro
 4. Within a couple of seconds the PUSH light on the panel turns green, the Push switches to User mode, and the [Home screen](#the-home-screen) appears on the Push display.
 5. Press PLAY on the Push. The transport starts, the PLAY button turns green, and the CLK, RESET and RUN outputs on the panel come alive. Patch CLK into a sequencer to hear it keep time.
 6. Turn the tempo encoder on the Push, at the top right, to change the tempo. Press METRONOME to hear the beat on the METRO output.
-7. To play notes, add a [Slice](slice.md) module directly to the right of Tart and patch its V/OCT and GATE outputs into a voice. Press NOTE on the Push and play the pads. The Slice shows the number 1, the first track.
+7. To play notes, add a [Slice](slice.md) module anywhere in the patch and patch its V/OCT and GATE outputs into a voice. Press NOTE on the Push and play the pads. The Slice shows the number 1, the first track.
 8. To make a loop, press LAYOUT so that the pads become the [Melodic Sequencer](#the-melodic-sequencer), and tap a few pads. The loop, a clip, starts to play on track 1, and the Slice plays it.
 9. Press SESSION to see the clip grid. The pad at the top left is your clip, and it pulses while it plays. Press an empty pad of the same column to stop the track, and press the clip's pad to start it again. See [Session mode](#session-mode).
 
@@ -134,7 +134,7 @@ Tart has eight tracks, numbered 1 to 8. A track is one instrument: it has its ow
 
 **Voices.** A voice is one note that can sound at the same time as others. Each track has from 1 to 16 voices, and 1 at the start. Set it with **Voices** in the **Track** menu. With one voice, a new note takes over from the old one. With more, the notes are shared out over the voices in turn, and a new note takes over the oldest voice when all of them are busy. A [drum track](#drum-tracks) ignores **Voices**: it always has 16, and so does a [Euclid track](#euclid-tracks) while its clip is in DRUM mode.
 
-**Taking a track out of Tart.** Tart itself has no jacks for the notes. Place a [Slice](slice.md) module directly to the right of Tart. The first Slice gives you the first track, the next Slice to its right the second, and so on, or you can pick the track in each Slice's menu. A Slice has V/OCT, GATE and VEL outputs with one channel for each voice of its track. If there is no Slice, the pads still light up but nothing is heard.
+**Taking a track out of Tart.** Tart itself has no jacks for the notes. Add a [Slice](slice.md) module anywhere in the patch. It finds the Tart by itself, and you pick its track with the two buttons on its panel, or with **Track** in its menu. Add one Slice for each track you want. A Slice has V/OCT, GATE and VEL outputs with one channel for each voice of its track. If there is no Slice, the pads still light up but nothing is heard.
 
 **Color.** Each track has a color, which you choose with **Color** in the **Track** menu. See [Colors](#colors).
 

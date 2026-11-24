@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Slice, 6 HP. The number window and the jacks match kSliceStatusMm and sliceJackMm in src/plugin.cpp; all text is drawn by the widget. -->
+<!-- Slice, 6 HP. The number window, the track buttons and the jacks match kSliceStatusMm, sliceButtonMm and sliceJackMm in src/plugin.cpp; all text is drawn by the widget. -->
 <svg xmlns="http://www.w3.org/2000/svg" width="30.48mm" height="128.5mm" viewBox="0 0 30.48 128.5">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
@@ -9,7 +9,9 @@
   </defs>
   <rect width="30.48" height="128.5" fill="url(#bg)"/>
   <line x1="3" y1="10.6" x2="27.5" y2="10.6" stroke="#1b1c1e" stroke-width="0.3"/>
-  <rect x="3" y="12" width="24.5" height="14" rx="0.4" fill="#000000"/>
+  <rect x="10.8" y="12" width="8.9" height="14" rx="0.4" fill="#000000"/>
+  <polygon points="7.5,23.4 7.5,26 5,24.7" fill="#1b1c1e"/>
+  <polygon points="23,23.4 23,26 25.5,24.7" fill="#1b1c1e"/>
   <rect x="2" y="76" width="26.5" height="47.5" rx="0.4" fill="#1b1c1e"/>
   <line x1="3" y1="124.6" x2="27.5" y2="124.6" stroke="#1b1c1e" stroke-width="0.2"/>
 </svg>

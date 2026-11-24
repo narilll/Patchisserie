@@ -528,6 +528,66 @@ TEST(tart_machine_threads) {
 	CHECK(st->s.ui.recTrack >= 0 || st->s.ui.writing == 0);
 }
 
+TEST(slice_bus_previous_frame) {
+	tart::SliceBus bus;
+	CHECK(bus.write(5) == nullptr); // nobody reads yet: nothing is filled
+	auto put = [&](int64_t n, float v) {
+		tart::SliceFrame* f = bus.write(n);
+		CHECK(f);
+		if (f)
+			f->frame = (uint32_t)n, f->track[3].level = v;
+	};
+	bus.read(0);
+	put(1, 1.f);
+	const tart::SliceFrame* f = bus.read(2); // the frame written at 1
+	CHECK(f && f->frame == 1 && f->track[3].level == 1.f);
+	put(2, 2.f);
+	f = bus.read(3);
+	CHECK(f && f->frame == 2 && f->track[3].level == 2.f);
+	CHECK(bus.read(4) == nullptr && bus.read(5) == nullptr); // frames 3 and 4 were never written
+	CHECK(bus.write(6) && bus.write(1000) == nullptr);       // a Slice that stopped reading: the Tart stops filling
+	CHECK(bus.read(6) == nullptr);                           // the writer skipped 3..5 (bypassed): stale
+	put(7, 7.f);
+	f = bus.read(8);
+	CHECK(f && f->frame == 7 && f->track[3].level == 7.f);
+}
+
+TEST(slice_bus_threads) { // make tsan: a writer and a reader, a barrier per sample as Rack's engine has
+	tart::SliceBus bus;
+	std::atomic<int> arrived{0};
+	std::atomic<int> bad{0}, seen{0};
+	auto barrier = [&](int n) {
+		arrived.fetch_add(1, std::memory_order_acq_rel);
+		while (arrived.load(std::memory_order_acquire) < 2 * (n + 1))
+			std::this_thread::yield();
+	};
+	const int N = 10000;
+	std::thread writer([&] {
+		for (int n = 1; n <= N; n++) {
+			if (tart::SliceFrame* f = bus.write(n)) {
+				f->frame = (uint32_t)n;
+				float sum = 0;
+				for (int i = 0; i < 16; i++)
+					sum += f->track[0].voct[i] = (float)(n + i);
+				f->track[7].pan = sum;
+			}
+			barrier(n - 1);
+		}
+	});
+	for (int n = 1; n <= N; n++) {
+		if (const tart::SliceFrame* f = bus.read(n)) {
+			float sum = 0;
+			for (int i = 0; i < 16; i++)
+				sum += f->track[0].voct[i];
+			bad += f->frame != (uint32_t)(n - 1) || f->track[7].pan != sum || f->track[0].voct[0] != (float)(n - 1);
+			seen++;
+		}
+		barrier(n - 1);
+	}
+	writer.join();
+	CHECK(bad == 0 && seen > N - 10);
+}
+
 TEST(state_layout) {
 	CHECK(std::is_trivially_copyable<tart::State>::value);
 	CHECK(tart::kMaxNotes == 4096);
@@ -694,7 +754,7 @@ TEST(slice_frame) {
 			CHECK(cc == 0);
 		CHECK(s.channels == (t == 2 ? 5 : 1));
 	}
-	CHECK(r.f.track[2].rgb == (0xEDu << 16 | 0xDAu << 8 | 0x3Cu) && r.f.hop == 0);
+	CHECK(r.f.track[2].rgb == (0xEDu << 16 | 0xDAu << 8 | 0x3Cu));
 	uint32_t before = r.f.frame;
 	r.run_(1);
 	CHECK(r.f.frame != before); // changes every sample
@@ -6009,7 +6069,7 @@ namespace {
 
 /** The same Slice frame, sample for sample (the padding bytes are not compared). */
 bool sameFrame(const tart::SliceFrame& a, const tart::SliceFrame& b) {
-	if (a.frame != b.frame || a.hop != b.hop)
+	if (a.frame != b.frame)
 		return false;
 	for (int t = 0; t < tart::kTracks; t++) {
 		const tart::SliceTrack &x = a.track[t], &y = b.track[t];

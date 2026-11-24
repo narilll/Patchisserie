@@ -1045,6 +1045,13 @@ struct LatticeWidget : ModuleWidget {
 
 static Model *modelTart, *modelSlice;
 
+struct Tart;
+// Every Tart in the engine, sorted by module id. Changed only in Tart::onAdd/onRemove (the UI thread, while Rack holds
+// the engine's exclusive lock) and read by Slice::process (stepBlock holds the lock shared): no lock of ours.
+// ponytail: 16 Tarts; a 17th is not found by any Slice.
+static Tart* gTarts[16];
+static int gNTarts = 0, gTartGen = 0; // the generation changes with the list, so a Slice knows when to look again
+
 struct Tart : Module {
 	enum InputId { PLAY_INPUT, STOP_INPUT, CLOCK_INPUT, RESET_INPUT, TEMPO_INPUT, INPUTS_LEN };
 	enum OutputId { CLK_OUTPUT, RESET_OUTPUT, RUN_OUTPUT, METRO_OUTPUT, OUTPUTS_LEN };
@@ -1070,6 +1077,7 @@ struct Tart : Module {
 	std::atomic<bool> owner{false};  // UI -> audio: this Tart holds the Push
 	std::atomic<int> pushState{0};   // UI -> audio, for the light: 0 none, 1 MIDI only, 2 MIDI and display
 	bool pushAuto = true;            // UI thread only
+	tart::SliceBus bus;              // the Slices read the tracks' voices here, one sample late
 
 	Tart() {
 		config(0, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
@@ -1088,6 +1096,27 @@ struct Tart : Module {
 		userMode.bytes.assign(push2::kUserMode, push2::kUserMode + sizeof push2::kUserMode);
 		reapply.bytes.assign(push2::kReapplyPalette, push2::kReapplyPalette + sizeof push2::kReapplyPalette);
 		palette.bytes.resize(17); // the capacity process() writes into
+	}
+
+	void onAdd(const AddEvent&) override {
+		if (gNTarts < 16) {
+			int i = gNTarts++;
+			for (; i > 0 && gTarts[i - 1]->id > id; i--)
+				gTarts[i] = gTarts[i - 1];
+			gTarts[i] = this;
+		}
+		gTartGen++;
+	}
+
+	void onRemove(const RemoveEvent&) override {
+		int i = 0;
+		while (i < gNTarts && gTarts[i] != this)
+			i++;
+		if (i < gNTarts) {
+			for (gNTarts--; i < gNTarts; i++)
+				gTarts[i] = gTarts[i + 1];
+		}
+		gTartGen++;
 	}
 
 	/** The 17 palette entries (the track colours, then yellow), then the reapply: 18 SysEx messages (audio thread). */
@@ -1125,12 +1154,7 @@ struct Tart : Module {
 		ti.events = pending;
 		ti.nEvents = nPending;
 		ti.leds = sync || args.frame % 256 == 0;
-		Module* right = rightExpander.module; // a Slice on the right gets the tracks' voices (one sample late)
-		tart::SliceFrame* slice =
-			right && right->model == modelSlice ? (tart::SliceFrame*)right->leftExpander.producerMessage : nullptr;
-		machine.process(ti, out, want, slice);
-		if (slice)
-			right->leftExpander.requestMessageFlip();
+		machine.process(ti, out, want, bus.write(args.frame));
 		if (out.consumed)
 			nPending = 0;
 		if (sync) {
@@ -1751,45 +1775,65 @@ struct TartWidget : ModuleWidget {
 	}
 };
 
-// --- Slice: one Tart track's voices as jacks, on the right of a Tart or another Slice ---
+// --- Slice: one Tart track's voices as jacks, anywhere in the patch ---
 
 struct Slice : Module {
+	enum ParamId { TRACK_PREV_PARAM, TRACK_NEXT_PARAM, PARAMS_LEN };
 	enum OutputId { VOCT_OUTPUT, GATE_OUTPUT, VEL_OUTPUT, CC_OUTPUT, LEVEL_OUTPUT, PAN_OUTPUT, OUTPUTS_LEN };
 
-	tart::SliceFrame msg[2] = {}; // the left neighbour writes one and this module reads the other (Rack flips them)
-	int track = -1;               // -1: the chain position; set by the UI thread, read by process()
-	uint32_t lastFrame = 0;
-	std::atomic<int> shown{-1}; // for the panel: the track number, -1 not chained, -2 chained without a track
-	std::atomic<uint32_t> shownRgb{0};
+	int track = 0;        // 0..7: the buttons and the menu set it, process() reads it
+	int64_t tartId = -1;  // the Tart's module id; -1: the registered Tart with the lowest id
+	bool migrate = false; // loaded with the chain position: take it once from the neighbours (process())
+	Tart* tart = nullptr; // the Tart found for tartId, valid while `gen` is the registry's generation
+	int gen = -1;
+	int64_t found = -1; // the tartId `tart` was found for
+	dsp::BooleanTrigger prev, next;
+	std::atomic<int> shown{-1};                 // for the panel: the track, -1 no Tart in the patch
+	std::atomic<uint32_t> shownRgb{kSliceGrey}; // the track's color, grey while the Tart sends nothing
+
+	static constexpr uint32_t kSliceGrey = 0x90928c;
 
 	Slice() {
-		config(0, 0, OUTPUTS_LEN, 0);
+		config(PARAMS_LEN, 0, OUTPUTS_LEN, 0);
+		configButton(TRACK_PREV_PARAM, "Previous track");
+		configButton(TRACK_NEXT_PARAM, "Next track");
 		configOutput(VOCT_OUTPUT, "V/OCT (one channel per voice)");
 		configOutput(GATE_OUTPUT, "Gate (one channel per voice)");
 		configOutput(VEL_OUTPUT, "Velocity (one channel per voice)");
 		configOutput(CC_OUTPUT, "CC 1 to 8 (one channel each)");
 		configOutput(LEVEL_OUTPUT, "Level (0 to 10 V)");
 		configOutput(PAN_OUTPUT, "Pan (-5 to +5 V)");
-		leftExpander.producerMessage = &msg[0];
-		leftExpander.consumerMessage = &msg[1];
 	}
 
-	void process(const ProcessArgs&) override {
-		Module* left = leftExpander.module;
-		bool chained = left && (left->model == modelTart || left->model == modelSlice);
-		const tart::SliceFrame* f = chained ? (const tart::SliceFrame*)leftExpander.consumerMessage : nullptr;
-		if (f && f->frame == lastFrame)
-			f = nullptr; // nothing new: the left neighbour is bypassed, removed or the engine is paused
-		else if (f)
-			lastFrame = f->frame;
-		int tr = !f ? -1 : track >= 0 ? track : f->hop < tart::kTracks ? f->hop : -1;
-		const tart::SliceTrack* t = tr >= 0 ? &f->track[tr] : nullptr;
-		if (!chained)
-			shown.store(-1, std::memory_order_relaxed);
-		else if (f)
-			shown.store(t ? tr : -2, std::memory_order_relaxed);
-		if (t)
-			shownRgb.store(t->rgb, std::memory_order_relaxed);
+	/** Chained patches (saved before Slices went anywhere): the track is the position in the chain, once. */
+	void takeChainPosition() {
+		Module* m = leftExpander.module;
+		if (!m)
+			return; // not chained, or Rack has not linked the neighbours yet: ask again next sample
+		int pos = 1;
+		for (; m && m->model == modelSlice; m = m->leftExpander.module)
+			pos++;
+		track = m && m->model == modelTart ? std::min(pos, tart::kTracks) - 1 : 0;
+		migrate = false;
+	}
+
+	void process(const ProcessArgs& args) override {
+		if (migrate)
+			takeChainPosition();
+		if (prev.process(params[TRACK_PREV_PARAM].getValue() > 0.f))
+			track = (track + tart::kTracks - 1) % tart::kTracks, migrate = false;
+		if (next.process(params[TRACK_NEXT_PARAM].getValue() > 0.f))
+			track = (track + 1) % tart::kTracks, migrate = false;
+		if (gen != gTartGen || found != tartId) { // the Tarts changed (the engine's lock is held shared: stable)
+			gen = gTartGen, found = tartId, tart = gNTarts ? gTarts[0] : nullptr;
+			for (int i = 0; i < gNTarts; i++)
+				if (gTarts[i]->id == tartId)
+					tart = gTarts[i];
+		}
+		const tart::SliceFrame* f = tart ? tart->bus.read(args.frame) : nullptr;
+		const tart::SliceTrack* t = f ? &f->track[track] : nullptr; // ponytail: read in place, only this track
+		shown.store(tart ? track : -1, std::memory_order_relaxed);
+		shownRgb.store(t ? t->rgb : kSliceGrey, std::memory_order_relaxed);
 		int n = t ? t->channels : 1;
 		for (int id : {VOCT_OUTPUT, GATE_OUTPUT, VEL_OUTPUT})
 			outputs[id].setChannels(n);
@@ -1806,27 +1850,27 @@ struct Slice : Module {
 			outputs[CC_OUTPUT].setVoltage(t ? t->cc[c] : 0.f, c);
 		outputs[LEVEL_OUTPUT].setVoltage(t ? t->level : 0.f);
 		outputs[PAN_OUTPUT].setVoltage(t ? t->pan : 0.f);
-		Module* right = rightExpander.module; // the chain goes on, one position further
-		if (f && right && right->model == modelSlice) {
-			tart::SliceFrame* next = (tart::SliceFrame*)right->leftExpander.producerMessage;
-			*next = *f;
-			next->hop = (uint8_t)std::min<int>(f->hop + 1, 255);
-			right->leftExpander.requestMessageFlip();
-		}
 	}
 
-	json_t* dataToJson() override { return json_pack("{s:i}", "track", track); }
+	json_t* dataToJson() override { return json_pack("{s:i, s:I}", "track", track, "tart", (json_int_t)tartId); }
 
 	void dataFromJson(json_t* root) override {
-		int v = track;
-		json_unpack(root, "{s?i}", "track", &v);
-		track = clamp(v, -1, tart::kTracks - 1);
+		int v = -1;
+		json_int_t id = -1;
+		json_unpack(root, "{s?i, s?I}", "track", &v, "tart", &id);
+		migrate = v < 0; // -1 (the chain position) or missing: an old patch
+		track = clamp(v, 0, tart::kTracks - 1);
+		tartId = id;
 	}
 };
 
-// Matches res/Slice.svg (mm): the number window and the hint under it; the jacks, two to a row.
+// Matches res/Slice.svg (mm): the number window and the hint under it, the two track buttons, the jacks two to a row.
+// The window and the glyphs under the buttons are in the SVG.
 static const math::Rect kSliceStatusMm = math::Rect(3, 12, 24.5, 62);
 static const float kSliceWindowMm = 14;
+static Vec sliceButtonMm(int i) {
+	return Vec(i ? 24.3f : 6.2f, 19.f);
+}
 static Vec sliceJackMm(int i) {
 	return Vec(i % 2 ? 21.9f : 8.6f, 85.f + 16.f * (i / 2));
 }
@@ -1849,11 +1893,11 @@ struct SliceStatus : widget::Widget {
 		nvgTextAlign(args.vg, NVG_ALIGN_CENTER | NVG_ALIGN_MIDDLE);
 		nvgText(args.vg, box.size.x / 2, mm2px(kSliceWindowMm) / 2,
 				shown >= 0 ? std::to_string(shown + 1).c_str() : "-", nullptr);
-		if (shown == -1) {
+		if (shown < 0) {
 			nvgFontSize(args.vg, 11);
 			nvgFillColor(args.vg, nvgRGB(0, 0, 0));
 			nvgTextAlign(args.vg, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
-			nvgTextBox(args.vg, 0, mm2px(kSliceWindowMm + 5), box.size.x, "Place right of a Tart or Slice", nullptr);
+			nvgTextBox(args.vg, 0, mm2px(kSliceWindowMm + 5), box.size.x, "No Tart in the patch", nullptr);
 		}
 	}
 };
@@ -1869,6 +1913,8 @@ struct SliceWidget : ModuleWidget {
 		auto* text = createWidget<PanelText>(Vec());
 		text->box.size = box.size;
 		text->band("SLICE");
+		for (int i = 0; i < Slice::PARAMS_LEN; i++)
+			addParam(createParamCentered<VCVButton>(mm2px(sliceButtonMm(i)), module, i));
 		const char* outputs[] = {"V/OCT", "GATE", "VEL", "CC", "LEVEL", "PAN"};
 		for (int i = 0; i < Slice::OUTPUTS_LEN; i++) {
 			addOutput(createOutputCentered<PJ301MPort>(mm2px(sliceJackMm(i)), module, i));
@@ -1880,9 +1926,17 @@ struct SliceWidget : ModuleWidget {
 	void appendContextMenu(Menu* menu) override {
 		Slice* m = static_cast<Slice*>(module);
 		menu->addChild(new MenuSeparator);
+		menu->addChild(createSubmenuItem("Tart", "", [=](Menu* sub) { // the UI thread owns the registry's writes
+			sub->addChild(createCheckMenuItem("Automatic", "", [=] { return m->tartId < 0; }, [=] { m->tartId = -1; }));
+			for (int i = 0; i < gNTarts; i++) {
+				int64_t id = gTarts[i]->id;
+				sub->addChild(createCheckMenuItem(
+					"Tart " + std::to_string(i + 1), "", [=] { return m->tartId == id; }, [=] { m->tartId = id; }));
+			}
+		}));
 		menu->addChild(createIndexSubmenuItem(
-			"Track", {"Chain position", "1", "2", "3", "4", "5", "6", "7", "8"}, [=] { return (size_t)(m->track + 1); },
-			[=](size_t i) { m->track = (int)i - 1; }));
+			"Track", {"1", "2", "3", "4", "5", "6", "7", "8"}, [=] { return (size_t)m->track; },
+			[=](size_t i) { m->track = (int)i, m->migrate = false; }));
 	}
 };
 

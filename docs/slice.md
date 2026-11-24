@@ -1,11 +1,11 @@
 # Slice
 
-Slice is a module for VCV Rack 2 that takes the notes of one track out of a [Tart](tart.md). Tart turns an Ableton Push 2 into an 8-track keyboard, but Tart itself has no jacks for the notes. A Slice is an expander: you place it directly to the right of a Tart, and it gives you the V/OCT, gate and velocity signals of one track on its jacks. Put several Slices in a row to take out several tracks, one Slice for each track. This manual explains where to place a Slice, how it picks its track, what its jacks do and what it does when it has no Tart to listen to.
+Slice is a module for VCV Rack 2 that takes the notes of one track out of a [Tart](tart.md). Tart turns an Ableton Push 2 into an 8-track keyboard, but Tart itself has no jacks for the notes. A Slice gives you the V/OCT, gate and velocity signals of one track on its jacks. You can place it anywhere in the patch, with no cable to the Tart and no need to sit next to it, and you choose its track with two buttons on its panel. Use one Slice for each track you want to take out. This manual explains how a Slice finds its Tart and its track, what its jacks do and what it does when it has no Tart to listen to.
 
 ## Contents
 
 1. [Quick start](#quick-start)
-2. [Placement and the chain](#placement-and-the-chain)
+2. [Choosing the Tart and the track](#choosing-the-tart-and-the-track)
 3. [The panel](#the-panel)
 4. [Context menu reference](#context-menu-reference)
 5. [When there is no Tart](#when-there-is-no-tart)
@@ -14,26 +14,31 @@ Slice is a module for VCV Rack 2 that takes the notes of one track out of a [Tar
 
 ## Quick start
 
-1. Add a Tart module and a Slice module to your patch. Place the Slice directly to the right of the Tart, with no gap and no other module in between. The number 1 appears in the window at the top of the Slice.
+1. Add a Tart module and a Slice module to your patch, anywhere you like. The number 1 appears in the window at the top of the Slice. Press the right button next to the window to play track 2 instead, and the left button to go back.
 2. Patch the V/OCT output into the pitch input of an oscillator, and the GATE output into the gate input of an envelope.
 3. Press NOTE on the Push and play the pads. See [Note mode](tart.md#note-mode) in the Tart manual.
 
-## Placement and the chain
+## Choosing the Tart and the track
 
-A Slice finds its Tart by position only. There is no cable between them. The Slice must sit directly to the right of a Tart or of another Slice.
+A Slice finds its Tart without a cable. It does not matter where the Slice is in the patch, and it works on the left or the right of the Tart, in another row, or far away.
 
-Slices form a chain. The first Slice in the chain, the one next to the Tart, is at position 1 and plays track 1. The next Slice to its right is at position 2 and plays track 2, and so on up to track 8. The number in the window of the Slice shows its track, in the color of the track. A ninth Slice in a chain has no track, and its window shows a dash.
+**The Tart.** By default the Slice listens to the Tart with the lowest module number in the patch, which is normally the first Tart you added. With one Tart in the patch you never need to think about it. With two or more, open **Tart** in the context menu. It lists the Tarts as "Tart 1", "Tart 2" and so on, in the order they were added to the patch, and **Automatic**, the default. Choose one of them to pin the Slice to that Tart. If the pinned Tart is removed, the Slice listens to the first Tart again until you pin another one.
 
-You can also choose the track yourself with **Track** in the context menu. A Slice with a chosen track plays that track wherever it is in the chain, and it still passes the chain on to the Slice on its right, which counts its position as usual. Two Slices can play the same track.
+**The track.** The two buttons on the sides of the window, with the triangles under them, change the track by one: the left one goes to the previous track, the right one to the next. After track 8 you get track 1 again, and before track 1 you get track 8. You can also choose a track directly with **Track** in the context menu. The number in the window shows the track, in the color of the track.
+
+Two Slices can play the same track, and they send the same signals. A Slice never changes its track by itself.
+
+**One sample of delay.** A Slice sends what the Tart made one sample earlier, because Rack runs every module for one sample before it starts the next. All Slices have the same delay, so tracks stay in time with each other. You will not hear this.
 
 ## The panel
 
-The panel shows the name SLICE, the track window and six output jacks, two to a row.
+The panel shows the name SLICE, the track window with a button on each side, and six output jacks, two to a row.
 
 | Element | Kind | What it does |
 |---|---|---|
 | SLICE | Title | The module name, in the band along the top of the panel. |
-| Window | Display | The number of the track, from 1 to 8, in the track's color. It shows a dash when the Slice has no track, and then a hint when it is not next to a Tart or a Slice. |
+| Left and right buttons | Buttons | The left one chooses the previous track and the right one the next track, and they wrap around between 8 and 1. Their tooltips say "Previous track" and "Next track". |
+| Window | Display | The number of the track, from 1 to 8, in the track's color. The number is grey while the Tart sends nothing, for example when it is bypassed. When there is no Tart in the patch it shows a dash and the hint "No Tart in the patch". |
 | V/OCT | Output | The pitch of each voice, 1 V per octave, with 0 V as C4 (MIDI note 60). It is a polyphonic cable with one channel for each voice of the track. The touch strip of the Push bends it by up to 2 semitones. |
 | GATE | Output | 10 V while a note is held on that voice and 0 V otherwise, and 0 V on every channel while the track is muted or muted by a solo. Polyphonic, one channel for each voice. When a voice plays a new note while the old one is still held, the gate drops for one sample so that envelopes start again. |
 | VEL | Output | The velocity of the note on each voice, from 0 V to 10 V. Polyphonic, one channel for each voice. The voltage stays after the note ends, until the voice plays again. |
@@ -57,21 +62,24 @@ Right-click the panel to open the context menu. Slice adds this entry below Rack
 
 | Entry | What it does |
 |---|---|
-| **Track** | A submenu with "Chain position" (the default), then 1 to 8. "Chain position" plays the track that matches the position of the Slice in the chain. A number plays that track. |
+| **Tart** | A submenu with **Automatic** (the default) and one entry for each Tart in the patch, "Tart 1", "Tart 2" and so on, with a check mark on the one in use. **Automatic** listens to the Tart with the lowest module number. |
+| **Track** | A submenu with the tracks 1 to 8, with a check mark on the current track. It does the same as the buttons, but you jump straight to a track. |
 
 ## When there is no Tart
 
-- **Not next to a Tart or a Slice.** Every output is 0 V, and the panel shows the hint "Place right of a Tart or Slice". Move the Slice next to a Tart or a Slice and it starts at once.
-- **The chain is broken.** If a module upstream in the chain is bypassed or removed, or the Tart is bypassed, every Slice to its right gets nothing new. All outputs of those Slices go to 0 V, including the gates, and LEVEL too. They start again when the module is switched on or the gap is closed. A bypassed Slice in the middle of a chain stops all the Slices to its right in the same way.
+- **No Tart in the patch.** Every output is 0 V, and the window shows a dash and the hint "No Tart in the patch". Add a Tart and the Slice starts at once.
+- **The Tart is bypassed.** The Slice gets nothing new, so all its outputs go to 0 V, including the gates and LEVEL, and the number in the window turns grey. They start again when you switch the Tart on. A bypassed Slice sends nothing, as every bypassed module.
 - **The engine is paused.** Nothing moves, as in every module.
 
 ## What is saved with the patch
 
-A Slice saves its **Track** setting. Which track it plays by position follows from where you place it, so it is not saved.
+A Slice saves its track and the Tart you chose, or **Automatic**. The Tart is saved as the module number of the Tart, so it stays right when you save and open the patch.
+
+**Patches from before.** Earlier versions of Slice had to sit in a chain on the right of a Tart and took the track from their position in the chain. A Slice from such a patch that had no track chosen works out its position once, when the patch opens and it is still next to the same Tart or Slices: the first Slice becomes track 1, the next one track 2, and so on up to track 8. From then on the track is saved like any chosen track, and the Slice can be moved anywhere. A Slice that is not next to a Tart or a Slice when it opens gets track 1.
 
 ## Limitations
 
-- A Slice plays one track. For all eight tracks you need eight Slices in a row, or Slices with chosen tracks.
-- Slices work only on the right of a Tart or of another Slice. They do not work on its left.
-- The chain passes on the tracks one sample later for each Slice, because Rack passes messages between modules with one sample of delay. You will not hear this.
+- A Slice plays one track. For all eight tracks you need eight Slices.
+- A patch can have 16 Tarts. A seventeenth Tart is not found by any Slice.
+- A Slice sends the tracks one sample late, as described in [Choosing the Tart and the track](#choosing-the-tart-and-the-track).
 - The CC outputs only move when you turn an encoder of the Device screen or a clip has automation, and LEVEL and PAN when you turn an encoder of the Mix screen or a clip has automation. A muted track closes its gates and sets LEVEL to 0 V, but its V/OCT, VEL, CC and PAN outputs still move.
