@@ -4,10 +4,12 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <vector>
 
 #include "check.hpp"
@@ -422,7 +424,7 @@ TEST(tart_machine_threads) {
 		tart::Inputs in;
 		tart::Outputs out;
 		push2::Leds want;
-		push2::Event ev[43];
+		push2::Event ev[56];
 		ev[0] = dec({0xB0, push2::cc::kTempo, 1});
 		ev[1] = dec({0xB0, push2::cc::Metronome, 127});
 		ev[2] = dec({0x90, 36, 100}); // a pad and the touch strip
@@ -464,12 +466,25 @@ TEST(tart_machine_threads) {
 		ev[38] = dec({0xB0, push2::cc::Track1Above + 1, 0});
 		ev[39] = dec({0xB0, push2::cc::Scene1 - 2, 127});
 		ev[40] = dec({0xB0, push2::cc::Scene1 - 2, 0});
-		ev[41] = dec({0xB0, push2::cc::Track1Below, 127});
-		ev[42] = dec({0xB0, push2::cc::Track1Below, 0});
+		ev[41] = dec({0xB0, push2::cc::Note, 127}); // a step pad held on track 2 on the Device screen: a turn makes a
+		ev[42] = dec({0xB0, push2::cc::Note, 0});   // lock, a DELETE + touch takes it off, DELETE + the pad again
+		ev[43] = dec({0xB0, push2::cc::Device, 127});
+		ev[44] = dec({0xB0, push2::cc::Device, 0});
+		ev[45] = dec({0x90, push2::padNote(7, 3), 100});
+		ev[46] = dec({0xB0, 71, 5});
+		ev[47] = dec({0xB0, push2::cc::Delete, 127});
+		ev[48] = dec({0x90, 0, 127});
+		ev[49] = dec({0x90, 0, 0});
+		ev[50] = dec({0x80, push2::padNote(7, 3), 0});
+		ev[51] = dec({0x90, push2::padNote(7, 3), 100});
+		ev[52] = dec({0x80, push2::padNote(7, 3), 0});
+		ev[53] = dec({0xB0, push2::cc::Delete, 0});
+		ev[54] = dec({0xB0, push2::cc::Track1Below, 127});
+		ev[55] = dec({0xB0, push2::cc::Track1Below, 0});
 		tart::SliceFrame frame;
 		in.play = true;
 		for (int i = 0; i < 20000; i++) {
-			in.events = ev, in.nEvents = i % 7 == 0 ? 43 : 0, in.frame = i;
+			in.events = ev, in.nEvents = i % 7 == 0 ? 56 : 0, in.frame = i;
 			m.process(in, out, want, &frame);
 			in.play = false;
 		}
@@ -516,9 +531,11 @@ TEST(tart_machine_threads) {
 TEST(state_layout) {
 	CHECK(std::is_trivially_copyable<tart::State>::value);
 	CHECK(tart::kMaxNotes == 4096);
-	CHECK(sizeof(tart::State) < 3 * 1024 * 1024);                // heap only: ~2.24 MB
-	CHECK(sizeof(tart::Machine) < 16 * 1024);                    // ~14.4 KB: from_/to_ add 640 bytes
-	CHECK(sizeof(tart::Clip) < 36 * 1024 && tart::kAutos == 10); // ~34.9 KB: 8 CCs, LEVEL, PAN, Euclid (92 bytes)
+	CHECK(sizeof(tart::State) < 3 * 1024 * 1024); // heap only: ~2.34 MB
+	CHECK(sizeof(tart::Machine) < 16 * 1024);     // ~14.4 KB: from_/to_ add 640 bytes
+	CHECK(sizeof(tart::Clip) < 36 * 1024 &&
+		  tart::kAutos == 10); // ~36.5 KB: 8 CCs, LEVEL, PAN, Euclid (92 bytes), locks
+	CHECK(tart::kMaxLocks == 256 && sizeof(tart::Lock) == 6);
 	CHECK(sizeof(tart::SliceFrame) < 2048);
 	CHECK(sizeof(tart::State) > 2 * 1024 * 1024);
 	auto st = std::make_unique<tart::State>();
@@ -5724,19 +5741,6 @@ TEST(euclid_drum_leds) {
 	CHECK(pad(7) == push2::kRed);
 }
 
-TEST(euclid_no_step_lock) {
-	Rig r;
-	euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 16, 4); }, tart::kBar, false);
-	r.click(push2::cc::Device);
-	r.pad(7, 3, 100); // a step pad of the pattern: nothing is held
-	CHECK(r.view().s.ui.heldStep == -1);
-	r.turn(0, 10); // CC 1 only moves its value (3120)
-	r.pad(7, 3, 0);
-	auto st = r.state();
-	CHECK(st->s.track[0].value[0] == 3120 && st->clip[0][0].nPoints[0] == 0 && st->clip[0][0].nNotes == 0);
-	CHECK(st->s.track[0].overridden == 0);
-}
-
 TEST(euclid_record_no_pads) {
 	using namespace push2::cc;
 	SliceRig r;
@@ -6042,6 +6046,628 @@ struct Twins {
 
 } // namespace
 
+// ---- Pattern-step locks (E5.4)
+
+namespace {
+
+/** The step pad of pattern step `k` (the top row is steps 1 to 8), pressed or, with vel 0, let go. */
+void stepPad(Rig& r, int k, int vel = 100) {
+	r.pad(7 - k / 8, k % 8, vel);
+}
+
+tart::Lock lk(int lane, int step, int target, int value) {
+	return {(uint8_t)lane, (uint8_t)step, (uint8_t)target, 0, (uint16_t)value};
+}
+using Locks = std::vector<tart::Lock>;
+Locks locksOf(const tart::State& st, int track = 0, int scene = 0) {
+	const tart::Clip& c = st.clip[track][scene];
+	return Locks(c.locks, c.locks + c.nLocks);
+}
+bool sameLocks(const Locks& a, const Locks& b) {
+	return a.size() == b.size() && (a.empty() || !std::memcmp(a.data(), b.data(), a.size() * sizeof(tart::Lock)));
+}
+/** The locks of slot (0, 0) are `l` (sorted by key already). */
+void setLocks(Rig& r, const Locks& l) {
+	r.m.edit([&](tart::State& st) {
+		tart::Clip& c = st.clip[0][0];
+		c.nLocks = (uint16_t)l.size();
+		std::copy(l.begin(), l.end(), c.locks);
+	});
+}
+float V(int value) { // a unipolar lane's volts
+	return (float)value * 10.f / 65535.f;
+}
+
+/** Runs a SliceRig (the first sample starts the transport) and returns CC `j` of track 0 `off` samples after each of
+ * the ticks [from, to) began: at 120 BPM a tick is 250 samples. */
+std::vector<float> ccTrace(SliceRig& r, int from, int to, int j = 0, int off = 5) {
+	std::vector<float> out;
+	for (int k = from; k < to; k++) {
+		while (r.in.frame < 250 * k + off)
+			r.in.play = r.in.frame == 0, r.step();
+		out.push_back(r.f.track[0].cc[j]);
+	}
+	return out;
+}
+
+/** The transport starts on the first sample (the Slice tests count ticks from it: 250 samples each). */
+void start(Rig& r) {
+	r.in.play = true;
+	r.step();
+}
+
+} // namespace
+
+TEST(euclid_lock_make) {
+	using namespace push2::cc;
+	Rig r;
+	euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 16, 4); }, tart::kBar, false);
+	r.click(Device);
+	stepPad(r, 3);
+	CHECK(r.view().s.ui.heldStep == 7 * 8 + 3);
+	r.turn(0, 1); // CC 1 starts from the lane's value (0) and moves one unit
+	CHECK(sameLocks(locksOf(*r.state()), Locks{lk(0, 3, 0, 312)}));
+	r.turn(0, 2); // more turns move the same lock
+	CHECK(sameLocks(locksOf(*r.state()), Locks{lk(0, 3, 0, 936)}));
+	r.turn(1, 3); // CC 2 on the same step: another lock, in order
+	CHECK(sameLocks(locksOf(*r.state()), Locks{lk(0, 3, 0, 936), lk(0, 3, 1, 936)}));
+	stepPad(r, 3, 0);
+	auto st = r.state();
+	CHECK(r.view().s.ui.heldStep == -1 && st->s.track[0].value[0] == 0 && st->clip[0][0].nPoints[0] == 0);
+	r.click(Undo); // the hold is one undo step
+	CHECK(locksOf(*r.state()).empty());
+	r.press(Shift);
+	r.click(Undo);
+	r.press(Shift, 0);
+	CHECK(r.state()->clip[0][0].nLocks == 2);
+	r.press(Shift); // SHIFT: 312 / 31 = 10 a unit
+	stepPad(r, 3);
+	r.turn(0, 1);
+	r.press(Shift, 0);
+	stepPad(r, 3, 0);
+	CHECK(sameLocks(locksOf(*r.state()), Locks{lk(0, 3, 0, 946), lk(0, 3, 1, 936)}));
+	// The 257th lock: "Clip full", the clip as it was. A lock that exists still moves.
+	r.m.edit([](tart::State& s) {
+		tart::Clip& c = s.clip[0][0];
+		c.nLocks = tart::kMaxLocks;
+		for (int i = 0; i < tart::kMaxLocks; i++)
+			c.locks[i] = lk(i / 16, i % 16, 0, 1000 + i);
+	});
+	stepPad(r, 3);
+	auto before = r.state();
+	r.turn(1, 5);
+	auto after = r.state();
+	CHECK(r.view().s.ui.popup == tart::kClipFullPopup && after->clip[0][0].nLocks == 256);
+	CHECK(!std::memcmp(&before->clip[0][0], &after->clip[0][0], sizeof(tart::Clip)));
+	r.turn(0, 5);
+	CHECK(r.state()->clip[0][0].locks[3].value == 1003 + 5 * 312 && r.state()->clip[0][0].nLocks == 256);
+	// On the Euclid screen a held step changes nothing: the encoders edit the settings.
+	stepPad(r, 3, 0);
+	r.click(Device); // Home
+	stepPad(r, 3);
+	r.turn(1, 8);
+	after = r.state();
+	CHECK(after->clip[0][0].euclid.lane[0].pulses == 5 && after->clip[0][0].locks[3].value == 1003 + 5 * 312);
+	stepPad(r, 3, 0);
+	// An empty slot, and a pad from STEPS on, hold nothing.
+	Rig e;
+	euclidEmpty(e);
+	e.click(Device);
+	stepPad(e, 3);
+	CHECK(e.view().s.ui.heldStep == -1);
+	Rig p;
+	euclidTrack(p, 0, [](tart::Euclid& x) { lane(x, 0, 4, 1); }, tart::kBar, false);
+	p.click(Device);
+	stepPad(p, 4);
+	CHECK(p.view().s.ui.heldStep == -1);
+	stepPad(p, 4, 0);
+	stepPad(p, 3);
+	CHECK(p.view().s.ui.heldStep == 7 * 8 + 3);
+	// The lock belongs to the lane the pads show: the selected drum lane, or the Melodic rhythm.
+	stepPad(p, 3, 0);
+	p.pad(0, 3, 100), p.pad(0, 3, 0); // lane 3
+	stepPad(p, 1);
+	p.turn(0, 1);
+	CHECK(sameLocks(locksOf(*p.state()), Locks{lk(3, 1, 0, 312)}));
+	stepPad(p, 1, 0);
+	p.m.edit([](tart::State& s) { s.clip[0][0].euclid.mode = tart::kEuclidMelodic; });
+	stepPad(p, 5);
+	p.turn(0, 1);
+	CHECK(sameLocks(locksOf(*p.state()), Locks{lk(3, 1, 0, 312), lk(16, 5, 0, 312)}));
+}
+
+TEST(euclid_lock_playback) {
+	SliceRig r(false); // lane 0 is all rests; CC 1 is 5 V on step 3 of 4 (ticks 48..71), every 96 ticks
+	euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 4, 0); });
+	setLocks(r, {lk(0, 2, 0, 32768)});
+	auto cc = ccTrace(r, 0, 300);
+	for (int k = 0; k < 300; k++) { // at the first sample of a tick: 0 V, the ramps over ticks 47 and 71, 5 V between
+		const int c = k % 96;
+		const float want = c >= 48 && c < 71 ? 5.f : c == 71 ? 4.9f : c == 47 ? 0.1f : 0.f;
+		CHECK_NEAR(cc[(size_t)k], want, c == 71 || c == 47 ? 0.06f : 0.01f);
+	}
+	// Halfway through tick 47 and 71 the lane is half way.
+	SliceRig h(false);
+	euclidTrack(h, 0, [](tart::Euclid& e) { lane(e, 0, 4, 0); });
+	setLocks(h, {lk(0, 2, 0, 32768)});
+	const float up = ccTrace(h, 47, 48, 0, 125)[0], down = ccTrace(h, 71, 72, 0, 125)[0];
+	CHECK(up > 2.2f && up < 2.8f && down > 2.2f && down < 2.8f);
+	CHECK_NEAR(r.f.track[0].cc[1], 0.f, 1e-6); // the other lanes don't move
+	// A relaunch starts the cycle again from there.
+	setQuant(r, 0);
+	ccTrace(r, 300, 1000);
+	tapSlot(r, 0, 0);
+	r.run_(500);
+	const int s = (int)r.state()->s.track[0].startTick;
+	CHECK(s >= 1000 && s < 1004);
+	auto again = ccTrace(r, s + 40, s + 80);
+	for (int k = s + 40; k < s + 80; k++) {
+		const int c = k - s;
+		if (c != 47 && c != 71)
+			CHECK_NEAR(again[(size_t)(k - s - 40)], c >= 48 && c < 71 ? 5.f : 0.f, 0.01f);
+	}
+}
+
+TEST(euclid_lock_rest_and_dropped) {
+	SliceRig r;
+	// Lane 0 is all rests, lane 1's pulses are all dropped by PROB 0: each lock applies on its step all the same.
+	euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 4, 0), lane(e, 1, 4, 4, 0, 0); });
+	setLocks(r, {lk(0, 1, 0, 32768), lk(1, 2, 1, 32768)});
+	std::vector<float> a, b;
+	bool gate = false;
+	for (int k = 0; k < 200; k++) {
+		while (r.in.frame < 250 * k + 5) {
+			r.in.play = r.in.frame == 0, r.step();
+			for (int c = 0; c < 16; c++)
+				gate |= r.f.track[0].gate[c] > 5;
+		}
+		a.push_back(r.f.track[0].cc[0]), b.push_back(r.f.track[0].cc[1]);
+	}
+	for (int k = 0; k < 200; k++) {
+		const int c = k % 96; // lock 1 holds ticks 24..47, lock 2 ticks 48..71 (the ramps at 23, 47 and 71 are skipped)
+		if (c != 23 && c != 47 && c != 71) {
+			CHECK_NEAR(a[(size_t)k], c >= 24 && c < 47 ? 5.f : 0.f, 0.01f);
+			CHECK_NEAR(b[(size_t)k], c >= 48 && c < 71 ? 5.f : 0.f, 0.01f);
+		}
+	}
+	CHECK(!gate); // nothing sounded: no pulse on the rest, none passed PROB 0
+}
+
+TEST(euclid_lock_priority) {
+	SliceRig r;
+	euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 8, 0), lane(e, 3, 8, 0); });
+	// Lanes 0 and 3 are locked on CC 1 over the same step; lane 3 alone on step 6.
+	setLocks(r, {lk(0, 2, 0, 10000), lk(3, 2, 0, 40000), lk(3, 5, 0, 30000)});
+	auto cc = ccTrace(r, 0, 192);
+	for (int k : {50, 60, 70})
+		CHECK_NEAR(cc[(size_t)k], V(10000), 0.01f); // the lowest lane
+	for (int k : {122, 130, 140})
+		CHECK_NEAR(cc[(size_t)k], V(30000), 0.01f); // lane 3 on its own
+	CHECK_NEAR(cc[10], 0.f, 0.01f);
+	r.pad(0, 3, 100), r.pad(0, 3, 0); // lane 3 selected: nothing changes
+	CHECK(r.view().s.track[0].lane == 3);
+	auto next = ccTrace(r, 192, 384);
+	for (int k : {50, 60, 70})
+		CHECK_NEAR(next[(size_t)k], V(10000), 0.01f);
+	for (int k : {122, 140})
+		CHECK_NEAR(next[(size_t)k], V(30000), 0.01f);
+}
+
+TEST(euclid_lock_rotate_and_steps) {
+	using namespace push2::cc;
+	SliceRig r;
+	euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 8, 2); });
+	start(r);
+	r.click(Device);
+	stepPad(r, 2); // step 3 of the pattern, as it is now (not rotated)
+	r.turn(0, 60);
+	stepPad(r, 2, 0);
+	CHECK(sameLocks(locksOf(*r.state()), Locks{lk(0, 2, 0, 18720)}));
+	r.click(Device); // Home
+	r.turn(2, 8);    // ROTATE +1: the pulses move one step later, the lock with them
+	CHECK(r.state()->clip[0][0].euclid.lane[0].rotation == 1);
+	CHECK(sameLocks(locksOf(*r.state()), Locks{lk(0, 2, 0, 18720)}));
+	auto cc = ccTrace(r, 0, 120);
+	CHECK_NEAR(cc[50], 0.f, 0.01f); // step 3 no longer
+	CHECK_NEAR(cc[80], V(18720), 0.01f);
+	CHECK_NEAR(cc[90], V(18720), 0.01f); // step 4 (ticks 72..95)
+	r.click(Device);                     // the pad of step 4 is the lock's now
+	stepPad(r, 3);
+	CHECK(r.view().locked == 1 && r.view().at[0] == 18720);
+	stepPad(r, 3, 0);
+	stepPad(r, 2);
+	CHECK(r.view().locked == 0);
+	stepPad(r, 2, 0);
+	// STEPS 4 -> 2 silences a lock on step 4; back to 4 it plays again, and the pad of step 4 holds nothing meanwhile.
+	r.m.edit([](tart::State& s) { s.clip[0][0].euclid.lane[0].steps = 4, s.clip[0][0].euclid.lane[0].rotation = 0; });
+	setLocks(r, {lk(0, 3, 0, 31200)});
+	r.click(Device); // Home
+	r.turn(0, -16);
+	CHECK(r.state()->clip[0][0].euclid.lane[0].steps == 2 && r.state()->clip[0][0].nLocks == 1);
+	const int a = 200;
+	auto quiet = ccTrace(r, a, a + 200);
+	for (float v : quiet)
+		CHECK(v < 0.5f);
+	r.click(Device);
+	stepPad(r, 3);
+	CHECK(r.view().s.ui.heldStep == -1);
+	stepPad(r, 3, 0);
+	r.click(Device);
+	r.turn(0, 16);
+	CHECK(r.state()->clip[0][0].euclid.lane[0].steps == 4);
+	auto loud = ccTrace(r, 420, 620);
+	for (int k = 420; k < 620; k++) { // step 4 of 4 since the launch: ticks 72..95 of every 96
+		const int c = k % 96;
+		if (c >= 73 && c < 95)
+			CHECK_NEAR(loud[(size_t)(k - 420)], V(31200), 0.01f);
+		if (c < 71)
+			CHECK_NEAR(loud[(size_t)(k - 420)], 0.f, 0.01f);
+	}
+	// Drum -> Melodic -> Drum keeps the drum locks; Melodic plays only the rhythm's.
+	setLocks(r, {lk(0, 1, 0, 20000), lk(16, 3, 0, 50000)});
+	r.m.edit([](tart::State& s) { s.clip[0][0].euclid.lane[0].steps = 4; });
+	r.click(Track1Above + 1); // MELODIC
+	auto mel = ccTrace(r, 700, 900);
+	for (int k = 700; k < 900; k++) {
+		const int c = k % 384; // the rhythm has 16 steps of 24 ticks: step 4 is ticks 72..95
+		if (c % 384 >= 73 && c % 384 < 95)
+			CHECK_NEAR(mel[(size_t)(k - 700)], V(50000), 0.01f);
+		else if (c % 384 < 71 || c % 384 > 96)
+			CHECK_NEAR(mel[(size_t)(k - 700)], 0.f, 0.01f);
+	}
+	r.click(Track1Above); // DRUM
+	CHECK(r.state()->clip[0][0].nLocks == 2);
+	auto drum = ccTrace(r, 1000, 1200);
+	for (int k = 1000; k < 1200; k++) {
+		const int c = k % 96; // lane 0 has 4 steps: step 2 is ticks 24..47
+		if (c >= 25 && c < 47)
+			CHECK_NEAR(drum[(size_t)(k - 1000)], V(20000), 0.01f);
+		else if (c >= 49 || c < 23)
+			CHECK_NEAR(drum[(size_t)(k - 1000)], 0.f, 0.01f);
+	}
+}
+
+TEST(euclid_lock_with_e4) {
+	using namespace push2::cc;
+	SliceRig r;
+	euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 4, 0); });
+	r.m.edit([](tart::State& s) { // CC 1 has points (a flat 10000) and a lock on step 3; CC 2 only the lock
+		tart::Clip& c = s.clip[0][0];
+		c.nPoints[0] = 2, c.points[0][0] = {0, 10000}, c.points[0][1] = {384, 10000};
+		c.nLocks = 2, c.locks[0] = lk(0, 2, 0, 40000), c.locks[1] = lk(0, 2, 1, 40000);
+	});
+	start(r);
+	r.click(Device);
+	auto cc = ccTrace(r, 0, 100);
+	CHECK_NEAR(cc[20], V(10000), 0.01f); // the points elsewhere, the lock on its step
+	CHECK_NEAR(cc[60], V(40000), 0.01f);
+	CHECK_NEAR(cc[80], V(10000), 0.01f);
+	auto st = r.state(); // a lock never writes the lane's value
+	CHECK(st->s.track[0].value[0] == 10000 && st->s.track[0].value[1] == 0 && st->s.track[0].overridden == 0);
+	// Turning CC 1 overrides the points and the lock until a relaunch; so does a lane that only has locks.
+	r.turn(0, 1);
+	r.turn(1, 1);
+	CHECK(r.state()->s.track[0].overridden == 3);
+	auto over = ccTrace(r, 150, 160);
+	for (float v : over)
+		CHECK_NEAR(v, V(10312), 0.01f);
+	CHECK_NEAR(ccTrace(r, 160, 161, 1)[0], V(312), 0.01f);
+	r.press(Shift); // SHIFT + AUTOMATE: the clips are followed again
+	r.click(Automate);
+	r.press(Shift, 0);
+	CHECK(r.state()->s.track[0].overridden == 0);
+	auto back = ccTrace(r, 200, 260);
+	CHECK_NEAR(back[10], V(10000), 0.01f); // tick 210 of 384: 18 into a cycle
+	CHECK_NEAR(back[50], V(40000), 0.01f); // tick 250: 58 into the cycle
+	// A lane that Automate writes plays the encoder and ignores its locks.
+	r.click(Automate);
+	r.click(Record); // a take on the playing clip
+	touch(r, 0);
+	r.turn(0, 10);
+	const int written = r.state()->s.track[0].value[0];
+	CHECK(r.state()->s.ui.writing == 1 && written != 10000);
+	auto w = ccTrace(r, 336, 380); // ticks 48..71 of a cycle: the lock's step
+	for (float v : w)
+		CHECK_NEAR(v, V(written), 0.01f);
+	touch(r, 0, false);
+	r.click(Record);
+	// LEVEL and PAN locks from the Mix screen's held step.
+	SliceRig m;
+	euclidTrack(m, 0, [](tart::Euclid& e) { lane(e, 0, 4, 0); });
+	start(m);
+	m.click(Mix);
+	stepPad(m, 2);
+	m.turn(0, -60);
+	m.turn(1, 60);
+	stepPad(m, 2, 0);
+	CHECK(sameLocks(locksOf(*m.state()),
+					Locks{lk(0, 2, tart::kLevel, 65535 - 18720), lk(0, 2, tart::kPan, 32768 + 18720)}));
+	while (m.in.frame < 250 * 20 + 5) // tick 20: no lock; tick 60: the step's
+		m.step();
+	const float level0 = m.f.track[0].level, pan0 = m.f.track[0].pan;
+	while (m.in.frame < 250 * 60 + 5)
+		m.step();
+	const float level = m.f.track[0].level, pan = m.f.track[0].pan;
+	const tart::Track t;
+	CHECK_NEAR(level0, 10.f, 0.01f);
+	CHECK_NEAR(pan0, 0.f, 0.01f);
+	CHECK_NEAR(level, tart::volts(t, tart::kLevel, 65535 - 18720), 0.01f);
+	CHECK_NEAR(pan, tart::volts(t, tart::kPan, 32768 + 18720), 0.01f);
+}
+
+TEST(euclid_lock_delete) {
+	using namespace push2::cc;
+	auto make = [](Rig& r) {
+		euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 16, 4), lane(e, 1, 8, 2); }, tart::kBar, false);
+		r.m.edit([](tart::State& s) {
+			tart::Clip& c = s.clip[0][0];
+			c.nLocks = 4, c.locks[0] = lk(0, 3, 0, 100), c.locks[1] = lk(0, 3, 1, 200), c.locks[2] = lk(0, 4, 0, 300),
+			c.locks[3] = lk(1, 3, 0, 400);
+			c.nPoints[0] = 2, c.points[0][0] = {0, 5}, c.points[0][1] = {96, 6};
+			s.s.track[0].value[2] = 5000;
+		});
+		r.click(Device);
+	};
+	auto undone = [](Rig& r, const tart::State& was) { // one Undo brings the clip back
+		r.click(Undo);
+		return !std::memcmp(&r.state()->clip[0][0], &was.clip[0][0], sizeof(tart::Clip));
+	};
+	{ // DELETE + a step pad: every lock of that step of the shown pattern (lane 0)
+		Rig r;
+		make(r);
+		auto was = r.state();
+		r.press(Delete);
+		stepPad(r, 3), stepPad(r, 3, 0);
+		r.press(Delete, 0);
+		CHECK(sameLocks(locksOf(*r.state()), Locks{lk(0, 4, 0, 300), lk(1, 3, 0, 400)}) &&
+			  r.view().s.ui.heldStep == -1);
+		CHECK(undone(r, *was));
+	}
+	{ // a step without locks: nothing, not even an undo step
+		Rig r;
+		make(r);
+		r.press(Delete);
+		stepPad(r, 7), stepPad(r, 7, 0);
+		stepPad(r, 20), stepPad(r, 20, 0); // (the pads past STEPS also)
+		r.press(Delete, 0);
+		r.click(Undo);
+		CHECK(r.view().s.ui.popup != tart::kUndoPopup && r.state()->clip[0][0].nLocks == 4);
+	}
+	{ // DELETE + touch with a step held: that target's lock on the step; the others stay
+		Rig r;
+		make(r);
+		auto was = r.state();
+		stepPad(r, 3);
+		r.press(Delete);
+		touch(r, 0), touch(r, 0, false);
+		touch(r, 5), touch(r, 5, false); // no lock: nothing
+		r.press(Delete, 0);
+		stepPad(r, 3, 0);
+		CHECK(sameLocks(locksOf(*r.state()), Locks{lk(0, 3, 1, 200), lk(0, 4, 0, 300), lk(1, 3, 0, 400)}));
+		CHECK(r.state()->clip[0][0].nPoints[0] == 2); // the points stay
+		CHECK(undone(r, *was));
+	}
+	{ // DELETE + touch with nothing held: the lane's points and every lock on that target; else the value resets
+		Rig r;
+		make(r);
+		auto was = r.state();
+		r.press(Delete);
+		touch(r, 0), touch(r, 0, false);
+		auto st = r.state();
+		CHECK(sameLocks(locksOf(*st), Locks{lk(0, 3, 1, 200)}) && st->clip[0][0].nPoints[0] == 0);
+		touch(r, 2), touch(r, 2, false); // no points, no locks: the value goes back
+		CHECK(r.state()->s.track[0].value[2] == 0);
+		r.press(Delete, 0);
+		CHECK(undone(r, *was));
+		// With only locks the same touch takes them (and makes one undo step)
+		r.m.edit([](tart::State& s) { s.clip[0][0].nPoints[0] = 0; });
+		auto was2 = r.state();
+		r.press(Delete);
+		touch(r, 0), touch(r, 0, false);
+		r.press(Delete, 0);
+		CHECK(locksOf(*r.state()).size() == 1 && undone(r, *was2));
+	}
+	{ // DELETE + AUTOMATE: the points and all the locks
+		Rig r;
+		make(r);
+		auto was = r.state();
+		r.press(Delete);
+		r.click(Automate);
+		r.press(Delete, 0);
+		auto st = r.state();
+		CHECK(st->clip[0][0].nLocks == 0 && st->clip[0][0].nPoints[0] == 0);
+		CHECK(undone(r, *was));
+		r.m.edit([](tart::State& s) { s.clip[0][0].nPoints[0] = 0, s.clip[0][0].nLocks = 0; });
+		r.press(Delete);
+		r.click(Automate); // nothing there: nothing happens
+		r.press(Delete, 0);
+		r.m.edit([](tart::State& s) { s.s.ui.popup = tart::kNoPopup; });
+		r.click(Undo);
+		CHECK(r.view().s.ui.popup != tart::kUndoPopup);
+	}
+	{ // DELETE + a lane pad: the lane's settings and its locks
+		Rig r;
+		make(r);
+		auto was = r.state();
+		r.press(Delete);
+		r.pad(0, 1, 100), r.pad(0, 1, 0);
+		r.press(Delete, 0);
+		auto st = r.state();
+		CHECK(sameLocks(locksOf(*st), Locks{lk(0, 3, 0, 100), lk(0, 3, 1, 200), lk(0, 4, 0, 300)}));
+		const tart::EuclidLane standard;
+		CHECK(!std::memcmp(&st->clip[0][0].euclid.lane[1], &standard, sizeof standard));
+		CHECK(undone(r, *was));
+		// a lane with standard settings but locks: the locks go, one undo step
+		r.m.edit([](tart::State& s) { s.clip[0][0].euclid.lane[1] = tart::EuclidLane(); });
+		auto was2 = r.state();
+		r.press(Delete);
+		r.pad(0, 1, 100), r.pad(0, 1, 0);
+		r.press(Delete, 0);
+		CHECK(r.state()->clip[0][0].nLocks == 3 && undone(r, *was2));
+		// holding a step lets go when a lane pad is pressed
+		stepPad(r, 3);
+		CHECK(r.view().s.ui.heldStep >= 0);
+		r.pad(0, 2, 100), r.pad(0, 2, 0);
+		CHECK(r.view().s.ui.heldStep == -1);
+	}
+}
+
+TEST(euclid_lock_ops) {
+	using namespace push2::cc;
+	Rig r(false);
+	setQuant(r, 0);
+	euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 16, 4); }, tart::kBar, false);
+	setLocks(r, {lk(0, 3, 0, 100), lk(0, 4, 1, 200), lk(5, 9, 8, 300)});
+	const Locks want = locksOf(*r.state());
+	r.press(Duplicate); // Duplicate copies the locks along
+	slot(r, 0, 0, 100), slot(r, 0, 0, 0);
+	tapSlot(r, 1, 2);
+	r.press(Duplicate, 0);
+	CHECK(sameLocks(locksOf(*r.state(), 1, 2), want));
+	r.press(Delete); // Delete empties the slot's locks; Undo brings them back
+	tapSlot(r, 0, 0);
+	r.press(Delete, 0);
+	auto st = r.state();
+	CHECK(st->clip[0][0].nLocks == 0 && st->clip[0][0].locks[0].value == 0 && st->clip[0][0].locks[2].value == 0);
+	r.click(Undo);
+	CHECK(sameLocks(locksOf(*r.state()), want));
+	// sanitize
+	auto s = std::make_unique<tart::State>();
+	tart::Clip& c = s->clip[0][0];
+	c.length = tart::kBar;
+	const Locks bad = {lk(3, 5, 1, 7),  lk(0, 2, 0, 100), lk(17, 0, 0, 1),
+					   lk(0, 32, 0, 1), lk(0, 1, 10, 1),  lk(0, 2, 0, 200)};
+	std::copy(bad.begin(), bad.end(), c.locks);
+	c.locks[0].spare = 9;
+	c.nLocks = (uint16_t)bad.size();
+	tart::sanitize(*s);
+	CHECK(sameLocks(locksOf(*s),
+					Locks{lk(0, 2, 0, 100), lk(3, 5, 1, 7)})); // dropped, sorted, the first of a key, spare 0
+	CHECK(c.locks[2].value == 0 && c.locks[5].lane == 0);
+	for (int i = 0; i < tart::kMaxLocks; i++)
+		c.locks[i] = lk(i / 16, i % 16, 0, i + 1);
+	c.nLocks = 999; // past the ceiling
+	tart::sanitize(*s);
+	CHECK(c.nLocks == tart::kMaxLocks && c.locks[255].value == 256);
+	for (int i = 0; i < tart::kMaxLocks; i++)
+		c.locks[i] = lk(15 - i / 16, 15 - i % 16, 0, i + 1); // backwards
+	tart::sanitize(*s);
+	CHECK(c.nLocks == tart::kMaxLocks && c.locks[0].lane == 0 && c.locks[0].step == 0 && c.locks[255].lane == 15);
+	s->clip[0][0].length = 0; // an empty slot has none
+	tart::sanitize(*s);
+	CHECK(c.nLocks == 0 && c.locks[0].value == 0 && c.locks[255].value == 0);
+}
+
+TEST(euclid_lock_view_leds) {
+	using namespace push2::cc;
+	Rig r;
+	euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 8, 3, 1); }, tart::kBar, false);
+	setLocks(r, {lk(0, 0, 0, 1000), lk(0, 2, tart::kLevel, 500)}); // rotated by 1: pads 2 and 4 (k = 1 and 3)
+	r.click(Device);
+	stepPad(r, 1);
+	tart::View v = r.view();
+	CHECK(v.at[0] == 1000 && v.locked == 1 && v.at[1] == 0);
+	CHECK(v.automated[0] == (1 | 1 << tart::kLevel)); // the dots count locks
+	r.in.leds = true;
+	r.step();
+	const uint32_t mask = tart::euclidMask(mk(8, 3, 1));
+	auto led = [&](int k) { return r.want.note[push2::padNote(7 - k / 8, k % 8)]; };
+	CHECK(led(1).color == push2::kRgbWhite && led(1).channel == push2::kStatic); // the held step: white
+	const uint8_t base3 = mask >> 3 & 1 ? tart::kPaletteFull : push2::kRgbDarkGray;
+	CHECK(led(3).color == push2::kRgbWhite && led(3).channel == push2::kPulseHalf && led(3).base == base3);
+	CHECK(led(5).channel == push2::kStatic && led(5).color != push2::kRgbWhite);
+	stepPad(r, 1, 0);
+	stepPad(r, 3);
+	v = r.view();
+	CHECK(v.locked == 1 << tart::kLevel && v.at[tart::kLevel] == 500 && v.at[0] == 0);
+	stepPad(r, 3, 0);
+	r.click(Mix);
+	stepPad(r, 3);
+	CHECK(r.view().at[tart::kLevel] == 500);
+	stepPad(r, 3, 0);
+	// The playhead is green over a locked step and over the held one.
+	Rig p;
+	euclidTrack(p, 0, [](tart::Euclid& e) { lane(e, 0, 8, 3, 1); });
+	setLocks(p, {lk(0, 2, 0, 1000)});
+	ledsAt(p, 24 * 3 + 5);
+	auto pled = [&](int k) { return p.want.note[push2::padNote(7 - k / 8, k % 8)]; };
+	CHECK(pled(3).color == push2::kGreen && pled(3).channel == push2::kStatic);
+	p.click(Device);
+	stepPad(p, 3);
+	p.step();
+	CHECK(pled(3).color == push2::kGreen && pled(3).channel == push2::kStatic);
+	// A locked step in Melodic mode: the rhythm's pattern is shown.
+	p.m.edit([](tart::State& s) { s.clip[0][0].euclid.mode = tart::kEuclidMelodic; });
+	setLocks(p, {lk(16, 6, 0, 5)});
+	stepPad(p, 3, 0);
+	p.step();
+	CHECK(pled(6).channel == push2::kPulseHalf && pled(2).channel == push2::kStatic);
+}
+
+TEST(euclid_lock_model) {
+	// 50 random clips, 4 bars each: the Slice's CC, LEVEL and PAN at the first samples of every tick against a naive
+	// reference written from the design: a lock on step s of the unrotated pattern of lane l plays on pattern step
+	// (s + rotation) % steps while the lane is active (Drum: lanes 0 to 15, Melodic: the rhythm), the lowest lane wins,
+	// and a lock on a step from STEPS on is hidden.
+	static const int kTicksPerStep[8] = {96, 64, 48, 32, 24, 16, 12, 8};
+	Rng g{20250611};
+	struct Ref {
+		int lane, step, target, value;
+	};
+	long checked = 0, locked = 0, contested = 0;
+	for (int run = 0; run < 50; run++) {
+		const int gridIdx = g.n(8), grid = kTicksPerStep[gridIdx];
+		const bool melodic = g.n(3) == 0;
+		const int lanes[5] = {0, 1, 2, 3, tart::kEuclidRhythm};
+		int steps[17] = {}, rotation[17] = {};
+		SliceRig r(false);
+		euclidTrack(r, 0, [&](tart::Euclid& e) {
+			e.mode = melodic ? tart::kEuclidMelodic : tart::kEuclidDrum, e.grid = (uint8_t)gridIdx;
+			for (int l : lanes) {
+				steps[l] = 1 + g.n(32), rotation[l] = g.n(32);
+				lane(e, l, steps[l], g.n(steps[l] + 1), rotation[l]);
+			}
+		});
+		std::map<std::tuple<int, int, int>, int> keys;
+		for (int i = 0; i < 60; i++) {
+			const int l = lanes[g.n(5)], s = g.n(32), t = g.n(10), v = g.n(65536);
+			keys.insert({{l, s, t}, v}); // the first of a key stays
+		}
+		std::vector<Ref> ref;
+		Locks locks;
+		for (const auto& k : keys)
+			ref.push_back({std::get<0>(k.first), std::get<1>(k.first), std::get<2>(k.first), k.second}),
+				locks.push_back(lk(std::get<0>(k.first), std::get<1>(k.first), std::get<2>(k.first), k.second));
+		setLocks(r, locks);
+		const tart::Track base = r.state()->s.track[0];
+		for (int k = 0; k < 4 * tart::kBar; k++) {
+			while (r.in.frame < 250 * k + 2)
+				r.in.play = r.in.frame == 0, r.step();
+			for (int j = 0; j < tart::kAutos; j++) {
+				int want = -1, lowest = 99, hits = 0;
+				for (const Ref& x : ref) {
+					if (x.target != j || (melodic ? x.lane != tart::kEuclidRhythm : x.lane == tart::kEuclidRhythm))
+						continue;
+					const int n = steps[x.lane];
+					if (x.step >= n || (k / grid) % n != (x.step + rotation[x.lane] % n) % n)
+						continue;
+					hits++;
+					if (x.lane < lowest)
+						lowest = x.lane, want = x.value;
+				}
+				const float expected = tart::volts(base, j, want >= 0 ? want : base.value[j]);
+				const tart::SliceTrack& o = r.f.track[0];
+				const float got = j < tart::kCcs ? o.cc[j] : j == tart::kLevel ? o.level : o.pan;
+				CHECK_NEAR(got, expected, 0.15f);
+				checked++, locked += want >= 0, contested += hits > 1;
+			}
+		}
+	}
+	std::printf("euclid_lock_model: %ld lane-ticks checked, %ld on a lock, %ld with two lanes locked\n", checked,
+				locked, contested);
+	CHECK(locked > 20000 && contested > 100);
+}
+
 TEST(euclid_fuzz) {
 	using namespace push2::cc;
 	Twins w;
@@ -6066,6 +6692,12 @@ TEST(euclid_fuzz) {
 					const int n = 1 + g.n(32);
 					lane(e, l, n, g.n(n + 1), g.n(n), 40 + g.n(61), 30 + g.n(98));
 				}
+				std::map<std::tuple<int, int, int>, int> keys; // some pattern-step locks, in order
+				for (int i = g.n(40); i-- > 0;)
+					keys.insert({{g.n(2) ? g.n(4) : tart::kEuclidRhythm, g.n(32), g.n(tart::kAutos)}, g.n(65536)});
+				for (const auto& k : keys)
+					c.locks[c.nLocks++] =
+						lk(std::get<0>(k.first), std::get<1>(k.first), std::get<2>(k.first), k.second);
 			}
 	};
 	w.edit([&](tart::State& st) {
@@ -6078,7 +6710,9 @@ TEST(euclid_fuzz) {
 		st.clip[3][0].length = tart::kBar, st.clip[3][0].nNotes = 1, st.clip[3][0].notes[0] = {0, 24, 60, 100};
 	});
 	Rng g{12345};
-	int counts[21] = {}, switches = 0, relaunches = 0, resets = 0, keys = 0, edited = 0, stateTypes = 0, held[3] = {};
+	long nLocks = 0;
+	int counts[22] = {}, heldSteps = 0, switches = 0, relaunches = 0, resets = 0, keys = 0, edited = 0, stateTypes = 0,
+		held[3] = {};
 	const int ops = 3000;
 	w.a.in.play = w.b.in.play = true;
 	for (int op = 0; op < ops; op++) {
@@ -6176,6 +6810,22 @@ TEST(euclid_fuzz) {
 			w.press(StopClip), w.click(Track1Below + g.n(3)), w.press(StopClip, 0), kind = 19;
 		} else if (k < 93) { // MUTE, SOLO
 			w.click(g.n(2) ? Mute : Solo), kind = 20;
+		} else if (k <
+				   97) { // locks: a step pad held on the Device or Mix screen, turns, a DELETE variant, let go or not
+			const int row = 4 + g.n(4), col = g.n(8), screen = g.n(3) ? tart::kDeviceScreen : tart::kMixScreen;
+			const uint8_t pads = s.ui.pads;
+			w.edit([=](tart::State& st) { st.s.ui.screen = (uint8_t)screen, st.s.ui.pads = tart::kNote; });
+			w.pad(row, col, 100);
+			for (int i = g.n(4); i-- > 0;)
+				w.turn(g.n(3), (g.n(2) ? 1 : -1) * (1 + g.n(60)));
+			if (g.n(3) == 0)
+				w.press(Delete), w.touch(g.n(3), true), w.touch(g.n(3), false), w.press(Delete, 0);
+			if (g.n(4) != 0)
+				w.pad(row, col, 0);
+			if (g.n(4) == 0)
+				w.press(Delete), w.pad(row, col, 100), w.pad(row, col, 0), w.press(Delete, 0);
+			w.edit([=](tart::State& st) { st.s.ui.screen = tart::kHome, st.s.ui.pads = pads; });
+			kind = 21;
 		} else
 			kind = 0;
 		counts[kind]++;
@@ -6190,6 +6840,9 @@ TEST(euclid_fuzz) {
 			for (int tr = 0; tr < tart::kTracks; tr++) {
 				for (int sc = 0; sc < tart::kScenes; sc++) {
 					sane &= !std::memcmp(&copy->clip[tr][sc].euclid, &st.clip[tr][sc].euclid, sizeof(tart::Euclid));
+					sane &= copy->clip[tr][sc].nLocks == st.clip[tr][sc].nLocks && // sorted, unique, in range, <= 256
+							!std::memcmp(copy->clip[tr][sc].locks, st.clip[tr][sc].locks, sizeof st.clip[tr][sc].locks);
+					nLocks += st.clip[tr][sc].nLocks;
 					edited += !!std::memcmp(&prev[tr][sc], &st.clip[tr][sc].euclid, sizeof(tart::Euclid));
 					prev[tr][sc] = st.clip[tr][sc].euclid;
 				}
@@ -6211,11 +6864,12 @@ TEST(euclid_fuzz) {
 			for (int c = 0; c < tart::kCcs; c++)
 				CHECK(std::isfinite(o.cc[c]));
 		}
-		w.a.m.view(*view); // the selected slot's picture, sorted and within its room; no held step on a Euclid track
+		w.a.m.view(*view); // the selected slot's picture, sorted and within its room; a held step is a step pad
 		CHECK(view->nNotes <= tart::kMaxNotes);
 		for (int i = 1; i < view->nNotes; i++)
 			CHECK(view->notes[i - 1].tick <= view->notes[i].tick);
-		CHECK(view->s.track[view->s.ui.track].type != tart::Euclidean || view->s.ui.heldStep == -1);
+		CHECK(view->s.ui.heldStep == -1 || view->s.ui.heldStep >= 32); // a held step is a step pad
+		heldSteps += view->s.ui.heldStep >= 0;
 		held[view->s.track[view->s.ui.track].type == tart::Euclidean ? 1 : 0]++;
 		CHECK(w.diverged < 0);
 	}
@@ -6236,6 +6890,8 @@ TEST(euclid_fuzz) {
 	CHECK(w.rises[1] > 100 && w.rises[2] > 50); // both modes sounded
 	CHECK(switches > 20 && relaunches > 10 && resets > 20 && keys > 15 && edited > 100 && stateTypes > 20);
 	CHECK(held[1] > ops / 4 && held[0] > ops / 4);
-	for (int kind = 1; kind <= 20; kind++)
+	for (int kind = 1; kind <= 21; kind++)
 		CHECK(counts[kind] > 0);
+	std::printf("euclid_fuzz: locks held at the end of an op %d times, %ld locks seen\n", heldSteps, nLocks);
+	CHECK(heldSteps > 10 && nLocks > 5000);
 }

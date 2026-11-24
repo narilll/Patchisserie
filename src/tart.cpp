@@ -390,6 +390,114 @@ int euclidField(Euclid& e, int lane, int f, int set = -1) {
 	return was;
 }
 
+// ---- Pattern-step locks (E5.4): a lock belongs to a step of one pattern lane, not to a place in the clip
+
+/** Whether Euclid lane `lane` plays in the clip's mode (Drum: 0..15, Melodic: the rhythm). */
+bool laneActive(const Euclid& e, int lane) {
+	return (lane == kEuclidRhythm) == (e.mode == kEuclidMelodic);
+}
+
+/** The step of the unrotated pattern that pattern step `p` plays: locks go with the pulses when ROTATE turns them. */
+int unrotated(const EuclidLane& x, int p) {
+	const int n = laneSteps(x);
+	return (p - x.rotation % n + n) % n;
+}
+
+uint32_t lockKey(int lane, int step, int target) {
+	return (uint32_t)lane << 16 | (uint32_t)step << 8 | (uint32_t)target;
+}
+
+/** Where the lock (lane, step, target) is, or would go: the first lock not before it. */
+int lowerLock(const Clip& c, int lane, int step, int target) {
+	const uint32_t key = lockKey(lane, step, target);
+	return (int)(std::lower_bound(c.locks, c.locks + c.nLocks, key,
+								  [](const Lock& a, uint32_t k) { return lockKey(a.lane, a.step, a.target) < k; }) -
+				 c.locks);
+}
+
+/** The index of the lock (lane, step, target), -1: none. */
+int findLock(const Clip& c, int lane, int step, int target) {
+	const int i = lowerLock(c, lane, step, target);
+	return i < c.nLocks && c.locks[i].lane == lane && c.locks[i].step == step && c.locks[i].target == target ? i : -1;
+}
+
+/** Puts a lock in, replacing the one with its key; false when the clip is full (`dry`: only asks). */
+bool putLock(Clip& c, const Lock& x, bool dry = false) {
+	const int i = lowerLock(c, x.lane, x.step, x.target), have = findLock(c, x.lane, x.step, x.target) >= 0;
+	if (!have && c.nLocks == kMaxLocks)
+		return false;
+	if (dry)
+		return true;
+	if (!have)
+		std::memmove(static_cast<void*>(c.locks + i + 1), c.locks + i, (c.nLocks++ - i) * sizeof(Lock));
+	c.locks[i] = x;
+	return true;
+}
+
+/** Takes off the locks that match (-1: any lane, step or target); how many went. */
+int eraseLocks(Clip& c, int lane, int step, int target) {
+	Lock* end = c.locks + c.nLocks;
+	Lock* keep = std::remove_if(c.locks, end, [&](const Lock& l) {
+		return (lane < 0 || l.lane == lane) && (step < 0 || l.step == step) && (target < 0 || l.target == target);
+	});
+	std::fill(keep, end, Lock()); // the unused tail stays zero
+	const int n = (int)(end - keep);
+	c.nLocks = (uint16_t)(c.nLocks - n);
+	return n;
+}
+
+/** Bit j: automation lane j has a lock on step `step` of the unrotated pattern of `lane`. */
+uint16_t lockMask(const Clip& c, int lane, int step) {
+	uint16_t m = 0;
+	for (int j = 0; j < kAutos; j++)
+		m |= (uint16_t)((findLock(c, lane, step, j) >= 0) << j);
+	return m;
+}
+
+/** The pattern lane the pads show: the selected drum lane, or the melodic rhythm. */
+int shownLane(const Session& s, const Clip& c) {
+	return c.euclid.mode == kEuclidMelodic ? kEuclidRhythm : s.track[s.ui.track].lane;
+}
+
+/** The step of the unrotated pattern that the held Euclid pad is on the shown lane, -1: none (no clip, or a step past
+ * STEPS). */
+int lockStep(const Session& s, const Clip& c) {
+	const int h = s.ui.heldStep;
+	if (h < 32 || !c.length) // the step pads are the pad indices 32..63
+		return -1;
+	const EuclidLane& x = c.euclid.lane[shownLane(s, c)];
+	const int k = (7 - h / 8) * 8 + h % 8;
+	return k < laneSteps(x) ? unrotated(x, k) : -1;
+}
+
+/** The value a lock gives automation lane `target` `rel` ticks after the launch, -1: none. Each active lane plays its
+ * pattern step n % steps of the step n that began at rel; the lowest lane with a lock there wins. */
+int lockAt(const Clip& c, int64_t rel, int target) {
+	if (rel < 0 || !c.nLocks)
+		return -1;
+	const int64_t n = rel / kGrid[std::min<int>(c.euclid.grid, 7)];
+	for (int l = 0; l <= kEuclidRhythm; l++) {
+		if (!laneActive(c.euclid, l))
+			continue;
+		const EuclidLane& x = c.euclid.lane[l];
+		const int i = findLock(c, l, unrotated(x, (int)(n % laneSteps(x))), target);
+		if (i >= 0)
+			return c.locks[i].value;
+	}
+	return -1;
+}
+
+/** Whether automation lane `lane` of the slot has points, or on a Euclid track locks that play. */
+bool automated(const State& st, int track, int scene, int lane) {
+	const Clip& c = st.clip[track][scene];
+	if (c.nPoints[lane])
+		return true;
+	if (st.s.track[track].type != Euclidean)
+		return false;
+	return std::any_of(c.locks, c.locks + c.nLocks,
+					   [&](const Lock& l) { return l.target == lane && laneActive(c.euclid, l.lane); });
+}
+
 } // namespace
 
 const char* const kTypeNames[kBrowseTypes] = {"Melodic", "Drum", "Euclid"};
@@ -585,6 +693,20 @@ void sanitize(State& st) {
 					l.velocity = std::min<uint8_t>(std::max<uint8_t>(l.velocity, 1), 127);
 				}
 			}
+			int nl = 0; // locks: sorted, unique (the first of a repeated key stays); an empty slot has none
+			for (int i = 0, k = c.length ? std::min<int>(c.nLocks, kMaxLocks) : 0; i < k; i++) {
+				Lock x = c.locks[i];
+				if (x.lane <= kEuclidRhythm && x.step < kMaxSteps && x.target < kAutos)
+					x.spare = 0, c.locks[nl++] = x;
+			}
+			auto order = [](const Lock& a, const Lock& b) {
+				return lockKey(a.lane, a.step, a.target) < lockKey(b.lane, b.step, b.target);
+			};
+			std::stable_sort(c.locks, c.locks + nl, order);
+			nl = (int)(std::unique(c.locks, c.locks + nl, [&](const Lock& a, const Lock& b) { return !order(a, b); }) -
+					   c.locks);
+			std::fill(c.locks + nl, c.locks + kMaxLocks, Lock());
+			c.nLocks = (uint16_t)nl;
 			int n = 0;
 			for (int i = 0; i < c.nNotes; i++) {
 				Note x = c.notes[i];
@@ -809,8 +931,9 @@ void Machine::handle(State& st, const push2::Event& e) {
 				for (Track& tr : s.track)
 					tr.overridden = 0;
 			} else if (ui.button[push2::cc::Delete]) {
-				if (std::any_of(c.nPoints, c.nPoints + kAutos, [](uint16_t n) { return n != 0; }))
-					checkpoint(ui.track, ui.scene), std::fill(c.nPoints, c.nPoints + kAutos, 0);
+				if (c.nLocks || std::any_of(c.nPoints, c.nPoints + kAutos, [](uint16_t n) { return n != 0; }))
+					checkpoint(ui.track, ui.scene), std::fill(c.nPoints, c.nPoints + kAutos, 0),
+						eraseLocks(c, -1, -1, -1);
 			} else {
 				ui.automate = !ui.automate;
 			}
@@ -951,7 +1074,8 @@ void Machine::handle(State& st, const push2::Event& e) {
 				valueEncoder(st, e.index, ui.track, e.index ? kPan : kLevel, e.value);
 		} else if (e.index < 8 && euclidHome(s)) { // the Euclid screen: the settings of the selected clip
 			euclidEncoder(st, e.index, e.value);
-		} else if (e.index < 4 && ui.heldStep >= 0) { // a held step: Nudge, Length, Length fine, Velocity
+		} else if (e.index < 4 && ui.heldStep >= 0 &&
+				   s.track[ui.track].type != Euclidean) { // a held step: Nudge, Length, Length fine, Velocity
 			noteEncoder(st, e.index, e.value);
 		} else if (e.index == push2::kSwingId) {
 			t.swing = (uint8_t)std::min(std::max(t.swing + steps(accSwing_, e.value, kSwingUnits), 0), 100);
@@ -967,10 +1091,20 @@ void Machine::handle(State& st, const push2::Event& e) {
 				euclidReset(st, e.index);
 		}
 		if (e.value && e.index < 8 && ui.button[push2::cc::Delete]) {
-			if (ui.screen == kDeviceScreen)
+			// a held Euclid step: its lock on that lane (the Mix screen: encoder 1 LEVEL, 2 PAN of the selected track)
+			const bool lock = ui.heldStep >= 0 && s.track[ui.track].type == Euclidean;
+			const int target = ui.screen == kDeviceScreen ? e.index : e.index < 2 ? e.index ? kPan : kLevel : -1;
+			if (lock && (ui.screen == kDeviceScreen || ui.screen == kMixScreen)) {
+				Clip& c = st.clip[ui.track][ui.scene];
+				const int q = lockStep(s, c), pl = shownLane(s, c);
+				gesture_++;
+				if (target >= 0 && q >= 0 && findLock(c, pl, q, target) >= 0)
+					checkpoint(ui.track, ui.scene), eraseLocks(c, pl, q, target);
+			} else if (ui.screen == kDeviceScreen) {
 				deleteLane(st, ui.track, e.index);
-			else if (ui.screen == kMixScreen)
+			} else if (ui.screen == kMixScreen) {
 				deleteLane(st, e.index, ui.mixPans ? kPan : kLevel);
+			}
 		}
 		if (!e.value && e.index < 8 && writeBy_[e.index] >= 0) // the touch ends what its turns wrote
 			endWrite(st, writeBy_[e.index]), writeBy_[e.index] = -1;
@@ -1189,14 +1323,28 @@ Euclid& Machine::euclidEdit(State& st) {
 }
 
 /** A pad of a Euclid track in Note mode: Drum mode's lane pads (lower left 4 x 4) play their channel and select the
- * lane (SELECT: only select; DELETE: the lane's settings go back to the standard ones). Melodic mode's lower four rows
- * are the keyboard: played, never recorded (play() leaves a Euclid track out of a take). The step pads show the
- * pattern and do nothing. */
+ * lane (SELECT: only select; DELETE: the lane's settings and locks go back to the standard ones). Melodic mode's lower
+ * four rows are the keyboard: played, never recorded (play() leaves a Euclid track out of a take). The step pads show
+ * the pattern; one that is pressed is held for the locks (see euclidLock). */
 void Machine::euclidPad(State& st, int i, int vel) {
 	Session& s = st.s;
 	Ui& ui = s.ui;
 	Clip& c = st.clip[ui.track][ui.scene];
-	if (!vel || i / 8 > 3)
+	if (i / 8 > 3) { // a step pad: held for its locks while the clip has that step; DELETE takes the step's locks off
+		const int pl = shownLane(s, c), k = (7 - i / 8) * 8 + i % 8;
+		if (!vel) {
+			if (i == ui.heldStep)
+				ui.heldStep = -1;
+		} else if (c.length && k < laneSteps(c.euclid.lane[pl])) {
+			const int q = unrotated(c.euclid.lane[pl], k);
+			if (!ui.button[push2::cc::Delete])
+				ui.heldStep = (int8_t)i, ui.heldHad = ui.heldEdited = false;
+			else if (lockMask(c, pl, q))
+				checkpoint(ui.track, ui.scene), eraseLocks(c, pl, q, -1);
+		}
+		return;
+	}
+	if (!vel)
 		return;
 	if (c.euclid.mode == kEuclidMelodic) {
 		bool root, inScale;
@@ -1208,10 +1356,12 @@ void Machine::euclidPad(State& st, int i, int vel) {
 	if (i % 8 > 3)
 		return;
 	const int lane = i / 8 * 4 + i % 8;
-	if (ui.button[push2::cc::Delete]) {
+	ui.heldStep = -1;
+	if (ui.button[push2::cc::Delete]) { // the lane's settings and locks go back to the standard ones
 		const EuclidLane standard;
-		if (c.length && std::memcmp(&c.euclid.lane[lane], &standard, sizeof standard))
-			checkpoint(ui.track, ui.scene), c.euclid.lane[lane] = standard;
+		const bool locks = std::any_of(c.locks, c.locks + c.nLocks, [&](const Lock& l) { return l.lane == lane; });
+		if (c.length && (locks || std::memcmp(&c.euclid.lane[lane], &standard, sizeof standard)))
+			checkpoint(ui.track, ui.scene), c.euclid.lane[lane] = standard, eraseLocks(c, lane, -1, -1);
 		return;
 	}
 	s.track[ui.track].lane = (uint8_t)lane; // (pad() lets no pad through while QUANTIZE is held)
@@ -1259,6 +1409,7 @@ void Machine::euclidReset(State& st, int encoder) {
 
 /** DRUM (upper button 1) or MELODIC (2) on the Euclid screen: the mode of the selected clip. */
 void Machine::euclidModeButton(State& st, int mode) {
+	st.s.ui.heldStep = -1;
 	if (st.clip[st.s.ui.track][st.s.ui.scene].euclid.mode != mode)
 		euclidEdit(st).mode = (uint8_t)mode;
 }
@@ -1621,7 +1772,7 @@ void Machine::valueEncoder(State& st, int encoder, int track, int lane, int delt
 	Track& tr = st.s.track[track];
 	int d = delta * kValueUnits / (ui.button[push2::cc::Shift] ? kFineDivisor : 1);
 	if (ui.heldStep >= 0) {
-		stepLock(st, lane, d);
+		tr.type == Euclidean ? euclidLock(st, lane, d) : stepLock(st, lane, d);
 		return;
 	}
 	const uint16_t was = tr.value[lane];
@@ -1632,7 +1783,7 @@ void Machine::valueEncoder(State& st, int encoder, int track, int lane, int delt
 		if (!(ui.writing >> lane & 1))
 			door_[lane].on = false, door_[lane].pre = was;
 		ui.writing |= (uint16_t)(1 << lane), tr.overridden &= (uint16_t)~(1 << lane), writeBy_[encoder] = (int8_t)lane;
-	} else if (tr.playing != kNone && st.clip[track][tr.playing].nPoints[lane]) {
+	} else if (tr.playing != kNone && automated(st, track, tr.playing, lane)) {
 		tr.overridden |= (uint16_t)(1 << lane);
 	}
 }
@@ -1756,16 +1907,41 @@ void Machine::stepLock(State& st, int lane, int delta) {
 	replacePoints(c, lane, start, end, add, n);
 }
 
+/** A pattern-step lock: the held Euclid step of the shown lane holds `lane` at its lock moved by `delta` (the first
+ * turn starts from the lane's value). A lock that doesn't fit says "Clip full". One undo step per hold. */
+void Machine::euclidLock(State& st, int lane, int delta) {
+	Ui& ui = st.s.ui;
+	Clip& c = st.clip[ui.track][ui.scene];
+	const int q = lockStep(st.s, c), pl = shownLane(st.s, c);
+	ui.heldEdited = true;
+	if (q < 0)
+		return;
+	const int i = findLock(c, pl, q, lane), now = i >= 0 ? c.locks[i].value : st.s.track[ui.track].value[lane];
+	const int v = std::min(std::max(now + delta, 0), 65535);
+	if (v == now)
+		return;
+	const Lock x = {(uint8_t)pl, (uint8_t)q, (uint8_t)lane, 0, (uint16_t)v};
+	if (!putLock(c, x, true)) {
+		ui.popup = kClipFullPopup, ui.popupAt = ui.now;
+		return;
+	}
+	checkpoint(ui.track, ui.scene);
+	putLock(c, x);
+}
+
 /** Delete + touch of an encoder on the Device or Mix screen: the points of the lane in the track's clip of the selected
- * scene go, one undo step; with none, the lane's value goes back to its default. */
+ * scene go (on a Euclid track its locks too), one undo step; with none, the lane's value goes back to its default. */
 void Machine::deleteLane(State& st, int track, int lane) {
 	Ui& ui = st.s.ui;
 	Clip& c = st.clip[track][ui.scene];
 	Track& tr = st.s.track[track];
-	if (c.nPoints[lane]) {
+	const bool locks = tr.type == Euclidean &&
+					   std::any_of(c.locks, c.locks + c.nLocks, [&](const Lock& l) { return l.target == lane; });
+	if (c.nPoints[lane] || locks) {
 		gesture_++; // the touch is a gesture of its own
 		checkpoint(track, ui.scene);
 		c.nPoints[lane] = 0;
+		eraseLocks(c, -1, -1, lane);
 	} else {
 		tr.value[lane] = defaultValue(ui, tr, lane);
 	}
@@ -1910,7 +2086,8 @@ static void laneLeds(const State& st, const filo::VoiceAllocator& voice, const b
 
 /** The 32 step pads of a Euclid track: the pattern of `lane` of the selected clip in its own time (pad k is step k, the
  * top row steps 1 to 8): a pulse in the track's colour (dim below VEL 64), a rest dark gray, black from STEPS on, and
- * the lane's own current step since the launch green (red in a take), whatever the clip's length. */
+ * the lane's own current step since the launch green (red in a take), whatever the clip's length. The held step is
+ * white, a step with locks pulses between its colour and white. */
 static void euclidStepLeds(const State& st, int lane, push2::Leds& out) {
 	const Session& s = st.s;
 	const Ui& u = s.ui;
@@ -1922,13 +2099,22 @@ static void euclidStepLeds(const State& st, int lane, push2::Leds& out) {
 	const int head = s.transport.playing && tr.playing == u.scene && c.length
 						 ? (int)(std::max<int64_t>(s.transport.tick - tr.startTick, 0) / grid % n)
 						 : -1;
-	for (int k = 0; k < kMaxSteps; k++)
-		out.note[push2::padNote(7 - k / 8, k % 8)] = {k >= n             ? push2::kBlack
-													  : k == head        ? hot(u, true)
-													  : !(mask >> k & 1) ? push2::kRgbDarkGray
-													  : x.velocity < 64  ? (uint8_t)(kPaletteDim + u.track)
-																		 : (uint8_t)(kPaletteFull + u.track),
-													  push2::kStatic};
+	const int held = u.heldStep >= 32 ? (7 - u.heldStep / 8) * 8 + u.heldStep % 8 : -1;
+	for (int k = 0; k < kMaxSteps; k++) {
+		const uint8_t colour = !(mask >> k & 1)  ? push2::kRgbDarkGray
+							   : x.velocity < 64 ? (uint8_t)(kPaletteDim + u.track)
+												 : (uint8_t)(kPaletteFull + u.track);
+		push2::Led led = {colour, push2::kStatic};
+		if (k >= n)
+			led = {push2::kBlack, push2::kStatic};
+		else if (k == head)
+			led = {hot(u, true), push2::kStatic};
+		else if (k == held)
+			led = {push2::kRgbWhite, push2::kStatic};
+		else if (lockMask(c, lane, unrotated(x, k))) // a step with locks pulses to white
+			led = {push2::kRgbWhite, push2::kPulseHalf, colour};
+		out.note[push2::padNote(7 - k / 8, k % 8)] = led;
+	}
 }
 
 /** A drum track's LEDs. Lanes: the selected one white, a sounding one green, else the track's colour, dim when the
@@ -2457,11 +2643,16 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 			const Track& tr = s.track[i];
 			const Clip* c = tr.playing != kNone ? &state_->clip[i][tr.playing] : nullptr;
 			int pos = c && c->length ? (int)(std::max<int64_t>(lastTick_ - tr.startTick, 0) % c->length) : 0;
+			// A playing Euclid clip's pattern-step locks win on their step: each lane ramps into and out of one over a
+			// tick.
+			const bool locks = c && c->length && c->nLocks && tr.type == Euclidean;
 			for (int j = 0; j < kAutos; j++) {
-				from_[i][j] = volts(tr, j, tr.value[j]);
-				bool plays = !(tr.overridden >> j & 1) && !(i == s.ui.recTrack && s.ui.writing >> j & 1);
-				int e = c && c->length && plays ? envelope(*c, j, pos + 1) : -1;
-				to_[i][j] = e >= 0 ? volts(tr, j, e) : from_[i][j];
+				const bool plays = !(tr.overridden >> j & 1) && !(i == s.ui.recTrack && s.ui.writing >> j & 1);
+				const int l0 = locks && plays ? lockAt(*c, lastTick_ - tr.startTick, j) : -1,
+						  l1 = locks && plays ? lockAt(*c, lastTick_ - tr.startTick + 1, j) : -1;
+				const int e = l1 >= 0 ? l1 : c && c->length && plays ? envelope(*c, j, pos + 1) : -1;
+				from_[i][j] = volts(tr, j, l0 >= 0 ? l0 : tr.value[j]);
+				to_[i][j] = volts(tr, j, e >= 0 ? e : tr.value[j]);
 			}
 		}
 		t.shownBpm = (in.clockConnected ? (float)clock_.cps() : cps_) * 60.f;
@@ -2533,10 +2724,10 @@ void Machine::view(View& v) {
 		for (int c = 0; c < kScenes; c++)
 			v.length[t][c] = state_->clip[t][c].length;
 		const int8_t playing = v.s.track[t].playing;
-		const Clip* lanes = t == u.track ? &clip : playing != kNone ? &state_->clip[t][playing] : nullptr;
+		const int scene = t == u.track ? u.scene : playing; // the selected clip, else the playing one
 		v.automated[t] = 0;
-		for (int j = 0; lanes && j < kAutos; j++)
-			v.automated[t] |= (uint16_t)((lanes->nPoints[j] != 0) << j);
+		for (int j = 0; scene != kNone && j < kAutos; j++)
+			v.automated[t] |= (uint16_t)(automated(*state_, t, scene, j) << j);
 	}
 	for (int j = 0; j < kAutos; j++)
 		v.at[j] = v.s.track[u.track].value[j];
@@ -2552,7 +2743,14 @@ void Machine::view(View& v) {
 		std::copy(clip.notes, clip.notes + clip.nNotes, v.notes);
 	v.held = -1;
 	v.heldCount = 0;
-	if (u.pads == kNote && (u.noteLayout || v.s.track[u.track].type == Drum) && u.heldStep >= 0) {
+	v.locked = 0;
+	if (u.pads == kNote && euclid && u.heldStep >= 0) { // a held Euclid step: its locks, else the lanes' values
+		const int pl = shownLane(v.s, clip), q = lockStep(v.s, clip);
+		for (int j = 0; q >= 0 && j < kAutos; j++)
+			if (const int i = findLock(clip, pl, q, j); i >= 0)
+				v.at[j] = clip.locks[i].value, v.locked |= (uint16_t)(1 << j);
+	}
+	if (u.pads == kNote && !euclid && (u.noteLayout || v.s.track[u.track].type == Drum) && u.heldStep >= 0) {
 		int start, end, pitch = stepOf(v.s, u.heldStep, start), grid = kGrid[v.s.track[u.track].grid];
 		stepSpan(v.s, clip, start, end);
 		for (int j = 0; j < kAutos; j++)

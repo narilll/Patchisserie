@@ -1212,6 +1212,14 @@ struct Tart : Module {
 													  c.euclid.seed, "octaves", c.euclid.octaves, "change",
 													  c.euclid.change, "grid", c.euclid.grid, "lanes", lanesJ));
 					}
+					// "locks": the pattern-step locks as [lane, step, target, value], only when there are some.
+					if (c.nLocks) {
+						json_t* locksJ = json_array();
+						for (int i = 0; i < c.nLocks; i++)
+							json_array_append_new(locksJ, json_pack("[i, i, i, i]", c.locks[i].lane, c.locks[i].step,
+																	c.locks[i].target, c.locks[i].value));
+						json_object_set_new(clip, "locks", locksJ);
+					}
 					// "automation": a list of [tick, value] points for each of the 10 lanes (8 CCs, LEVEL, PAN), only
 					// when some lane has points.
 					if (std::any_of(c.nPoints, c.nPoints + tart::kAutos, [](uint16_t n) { return n > 0; })) {
@@ -1332,7 +1340,7 @@ struct Tart : Module {
 				json_t* notesJ = json_object_get(clipJ, "notes");
 				c.length = c.nNotes = 0;
 				std::fill(c.nPoints, c.nPoints + tart::kAutos, 0);
-				c.euclid = tart::Euclid();
+				c.euclid = tart::Euclid(), c.nLocks = 0;
 				if (!json_is_object(clipJ))
 					continue;
 				c.length =
@@ -1364,6 +1372,14 @@ struct Tart : Module {
 							if (json_t* v = json_array_get(json_array_get(lanesE, l), i); json_is_integer(v))
 								*field[i] = u8((int)json_integer_value(v));
 					}
+				}
+				json_t* locksJ = json_object_get(clipJ, "locks"); // entries of 4 integers; sanitize does the rest
+				for (size_t k = 0; k < json_array_size(locksJ) && c.nLocks < tart::kMaxLocks; k++) {
+					json_t* x = json_array_get(locksJ, k);
+					if (json_array_size(x) < 4)
+						continue;
+					auto at = [&](int i) { return (int)json_integer_value(json_array_get(x, i)); };
+					c.locks[c.nLocks++] = {u8(at(0)), u8(at(1)), u8(at(2)), 0, (uint16_t)clamp(at(3), 0, 65535)};
 				}
 				json_t* lanesJ = json_object_get(clipJ, "automation");
 				for (size_t l = 0; l < tart::kAutos && l < json_array_size(lanesJ); l++) {

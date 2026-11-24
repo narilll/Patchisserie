@@ -142,9 +142,12 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 			number(6, "OCTAVES", e.octaves), number(7, "CHANGE", e.change, " %");
 	} else if (ui.screen == kDeviceScreen) { // CC 1 to 8: the name and a dot (white: automated, gray: overridden) over
 		const Track& tr = v.s.track[ui.track]; // the value, which is the one at the held step while one is held
+		const bool lockHeld = ui.heldStep >= 0 && tr.type == tart::Euclidean;
 		for (int j = 0; j < kCcs; j++) {
 			float x = 120.f * j;
 			bool over = tr.overridden >> j & 1, lit = over || v.automated[ui.track] >> j & 1;
+			if (lockHeld) // a held Euclid step: a white dot where it has a lock, none elsewhere
+				over = false, lit = v.locked >> j & 1;
 			bool written = ui.recTrack == ui.track && ui.writing >> j & 1; // red: the take is writing it
 			if (lit || written) {
 				nvgBeginPath(vg);
@@ -172,7 +175,9 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 			const int trk = held ? ui.track : j, lane = held ? (j ? kPan : kLevel) : ui.mixPans ? kPan : kLevel;
 			const Track& tr = v.s.track[trk];
 			const float x = 120.f * j;
-			const bool over = tr.overridden >> lane & 1, lit = over || v.automated[trk] >> lane & 1;
+			const bool lockHeld = held && tr.type == tart::Euclidean; // its locks are the dots, as on Device
+			const bool over = !lockHeld && tr.overridden >> lane & 1,
+					   lit = lockHeld ? v.locked >> lane & 1 : over || v.automated[trk] >> lane & 1;
 			const bool written = ui.recTrack == trk && ui.writing >> lane & 1;
 			if (lit || written) {
 				nvgBeginPath(vg);

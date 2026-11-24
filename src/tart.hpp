@@ -17,7 +17,7 @@ namespace tart {
 // (Fixed Length).
 constexpr double kHoldSeconds = 0.3;
 constexpr int kTracks = 8, kScenes = 8, kPpqn = 96, kBar = 4 * kPpqn, kMaxLength = 32 * kBar; // 12288 fits uint16_t
-// ponytail: per-clip ceilings. 4096 notes (Clip 34.9 KB, State 2.2 MB) = 32 bars of 16ths in 8-note chords or a 16-bar
+// ponytail: per-clip ceilings. 4096 notes (Clip 36.5 KB, State 2.3 MB) = 32 bars of 16ths in 8-note chords or a 16-bar
 // 16-lane drum clip; a full 32-bar one needs 8192 (+36 KB/clip, State 4.2 MB), and a clip past the ceiling says "Clip
 // full".
 constexpr int kMaxNotes = 4096, kCcs = 8, kMaxPoints = 256, kNameBytes = 32, kColors = 70, kMaxOctave = 10;
@@ -51,12 +51,22 @@ struct Euclid {
 	EuclidLane lane[kLanes + 1];
 };
 static_assert(sizeof(EuclidLane) == 5 && sizeof(Euclid) == 92, "no padding: the JSON compares with memcmp");
+// ponytail: 256 locks a clip (16 lanes x 16 steps of one CC, or one lane's 32 steps x 8 CCs); "Clip full" past it.
+constexpr int kMaxLocks = 256;
+/** A pattern-step lock: automation lane `target` (0..kAutos-1) holds `value` on step `step` of the unrotated pattern of
+ * Euclid lane `lane` (0..15 drum, kEuclidRhythm melodic). */
+struct Lock {
+	uint8_t lane, step, target, spare;
+	uint16_t value;
+};
 struct Clip {
 	uint16_t length = 0, nNotes = 0; // length 0 = empty slot
 	Note notes[kMaxNotes] = {};      // sorted (tick, pitch), unique
 	uint16_t nPoints[kAutos] = {};
 	Point points[kAutos][kMaxPoints] = {}; // per lane sorted by tick; two on one tick are a jump (arriving, leaving)
 	Euclid euclid = {};
+	uint16_t nLocks = 0;
+	Lock locks[kMaxLocks] = {}; // sorted (lane, step, target), unique
 };
 
 enum Type : uint8_t { Melodic, Drum, Euclidean };
@@ -184,7 +194,8 @@ struct View {
 	uint8_t lane = 255;
 	uint16_t nShown = 0;
 	Point shown[kMaxPoints];
-	Euclid euclid = {}; // the selected slot's
+	Euclid euclid = {};  // the selected slot's
+	uint16_t locked = 0; // a Euclid step is held: bit j: lane j has a lock on it
 };
 
 /** The Euclid notes that start in [t0, t0 + length) ticks after the clip's launch, at ticks relative to t0, before
@@ -366,6 +377,7 @@ class Machine {
 	void euclidModeButton(State& st, int mode);
 	void euclidGridButton(State& st, int grid);
 	void euclidReset(State& st, int encoder);
+	void euclidLock(State& st, int lane, int delta);
 	Euclid& euclidEdit(State& st);
 	void checkpoint(int track, int scene);
 	void record(State& st);
