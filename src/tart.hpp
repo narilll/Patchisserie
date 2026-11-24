@@ -90,6 +90,8 @@ struct Track {
 	uint16_t value[kAutos] = {};          // what each lane outputs without automation; a playing clip writes it
 	uint16_t overridden = 0;              // transient: bit j: lane j ignores the playing clip until it launches again
 	bool mute = false, solo = false;      // saved: MUTE and SOLO (see silent)
+	bool repeat = false;                  // saved: REPEAT, kept for each track as Live does
+	uint8_t rate = 2;                     // saved: the repeat rate, an index of kGrid (the scene buttons): 1/8
 };
 
 enum Popup : uint8_t {
@@ -171,6 +173,7 @@ struct Ui {
 	bool muteSoloUsed = false;
 	bool accent = false;  // ACCENT: pads and new steps at velocity 127
 	double accentAt = -1; // when the press of ACCENT began (-1: none)
+	double repeatAt = -1; // when the press of REPEAT began (-1: none)
 };
 
 struct Session {
@@ -398,6 +401,7 @@ class Machine {
 	void tick(State& st, int64_t k, Outputs& out);
 	void layout(const State& st, int t);
 	void euclidTick(State& st, int t, int64_t k);
+	void repeatTick(State& st, int pad, int64_t k);
 	void euclidPad(State& st, int i, int vel);
 	void euclidEncoder(State& st, int encoder, int delta);
 	void euclidModeButton(State& st, int mode);
@@ -438,9 +442,10 @@ class Machine {
 	struct Live {
 		uint32_t id = 0; // 0: the pad isn't sounding
 		uint8_t track = 0, pitch = 0, vel = 0;
-		int8_t rec = -1;  // the scene of the take it is recorded into (-1: not recorded)
-		uint16_t pos = 0; // where in that clip it started
-		int64_t at = 0;   // the tick it started at
+		int8_t rec = -1;     // the scene of the take it is recorded into (-1: not recorded)
+		uint16_t pos = 0;    // where in that clip it started
+		int64_t at = 0;      // the tick it started at
+		bool repeat = false; // held with REPEAT: tick() plays it on the grid, it has no voice of its own
 	};
 	Live live_[64]; // the note each held pad started, on the track that was selected then
 	// The notes the clips have started and when they end (tick), per track. ponytail: a track that has 64 notes

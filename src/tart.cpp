@@ -28,6 +28,8 @@ constexpr int kNoteUnits[4] = {2, 8, 2, 1};
 constexpr int kEuclidUnits[8] = {8, 8, 8, 2, 1, 4, 30, 2};
 // The ticks of a step by resolution (the scene buttons from the bottom, as printed): 1/4, 1/4t, 1/8, 1/8t, 1/16, 1/16t,
 // 1/32, 1/32t.
+// ponytail: a repeated note lasts half its rate (Live's gate is unverified); calibrate on the hardware.
+constexpr int kRepeatGate = 50;
 constexpr int kGrid[8] = {96, 64, 48, 32, 24, 16, 12, 8};
 /** The step size (an index of kGrid) of a scene button's CC, and the CC of a step size: the top button is 1/32t. */
 /** The velocity of a note a sequencer makes: 100, or 127 with ACCENT. */
@@ -687,7 +689,7 @@ void sanitize(State& st) {
 	u.automate = u.automate != 0, u.mixLane = std::min<uint8_t>(u.mixLane, 3),
 	u.sendPre = std::min<uint8_t>(u.sendPre, 3), u.defaultLevel = std::min<uint8_t>(u.defaultLevel, 10);
 	u.muteSoloLock = 0, u.muteSoloAt = -1, u.muteSoloUsed = false;
-	u.accent = false, u.accentAt = -1;
+	u.accent = false, u.accentAt = -1, u.repeatAt = -1;
 	for (auto& row : st.clip)
 		for (Clip& c : row) { // `playing` is transient, so a clip needs no more than sorted notes of sound values
 			c.length = std::min<uint16_t>(c.length, kMaxLength);
@@ -763,6 +765,7 @@ void sanitize(State& st) {
 		t.launchTick = t.startTick = 0;
 		t.overridden = 0;
 		t.mute = t.mute != 0, t.solo = t.solo != 0;
+		t.repeat = t.repeat != 0, t.rate = std::min<uint8_t>(t.rate, 7);
 	}
 }
 
@@ -926,6 +929,11 @@ void Machine::handle(State& st, const push2::Event& e) {
 					ui.accent = false;
 				ui.accentAt = -1;
 			}
+			if (e.index == push2::cc::Repeat && ui.repeatAt >= 0) { // a hold toggles it back: momentary
+				if (ui.now - ui.repeatAt >= kHoldSeconds)
+					s.track[ui.track].repeat = !s.track[ui.track].repeat;
+				ui.repeatAt = -1;
+			}
 			if (e.index == push2::cc::Duplicate)
 				ui.dup = -1;
 			if (e.index == push2::cc::FixedLength) { // a tap toggles; a hold, or choosing a length, doesn't
@@ -952,6 +960,9 @@ void Machine::handle(State& st, const push2::Event& e) {
 				fullVelocity(st);
 			else if (ui.pads == kNote)
 				ui.accent = !ui.accent, ui.accentAt = ui.now;
+		} else if (e.index == push2::cc::Repeat) { // Note mode only, for the selected track
+			if (ui.pads == kNote)
+				s.track[ui.track].repeat = !s.track[ui.track].repeat, ui.repeatAt = ui.now;
 		} else if (e.index == push2::cc::Automate) { // Shift: automation follows the clips again; Delete: no automation
 			Clip& c = st.clip[ui.track][ui.scene];
 			if (ui.button[push2::cc::Shift]) {
@@ -1028,6 +1039,8 @@ void Machine::handle(State& st, const push2::Event& e) {
 		} else if (ui.pads == kSession) {
 			if (e.index >= push2::cc::Scene8 && e.index <= push2::cc::Scene1)
 				sceneButton(st, push2::cc::Scene1 - e.index);
+		} else if (s.track[ui.track].repeat && e.index >= push2::cc::Scene8 && e.index <= push2::cc::Scene1) {
+			s.track[ui.track].rate = (uint8_t)sceneGrid(e.index); // REPEAT: the scene buttons are its rate
 		} else if (s.track[ui.track].type == Euclidean &&
 				   !((e.index == push2::cc::OctaveUp || e.index == push2::cc::OctaveDown) &&
 					 st.clip[ui.track][ui.scene].euclid.mode == kEuclidMelodic)) {
@@ -1310,6 +1323,11 @@ void Machine::play(Session& s, int i, int pitch, int vel) {
 	const uint8_t sounds = s.ui.accent ? 127 : (uint8_t)vel; // ACCENT: full velocity, the pad shows the press
 	l = {++nextId_, s.ui.track, (uint8_t)pitch, sounds};
 	s.ui.pad[i] = (uint8_t)vel;
+	if (s.track[l.track].repeat &&
+		clock_.started()) { // tick() plays it on the grid; a stopped transport plays one note
+		l.repeat = true;
+		return;
+	}
 	const Ui& u = s.ui;
 	int length = state_->clip[l.track][u.recScene].length;
 	if (u.recTrack == l.track && s.track[l.track].playing == u.recScene && length && s.track[l.track].type != Euclidean)
@@ -2258,9 +2276,13 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 		u.automate ? push2::Led{push2::kRed, push2::kStatic}
 				   : push2::Led{u.button[push2::cc::Automate] ? push2::kWhiteFull : push2::kWhiteDark, push2::kStatic};
 	white(push2::cc::Quantize, u.button[push2::cc::Quantize]);
-	if (u.pads == kNote) // ACCENT: pulsing while on (Live's slow pulse), dim while off; dark in Session mode
-		out.cc[push2::cc::Accent] = u.accent ? push2::Led{push2::kWhiteDark, push2::kPulseHalf, push2::kWhiteFull}
-											 : push2::Led{push2::kWhiteDark, push2::kStatic};
+	// ACCENT and REPEAT: pulsing while on (Live's slow pulse), dim while off; dark in Session mode
+	auto toggle = [&](int b, bool on) {
+		out.cc[b] = on ? push2::Led{push2::kWhiteDark, push2::kPulseHalf, push2::kWhiteFull}
+					   : push2::Led{push2::kWhiteDark, push2::kStatic};
+	};
+	if (u.pads == kNote)
+		toggle(push2::cc::Accent, u.accent), toggle(push2::cc::Repeat, tr.repeat);
 	if (st.clip[u.track][u.scene].length || u.button[push2::cc::DoubleLoop])
 		white(push2::cc::DoubleLoop, u.button[push2::cc::DoubleLoop]);
 	white(push2::cc::Browse, u.screen == kBrowseScreen || u.button[push2::cc::Browse]);
@@ -2303,9 +2325,15 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 		sessionLeds(st, out);
 		return;
 	}
+	// REPEAT on: the scene buttons are its rate, the chosen one green and the others white (over the step size)
+	auto rateLeds = [&] {
+		if (tr.repeat)
+			for (int g = 0; g < 8; g++)
+				out.cc[gridScene(g)] = {g == tr.rate ? push2::kGreen : push2::kRgbWhite, push2::kStatic};
+	};
 	if (tr.type == Drum) { // no octave, no layout
 		drumLeds(st, voice_[u.track], out);
-		return;
+		return rateLeds();
 	}
 	const bool euclid = tr.type == Euclidean;
 	if (euclid) { // the step size and the pattern of the lane; Drum mode the lanes, Melodic mode the keyboard below
@@ -2318,7 +2346,7 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 		euclidStepLeds(st, drum ? tr.lane : kEuclidRhythm, out);
 		if (drum) {
 			laneLeds(st, voice_[u.track], has, out);
-			return;
+			return rateLeds();
 		}
 	}
 	if (tr.octave > 0)
@@ -2329,7 +2357,7 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 		white(push2::cc::Layout, u.noteLayout || u.button[push2::cc::Layout]);
 	if (!euclid && u.noteLayout == 1) {
 		seqLeds(st, out);
-		return;
+		return rateLeds();
 	}
 	bool held[128] = {}; // pitches sounding from the pads: lit on every pad with that pitch
 	for (int i = 0; i < 64; i++)
@@ -2371,6 +2399,7 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 								  : push2::kBlack;
 			out.note[push2::padNote(row, col)] = {c, push2::kStatic};
 		}
+	rateLeds();
 }
 
 /** The voices of track `t` follow what it plays: 16 channels, one for each lane, for a drum track and for a Euclid
@@ -2430,6 +2459,28 @@ void Machine::euclidTick(State& st, int t, int64_t k) {
 							 layout_[t] == Drum ? at[i].pitch - kDrumNote + 1 : 0);
 			active_[t][nActive_[t]++] = {id, k + grid};
 		}
+	}
+}
+
+/** Tick `k` for pad `i`, held with REPEAT: a note on every line of its track's rate, counted from the transport's
+ * start, swung as the clips' notes are. */
+void Machine::repeatTick(State& st, int i, int64_t k) {
+	const Live& l = live_[i];
+	const Track& tr = st.s.track[l.track];
+	if (!tr.repeat) // REPEAT went off: the pad rests until it is let go
+		return;
+	const int rate = kGrid[std::min<int>(tr.rate, 7)], d = (st.s.transport.swing * 12 + 50) / 100;
+	const int len = std::max(rate * kRepeatGate / 100, 1);
+	for (int pass = 0; pass <= (d > 0); pass++) {
+		const int64_t line = k - (pass ? d : 0);
+		if (line < 0 || line % rate || (d > 0 && (line % 48 == 24) != (pass == 1)))
+			continue;
+		if (nActive_[l.track] == kActive)
+			return;
+		const uint32_t id = ++nextId_;
+		voice_[l.track].noteOn(id, (float)l.pitch, (float)l.vel / 127.f,
+							   layout_[l.track] == Drum ? l.pitch - kDrumNote + 1 : 0);
+		active_[l.track][nActive_[l.track]++] = {id, k + len};
 	}
 }
 
@@ -2502,6 +2553,9 @@ void Machine::tick(State& st, int64_t k, Outputs& out) {
 			}
 		}
 	}
+	for (int i = 0; i < 64; i++)
+		if (live_[i].repeat)
+			repeatTick(st, i, k); // after every note that ends on this tick
 	if (s.transport.metronome && k % kPpqn == 0)
 		out.metro = true, out.metroV = k % kBar == 0 ? 10.f : 5.f;
 }

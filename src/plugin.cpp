@@ -1262,9 +1262,10 @@ struct Tart : Module {
 				}
 				json_array_append_new(clips, clip);
 			}
-			json_t* trackJ = json_pack("{s:s, s:i, s:i, s:i, s:i, s:i, s:o, s:i}", "name", tr.name, "color", tr.color,
-									   "voices", tr.voices, "octave", tr.octave, "type", tr.type, "lane", tr.lane,
-									   "clips", clips, "bipolar", tr.bipolar);
+			json_t* trackJ =
+				json_pack("{s:s, s:i, s:i, s:i, s:i, s:i, s:o, s:i, s:b, s:i}", "name", tr.name, "color", tr.color,
+						  "voices", tr.voices, "octave", tr.octave, "type", tr.type, "lane", tr.lane, "clips", clips,
+						  "bipolar", tr.bipolar, "repeat", tr.repeat, "rate", tr.rate);
 			json_t *ccNames = json_array(), *values = json_array();
 			for (const auto& name : tr.ccName)
 				json_array_append_new(ccNames, json_string(name));
@@ -1351,9 +1352,10 @@ struct Tart : Module {
 			tr.color = u8(color), tr.voices = u8(voices), tr.octave = (int8_t)clamp(octave, -128, 127);
 			tr.type = u8(type), tr.lane = u8(lane);
 			json_t* trackJ = json_array_get(tracksJ, i);
-			int bipolar = tr.bipolar, mute = tr.mute, solo = tr.solo;
-			json_unpack(trackJ, "{s?i, s?b, s?b}", "bipolar", &bipolar, "mute", &mute, "solo", &solo);
-			tr.bipolar = u8(bipolar), tr.mute = mute, tr.solo = solo;
+			int bipolar = tr.bipolar, mute = tr.mute, solo = tr.solo, repeat = tr.repeat, rate = tr.rate;
+			json_unpack(trackJ, "{s?i, s?b, s?b, s?b, s?i}", "bipolar", &bipolar, "mute", &mute, "solo", &solo,
+						"repeat", &repeat, "rate", &rate);
+			tr.bipolar = u8(bipolar), tr.mute = mute, tr.solo = solo, tr.repeat = repeat, tr.rate = u8(rate);
 			json_t *namesJ = json_object_get(trackJ, "ccNames"), *valuesJ = json_object_get(trackJ, "values");
 			for (int c = 0; c < tart::kCcs; c++)
 				if (const char* text = json_string_value(json_array_get(namesJ, c)))

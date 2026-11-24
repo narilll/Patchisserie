@@ -1,5 +1,6 @@
 // Tart: the Push 2 decoder, LED diff, display frame and the echo state.
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cmath>
 #include <cstdio>
@@ -425,7 +426,7 @@ TEST(tart_machine_threads) {
 		tart::Inputs in;
 		tart::Outputs out;
 		push2::Leds want;
-		push2::Event ev[65];
+		push2::Event ev[73];
 		ev[0] = dec({0xB0, push2::cc::kTempo, 1});
 		ev[1] = dec({0xB0, push2::cc::Metronome, 127});
 		ev[2] = dec({0x90, 36, 100}); // a pad and the touch strip
@@ -491,10 +492,18 @@ TEST(tart_machine_threads) {
 		ev[62] = dec({0xB0, push2::cc::Mix, 0});
 		ev[63] = dec({0xB0, push2::cc::Accent, 127});
 		ev[64] = dec({0xB0, push2::cc::Accent, 0});
+		ev[65] = dec({0xB0, push2::cc::Repeat, 127}); // REPEAT on, a scene button (the rate), a pad, REPEAT off
+		ev[66] = dec({0xB0, push2::cc::Repeat, 0});
+		ev[67] = dec({0xB0, push2::cc::Scene8 + 3, 127});
+		ev[68] = dec({0xB0, push2::cc::Scene8 + 3, 0});
+		ev[69] = dec({0x90, 36, 100});
+		ev[70] = dec({0x80, 36, 0});
+		ev[71] = dec({0xB0, push2::cc::Repeat, 127});
+		ev[72] = dec({0xB0, push2::cc::Repeat, 0});
 		tart::SliceFrame frame;
 		in.play = true;
 		for (int i = 0; i < 20000; i++) {
-			in.events = ev, in.nEvents = i % 7 == 0 ? 65 : 0, in.frame = i;
+			in.events = ev, in.nEvents = i % 7 == 0 ? 73 : 0, in.frame = i;
 			m.process(in, out, want, &frame);
 			in.play = false;
 		}
@@ -7369,4 +7378,343 @@ TEST(sanitize_sends) {
 	tart::sanitize(*st);
 	CHECK(st->s.ui.mixLane == 2 && st->s.ui.sendPre == 1 && st->s.transport.master == 1234);   // saved
 	CHECK(st->s.track[3].value[tart::kSendA] == 0 && st->s.track[3].value[tart::kSendB] == 0); // an old patch: 0 V
+}
+
+namespace {
+
+/** A gate rise of the Slice's track 0: the tick (sample / 250 at 120 BPM from a Play on sample 0), channel and VEL. */
+struct Rep {
+	int tick, ch;
+	float vel;
+};
+bool operator==(const Rep& a, const Rep& b) {
+	return a.tick == b.tick && a.ch == b.ch;
+}
+
+/** A SliceRig that plays from sample 0 (as a rack with a Play pulse), with its sample count and the rises of track 0.
+ */
+struct RepRig : SliceRig {
+	int sample = 0;
+	bool high[16] = {};
+	std::vector<Rep> got;
+	explicit RepRig(bool note = true) : SliceRig(note) {
+		in.play = true;
+		step();
+		in.play = false;
+	}
+	void step(const push2::Event* ev = nullptr, int n = 1) {
+		SliceRig::step(ev, n);
+		for (int c = 0; c < 16; c++) {
+			const bool g = c < f.track[0].channels && f.track[0].gate[c] > 5;
+			if (g && !high[c])
+				got.push_back({sample / 250, c, f.track[0].vel[c]});
+			high[c] = g;
+		}
+		sample++;
+	}
+	void run_(int n) {
+		while (n-- > 0)
+			step();
+	}
+	void to(int tick, int into = 10) { // `into` samples into the tick
+		while (sample < tick * 250 + into)
+			step();
+	}
+	void pad(int row, int col, int vel) {
+		push2::Event e = dec({vel ? (uint8_t)0x90 : (uint8_t)0x80, push2::padNote(row, col), (uint8_t)vel});
+		step(&e);
+	}
+	void press(int cc, int value = 127) {
+		push2::Event e = dec({0xB0, (uint8_t)cc, (uint8_t)value});
+		step(&e);
+	}
+	void click(int cc) { press(cc), press(cc, 0); }
+	std::vector<int> ticks(int ch = 0) const {
+		std::vector<int> v;
+		for (const Rep& r : got)
+			if (r.ch == ch)
+				v.push_back(r.tick);
+		return v;
+	}
+};
+
+void repeatOn(Rig& r, int rate, int swing = 0, int track = 0) {
+	r.m.edit([=](tart::State& st) {
+		st.s.track[track].repeat = true, st.s.track[track].rate = (uint8_t)rate, st.s.transport.swing = (uint8_t)swing;
+	});
+}
+
+} // namespace
+
+TEST(repeat_button_tap_hold_per_track) {
+	using namespace push2::cc;
+	Rig r;
+	r.in.leds = true;
+	r.step();
+	CHECK(r.want.cc[Repeat].color == push2::kWhiteDark && r.want.cc[Repeat].channel == 0);
+	r.click(Repeat);
+	r.step();
+	CHECK(r.view().s.track[0].repeat && r.want.cc[Repeat].channel == push2::kPulseHalf);
+	r.click(Track1Below + 2); // another track: its own Repeat, off
+	r.step();
+	CHECK(!r.view().s.track[2].repeat && r.want.cc[Repeat].channel == 0);
+	r.click(Track1Below);
+	r.step();
+	CHECK(r.want.cc[Repeat].channel == push2::kPulseHalf);
+	r.click(Repeat);
+	CHECK(!r.view().s.track[0].repeat);
+	r.press(Repeat); // held for 0.3 s: on while held, off after
+	r.run_(14400);
+	CHECK(r.view().s.track[0].repeat);
+	r.press(Repeat, 0);
+	CHECK(!r.view().s.track[0].repeat);
+	Rig q(false); // Session mode: nothing, dark
+	q.in.leds = true;
+	q.click(Repeat);
+	q.step();
+	CHECK(!q.view().s.track[0].repeat && q.want.cc[Repeat].color == 0);
+}
+
+TEST(repeat_rate_scene_buttons) {
+	using namespace push2::cc;
+	Rig r;
+	r.click(Layout); // the Melodic Sequencer: the step size on the scene buttons
+	r.click(Repeat);
+	r.in.leds = true;
+	r.click(Scene8 + 4); // 1/16: the rate, and the step size stays
+	CHECK(r.view().s.track[0].rate == 4 && r.view().s.track[0].grid == 4);
+	r.click(Scene8 + 6);
+	CHECK(r.view().s.track[0].rate == 6 && r.view().s.track[0].grid == 4);
+	r.step();
+	for (int g = 0; g < 8; g++)
+		CHECK(r.want.cc[Scene8 + g].color == (g == 6 ? push2::kGreen : push2::kRgbWhite));
+	r.click(Repeat); // off: the step size again
+	r.click(Scene8 + 1);
+	r.step();
+	CHECK(r.view().s.track[0].rate == 6 && r.view().s.track[0].grid == 1);
+	CHECK(r.want.cc[Scene8 + 1].color == push2::kRgbWhite && r.want.cc[Scene8 + 6].color == push2::kRgbDarkGray);
+	Rig k; // 64 Notes: the scene buttons are dark with Repeat off, the rate with it on
+	k.in.leds = true;
+	k.step();
+	CHECK(k.want.cc[Scene8].color == 0);
+	k.click(Repeat);
+	k.step();
+	CHECK(k.want.cc[Scene8 + 2].color == push2::kGreen && k.want.cc[Scene8].color == push2::kRgbWhite);
+	Rig d; // a drum track
+	drumTrack(d);
+	d.click(Repeat), d.click(Scene8 + 5);
+	CHECK(d.view().s.track[0].rate == 5 && d.view().s.track[0].grid == 4);
+	Rig e; // an empty Euclid slot: the rate changes, the clip's step size doesn't and no clip is made
+	euclidEmpty(e);
+	e.click(Repeat), e.click(Scene8 + 3);
+	CHECK(e.view().s.track[0].rate == 3 && e.view().length[0][0] == 0 && settingsOf(e).grid == 4);
+	Rig s(false); // Session mode: a scene button launches, whatever the rate
+	s.m.edit([](tart::State& st) { st.s.track[0].repeat = true; });
+	s.click(Scene1 - 1);
+	CHECK(s.view().s.ui.scene == 1 && s.view().s.track[0].rate == 2);
+}
+
+TEST(repeat_plays_on_transport_grid) {
+	{
+		RepRig r; // 1/16: every 24 ticks, 12 ticks long, at the velocity of the press
+		repeatOn(r, 4);
+		r.to(30);
+		r.pad(0, 0, 100);
+		r.to(100);
+		r.pad(0, 0, 0);
+		r.to(140);
+		CHECK((r.ticks() == std::vector<int>{48, 72, 96}));
+		CHECK_NEAR(r.got[0].vel, 100 / 127.f * 10, 1e-4);
+	}
+	{
+		RepRig r; // pressed just before a line: it sounds at the line
+		repeatOn(r, 4);
+		r.to(47);
+		r.pad(0, 0, 100);
+		r.to(60);
+		CHECK((r.ticks() == std::vector<int>{48}));
+	}
+	{
+		RepRig r; // a clip launched at tick 8 moves nothing: the grid is the transport's
+		repeatOn(r, 4);
+		r.to(7);
+		r.m.edit([](tart::State& st) {
+			st.clip[0][0].length = tart::kBar, st.s.track[0].queued = 0, st.s.track[0].launchTick = 8;
+		});
+		r.to(30);
+		r.pad(0, 0, 100);
+		r.to(100);
+		CHECK((r.ticks() == std::vector<int>{48, 72, 96}));
+	}
+	{
+		RepRig r; // a stopped transport: one note as long as the pad
+		repeatOn(r, 4);
+		r.click(push2::cc::Play);
+		r.run_(500);
+		r.pad(0, 0, 100);
+		r.run_(48000);
+		CHECK(r.got.size() == 1 && r.f.track[0].gate[0] > 5);
+		r.pad(0, 0, 0);
+		CHECK(r.f.track[0].gate[0] == 0);
+	}
+}
+
+TEST(repeat_swing) {
+	const struct {
+		int rate;
+		std::vector<int> want;
+	} cases[] = {{4, {36, 48, 84, 96}}, {2, {48, 96}}, {5, {32, 48, 64, 80, 96}}};
+	for (const auto& c : cases) {
+		RepRig r;
+		repeatOn(r, c.rate, 100);
+		r.to(30);
+		r.pad(0, 0, 100);
+		r.to(100);
+		r.pad(0, 0, 0);
+		r.to(140);
+		CHECK(r.ticks() == c.want);
+	}
+}
+
+TEST(repeat_pads) {
+	using namespace push2::cc;
+	{
+		RepRig r; // a drum lane: on its own channel
+		drumTrack(r);
+		repeatOn(r, 4);
+		r.to(30);
+		r.pad(1, 1, 100); // lane 5
+		r.to(80);
+		CHECK((r.ticks(5) == std::vector<int>{48, 72}) && r.got.size() == 2);
+		r.pad(1, 1, 0);
+	}
+	{
+		RepRig r; // the split layout: a lower pad repeats, a step pad makes a note and doesn't repeat
+		r.click(Layout), r.click(Layout);
+		repeatOn(r, 4);
+		r.to(30);
+		r.pad(0, 0, 100);
+		r.to(80);
+		CHECK((r.ticks() == std::vector<int>{48, 72}));
+		r.pad(0, 0, 0);
+	}
+	{
+		RepRig r; // Euclid: the DRUM lane pad repeats, a step pad doesn't
+		euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 16, 0); }, tart::kBar, false);
+		repeatOn(r, 4);
+		r.to(30);
+		r.pad(7, 0, 100), r.pad(7, 0, 0); // a step pad
+		r.pad(0, 2, 100);                 // lane 3
+		r.to(80);
+		CHECK((r.ticks(2) == std::vector<int>{48, 72}) && r.got.size() == 2);
+		r.pad(0, 2, 0);
+	}
+	{
+		RepRig r; // Euclid MELODIC: the keyboard repeats
+		euclidTrack(
+			r, 0, [](tart::Euclid& e) { e.mode = tart::kEuclidMelodic, lane(e, tart::kEuclidRhythm, 8, 0); },
+			tart::kBar, false);
+		repeatOn(r, 4);
+		r.to(30);
+		r.pad(0, 0, 100);
+		r.to(80);
+		CHECK((r.ticks() == std::vector<int>{48, 72}));
+		r.pad(0, 0, 0);
+	}
+}
+
+TEST(repeat_stops) {
+	RepRig r; // REPEAT off while held: no more repeats; the transport stops: the notes end; PLAY: from tick 0 again
+	repeatOn(r, 4);
+	r.to(30);
+	r.pad(0, 0, 100);
+	r.to(60);
+	r.click(push2::cc::Repeat); // off
+	r.to(120);
+	CHECK((r.ticks() == std::vector<int>{48}));
+	r.click(push2::cc::Repeat); // on again: it resumes on the grid, the pad is still held
+	r.to(150);
+	CHECK((r.ticks() == std::vector<int>{48, 144}));
+	r.click(push2::cc::Play); // stop
+	r.run_(1000);
+	CHECK(r.f.track[0].gate[0] == 0);
+	const size_t n = r.got.size();
+	r.run_(5000);
+	CHECK(r.got.size() == n);
+	r.click(push2::cc::Play); // play again: the pad is held, the grid starts over
+	r.run_(250 * 60);
+	CHECK(r.got.size() > n);
+	r.pad(0, 0, 0);
+	const size_t m = r.got.size();
+	r.run_(250 * 60);
+	CHECK(r.got.size() == m);
+	r.pad(0, 0, 100); // a load silences it
+	r.run_(250 * 30);
+	auto st = r.state();
+	r.m.load(*st);
+	r.run_(2);
+	const size_t l = r.got.size();
+	r.run_(250 * 60);
+	CHECK(r.got.size() == l);
+}
+
+TEST(repeat_model) {
+	Rng g{777};
+	int total = 0;
+	for (int run = 0; run < 50; run++) {
+		RepRig r;
+		drumTrack(r);
+		const int rate = g.n(8), swing = 50 * g.n(3), rt = std::array<int, 8>{96, 64, 48, 32, 24, 16, 12, 8}[rate];
+		repeatOn(r, rate, swing);
+		struct Ev {
+			int sample, lane;
+		};
+		std::vector<Ev> ev;
+		for (int i = 0; i < 30; i++)
+			ev.push_back({1 + g.n(4 * 384 * 250), g.n(3)});
+		std::sort(ev.begin(), ev.end(), [](const Ev& a, const Ev& b) { return a.sample < b.sample; });
+		bool held[3] = {};
+		struct Stamp {
+			int64_t tick;
+			int lane;
+			bool down;
+		};
+		std::vector<Stamp> stamps;
+		for (const Ev& e : ev) {
+			while (r.sample < e.sample)
+				r.step();
+			held[e.lane] = !held[e.lane];
+			stamps.push_back({r.view().s.transport.tick, e.lane, held[e.lane]});
+			r.pad(0, e.lane, held[e.lane] ? 100 : 0);
+		}
+		r.to(4 * 384 + 4);
+		const int d = (swing * 12 + 50) / 100;
+		std::set<std::pair<int, int>> want, have;
+		bool down[3] = {};
+		size_t si = 0;
+		for (int k = 1; k <= 4 * 384; k++) {
+			while (si < stamps.size() && stamps[si].tick < k)
+				down[stamps[si].lane] = stamps[si].down, si++;
+			for (int n = 0; n < 3; n++)
+				for (int pass = 0; pass <= (d > 0) && down[n]; pass++) {
+					const int line = k - (pass ? d : 0);
+					if (line >= 0 && line % rt == 0 && (d == 0 || (line % 48 == 24) == (pass == 1)))
+						want.insert({k, n});
+				}
+		}
+		for (const Rep& x : r.got)
+			if (x.tick <= 4 * 384)
+				have.insert({x.tick, x.ch});
+		CHECK(want == have);
+		total += (int)want.size();
+	}
+	CHECK(total > 2000); // the runs repeat something
+}
+
+TEST(sanitize_repeat) {
+	auto st = std::make_unique<tart::State>();
+	st->s.track[1].rate = 9, st->s.track[1].repeat = true, st->s.ui.repeatAt = 3;
+	tart::sanitize(*st);
+	CHECK(st->s.track[1].rate == 7 && st->s.track[1].repeat && st->s.ui.repeatAt == -1);
+	CHECK(tart::Track().rate == 2 && !tart::Track().repeat); // an old patch: Repeat off at 1/8
 }
