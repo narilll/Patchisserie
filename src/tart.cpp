@@ -680,7 +680,8 @@ void sanitize(State& st) {
 	u.touched = 0, u.popup = kNoPopup, u.popupAt = u.now = 0, u.screenAt = u.padsAt = -1;
 	u.prevPads = kSession, u.dup = -1, u.browse = 0;
 	u.recTrack = -1, u.recScene = 0, u.recFresh = u.recOpen = false, u.recEnd = -1, u.writing = 0;
-	u.automate = u.automate != 0, u.mixPans = u.mixPans != 0, u.defaultLevel = std::min<uint8_t>(u.defaultLevel, 10);
+	u.automate = u.automate != 0, u.mixLane = std::min<uint8_t>(u.mixLane, 3),
+	u.sendPre = std::min<uint8_t>(u.sendPre, 3), u.defaultLevel = std::min<uint8_t>(u.defaultLevel, 10);
 	u.muteSoloLock = 0, u.muteSoloAt = -1, u.muteSoloUsed = false;
 	for (auto& row : st.clip)
 		for (Clip& c : row) { // `playing` is transient, so a clip needs no more than sorted notes of sound values
@@ -792,6 +793,9 @@ void popupText(const View& v, char* buf, size_t size) {
 		break;
 	case kClipFullPopup:
 		std::snprintf(buf, size, "Clip full");
+		break;
+	case kMasterPopup:
+		std::snprintf(buf, size, "MASTER %.2f V", t.master * 10.f / 65535.f);
 		break;
 	case kTempoPopup:
 		std::snprintf(buf, size, t.external ? "Tempo %.1f BPM EXT" : "Tempo %.1f BPM", t.external ? t.shownBpm : t.bpm);
@@ -976,9 +980,9 @@ void Machine::handle(State& st, const push2::Event& e) {
 			ui.browse = std::min<uint8_t>(s.track[ui.track].type, kBrowseTypes - 1);
 		} else if (ui.screen == kScaleScreen && scaleButton(s.scale, e.index)) {
 		} else if (ui.screen == kBrowseScreen && browseButton(st, e.index)) {
-		} else if (ui.screen == kMixScreen &&
-				   (e.index == push2::cc::Track1Above || e.index == push2::cc::Track1Above + 1)) {
-			ui.mixPans = e.index != push2::cc::Track1Above; // VOLUMES, PANS
+		} else if (ui.screen == kMixScreen && e.index >= push2::cc::Track1Above &&
+				   e.index < push2::cc::Track1Above + 4) {
+			ui.mixLane = (uint8_t)(e.index - push2::cc::Track1Above); // VOLUMES, PANS, SEND A, SEND B
 		} else if (euclidHome(s) && (e.index == push2::cc::Track1Above || e.index == push2::cc::Track1Above + 1)) {
 			euclidModeButton(st, e.index - push2::cc::Track1Above); // DRUM, MELODIC
 		} else if (e.index == push2::cc::StopClip) {
@@ -1049,6 +1053,11 @@ void Machine::handle(State& st, const push2::Event& e) {
 			ui.quantizeUsed = true;
 		if (e.index < 8 && ui.button[push2::cc::Quantize]) { // the Quantize settings
 			quantizeEncoder(st, e.index, e.value);
+		} else if (e.index == push2::kMasterId) { // MASTER: on every screen, in the Device encoders' units
+			t.master = (uint16_t)std::min(
+				std::max(t.master + e.value * kValueUnits / (ui.button[push2::cc::Shift] ? kFineDivisor : 1), 0),
+				65535);
+			show(kMasterPopup);
 		} else if (e.index == push2::kTempoId) {
 			float step = ui.button[push2::cc::Shift] ? 0.1f : 1.f;
 			float bpm = t.bpm + (float)steps(accTempo_, e.value, kTempoUnits) * step;
@@ -1075,11 +1084,11 @@ void Machine::handle(State& st, const push2::Event& e) {
 				setLength(st, (st.clip[ui.track][ui.scene].length / kPpqn + n) * kPpqn);
 		} else if (e.index < 8 && ui.screen == kDeviceScreen) { // the Device screen: CC 1 to 8, or a held step's lock
 			valueEncoder(st, e.index, ui.track, e.index, e.value);
-		} else if (e.index < 8 && ui.screen == kMixScreen) { // the Mix screen: LEVEL or PAN of each track, or a held
-			if (ui.heldStep < 0) // step's lock on the selected track (encoder 1 LEVEL, 2 PAN)
-				valueEncoder(st, e.index, e.index, ui.mixPans ? kPan : kLevel, e.value);
-			else if (e.index < 2)
-				valueEncoder(st, e.index, ui.track, e.index ? kPan : kLevel, e.value);
+		} else if (e.index < 8 && ui.screen == kMixScreen) { // the Mix screen: the lane of each track, or a held
+			if (ui.heldStep < 0) // step's lock on the selected track (encoders 1 to 4: LEVEL, PAN, SEND A, SEND B)
+				valueEncoder(st, e.index, e.index, kMixLane[ui.mixLane], e.value);
+			else if (e.index < 4)
+				valueEncoder(st, e.index, ui.track, kMixLane[e.index], e.value);
 		} else if (e.index < 8 && euclidHome(s)) { // the Euclid screen: the settings of the selected clip
 			euclidEncoder(st, e.index, e.value);
 		} else if (e.index < 4 && ui.heldStep >= 0 &&
@@ -1099,9 +1108,9 @@ void Machine::handle(State& st, const push2::Event& e) {
 				euclidReset(st, e.index);
 		}
 		if (e.value && e.index < 8 && ui.button[push2::cc::Delete]) {
-			// a held Euclid step: its lock on that lane (the Mix screen: encoder 1 LEVEL, 2 PAN of the selected track)
+			// a held Euclid step: its lock on that lane (the Mix screen: encoders 1 to 4 of the selected track)
 			const bool lock = ui.heldStep >= 0 && s.track[ui.track].type == Euclidean;
-			const int target = ui.screen == kDeviceScreen ? e.index : e.index < 2 ? e.index ? kPan : kLevel : -1;
+			const int target = ui.screen == kDeviceScreen ? e.index : e.index < 4 ? kMixLane[e.index] : -1;
 			if (lock && (ui.screen == kDeviceScreen || ui.screen == kMixScreen)) {
 				Clip& c = st.clip[ui.track][ui.scene];
 				const int q = lockStep(s, c), pl = shownLane(s, c);
@@ -1111,7 +1120,7 @@ void Machine::handle(State& st, const push2::Event& e) {
 			} else if (ui.screen == kDeviceScreen) {
 				deleteLane(st, ui.track, e.index);
 			} else if (ui.screen == kMixScreen) {
-				deleteLane(st, e.index, ui.mixPans ? kPan : kLevel);
+				deleteLane(st, e.index, kMixLane[ui.mixLane]);
 			}
 		}
 		if (!e.value && e.index < 8 && writeBy_[e.index] >= 0) // the touch ends what its turns wrote
@@ -1122,6 +1131,8 @@ void Machine::handle(State& st, const push2::Event& e) {
 			show(kTempoPopup);
 		else if (e.value && e.index == push2::kSwingId)
 			show(kSwingPopup);
+		else if (e.value && e.index == push2::kMasterId)
+			show(kMasterPopup);
 		break;
 	default:
 		break;
@@ -2190,9 +2201,9 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 					: u.button[b] || (mode == 1 ? tr.mute : tr.solo) ? push2::Led{color, push2::kStatic}
 																	 : push2::Led{push2::kWhiteDark, push2::kStatic};
 	}
-	if (u.screen == kMixScreen) // VOLUMES and PANS: the chosen one white, the other dark gray
-		for (int i = 0; i < 2; i++)
-			out.cc[push2::cc::Track1Above + i] = {i == u.mixPans ? push2::kRgbWhite : push2::kRgbDarkGray,
+	if (u.screen == kMixScreen) // VOLUMES, PANS, SEND A and SEND B: the chosen one white, the others dark gray
+		for (int i = 0; i < 4; i++)
+			out.cc[push2::cc::Track1Above + i] = {i == u.mixLane ? push2::kRgbWhite : push2::kRgbDarkGray,
 												  push2::kStatic};
 	if (euclidHome(s)) // DRUM and MELODIC: the clip's mode white, the other dark gray
 		for (int i = 0; i < 2; i++)
@@ -2666,6 +2677,7 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 		t.shownBpm = (in.clockConnected ? (float)clock_.cps() : cps_) * 60.f;
 		for (int i = 0; i < kTracks; i++)
 			muted_[i] = silent(s, i);
+		sendPre_ = s.ui.sendPre, master_ = s.transport.master;
 		for (int i = 0; i < kTracks; i++) {
 			voices_[i] = s.track[i].voices;
 			const uint8_t* c = kLiveColors[s.track[i].color % kColors];
@@ -2704,12 +2716,16 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 			for (int c = 0; c < kCcs; c++)
 				o.cc[c] = lane(c);
 			o.level = muted_[t] ? 0.f : lane(kLevel), o.pan = lane(kPan), o.rgb = rgb_[t];
+			// post-fader: the send follows LEVEL (0 V while the track is silent); pre-fader: its own volts always
+			o.sendA = sendPre_ & 1 ? lane(kSendA) : lane(kSendA) * o.level / 10.f;
+			o.sendB = sendPre_ & 2 ? lane(kSendB) : lane(kSendB) * o.level / 10.f;
 		}
 		v.tick();
 	}
 	if (slice)
 		slice->frame = (uint32_t)in.frame;
 
+	out.master = master_ * 10.f / 65535.f;
 	out.run = clock_.started();
 	if (out.run) {
 		out.clk = clk_.clk(lastAt_, at);

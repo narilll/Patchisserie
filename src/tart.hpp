@@ -17,13 +17,15 @@ namespace tart {
 // (Fixed Length).
 constexpr double kHoldSeconds = 0.3;
 constexpr int kTracks = 8, kScenes = 8, kPpqn = 96, kBar = 4 * kPpqn, kMaxLength = 32 * kBar; // 12288 fits uint16_t
-// ponytail: per-clip ceilings. 4096 notes (Clip 36.5 KB, State 2.3 MB) = 32 bars of 16ths in 8-note chords or a 16-bar
-// 16-lane drum clip; a full 32-bar one needs 8192 (+36 KB/clip, State 4.2 MB), and a clip past the ceiling says "Clip
+// ponytail: per-clip ceilings. 4096 notes (Clip 38.5 KB, State 2.47 MB) = 32 bars of 16ths in 8-note chords or a 16-bar
+// 16-lane drum clip; a full 32-bar one needs 8192 (+36 KB/clip, State 4.4 MB), and a clip past the ceiling says "Clip
 // full".
 constexpr int kMaxNotes = 4096, kCcs = 8, kMaxPoints = 256, kNameBytes = 32, kColors = 70, kMaxOctave = 10;
-// The automation lanes of a clip: the 8 CCs, then LEVEL and PAN. ponytail: 256 points a lane is about 64 isolated step
-// locks.
-constexpr int kAutos = kCcs + 2, kLevel = kCcs, kPan = kCcs + 1, kCcNameBytes = 16;
+// The automation lanes of a clip: the 8 CCs, then LEVEL, PAN, SEND A and SEND B (appended, so a saved lane index keeps
+// its meaning). ponytail: 256 points a lane is about 64 isolated step locks.
+constexpr int kAutos = kCcs + 4, kLevel = kCcs, kPan = kCcs + 1, kSendA = kCcs + 2, kSendB = kCcs + 3,
+			  kCcNameBytes = 16;
+constexpr int kMixLane[4] = {kLevel, kPan, kSendA, kSendB}; // the Mix screen's lanes: VOLUMES, PANS, SEND A, SEND B
 
 // The clips. The layout is final: later commits only fill it.
 struct Note {
@@ -94,6 +96,7 @@ enum Popup : uint8_t {
 	kNoPopup,
 	kTempoPopup,
 	kSwingPopup,
+	kMasterPopup,
 	kClipFullPopup,
 	kUndoPopup,
 	kRedoPopup,
@@ -108,6 +111,7 @@ struct Transport {
 	float bpm = 120; // the internal tempo; a patched CLOCK overrides it, the TEMPO input scales it
 	uint8_t swing = 0, quant = 4 /*1 Bar*/;
 	bool metronome = false;
+	uint16_t master = 65535;                // MASTER output: 0..10 V, saved; not automated, not in Undo
 	bool playing = false, external = false; // transient from here on
 	int64_t tick = 0;                       // the last tick run, 96 per beat
 	float shownBpm = 120;                   // what the clock runs at now: the CV applied, or measured from CLOCK
@@ -131,7 +135,8 @@ struct Ui {
 	bool recQuantOn = false;
 	bool automate = false;     // AUTOMATE: a take records the encoders of the Device and Mix screens
 	uint8_t defaultLevel = 10; // Default LEVEL in volts (0..10): what Delete + touch resets a LEVEL to
-	bool mixPans = false;      // the Mix screen's encoders are PAN (else LEVEL)
+	uint8_t mixLane = 0;       // the Mix screen's lane: 0 VOLUMES, 1 PANS, 2 SEND A, 3 SEND B
+	uint8_t sendPre = 0;       // bit 0 SEND A, bit 1 SEND B: pre-fader (else post-fader, after LEVEL and Mute)
 	// transient
 	uint8_t page = 0;       // the sequencer's page of 8 steps (a drum track: 32)
 	uint8_t pad[64] = {};   // velocity of each held pad, row * 8 + col
@@ -295,7 +300,7 @@ struct Inputs {
 
 /** What a Slice gets from a Tart: every track's voices (the audio thread fills it, ~2 KB). */
 struct SliceTrack {
-	float voct[16], gate[16], vel[16], cc[kCcs], level, pan;
+	float voct[16], gate[16], vel[16], cc[kCcs], level, pan, sendA, sendB;
 	uint8_t channels;
 	uint32_t rgb; // 0xRRGGBB
 };
@@ -327,6 +332,7 @@ struct Outputs {
 	bool ledsDone = false;                                       // `want` is current
 	bool clk = false, reset = false, run = false, metro = false; // this sample; the caller makes pulses of them
 	float metroV = 0;
+	float master = 10.f; // the MASTER output's volts, every sample
 	bool midiClock = false, midiStart = false;
 	bool palette = false;  // the track colours changed (or never went out): send `rgb`, then reapply
 	uint32_t rgb[17] = {}; // 0xRRGGBB for palette index kPaletteFull + k (kPaletteDim is k = 8..15, kPaletteYellow 16);
@@ -449,6 +455,8 @@ class Machine {
 	// What process() reads without the lock: copies of the state, refreshed under it.
 	int voices_[kTracks] = {}, selected_ = 0;
 	bool muted_[kTracks] = {};   // silent(): LEVEL 0 V and the gates closed
+	uint8_t sendPre_ = 0;        // Ui::sendPre
+	uint16_t master_ = 65535;    // Transport::master
 	uint8_t type_[kTracks] = {}; // a change silences the track (see layout)
 	uint8_t layout_[kTracks] =
 		{}; // Drum: 16 channels, one for each lane; else the track's Voices (Euclid: by the clip)

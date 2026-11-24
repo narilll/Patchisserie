@@ -214,9 +214,10 @@ struct Rig {
 		step(&e);
 	}
 	void turn(int id, int delta) { // the encoder CC for the id, delta as the Push sends it
-		uint8_t cc = id < 8                  ? (uint8_t)(push2::cc::kTrack1 + id)
-					 : id == push2::kTempoId ? push2::cc::kTempo
-											 : push2::cc::kSwing;
+		uint8_t cc = id < 8                   ? (uint8_t)(push2::cc::kTrack1 + id)
+					 : id == push2::kTempoId  ? push2::cc::kTempo
+					 : id == push2::kMasterId ? push2::cc::kMasterVolume
+											  : push2::cc::kSwing;
 		push2::Event e = dec({0xB0, cc, (uint8_t)(delta & 127)});
 		step(&e);
 	}
@@ -424,7 +425,7 @@ TEST(tart_machine_threads) {
 		tart::Inputs in;
 		tart::Outputs out;
 		push2::Leds want;
-		push2::Event ev[56];
+		push2::Event ev[63];
 		ev[0] = dec({0xB0, push2::cc::kTempo, 1});
 		ev[1] = dec({0xB0, push2::cc::Metronome, 127});
 		ev[2] = dec({0x90, 36, 100}); // a pad and the touch strip
@@ -481,10 +482,17 @@ TEST(tart_machine_threads) {
 		ev[53] = dec({0xB0, push2::cc::Delete, 0});
 		ev[54] = dec({0xB0, push2::cc::Track1Below, 127});
 		ev[55] = dec({0xB0, push2::cc::Track1Below, 0});
+		ev[56] = dec({0xB0, push2::cc::kMasterVolume, 5}); // MASTER, then the Mix screen's SEND B lane and a turn
+		ev[57] = dec({0xB0, push2::cc::Mix, 127});
+		ev[58] = dec({0xB0, push2::cc::Track1Above + 3, 127});
+		ev[59] = dec({0xB0, push2::cc::Track1Above + 3, 0});
+		ev[60] = dec({0xB0, 73, 4});
+		ev[61] = dec({0xB0, push2::cc::kMasterVolume, 127});
+		ev[62] = dec({0xB0, push2::cc::Mix, 0});
 		tart::SliceFrame frame;
 		in.play = true;
 		for (int i = 0; i < 20000; i++) {
-			in.events = ev, in.nEvents = i % 7 == 0 ? 56 : 0, in.frame = i;
+			in.events = ev, in.nEvents = i % 7 == 0 ? 63 : 0, in.frame = i;
 			m.process(in, out, want, &frame);
 			in.play = false;
 		}
@@ -495,7 +503,8 @@ TEST(tart_machine_threads) {
 	while (!done) {
 		m.view(*v);
 		m.edit([&](tart::State& st) {
-			st.s.transport.swing = (uint8_t)(n % 100), st.s.track[0].voices = (uint8_t)(n % 16 + 1);
+			st.s.transport.swing = (uint8_t)(n % 100), st.s.transport.master = (uint16_t)(n * 977),
+			st.s.ui.sendPre = (uint8_t)(n % 4), st.s.track[0].voices = (uint8_t)(n % 16 + 1);
 			st.clip[0][7].length = (uint16_t)(n % 3 * tart::kBar);
 			tart::Clip& e = st.clip[1][0]; // track 2 plays a Euclid clip whose settings and type the UI keeps changing
 			e.length = tart::kBar, e.euclid.lane[0].pulses = (uint8_t)(n % 9), e.euclid.mode = (uint8_t)(n / 5 % 2);
@@ -591,10 +600,11 @@ TEST(slice_bus_threads) { // make tsan: a writer and a reader, a barrier per sam
 TEST(state_layout) {
 	CHECK(std::is_trivially_copyable<tart::State>::value);
 	CHECK(tart::kMaxNotes == 4096);
-	CHECK(sizeof(tart::State) < 3 * 1024 * 1024); // heap only: ~2.34 MB
-	CHECK(sizeof(tart::Machine) < 16 * 1024);     // ~14.4 KB: from_/to_ add 640 bytes
-	CHECK(sizeof(tart::Clip) < 36 * 1024 &&
-		  tart::kAutos == 10); // ~36.5 KB: 8 CCs, LEVEL, PAN, Euclid (92 bytes), locks
+	CHECK(sizeof(tart::State) < 3 * 1024 * 1024); // heap only: ~2.47 MB; the undo ring is 32 clips, ~1.23 MB
+	CHECK(sizeof(tart::Machine) < 16 * 1024);     // ~14.95 KB
+	CHECK(sizeof(tart::View) < 32 * 1024);        // ~28.0 KB
+	CHECK(sizeof(tart::Clip) < 39 * 1024 &&
+		  tart::kAutos == 12); // ~38.5 KB: 8 CCs, LEVEL, PAN, SEND A, SEND B, Euclid (92 bytes), locks
 	CHECK(tart::kMaxLocks == 256 && sizeof(tart::Lock) == 6);
 	CHECK(sizeof(tart::SliceFrame) < 2048);
 	CHECK(sizeof(tart::State) > 2 * 1024 * 1024);
@@ -4371,7 +4381,7 @@ TEST(mix_volumes_pans) {
 	using namespace push2::cc;
 	Rig r(false);
 	r.click(Mix);
-	CHECK(r.view().s.ui.screen == tart::kMixScreen && !r.view().s.ui.mixPans);
+	CHECK(r.view().s.ui.screen == tart::kMixScreen && r.view().s.ui.mixLane == 0);
 	r.turn(0, -1); // VOLUMES: one raw unit is 312 of 65535, like a Device encoder
 	r.turn(3, -2);
 	auto st = r.state();
@@ -4382,26 +4392,29 @@ TEST(mix_volumes_pans) {
 	r.press(Shift, 0);
 	CHECK(r.state()->s.track[0].value[tart::kLevel] == 65535); // clamped at the top
 	r.click(Track1Above + 1);                                  // PANS
-	CHECK(r.view().s.ui.mixPans);
+	CHECK(r.view().s.ui.mixLane == 1);
 	r.turn(1, 1);
 	r.turn(0, 127);
 	st = r.state();
 	CHECK(st->s.track[1].value[tart::kPan] == 32768 + 312 && st->s.track[0].value[tart::kPan] == 32768 - 312);
 	CHECK(st->s.track[1].value[tart::kLevel] == 65535);
 	CHECK_NEAR(tart::volts(st->s.track[1], tart::kPan, st->s.track[1].value[tart::kPan]), 0.0475f, 1e-3);
-	// The master encoder does nothing here.
-	push2::Event master = dec({0xB0, push2::cc::kMasterVolume, 5});
+	// The master encoder moves MASTER here too, and no track.
+	push2::Event master = dec({0xB0, push2::cc::kMasterVolume, 127}); // one unit down
 	r.step(&master);
 	auto after = r.state();
 	CHECK(std::memcmp(after->s.track, st->s.track, sizeof st->s.track) == 0 && after->s.transport.swing == 0);
+	CHECK(after->s.transport.master == 65535 - 312);
 	// The LEDs: the chosen box white, the other dark gray, the rest dark; MIX full.
 	ledsOf(r);
 	CHECK(r.want.cc[Track1Above].color == push2::kRgbDarkGray && r.want.cc[Track1Above + 1].color == push2::kRgbWhite);
-	CHECK(r.want.cc[Track1Above + 2].color == push2::kBlack && r.want.cc[Track8Above].color == push2::kBlack);
+	CHECK(r.want.cc[Track1Above + 2].color == push2::kRgbDarkGray &&
+		  r.want.cc[Track1Above + 3].color == push2::kRgbDarkGray);
+	CHECK(r.want.cc[Track1Above + 4].color == push2::kBlack && r.want.cc[Track8Above].color == push2::kBlack);
 	CHECK(r.want.cc[Mix].color == push2::kWhiteFull);
 	r.click(Track1Above); // VOLUMES again
 	ledsOf(r);
-	CHECK(!r.view().s.ui.mixPans && r.want.cc[Track1Above].color == push2::kRgbWhite);
+	CHECK(r.view().s.ui.mixLane == 0 && r.want.cc[Track1Above].color == push2::kRgbWhite);
 	// Lower buttons still select tracks; the upper ones do nothing on other screens.
 	r.click(Track1Below + 4);
 	CHECK(r.view().s.ui.track == 4);
@@ -4410,7 +4423,7 @@ TEST(mix_volumes_pans) {
 	ledsOf(r);
 	CHECK(r.want.cc[Mix].color == push2::kWhiteDark && r.want.cc[Track1Above].color == push2::kBlack);
 	r.click(Track1Above + 1);
-	CHECK(!r.view().s.ui.mixPans);
+	CHECK(r.view().s.ui.mixLane == 0);
 	r.turn(0, -1); // closed: the encoder does nothing
 	CHECK(r.state()->s.track[0].value[tart::kLevel] == 65535);
 	// MIX is momentary when held, as DEVICE.
@@ -4576,7 +4589,7 @@ TEST(mix_step_lock) {
 	CHECK((pointsOf(r, tart::kPan) == Pts{{48, 32768}, {48, 32768 + 312}, {72, 32768 + 312}, {72, 32768}}));
 	auto v = r.view();
 	CHECK(v.at[tart::kLevel] == 65535 - 312 && v.at[tart::kPan] == 32768 + 312); // what the display shows
-	r.turn(2, 3);                                                                // the other encoders do nothing
+	r.turn(4, 3);                                                                // the other encoders do nothing
 	r.turn(7, 3);
 	for (int lane = 0; lane < tart::kCcs; lane++)
 		CHECK(pointsOf(r, lane).empty());
@@ -4751,12 +4764,12 @@ TEST(lower_button_colors) {
 
 TEST(sanitize_mixer) {
 	auto st = std::make_unique<tart::State>();
-	st->s.track[0].mute = true, st->s.track[1].solo = true, st->s.ui.mixPans = true;
+	st->s.track[0].mute = true, st->s.track[1].solo = true, st->s.ui.mixLane = 3, st->s.ui.sendPre = 2;
 	st->s.ui.defaultLevel = 200;
 	st->s.ui.screen = tart::kMixScreen;
 	st->s.ui.muteSoloLock = 2, st->s.ui.muteSoloAt = 5, st->s.ui.muteSoloUsed = true;
 	tart::sanitize(*st);
-	CHECK(st->s.track[0].mute && st->s.track[1].solo && st->s.ui.mixPans); // saved
+	CHECK(st->s.track[0].mute && st->s.track[1].solo && st->s.ui.mixLane == 3 && st->s.ui.sendPre == 2); // saved
 	CHECK(st->s.ui.defaultLevel == 10 && st->s.ui.screen == tart::kHome);
 	CHECK(!st->s.track[2].mute && !st->s.track[2].solo);
 	CHECK(st->s.ui.muteSoloLock == 0 && st->s.ui.muteSoloAt == -1 && !st->s.ui.muteSoloUsed);
@@ -4765,7 +4778,8 @@ TEST(sanitize_mixer) {
 	tart::sanitize(*st);
 	CHECK(st->s.ui.defaultLevel == 4);
 	const tart::Session fresh;
-	CHECK(!fresh.track[0].mute && !fresh.track[0].solo && !fresh.ui.mixPans && fresh.ui.defaultLevel == 10);
+	CHECK(!fresh.track[0].mute && !fresh.track[0].solo && fresh.ui.mixLane == 0 && fresh.ui.sendPre == 0 &&
+		  fresh.transport.master == 65535 && fresh.ui.defaultLevel == 10);
 }
 
 TEST(mix_automate_writes_level) {
@@ -6619,7 +6633,7 @@ TEST(euclid_lock_ops) {
 	tart::Clip& c = s->clip[0][0];
 	c.length = tart::kBar;
 	const Locks bad = {lk(3, 5, 1, 7),  lk(0, 2, 0, 100), lk(17, 0, 0, 1),
-					   lk(0, 32, 0, 1), lk(0, 1, 10, 1),  lk(0, 2, 0, 200)};
+					   lk(0, 32, 0, 1), lk(0, 1, 12, 1),  lk(0, 2, 0, 200)};
 	std::copy(bad.begin(), bad.end(), c.locks);
 	c.locks[0].spare = 9;
 	c.nLocks = (uint16_t)bad.size();
@@ -6722,6 +6736,7 @@ TEST(euclid_lock_model) {
 			ref.push_back({std::get<0>(k.first), std::get<1>(k.first), std::get<2>(k.first), k.second}),
 				locks.push_back(lk(std::get<0>(k.first), std::get<1>(k.first), std::get<2>(k.first), k.second));
 		setLocks(r, locks);
+		r.m.edit([](tart::State& st) { st.s.ui.sendPre = 3; }); // the sends' own volts, whatever LEVEL does
 		const tart::Track base = r.state()->s.track[0];
 		for (int k = 0; k < 4 * tart::kBar; k++) {
 			while (r.in.frame < 250 * k + 2)
@@ -6740,7 +6755,11 @@ TEST(euclid_lock_model) {
 				}
 				const float expected = tart::volts(base, j, want >= 0 ? want : base.value[j]);
 				const tart::SliceTrack& o = r.f.track[0];
-				const float got = j < tart::kCcs ? o.cc[j] : j == tart::kLevel ? o.level : o.pan;
+				const float got = j < tart::kCcs      ? o.cc[j]
+								  : j == tart::kLevel ? o.level
+								  : j == tart::kPan   ? o.pan
+								  : j == tart::kSendA ? o.sendA
+													  : o.sendB;
 				CHECK_NEAR(got, expected, 0.15f);
 				checked++, locked += want >= 0, contested += hits > 1;
 			}
@@ -6977,4 +6996,228 @@ TEST(euclid_fuzz) {
 		CHECK(counts[kind] > 0);
 	std::printf("euclid_fuzz: locks held at the end of an op %d times, %ld locks seen\n", heldSteps, nLocks);
 	CHECK(heldSteps > 10 && nLocks > 5000);
+}
+
+// ---- Sends and MASTER (E4.6)
+
+namespace {
+
+/** Runs a SliceRig until frame `n` (the transport starts on the first sample). */
+void runFrames(SliceRig& r, int64_t n) {
+	while (r.in.frame < n)
+		r.in.play = r.in.frame == 0, r.step();
+}
+
+} // namespace
+
+TEST(sends_are_lanes) {
+	using namespace push2::cc;
+	CHECK(tart::kAutos == 12 && tart::kLevel == 8 && tart::kPan == 9 && tart::kSendA == 10 && tart::kSendB == 11);
+	{ // defaults: 0 V, and a patch made before the sends has no points on them
+		SliceRig r;
+		r.run_(2);
+		for (int t = 0; t < tart::kTracks; t++)
+			CHECK(r.f.track[t].sendA == 0 && r.f.track[t].sendB == 0 && r.f.track[t].level == 10);
+		CHECK(r.state()->s.track[0].value[tart::kSendA] == 0 && r.state()->s.track[0].value[tart::kSendB] == 0);
+	}
+	{ // a clip's SEND A line plays, and SEND B stays
+		SliceRig r(false);
+		r.m.edit([](tart::State& st) {
+			tart::Clip& c = st.clip[0][0];
+			c.length = tart::kBar, c.nPoints[tart::kSendA] = 2;
+			c.points[tart::kSendA][0] = {0, 0}, c.points[tart::kSendA][1] = {tart::kBar, 65535};
+			st.s.track[0].playing = 0;
+		});
+		runFrames(r, 250 * 192 + 5);
+		CHECK_NEAR(r.f.track[0].sendA, 5.f, 0.1f);
+		CHECK(r.f.track[0].sendB == 0 && r.f.track[1].sendA == 0);
+	}
+	{ // a step lock on the Mix screen: encoders 3 and 4 of the selected track
+		Rig r;
+		r.click(Layout);
+		r.tap(0, 2);
+		r.click(Mix);
+		r.pad(0, 2, 100);
+		r.turn(2, 1);
+		CHECK((pointsOf(r, tart::kSendA) == Pts{{48, 0}, {48, 312}, {72, 312}, {72, 0}}));
+		r.turn(3, 2);
+		CHECK((pointsOf(r, tart::kSendB) == Pts{{48, 0}, {48, 624}, {72, 624}, {72, 0}}));
+		CHECK(r.view().at[tart::kSendA] == 312 && r.view().at[tart::kSendB] == 624);
+		r.turn(4, 3); // encoders 5 to 8 do nothing
+		r.turn(7, 3);
+		CHECK(pointsOf(r, tart::kLevel).empty() && pointsOf(r, tart::kPan).empty());
+		r.pad(0, 2, 0);
+		undoClick(r);
+		CHECK(pointsOf(r, tart::kSendA).empty() && pointsOf(r, tart::kSendB).empty());
+	}
+	{ // a pattern-step lock on a Euclid track
+		Rig r;
+		euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 16, 4); }, tart::kBar, false);
+		r.click(Mix);
+		stepPad(r, 3);
+		r.turn(3, 1);
+		r.turn(2, 2);
+		CHECK(sameLocks(locksOf(*r.state()), Locks{lk(0, 3, tart::kSendA, 624), lk(0, 3, tart::kSendB, 312)}));
+		stepPad(r, 3, 0);
+	}
+}
+
+TEST(send_post_fader) {
+	SliceRig r;
+	r.m.edit([](tart::State& st) {
+		st.s.track[0].value[tart::kSendA] = 52428; // 8 V
+		st.s.track[0].value[tart::kSendB] = 65535;
+		st.s.track[0].value[tart::kLevel] = 32768; // 5 V
+	});
+	r.run_(2);
+	CHECK_NEAR(r.f.track[0].sendA, 4.f, 0.01f); // 8 V x LEVEL 5 V / 10 V
+	CHECK_NEAR(r.f.track[0].sendB, 5.f, 0.01f);
+	r.m.edit([](tart::State& st) { st.s.track[0].mute = true; });
+	r.run_(2);
+	CHECK(r.f.track[0].sendA == 0 && r.f.track[0].sendB == 0); // muted: nothing reaches the sends
+	r.m.edit([](tart::State& st) { st.s.track[0].mute = false, st.s.track[1].solo = true; });
+	r.run_(2);
+	CHECK(r.f.track[0].sendA == 0); // another track is soloed
+	r.m.edit([](tart::State& st) { st.s.track[1].solo = false; });
+	r.run_(2);
+	CHECK_NEAR(r.f.track[0].sendA, 4.f, 0.01f);
+}
+
+TEST(send_pre_fader) {
+	SliceRig r;
+	r.m.edit([](tart::State& st) {
+		st.s.track[0].value[tart::kSendA] = 52428, st.s.track[0].value[tart::kSendB] = 52428;
+		st.s.track[0].value[tart::kLevel] = 32768;
+		st.s.ui.sendPre = 1; // SEND A pre-fader, SEND B still post
+	});
+	r.run_(2);
+	CHECK_NEAR(r.f.track[0].sendA, 8.f, 0.01f); // independent of LEVEL
+	CHECK_NEAR(r.f.track[0].sendB, 4.f, 0.01f);
+	r.m.edit([](tart::State& st) { st.s.track[0].mute = true; });
+	r.run_(2);
+	CHECK_NEAR(r.f.track[0].sendA, 8.f, 0.01f); // and of Mute
+	CHECK(r.f.track[0].sendB == 0 && r.f.track[0].level == 0);
+	r.m.edit([](tart::State& st) { st.s.track[0].mute = false, st.s.track[1].solo = true, st.s.ui.sendPre = 3; });
+	r.run_(2);
+	CHECK_NEAR(r.f.track[0].sendA, 8.f, 0.01f); // and of another track's Solo
+	CHECK_NEAR(r.f.track[0].sendB, 8.f, 0.01f);
+}
+
+TEST(mix_send_pages) {
+	using namespace push2::cc;
+	{
+		Rig r(false);
+		r.click(Mix);
+		r.click(Track1Above + 2); // SEND A
+		CHECK(r.view().s.ui.mixLane == 2);
+		for (int t = 0; t < tart::kTracks; t++)
+			r.turn(t, t + 1);
+		auto st = r.state();
+		for (int t = 0; t < tart::kTracks; t++)
+			CHECK(st->s.track[t].value[tart::kSendA] == 312 * (t + 1) && st->s.track[t].value[tart::kLevel] == 65535 &&
+				  st->s.track[t].value[tart::kSendB] == 0);
+		ledsOf(r);
+		for (int i = 0; i < 4; i++)
+			CHECK(r.want.cc[Track1Above + i].color == (i == 2 ? push2::kRgbWhite : push2::kRgbDarkGray));
+		CHECK(r.want.cc[Track1Above + 4].color == push2::kBlack);
+		r.click(Track1Above + 3); // SEND B
+		r.turn(0, 2);
+		CHECK(r.state()->s.track[0].value[tart::kSendB] == 624 && r.state()->s.track[0].value[tart::kSendA] == 312);
+		r.press(Delete); // Delete + touch resets the shown lane to 0 V
+		touch(r, 0);
+		touch(r, 0, false);
+		r.press(Delete, 0);
+		CHECK(r.state()->s.track[0].value[tart::kSendB] == 0 && r.state()->s.track[0].value[tart::kSendA] == 312);
+		r.click(Track1Above + 1); // PANS: the sends stay
+		CHECK(r.view().s.ui.mixLane == 1);
+	}
+	{ // Automate writes a send during a take
+		SliceRig r;
+		fill(r, 0, 0);
+		r.click(Automate);
+		r.click(Mix);
+		r.click(Track1Above + 3);
+		r.click(Record);
+		runTo(r, 24);
+		touch(r, 0);
+		runTo(r, 30);
+		r.turn(0, 10);
+		CHECK(r.view().s.ui.writing == 1 << tart::kSendB);
+		runTo(r, 40);
+		r.run_(20);
+		CHECK_NEAR(r.f.track[0].sendB, 3120 * 10.f / 65535, 1e-3); // post-fader at LEVEL 10 V
+		touch(r, 0, false);
+		CHECK(r.view().s.ui.writing == 0 && !pointsOf(r, tart::kSendB).empty());
+		for (int lane = 0; lane < tart::kSendB; lane++)
+			CHECK(pointsOf(r, lane).empty());
+	}
+}
+
+TEST(master_encoder) {
+	using namespace push2::cc;
+	Rig r(false);
+	CHECK(r.state()->s.transport.master == 65535);
+	r.turn(push2::kMasterId, -1); // Home
+	CHECK(r.state()->s.transport.master == 65535 - 312);
+	CHECK_NEAR(r.out.master, (65535 - 312) * 10.f / 65535, 1e-3);
+	CHECK(r.view().s.ui.popup == tart::kMasterPopup);
+	r.turn(push2::kMasterId, 5); // clamped at the top
+	CHECK(r.state()->s.transport.master == 65535);
+	r.press(Shift); // finer: SHIFT divides by 31
+	r.turn(push2::kMasterId, -1);
+	CHECK(r.state()->s.transport.master == 65535 - 312 / 31);
+	r.turn(push2::kMasterId, -31);
+	CHECK(r.state()->s.transport.master == 65535 - 312 / 31 - 312);
+	r.press(Shift, 0);
+	r.m.edit([](tart::State& st) { st.s.transport.master = 100; });
+	r.turn(push2::kMasterId, -3); // clamped at the bottom
+	CHECK(r.state()->s.transport.master == 0);
+	r.step();
+	CHECK(r.out.master == 0);
+	for (int screen : {(int)Device, (int)Mix}) { // on every screen, and no track encoder moves with it
+		r.click(screen);
+		auto before = r.state();
+		r.turn(push2::kMasterId, 2);
+		auto after = r.state();
+		CHECK(after->s.transport.master == before->s.transport.master + 624);
+		CHECK(std::memcmp(after->s.track, before->s.track, sizeof before->s.track) == 0);
+		r.click(screen);
+	}
+	// Not in Undo, not touched by Mute or Solo.
+	CHECK(r.state()->s.transport.master == 1248);
+	{
+		Rig n;
+		n.click(Layout);
+		n.tap(0, 2); // an edit that Undo takes back
+		n.turn(push2::kMasterId, -1);
+		undoClick(n);
+		CHECK(n.view().length[0][0] == 0 && n.state()->s.transport.master == 65535 - 312);
+	}
+	r.m.edit([](tart::State& st) { st.s.track[0].mute = true, st.s.track[1].solo = true; });
+	r.run_(3);
+	CHECK_NEAR(r.out.master, 1248 * 10.f / 65535, 1e-4);
+	// The display: the touch shows it; the text is "MASTER 8.50 V".
+	r.m.edit([](tart::State& st) { st.s.transport.master = 55705; });
+	touch(r, push2::kMasterId);
+	tart::View v = r.view();
+	char buf[64];
+	tart::popupText(v, buf, sizeof buf);
+	CHECK(v.s.ui.popup == tart::kMasterPopup && std::string(buf) == "MASTER 8.50 V");
+	touch(r, push2::kMasterId, false);
+}
+
+TEST(sanitize_sends) {
+	auto st = std::make_unique<tart::State>();
+	st->s.ui.mixLane = 9, st->s.ui.sendPre = 7;
+	tart::Clip& c = st->clip[0][0];
+	c.length = tart::kBar, c.nLocks = 2;
+	c.locks[0] = {0, 3, tart::kAutos - 1, 0, 5}; // the last lane is kept
+	c.locks[1] = {0, 3, tart::kAutos, 0, 5};     // one past it is dropped
+	tart::sanitize(*st);
+	CHECK(st->s.ui.mixLane == 3 && st->s.ui.sendPre == 3 && st->s.transport.master == 65535);
+	CHECK(c.nLocks == 1 && c.locks[0].target == 11);
+	st->s.ui.mixLane = 2, st->s.ui.sendPre = 1, st->s.transport.master = 1234;
+	tart::sanitize(*st);
+	CHECK(st->s.ui.mixLane == 2 && st->s.ui.sendPre == 1 && st->s.transport.master == 1234);   // saved
+	CHECK(st->s.track[3].value[tart::kSendA] == 0 && st->s.track[3].value[tart::kSendB] == 0); // an old patch: 0 V
 }

@@ -32,7 +32,7 @@ Two Slices can play the same track, and they send the same signals. A Slice neve
 
 ## The panel
 
-The panel shows the name SLICE, the track window with a button on each side, and six output jacks, two to a row.
+The panel shows the name SLICE, the track window with a button on each side, and eight output jacks, two to a row.
 
 | Element | Kind | What it does |
 |---|---|---|
@@ -45,6 +45,8 @@ The panel shows the name SLICE, the track window with a button on each side, and
 | CC | Output | The 8 CC lanes of the track, one channel each, CC 1 on channel 1. Each channel is 0 V to 10 V or -5 V to +5 V, as the **Range** of that CC says in the **Track** menu of the Tart. 0 V at the start. |
 | LEVEL | Output | The level of the track, 0 V to 10 V. 10 V at the start, or the **Default LEVEL** of the Tart. 0 V while the track is muted or muted by a solo. |
 | PAN | Output | The pan of the track, -5 V to +5 V. 0 V (the middle) at the start. |
+| SEND A | Output | The first send of the track, 0 V to 10 V. 0 V at the start. It is post-fader by default: the value of the send times LEVEL divided by 10 V, and 0 V while the track is silent. With **Send A** set to **Pre-fader** in the menu of the Tart it is the value of the send itself. |
+| SEND B | Output | The second send, the same as SEND A with **Send B** in the menu of the Tart. |
 
 The number of channels on V/OCT, GATE and VEL is the number of voices of the track, set with **Voices** in the **Track** menu of the Tart. The default is 1.
 
@@ -52,9 +54,9 @@ The number of channels on V/OCT, GATE and VEL is the number of voices of the tra
 
 **Euclid tracks.** A track of the Euclid type (see [Euclid tracks](tart.md#euclid-tracks) in the Tart manual) sends 16 channels, as a drum track does, while the clip that decides is in DRUM mode, and sends the number of channels of its **Voices** while that clip is in Melodic mode. The clip that decides is the one that plays, and when none plays, the clip of the selected scene. When this changes, the notes of the track stop and the number of channels changes. In MELODIC mode the touch strip bends the track as on a melodic track.
 
-**CC, LEVEL and PAN.** These three follow the automation of the clip that the track is playing, and move smoothly between the ticks of the clock. A lane without automation sends the value the track has for it, and it stays there when the clip stops. See [CC and automation](tart.md#cc-and-automation) in the Tart manual. You change the CC values and make automation for the CC lanes on the Push, see [Device mode](tart.md#device-mode) and [Step automation](tart.md#step-automation), and the LEVEL and PAN of the tracks on the Mix screen, see [Mix mode](tart.md#mix-mode).
+**CC, LEVEL, PAN and the sends.** These follow the automation of the clip that the track is playing, and move smoothly between the ticks of the clock. A lane without automation sends the value the track has for it, and it stays there when the clip stops. See [CC and automation](tart.md#cc-and-automation) in the Tart manual. You change the CC values and make automation for the CC lanes on the Push, see [Device mode](tart.md#device-mode) and [Step automation](tart.md#step-automation), and the LEVEL, PAN and sends of the tracks on the Mix screen, see [Mix mode](tart.md#mix-mode).
 
-**Mute and solo.** While the track is muted, or another track is soloed and this one is not (see [Mute and Solo](tart.md#mute-and-solo) in the Tart manual), LEVEL is 0 V and every channel of GATE is 0 V. The clip goes on playing, and V/OCT, VEL, CC and PAN keep following it, so when the track sounds again, it is in the right place. A note that is still held when you unmute the track opens its gate at once.
+**Mute and solo.** While the track is muted, or another track is soloed and this one is not (see [Mute and Solo](tart.md#mute-and-solo) in the Tart manual), LEVEL is 0 V, every channel of GATE is 0 V, and so is every post-fader send. A pre-fader send keeps its own value. The clip goes on playing, and V/OCT, VEL, CC, PAN and the pre-fader sends keep following it, so when the track sounds again, it is in the right place. A note that is still held when you unmute the track opens its gate at once.
 
 ## Context menu reference
 
@@ -82,4 +84,4 @@ A Slice saves its track and the Tart you chose, or **Automatic**. The Tart is sa
 - A Slice plays one track. For all eight tracks you need eight Slices.
 - A patch can have 16 Tarts. A seventeenth Tart is not found by any Slice.
 - A Slice sends the tracks one sample late, as described in [Choosing the Tart and the track](#choosing-the-tart-and-the-track).
-- The CC outputs only move when you turn an encoder of the Device screen or a clip has automation, and LEVEL and PAN when you turn an encoder of the Mix screen or a clip has automation. A muted track closes its gates and sets LEVEL to 0 V, but its V/OCT, VEL, CC and PAN outputs still move.
+- The CC outputs only move when you turn an encoder of the Device screen or a clip has automation, and LEVEL, PAN and the sends when you turn an encoder of the Mix screen or a clip has automation. A muted track closes its gates and sets LEVEL to 0 V, but its V/OCT, VEL, CC and PAN outputs, and its pre-fader sends, still move.

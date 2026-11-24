@@ -1054,7 +1054,7 @@ static int gNTarts = 0, gTartGen = 0; // the generation changes with the list, s
 
 struct Tart : Module {
 	enum InputId { PLAY_INPUT, STOP_INPUT, CLOCK_INPUT, RESET_INPUT, TEMPO_INPUT, INPUTS_LEN };
-	enum OutputId { CLK_OUTPUT, RESET_OUTPUT, RUN_OUTPUT, METRO_OUTPUT, OUTPUTS_LEN };
+	enum OutputId { CLK_OUTPUT, RESET_OUTPUT, RUN_OUTPUT, METRO_OUTPUT, MASTER_OUTPUT, OUTPUTS_LEN };
 	enum LightId { PUSH_LIGHT, PUSH_RED_LIGHT, LIGHTS_LEN }; // one green-red light: green first
 
 	// The Push's User port, both directions: ports found by name or picked in the menu, saved in the patch.
@@ -1090,6 +1090,7 @@ struct Tart : Module {
 		configOutput(RESET_OUTPUT, "Reset (on play and reset)");
 		configOutput(RUN_OUTPUT, "Run (high while playing)");
 		configOutput(METRO_OUTPUT, "Metronome (10 V downbeat, 5 V other beats)");
+		configOutput(MASTER_OUTPUT, "Master volume (0 to 10 V)");
 		configLight(PUSH_LIGHT, "Push 2 (green: MIDI and display, red: MIDI only)");
 		pushOut.channel = -1; // else Rack overwrites the channel byte, which carries the LED animation
 		one.setSize(1);
@@ -1190,6 +1191,7 @@ struct Tart : Module {
 		outputs[RESET_OUTPUT].setVoltage(resetPulse.process(args.sampleTime) ? 10.f : 0.f);
 		outputs[RUN_OUTPUT].setVoltage(out.run ? 10.f : 0.f);
 		outputs[METRO_OUTPUT].setVoltage(metroPulse.process(args.sampleTime) ? metroV : 0.f);
+		outputs[MASTER_OUTPUT].setVoltage(out.master);
 		if (args.frame % 256 == 0) {
 			uint8_t msg[32][3];
 			int n = own ? push2::diff(want, sent, false, msg, 32) : 0;
@@ -1274,17 +1276,17 @@ struct Tart : Module {
 			json_object_set_new(trackJ, "solo", json_boolean(tr.solo));
 			json_array_append_new(tracks, trackJ);
 		}
-		return json_pack("{s:b, s:o, s:o, s:{s:f, s:i, s:i, s:b}, s:{s:i, s:i, s:i, s:b, s:b}, "
-						 "s:{s:i, s:i, s:i, s:i, s:i, s:b, s:i, s:i, s:i, s:i, s:b, s:b, s:i, s:b}, s:o, s:i, s:i}",
-						 "pushAuto", pushAuto, "pushIn", pushIn.toJson(), "pushOut", pushOut.toJson(), "transport",
-						 "bpm", (double)t.bpm, "swing", (int)t.swing, "quant", (int)t.quant, "metronome", t.metronome,
-						 "scale", "root", (int)sc.root, "scale", (int)sc.scale, "layout", (int)sc.layout, "inKey",
-						 sc.inKey, "fixed", sc.fixed, "ui", "pads", (int)u.pads, "noteLayout", (int)u.noteLayout,
-						 "screen", (int)u.screen, "track", (int)u.track, "scene", (int)u.scene, "fixedOn", u.fixedOn,
-						 "fixedBars", (int)u.fixedBars, "quantTo", (int)u.quantTo, "quantAmount", (int)u.quantAmount,
-						 "recQuant", (int)u.recQuant, "recQuantOn", u.recQuantOn, "automate", u.automate,
-						 "defaultLevel", (int)u.defaultLevel, "mixPans", u.mixPans, "tracks", tracks, "clkDivision",
-						 clkDivision, "ppc", ppc);
+		return json_pack(
+			"{s:b, s:o, s:o, s:{s:f, s:i, s:i, s:b, s:i}, s:{s:i, s:i, s:i, s:b, s:b}, "
+			"s:{s:i, s:i, s:i, s:i, s:i, s:b, s:i, s:i, s:i, s:i, s:b, s:b, s:i, s:i, s:i}, s:o, s:i, s:i}",
+			"pushAuto", pushAuto, "pushIn", pushIn.toJson(), "pushOut", pushOut.toJson(), "transport", "bpm",
+			(double)t.bpm, "swing", (int)t.swing, "quant", (int)t.quant, "metronome", t.metronome, "master",
+			(int)t.master, "scale", "root", (int)sc.root, "scale", (int)sc.scale, "layout", (int)sc.layout, "inKey",
+			sc.inKey, "fixed", sc.fixed, "ui", "pads", (int)u.pads, "noteLayout", (int)u.noteLayout, "screen",
+			(int)u.screen, "track", (int)u.track, "scene", (int)u.scene, "fixedOn", u.fixedOn, "fixedBars",
+			(int)u.fixedBars, "quantTo", (int)u.quantTo, "quantAmount", (int)u.quantAmount, "recQuant", (int)u.recQuant,
+			"recQuantOn", u.recQuantOn, "automate", u.automate, "defaultLevel", (int)u.defaultLevel, "mix",
+			(int)u.mixLane, "sendPre", (int)u.sendPre, "tracks", tracks, "clkDivision", clkDivision, "ppc", ppc);
 	}
 
 	void dataFromJson(json_t* root) override {
@@ -1310,9 +1312,10 @@ struct Tart : Module {
 		auto u8 = [](int v) { return (uint8_t)clamp(v, 0, 255); };
 		tart::Transport& t = st->s.transport;
 		double bpm = t.bpm;
-		int swing = t.swing, quant = t.quant, metronome = t.metronome;
-		json_unpack(transportJ, "{s?F, s?i, s?i, s?b}", "bpm", &bpm, "swing", &swing, "quant", &quant, "metronome",
-					&metronome);
+		int swing = t.swing, quant = t.quant, metronome = t.metronome, master = t.master;
+		json_unpack(transportJ, "{s?F, s?i, s?i, s?b, s?i}", "bpm", &bpm, "swing", &swing, "quant", &quant, "metronome",
+					&metronome, "master", &master);
+		t.master = (uint16_t)clamp(master, 0, 65535);
 		t.bpm = (float)bpm;
 		t.swing = u8(swing);
 		t.quant = u8(quant);
@@ -1326,16 +1329,17 @@ struct Tart : Module {
 		int pads = ui.pads, noteLayout = ui.noteLayout, screen = ui.screen, track = ui.track, scene = ui.scene,
 			fixedOn = ui.fixedOn, fixedBars = ui.fixedBars, quantTo = ui.quantTo, quantAmount = ui.quantAmount,
 			recQuant = ui.recQuant, recQuantOn = ui.recQuantOn, automate = ui.automate, defaultLevel = ui.defaultLevel,
-			mixPans = ui.mixPans;
-		json_unpack(uiJ, "{s?i, s?i, s?i, s?i, s?i, s?b, s?i, s?i, s?i, s?i, s?b, s?b, s?i, s?b}", "pads", &pads,
-					"noteLayout", &noteLayout, "screen", &screen, "track", &track, "scene", &scene, "fixedOn", &fixedOn,
-					"fixedBars", &fixedBars, "quantTo", &quantTo, "quantAmount", &quantAmount, "recQuant", &recQuant,
-					"recQuantOn", &recQuantOn, "automate", &automate, "defaultLevel", &defaultLevel, "mixPans",
-					&mixPans);
+			mix = ui.mixLane, sendPre = ui.sendPre, mixPans = 0; // "mixPans" (saved before the sends): PANS
+		json_unpack(uiJ, "{s?i, s?i, s?i, s?i, s?i, s?b, s?i, s?i, s?i, s?i, s?b, s?b, s?i, s?i, s?i, s?b}", "pads",
+					&pads, "noteLayout", &noteLayout, "screen", &screen, "track", &track, "scene", &scene, "fixedOn",
+					&fixedOn, "fixedBars", &fixedBars, "quantTo", &quantTo, "quantAmount", &quantAmount, "recQuant",
+					&recQuant, "recQuantOn", &recQuantOn, "automate", &automate, "defaultLevel", &defaultLevel, "mix",
+					&mix, "sendPre", &sendPre, "mixPans", &mixPans);
 		ui.pads = u8(pads), ui.noteLayout = u8(noteLayout), ui.screen = u8(screen), ui.track = u8(track);
 		ui.scene = u8(scene), ui.fixedOn = fixedOn, ui.fixedBars = u8(fixedBars);
 		ui.quantTo = u8(quantTo), ui.quantAmount = u8(quantAmount), ui.recQuant = u8(recQuant);
-		ui.recQuantOn = recQuantOn, ui.automate = automate, ui.defaultLevel = u8(defaultLevel), ui.mixPans = mixPans;
+		ui.recQuantOn = recQuantOn, ui.automate = automate, ui.defaultLevel = u8(defaultLevel),
+		ui.mixLane = u8(json_object_get(uiJ, "mix") ? mix : mixPans), ui.sendPre = u8(sendPre);
 		for (size_t i = 0; i < tart::kTracks && i < json_array_size(tracksJ); i++) {
 			tart::Track& tr = st->s.track[i];
 			const char* name = nullptr;
@@ -1534,7 +1538,7 @@ struct TartWidget : ModuleWidget {
 			addInput(createInputCentered<PJ301MPort>(mm2px(Vec(kRow1X(i), 100)), module, i));
 			text->label(Vec(kRow1X(i), 100), inputs[i]);
 		}
-		const char* outputs[] = {"CLK", "RESET", "RUN", "METRO"};
+		const char* outputs[] = {"CLK", "RESET", "RUN", "METRO", "MASTER"};
 		for (int i = 0; i < Tart::OUTPUTS_LEN; i++) {
 			addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(kRow1X(i), 117)), module, i));
 			text->label(Vec(kRow1X(i), 117), outputs[i], true);
@@ -1685,6 +1689,19 @@ struct TartWidget : ModuleWidget {
 						tr.value[tart::kLevel] = tart::levelValue((int)i);
 				});
 			}));
+		for (int send = 0; send < 2; send++) // pre- or post-fader, for all tracks
+			menu->addChild(createIndexSubmenuItem(
+				send ? "Send B" : "Send A", {"Post-fader", "Pre-fader"},
+				[=] {
+					tart::View v;
+					m->machine.view(v);
+					return (size_t)(v.s.ui.sendPre >> send & 1);
+				},
+				[=](size_t i) {
+					m->machine.edit([=](tart::State& st) {
+						st.s.ui.sendPre = (uint8_t)((st.s.ui.sendPre & ~(1 << send)) | (i << send));
+					});
+				}));
 		menu->addChild(createSubmenuItem("Track", "", [=](Menu* sub) {
 			tart::View v;
 			m->machine.view(v);
@@ -1779,7 +1796,17 @@ struct TartWidget : ModuleWidget {
 
 struct Slice : Module {
 	enum ParamId { TRACK_PREV_PARAM, TRACK_NEXT_PARAM, PARAMS_LEN };
-	enum OutputId { VOCT_OUTPUT, GATE_OUTPUT, VEL_OUTPUT, CC_OUTPUT, LEVEL_OUTPUT, PAN_OUTPUT, OUTPUTS_LEN };
+	enum OutputId {
+		VOCT_OUTPUT,
+		GATE_OUTPUT,
+		VEL_OUTPUT,
+		CC_OUTPUT,
+		LEVEL_OUTPUT,
+		PAN_OUTPUT,
+		SEND_A_OUTPUT,
+		SEND_B_OUTPUT,
+		OUTPUTS_LEN
+	};
 
 	int track = 0;        // 0..7: the buttons and the menu set it, process() reads it
 	int64_t tartId = -1;  // the Tart's module id; -1: the registered Tart with the lowest id
@@ -1803,6 +1830,8 @@ struct Slice : Module {
 		configOutput(CC_OUTPUT, "CC 1 to 8 (one channel each)");
 		configOutput(LEVEL_OUTPUT, "Level (0 to 10 V)");
 		configOutput(PAN_OUTPUT, "Pan (-5 to +5 V)");
+		configOutput(SEND_A_OUTPUT, "Send A (0 to 10 V; post-fader by default)");
+		configOutput(SEND_B_OUTPUT, "Send B (0 to 10 V; post-fader by default)");
 	}
 
 	/** Chained patches (saved before Slices went anywhere): the track is the position in the chain, once. */
@@ -1850,6 +1879,8 @@ struct Slice : Module {
 			outputs[CC_OUTPUT].setVoltage(t ? t->cc[c] : 0.f, c);
 		outputs[LEVEL_OUTPUT].setVoltage(t ? t->level : 0.f);
 		outputs[PAN_OUTPUT].setVoltage(t ? t->pan : 0.f);
+		outputs[SEND_A_OUTPUT].setVoltage(t ? t->sendA : 0.f);
+		outputs[SEND_B_OUTPUT].setVoltage(t ? t->sendB : 0.f);
 	}
 
 	json_t* dataToJson() override { return json_pack("{s:i, s:I}", "track", track, "tart", (json_int_t)tartId); }
@@ -1866,13 +1897,13 @@ struct Slice : Module {
 
 // Matches res/Slice.svg (mm): the number window and the hint under it, the two track buttons, the jacks two to a row.
 // The window and the glyphs under the buttons are in the SVG.
-static const math::Rect kSliceStatusMm = math::Rect(3, 12, 24.5, 62);
+static const math::Rect kSliceStatusMm = math::Rect(3, 12, 24.5, 46);
 static const float kSliceWindowMm = 14;
 static Vec sliceButtonMm(int i) {
 	return Vec(i ? 24.3f : 6.2f, 19.f);
 }
 static Vec sliceJackMm(int i) {
-	return Vec(i % 2 ? 21.9f : 8.6f, 85.f + 16.f * (i / 2));
+	return Vec(i % 2 ? 21.9f : 8.6f, 69.f + 16.f * (i / 2));
 }
 
 /** The track number in its colour, or what to do when there is none. */
@@ -1915,7 +1946,7 @@ struct SliceWidget : ModuleWidget {
 		text->band("SLICE");
 		for (int i = 0; i < Slice::PARAMS_LEN; i++)
 			addParam(createParamCentered<VCVButton>(mm2px(sliceButtonMm(i)), module, i));
-		const char* outputs[] = {"V/OCT", "GATE", "VEL", "CC", "LEVEL", "PAN"};
+		const char* outputs[] = {"V/OCT", "GATE", "VEL", "CC", "LEVEL", "PAN", "SEND A", "SEND B"};
 		for (int i = 0; i < Slice::OUTPUTS_LEN; i++) {
 			addOutput(createOutputCentered<PJ301MPort>(mm2px(sliceJackMm(i)), module, i));
 			text->label(sliceJackMm(i), outputs[i], true);

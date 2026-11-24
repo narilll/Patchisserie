@@ -161,18 +161,18 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 			std::snprintf(buf, sizeof buf, tr.bipolar >> j & 1 ? "%+.2f V" : "%.2f V", volts);
 			text(x + 114, 27, buf, 14, NVG_ALIGN_RIGHT, white, mono);
 		}
-	} else if (ui.screen == kMixScreen) { // VOLUMES and PANS over upper 1 and 2; a column a track: its LEVEL or PAN
-		// (a held step: the selected track's LEVEL and PAN in columns 1 and 2) as a dot (as on Device), M and S badges,
-		// the value and a bar
+	} else if (ui.screen == kMixScreen) { // VOLUMES, PANS, SEND A, SEND B over upper 1 to 4; a column a track: its lane
+		// (a held step: the selected track's LEVEL, PAN, SEND A and SEND B in columns 1 to 4) as a dot (as on Device),
+		// M and S badges, the value and a bar
 		const NVGcolor grey = nvgRGB(0x30, 0x32, 0x36);
-		for (int k = 0; k < 2; k++) {
-			rect(120.f * k + 3, 2, 114, 20, k == ui.mixPans ? white : grey);
-			text(120.f * k + 60, 18, k ? "PANS" : "VOLUMES", 15, NVG_ALIGN_CENTER, k == ui.mixPans ? black : white,
-				 sans);
+		static const char* const kMixNames[4] = {"VOLUMES", "PANS", "SEND A", "SEND B"};
+		for (int k = 0; k < 4; k++) {
+			rect(120.f * k + 3, 2, 114, 20, k == ui.mixLane ? white : grey);
+			text(120.f * k + 60, 18, kMixNames[k], 15, NVG_ALIGN_CENTER, k == ui.mixLane ? black : white, sans);
 		}
 		const bool held = ui.heldStep >= 0;
-		for (int j = 0; j < (held ? 2 : kTracks); j++) {
-			const int trk = held ? ui.track : j, lane = held ? (j ? kPan : kLevel) : ui.mixPans ? kPan : kLevel;
+		for (int j = 0; j < (held ? 4 : kTracks); j++) {
+			const int trk = held ? ui.track : j, lane = kMixLane[held ? j : ui.mixLane];
 			const Track& tr = v.s.track[trk];
 			const float x = 120.f * j;
 			const bool lockHeld = held && tr.type == tart::Euclidean; // its locks are the dots, as on Device
@@ -186,7 +186,12 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 				nvgFill(vg);
 			}
 			if (held)
-				text(x + 18, 37, lane == kPan ? "PAN" : "LEVEL", 11, NVG_ALIGN_LEFT, dim, sans);
+				text(x + 18, 37,
+					 lane == kPan     ? "PAN"
+					 : lane == kLevel ? "LEVEL"
+					 : lane == kSendA ? "SEND A"
+									  : "SEND B",
+					 11, NVG_ALIGN_LEFT, dim, sans);
 			if (tr.mute && !held) {
 				rect(x + 76, 26, 18, 14, nvgRGB(255, 200, 0));
 				text(x + 85, 37, "M", 12, NVG_ALIGN_CENTER, black, sans);
@@ -356,10 +361,12 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 	}
 
 	// Popup: while the encoder is touched and for a second after a turn.
-	bool tempo = ui.popup == kTempoPopup, undo = ui.popup >= kUndoPopup, full = ui.popup >= kClipFullPopup;
-	if (full ? ui.now - ui.popupAt < 1
-			 : (tempo || ui.popup == kSwingPopup) &&
-				   (ui.touched >> (tempo ? push2::kTempoId : push2::kSwingId) & 1 || ui.now - ui.popupAt < 1)) {
+	const bool undo = ui.popup >= kUndoPopup, full = ui.popup >= kClipFullPopup;
+	const int knob = ui.popup == kTempoPopup    ? push2::kTempoId
+					 : ui.popup == kSwingPopup  ? push2::kSwingId
+					 : ui.popup == kMasterPopup ? push2::kMasterId
+												: -1;
+	if (full ? ui.now - ui.popupAt < 1 : knob >= 0 && (ui.touched >> knob & 1 || ui.now - ui.popupAt < 1)) {
 		popupText(v, buf, sizeof buf);
 		rect(undo ? 150 : 270, 45, undo ? 660 : 420, 70, nvgRGB(0x30, 0x32, 0x36));
 		text(480, 94, buf, undo ? 28 : 36, NVG_ALIGN_CENTER, white, sans);
