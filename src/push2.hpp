@@ -2,7 +2,9 @@
 // Push 2 (Ableton): the MIDI event decoder, the LED message diff and the display frame format, as pure functions. The
 // numbers come from Ableton's "Push 2 MIDI and Display Interface Manual"; sections are named in the comments. Nothing
 // here touches MIDI ports, USB or GL, so the host tests cover it all.
+#include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -267,6 +269,55 @@ inline void ledBrightness(uint8_t b, uint8_t out[9]) {
 inline void displayBrightness(uint8_t b, uint8_t out[10]) {
 	const uint8_t m[] = {0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x08, (uint8_t)(b & 0x7F), (uint8_t)(b >> 7), 0xF7};
 	std::memcpy(out, m, sizeof m);
+}
+
+/** Set Pad Velocity Curve Entry (0x20): the velocities v[0..15] (1..127) for the indices start..start+15 of the table
+ * (start: 0, 16, ..., 112). */
+inline void velocityCurveEntries(uint8_t start, const uint8_t* v, uint8_t out[25]) {
+	const uint8_t head[] = {0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x20, start};
+	std::memcpy(out, head, sizeof head);
+	for (int i = 0; i < 16; i++)
+		out[8 + i] = v[i] & 0x7F;
+	out[24] = 0xF7;
+}
+
+/** Live's pad velocity curve for Setup's Sensitivity, Gain and Dynamics (0..10 each; 5, 5, 5 is Live's default): the
+ * velocity (1..127) for the weights 0, 32, ... 4064 g. Ableton's Push 2 script (pad_velocity_curve.py,
+ * generate_velocity_curve), transcribed; rounding half to even as Python's round. */
+inline void velocityCurve(int sensitivity, int gain, int dynamics, uint8_t out[128]) {
+	static const double kMaxW[11] = {1700, 1660, 1590, 1510, 1420, 1300, 1170, 1030, 860, 640, 400};
+	static const double kGamma[11] = {0.7, 0.64, 0.58, 0.54, 0.5, 0.46, 0.43, 0.4, 0.36, 0.32, 0.25};
+	static const double kMinV[11] = {1, 1, 1, 1, 1, 1, 3, 6, 12, 24, 36};
+	static const double kMaxV[11] = {96, 102, 116, 121, 124, 127, 127, 127, 127, 127, 127};
+	static const double kAlpha[11] = {90, 70, 54, 40, 28, 20, 10, -5, -25, -55, -90};
+	const double kPi = 3.141592653589793, minw = 160, maxw = kMaxW[sensitivity], gamma = kGamma[gain],
+				 minv = kMinV[gain], maxv = kMaxV[gain];
+	const double a1 = (225.0 - kAlpha[dynamics]) * (kPi / 180.0), a2 = (45.0 - kAlpha[dynamics]) * (kPi / 180.0);
+	const double p1x = 0.5 + 0.4 * std::cos(a1), p1y = 0.5 + 0.4 * std::sin(a1), p2x = 0.5 + 0.4 * std::cos(a2),
+				 p2y = 0.5 + 0.4 * std::sin(a2);
+	const int minIndex = 160 / 32, maxIndex = (int)maxw / 32;
+	double t = 0; // the Bezier search goes on from where the last entry stopped, as in the script
+	for (int i = 0; i < 128; i++) {
+		const double w = i * 32.0;
+		double v;
+		if (w <= minw) {
+			v = 1.0 + (minv - 1.0) * ((double)i / minIndex);
+		} else if (w >= maxw) {
+			v = maxv + (127.0 - maxv) * ((double)(i - maxIndex) / (128 - maxIndex));
+		} else {
+			const double x = (w - minw) / (maxw - minw);
+			double b = 1.0;
+			for (; t <= 1.0; t += 0.0001) {
+				const double s = 1 - t, t2 = t * t, t3 = t2 * t, s2 = s * s, s3 = s2 * s;
+				if (s3 * 0.0 + 3 * t * s2 * p1x + 3 * t2 * s * p2x + t3 * 1.0 >= x) {
+					b = s3 * 0.0 + 3 * t * s2 * p1y + 3 * t2 * s * p2y + t3 * 1.0;
+					break;
+				}
+			}
+			v = minv + std::pow(b, std::exp(-4.0 + 8.0 * gamma)) * (maxv - minv);
+		}
+		out[i] = (uint8_t)std::min(std::max((int)std::nearbyint(v), 1), 127);
+	}
 }
 
 // ---- Display frame ("Pixel Data", "Pixel Color Encoding", "XORing Pixel Data")

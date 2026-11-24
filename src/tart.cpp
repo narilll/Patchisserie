@@ -660,6 +660,8 @@ State::State() {
 
 void clampSetup(Setup& h) {
 	h.display = std::max(h.display, kMinDisplay), h.led = std::min(std::max(h.led, kMinLed), (uint8_t)127);
+	h.sensitivity = std::min(h.sensitivity, kMaxPad), h.gain = std::min(h.gain, kMaxPad),
+	h.dynamics = std::min(h.dynamics, kMaxPad);
 }
 
 void sanitize(State& st) {
@@ -1197,10 +1199,11 @@ void Machine::quantizeEncoder(State& st, int encoder, int delta) {
 		pick(ui.recQuant, accRecQuant_, kQuantUnits, 7);
 }
 
-/** An encoder of the Setup screen: DISPLAY LIGHT (encoder 2) and LED BRIGHTNESS (encoder 3), in Live's ranges. */
+/** An encoder of the Setup screen, in Live's ranges: DISPLAY LIGHT (encoder 2), LED BRIGHTNESS (3), SENSITIVITY (5),
+ * GAIN (6) and DYNAMICS (7). */
 void Machine::setupEncoder(State& st, int encoder, int delta) {
 	Setup& h = st.s.setup;
-	uint8_t* const field[8] = {nullptr, &h.display, &h.led};
+	uint8_t* const field[8] = {nullptr, &h.display, &h.led, nullptr, &h.sensitivity, &h.gain, &h.dynamics};
 	if (!field[encoder])
 		return;
 	const int n = steps(accSetup_[encoder], delta, kSetupUnits[encoder]);
@@ -2822,7 +2825,10 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 		selected_ = s.ui.track, bend_ = s.ui.bend * 2.f / 12.f;
 		out.rgb[2 * kTracks] = 0xFFC800; // ponytail: calibrate on the hardware
 		out.setup = s.setup; // what changed since the Push got it: the first pass (never sent) and each edit
-		out.setupSend = (uint8_t)((s.setup.led != sentSetup_.led) | (s.setup.display != sentSetup_.display) << 1);
+		out.setupSend = (uint8_t)((s.setup.led != sentSetup_.led) | (s.setup.display != sentSetup_.display) << 1 |
+								  (s.setup.sensitivity != sentSetup_.sensitivity || s.setup.gain != sentSetup_.gain ||
+								   s.setup.dynamics != sentSetup_.dynamics)
+									  << 2);
 		sentSetup_ = s.setup;
 		leds(*state_, want);
 		out.ledsDone = true;

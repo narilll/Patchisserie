@@ -106,6 +106,12 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 		setting(1, "DISPLAY LIGHT", buf);
 		std::snprintf(buf, sizeof buf, "%d %%", (v.s.setup.led * 100 + 63) / 127);
 		setting(2, "LED BRIGHTNESS", buf);
+		std::snprintf(buf, sizeof buf, "%d", v.s.setup.sensitivity);
+		setting(4, "SENSITIVITY", buf);
+		std::snprintf(buf, sizeof buf, "%d", v.s.setup.gain);
+		setting(5, "GAIN", buf);
+		std::snprintf(buf, sizeof buf, "%d", v.s.setup.dynamics);
+		setting(6, "DYNAMICS", buf);
 	} else if (ui.screen == kClipScreen) { // the length of the selected clip, as bars.beats.ticks
 		int length = v.length[ui.track][ui.scene];
 		if (length) {
@@ -328,6 +334,19 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 			}
 			if (status)
 				text(8, 130, status, 14, NVG_ALIGN_LEFT, dim, sans);
+		} else if (ui.screen == kSetupScreen) { // the pads' velocity curve: the weights up to 1824 g (Live's picture)
+			text(8, 80, "Pad velocity", 16, NVG_ALIGN_LEFT, white, sans);
+			rect(8, 86, 944, 44, nvgRGB(0x20, 0x22, 0x26));
+			uint8_t curve[128];
+			push2::velocityCurve(v.s.setup.sensitivity, v.s.setup.gain, v.s.setup.dynamics, curve);
+			nvgBeginPath(vg);
+			for (int i = 0; i <= 57; i++) {
+				const float x = 8 + 944.f * i / 57, y = 86 + 43 - 42.f * (curve[i] - 1) / 126.f;
+				i ? nvgLineTo(vg, x, y) : nvgMoveTo(vg, x, y);
+			}
+			nvgStrokeColor(vg, white);
+			nvgStrokeWidth(vg, 2);
+			nvgStroke(vg);
 		}
 
 		// Bottom band: the tracks, the selected one inverted; with Fixed Length held, its lengths.

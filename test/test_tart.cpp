@@ -62,6 +62,55 @@ TEST(push2_setup_sysex) { // the examples of Ableton's Push 2 interface manual
 	CHECK(!std::memcmp(display, d64, sizeof d64));
 }
 
+namespace {
+
+/** Whether the curve of the three settings starts with `head` and holds 127 from there on. */
+bool curveStarts(int sensitivity, int gain, int dynamics, std::vector<int> head) {
+	uint8_t v[128];
+	push2::velocityCurve(sensitivity, gain, dynamics, v);
+	head.resize(128, 127);
+	return std::equal(head.begin(), head.end(), v);
+}
+
+} // namespace
+
+TEST(push2_velocity_curve) { // Live's curve (pad_velocity_curve.py), against values computed from its algorithm
+	CHECK(
+		curveStarts(5, 5, 5, {1,  1,  1,  1,  1,  1,  16, 24, 30, 35, 40, 44, 47,  51,  54,  57,  60,  62,  65,  68, 70,
+							  73, 75, 78, 80, 82, 85, 87, 89, 92, 94, 97, 99, 102, 104, 107, 110, 113, 116, 119, 124}));
+	CHECK(curveStarts(10, 10, 10, {1, 8, 15, 22, 29, 36, 96, 104, 111, 121, 125, 126}));
+	CHECK(curveStarts(2, 8, 3, {1,   3,   5,   8,   10,  12,  61,  69,  75,  79,  82,  84,  86,  88,  90,  91,  93,
+								94,  95,  96,  97,  98,  99,  100, 101, 102, 103, 103, 104, 105, 106, 107, 107, 108,
+								109, 110, 110, 111, 112, 113, 114, 115, 116, 116, 118, 119, 120, 121, 123, 125}));
+	CHECK(curveStarts(0, 0, 0,
+					  {1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   1,   2,   2,   2,   2,   2,
+					   2,   3,   3,   3,   3,   3,   3,   4,   4,   4,   4,   4,   4,   5,   5,   5,   5,   6,   6,
+					   7,   7,   8,   8,   9,   11,  12,  14,  16,  19,  24,  29,  37,  49,  65,  92,  96,  97,  97,
+					   98,  98,  98,  99,  99,  100, 100, 101, 101, 101, 102, 102, 103, 103, 103, 104, 104, 105, 105,
+					   106, 106, 106, 107, 107, 108, 108, 108, 109, 109, 110, 110, 110, 111, 111, 112, 112, 113, 113,
+					   113, 114, 114, 115, 115, 115, 116, 116, 117, 117, 117, 118, 118, 119, 119, 120, 120, 120, 121,
+					   121, 122, 122, 122, 123, 123, 124, 124, 125, 125, 125, 126, 126, 127}));
+	long sum = 0; // all 1331 settings: every entry 1..127 and non-decreasing, and the sum of them all
+	bool sane = true;
+	for (int a = 0; a <= 10; a++)
+		for (int b = 0; b <= 10; b++)
+			for (int c = 0; c <= 10; c++) {
+				uint8_t v[128];
+				push2::velocityCurve(a, b, c, v);
+				for (int i = 0; i < 128; i++)
+					sum += v[i], sane &= v[i] >= 1 && v[i] <= 127 && (i == 0 || v[i] >= v[i - 1]);
+			}
+	CHECK(sane && sum == 17806460);
+	// The sysex: indices 16..31 are Ableton's example bytes.
+	const uint8_t v[16] = {0x3E, 0x41, 0x44, 0x46, 0x49, 0x4B, 0x4D, 0x50,
+						   0x52, 0x54, 0x56, 0x59, 0x5B, 0x5D, 0x5F, 0x62};
+	const uint8_t want[25] = {0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x20, 0x10, 0x3E, 0x41, 0x44, 0x46, 0x49,
+							  0x4B, 0x4D, 0x50, 0x52, 0x54, 0x56, 0x59, 0x5B, 0x5D, 0x5F, 0x62, 0xF7};
+	uint8_t out[25];
+	push2::velocityCurveEntries(16, v, out);
+	CHECK(!std::memcmp(out, want, sizeof want));
+}
+
 TEST(push2_user_port) {
 	for (const char* n : {"Ableton Push 2 User Port", "MIDIIN2 (Ableton Push 2)", "MIDIOUT2 (Ableton Push 2)",
 						  "MIDIIN2 (Ableton Push 2) 3", "Ableton Push 2:Ableton Push 2 MIDI 2 20:1",
@@ -439,7 +488,7 @@ TEST(tart_machine_threads) {
 		tart::Inputs in;
 		tart::Outputs out;
 		push2::Leds want;
-		push2::Event ev[77];
+		push2::Event ev[78];
 		ev[0] = dec({0xB0, push2::cc::kTempo, 1});
 		ev[1] = dec({0xB0, push2::cc::Metronome, 127});
 		ev[2] = dec({0x90, 36, 100}); // a pad and the touch strip
@@ -517,10 +566,11 @@ TEST(tart_machine_threads) {
 		ev[74] = dec({0xB0, push2::cc::Setup, 0});
 		ev[75] = dec({0xB0, push2::cc::kTrack1 + 1, 124});
 		ev[76] = dec({0xB0, push2::cc::Setup, 127});
+		ev[77] = dec({0xB0, push2::cc::kTrack1 + 4, 6}); // SENSITIVITY
 		tart::SliceFrame frame;
 		in.play = true;
 		for (int i = 0; i < 20000; i++) {
-			in.events = ev, in.nEvents = i % 7 == 0 ? 77 : 0, in.frame = i;
+			in.events = ev, in.nEvents = i % 7 == 0 ? 78 : 0, in.frame = i;
 			m.process(in, out, want, &frame);
 			in.play = false;
 		}
@@ -7921,7 +7971,7 @@ TEST(setup_send_bits) {
 	Rig r;
 	r.in.leds = true;
 	r.step(); // the first pass: the Push has nothing yet
-	CHECK(r.out.ledsDone && r.out.setupSend == 3 && r.out.setup.display == 255 && r.out.setup.led == 127);
+	CHECK(r.out.ledsDone && r.out.setupSend == 7 && r.out.setup.display == 255 && r.out.setup.led == 127);
 	r.step();
 	CHECK(r.out.setupSend == 0);
 	r.click(Setup);
@@ -7948,4 +7998,34 @@ TEST(setup_send_bits) {
 	tart::sanitize(*st);
 	CHECK(st->s.setup.display == 2 && st->s.setup.led == 127);
 	CHECK(tart::Session().setup.display == 255 && tart::Session().setup.led == 127); // an old patch: Live's defaults
+}
+
+TEST(setup_pad_encoders) {
+	using namespace push2::cc;
+	Rig r;
+	r.in.leds = true;
+	r.step();
+	r.click(Setup);
+	r.step();
+	CHECK(r.view().s.setup.sensitivity == 5 && r.view().s.setup.gain == 5 && r.view().s.setup.dynamics == 5);
+	r.turn(4, 12); // 6 raw units a step
+	CHECK(r.view().s.setup.sensitivity == 7 && r.out.setupSend == 4);
+	r.step();
+	CHECK(r.out.setupSend == 0);
+	r.turn(5, -12);
+	CHECK(r.view().s.setup.gain == 3 && r.out.setupSend == 4);
+	r.turn(6, 6);
+	CHECK(r.view().s.setup.dynamics == 6 && r.out.setupSend == 4);
+	for (int i = 0; i < 6; i++)
+		r.turn(4, 60), r.turn(5, -60), r.turn(6, 60);
+	CHECK(r.view().s.setup.sensitivity == tart::kMaxPad && r.view().s.setup.gain == 0 &&
+		  r.view().s.setup.dynamics == tart::kMaxPad);
+	r.step();
+	r.turn(4, 60); // at the limit: nothing changes, nothing is sent
+	CHECK(r.out.setupSend == 0);
+	r.turn(1, -20); // a brightness doesn't send the curve
+	CHECK(r.out.setupSend == 2);
+	tart::Setup h = {255, 127, 40, 11, 255};
+	tart::clampSetup(h);
+	CHECK(h.sensitivity == 10 && h.gain == 10 && h.dynamics == 10);
 }

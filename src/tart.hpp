@@ -178,8 +178,10 @@ struct Ui {
 
 /** The Push's own settings, which the Setup screen edits and Tart sends to it: Live's ranges and defaults. */
 struct Setup {
-	uint8_t display = 255, led = 127; // DISPLAY LIGHT kMinDisplay..255, LED BRIGHTNESS kMinLed..127
+	uint8_t display = 255, led = 127;                // DISPLAY LIGHT kMinDisplay..255, LED BRIGHTNESS kMinLed..127
+	uint8_t sensitivity = 5, gain = 5, dynamics = 5; // SENSITIVITY, GAIN, DYNAMICS 0..kMaxPad: the pads' velocity curve
 };
+constexpr uint8_t kMaxPad = 10;
 constexpr uint8_t kMinDisplay = 2, kMinLed = 13; // Live's lowest (Push2/setup_component.py)
 /** Clamps a Setup into its ranges (a patch can hold anything). */
 void clampSetup(Setup& h);
@@ -348,8 +350,9 @@ struct Outputs {
 	float metroV = 0;
 	float master = 10.f; // the MASTER output's volts, every sample
 	bool midiClock = false, midiStart = false;
-	bool palette = false;  // the track colours changed (or never went out): send `rgb`, then reapply
-	uint8_t setupSend = 0; // with ledsDone: what changed since it went out: bit 0 LED brightness, bit 1 display
+	bool palette = false; // the track colours changed (or never went out): send `rgb`, then reapply
+	uint8_t setupSend =
+		0; // with ledsDone: what changed since it went out: bit 0 LED brightness, bit 1 display, bit 2 the curve
 	Setup setup = {};      // the values to send, valid with `ledsDone`
 	uint32_t rgb[17] = {}; // 0xRRGGBB for palette index kPaletteFull + k (kPaletteDim is k = 8..15, kPaletteYellow 16);
 						   // valid with `ledsDone`
@@ -489,7 +492,7 @@ class Machine {
 	bool sync_ = true; // take the lock this sample
 	int accTempo_ = 0, accSwing_ = 0, accScale_[8] = {}, accNote_[4] = {}, accClip_ = 0, accBrowse_ = 0,
 		accQuantTo_ = 0, accAmount_ = 0, accRecQuant_ = 0, accEuclid_[8] = {}, accSetup_[8] = {};
-	Setup sentSetup_ = {0, 0}; // what the Push has (0: never sent, below every minimum)
+	Setup sentSetup_ = {0, 0, 255, 255, 255}; // what the Push has (never sent: below or above every range)
 	// What the Slice reads: each lane's volts at the last tick and at the next, mirrored under the lock.
 	float from_[kTracks][kAutos] = {}, to_[kTracks][kAutos] = {};
 	int64_t lastTick_ = 0;

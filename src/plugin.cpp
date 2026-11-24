@@ -1072,7 +1072,7 @@ struct Tart : Module {
 	// process()'s messages, reused so the audio thread doesn't allocate: LEDs, MIDI clock and start, the User-mode
 	// SysEx, a palette entry and the palette reapply. ponytail: sendMessage() and tryPop() lock inside Rack's MIDI
 	// drivers, as in every Rack MIDI module.
-	midi::Message in, led, one, userMode, palette, reapply, ledBright, displayBright;
+	midi::Message in, led, one, userMode, palette, reapply, ledBright, displayBright, curve;
 	std::atomic<bool> resync{false}; // UI -> audio: the Push (re)opened: set User mode and send every LED again
 	std::atomic<bool> owner{false};  // UI -> audio: this Tart holds the Push
 	std::atomic<int> pushState{0};   // UI -> audio, for the light: 0 none, 1 MIDI only, 2 MIDI and display
@@ -1097,7 +1097,7 @@ struct Tart : Module {
 		userMode.bytes.assign(push2::kUserMode, push2::kUserMode + sizeof push2::kUserMode);
 		reapply.bytes.assign(push2::kReapplyPalette, push2::kReapplyPalette + sizeof push2::kReapplyPalette);
 		palette.bytes.resize(17); // the capacity process() writes into
-		ledBright.bytes.resize(9), displayBright.bytes.resize(10);
+		ledBright.bytes.resize(9), displayBright.bytes.resize(10), curve.bytes.resize(25);
 	}
 
 	void onAdd(const AddEvent&) override {
@@ -1135,7 +1135,7 @@ struct Tart : Module {
 	}
 
 	/** The Setup brightness the Push is told, over the same port as the LEDs (audio thread): bit 0 the LED brightness,
-	 * bit 1 the display's. */
+	 * bit 1 the display's, bit 2 the pad velocity curve. */
 	void sendSetup(int64_t frame, uint8_t bits) {
 		if (bits & 1) {
 			push2::ledBrightness(out.setup.led, ledBright.bytes.data());
@@ -1146,6 +1146,16 @@ struct Tart : Module {
 			push2::displayBrightness(out.setup.display, displayBright.bytes.data());
 			displayBright.setFrame(frame);
 			pushOut.sendMessage(displayBright);
+		}
+		if (bits &
+			4) { // the velocity curve: 8 messages of 16 entries (ponytail: about 10 k loop steps, only on a change)
+			uint8_t v[128];
+			push2::velocityCurve(out.setup.sensitivity, out.setup.gain, out.setup.dynamics, v);
+			for (int k = 0; k < 8; k++) {
+				push2::velocityCurveEntries((uint8_t)(16 * k), v + 16 * k, curve.bytes.data());
+				curve.setFrame(frame);
+				pushOut.sendMessage(curve);
+			}
 		}
 	}
 
@@ -1181,7 +1191,7 @@ struct Tart : Module {
 				userMode.setFrame(args.frame);
 				pushOut.sendMessage(userMode);
 				sendPalette(args.frame);
-				sendSetup(args.frame, 3); // the brightness: every time the Push (re)opens
+				sendSetup(args.frame, 7); // the brightness and the pad curve: every time the Push (re)opens
 				one.bytes[0] = 0xFA;      // Start: the Push animates LEDs only while it gets clock and start
 				one.setFrame(args.frame);
 				pushOut.sendMessage(one);
@@ -1296,19 +1306,20 @@ struct Tart : Module {
 			json_object_set_new(trackJ, "solo", json_boolean(tr.solo));
 			json_array_append_new(tracks, trackJ);
 		}
-		return json_pack("{s:b, s:o, s:o, s:{s:f, s:i, s:i, s:b, s:i}, s:{s:i, s:i, s:i, s:b, s:b}, "
-						 "s:{s:i, s:i, s:i, s:i, s:i, s:b, s:i, s:i, s:i, s:i, s:b, s:b, s:i, s:i, s:i}, s:o, s:i, "
-						 "s:i, s:{s:i, s:i}}",
-						 "pushAuto", pushAuto, "pushIn", pushIn.toJson(), "pushOut", pushOut.toJson(), "transport",
-						 "bpm", (double)t.bpm, "swing", (int)t.swing, "quant", (int)t.quant, "metronome", t.metronome,
-						 "master", (int)t.master, "scale", "root", (int)sc.root, "scale", (int)sc.scale, "layout",
-						 (int)sc.layout, "inKey", sc.inKey, "fixed", sc.fixed, "ui", "pads", (int)u.pads, "noteLayout",
-						 (int)u.noteLayout, "screen", (int)u.screen, "track", (int)u.track, "scene", (int)u.scene,
-						 "fixedOn", u.fixedOn, "fixedBars", (int)u.fixedBars, "quantTo", (int)u.quantTo, "quantAmount",
-						 (int)u.quantAmount, "recQuant", (int)u.recQuant, "recQuantOn", u.recQuantOn, "automate",
-						 u.automate, "defaultLevel", (int)u.defaultLevel, "mix", (int)u.mixLane, "sendPre",
-						 (int)u.sendPre, "tracks", tracks, "clkDivision", clkDivision, "ppc", ppc, "setup", "display",
-						 (int)st->s.setup.display, "led", (int)st->s.setup.led);
+		return json_pack(
+			"{s:b, s:o, s:o, s:{s:f, s:i, s:i, s:b, s:i}, s:{s:i, s:i, s:i, s:b, s:b}, "
+			"s:{s:i, s:i, s:i, s:i, s:i, s:b, s:i, s:i, s:i, s:i, s:b, s:b, s:i, s:i, s:i}, s:o, s:i, "
+			"s:i, s:{s:i, s:i, s:i, s:i, s:i}}",
+			"pushAuto", pushAuto, "pushIn", pushIn.toJson(), "pushOut", pushOut.toJson(), "transport", "bpm",
+			(double)t.bpm, "swing", (int)t.swing, "quant", (int)t.quant, "metronome", t.metronome, "master",
+			(int)t.master, "scale", "root", (int)sc.root, "scale", (int)sc.scale, "layout", (int)sc.layout, "inKey",
+			sc.inKey, "fixed", sc.fixed, "ui", "pads", (int)u.pads, "noteLayout", (int)u.noteLayout, "screen",
+			(int)u.screen, "track", (int)u.track, "scene", (int)u.scene, "fixedOn", u.fixedOn, "fixedBars",
+			(int)u.fixedBars, "quantTo", (int)u.quantTo, "quantAmount", (int)u.quantAmount, "recQuant", (int)u.recQuant,
+			"recQuantOn", u.recQuantOn, "automate", u.automate, "defaultLevel", (int)u.defaultLevel, "mix",
+			(int)u.mixLane, "sendPre", (int)u.sendPre, "tracks", tracks, "clkDivision", clkDivision, "ppc", ppc,
+			"setup", "display", (int)st->s.setup.display, "led", (int)st->s.setup.led, "sensitivity",
+			(int)st->s.setup.sensitivity, "gain", (int)st->s.setup.gain, "dynamics", (int)st->s.setup.dynamics);
 	}
 
 	void dataFromJson(json_t* root) override {
@@ -1446,9 +1457,11 @@ struct Tart : Module {
 				}
 			}
 		}
-		int display = st->s.setup.display, led = st->s.setup.led; // the Push's brightness: optional, Live's defaults
-		json_unpack(json_object_get(root, "setup"), "{s?i, s?i}", "display", &display, "led", &led);
-		st->s.setup = {u8(display), u8(led)};
+		const tart::Setup& d = st->s.setup; // the Push's settings: optional, Live's defaults
+		int display = d.display, led = d.led, sensitivity = d.sensitivity, gain = d.gain, dynamics = d.dynamics;
+		json_unpack(json_object_get(root, "setup"), "{s?i, s?i, s?i, s?i, s?i}", "display", &display, "led", &led,
+					"sensitivity", &sensitivity, "gain", &gain, "dynamics", &dynamics);
+		st->s.setup = {u8(display), u8(led), u8(sensitivity), u8(gain), u8(dynamics)};
 		tart::sanitize(*st);
 		machine.load(*st);
 	}
