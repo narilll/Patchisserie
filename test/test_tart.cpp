@@ -3088,9 +3088,8 @@ TEST(quantize_settings) {
 	tart::sanitize(*st);
 	CHECK(st->s.ui.quantTo == 7 && st->s.ui.quantAmount == 100 && st->s.ui.recQuant == 7 && st->s.ui.recQuantOn);
 	CHECK(st->s.ui.quantizeAt == -1 && !st->s.ui.quantizeUsed);
-	tart::State fresh;
-	CHECK(fresh.s.ui.quantTo == 4 && fresh.s.ui.quantAmount == 100 && fresh.s.ui.recQuant == 4 &&
-		  !fresh.s.ui.recQuantOn);
+	const tart::Session fresh; // (not a whole State: 2 MB overflow the 1 MB stack of Windows)
+	CHECK(fresh.ui.quantTo == 4 && fresh.ui.quantAmount == 100 && fresh.ui.recQuant == 4 && !fresh.ui.recQuantOn);
 	CHECK(std::string(tart::kQuantToNames[4]) == "1/16" && std::string(tart::kQuantToNames[6]) == "1/16+T");
 }
 
@@ -4688,8 +4687,8 @@ TEST(sanitize_mixer) {
 	st->s.ui.defaultLevel = 4;
 	tart::sanitize(*st);
 	CHECK(st->s.ui.defaultLevel == 4);
-	tart::State fresh;
-	CHECK(!fresh.s.track[0].mute && !fresh.s.track[0].solo && !fresh.s.ui.mixPans && fresh.s.ui.defaultLevel == 10);
+	const tart::Session fresh;
+	CHECK(!fresh.track[0].mute && !fresh.track[0].solo && !fresh.ui.mixPans && fresh.ui.defaultLevel == 10);
 }
 
 TEST(mix_automate_writes_level) {
