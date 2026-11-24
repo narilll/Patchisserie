@@ -136,6 +136,48 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 			std::snprintf(buf, sizeof buf, tr.bipolar >> j & 1 ? "%+.2f V" : "%.2f V", volts);
 			text(x + 114, 27, buf, 14, NVG_ALIGN_RIGHT, white, mono);
 		}
+	} else if (ui.screen == kMixScreen) { // VOLUMES and PANS over upper 1 and 2; a column a track: its LEVEL or PAN
+		// (a held step: the selected track's LEVEL and PAN in columns 1 and 2) as a dot (as on Device), M and S badges,
+		// the value and a bar
+		const NVGcolor grey = nvgRGB(0x30, 0x32, 0x36);
+		for (int k = 0; k < 2; k++) {
+			rect(120.f * k + 3, 2, 114, 20, k == ui.mixPans ? white : grey);
+			text(120.f * k + 60, 18, k ? "PANS" : "VOLUMES", 15, NVG_ALIGN_CENTER, k == ui.mixPans ? black : white,
+				 sans);
+		}
+		const bool held = ui.heldStep >= 0;
+		for (int j = 0; j < (held ? 2 : kTracks); j++) {
+			const int trk = held ? ui.track : j, lane = held ? (j ? kPan : kLevel) : ui.mixPans ? kPan : kLevel;
+			const Track& tr = v.s.track[trk];
+			const float x = 120.f * j;
+			const bool over = tr.overridden >> lane & 1, lit = over || v.automated[trk] >> lane & 1;
+			const bool written = ui.recTrack == trk && ui.writing >> lane & 1;
+			if (lit || written) {
+				nvgBeginPath(vg);
+				nvgCircle(vg, x + 10, 33, 3.5f);
+				nvgFillColor(vg, written ? nvgRGB(0xff, 0x30, 0x30) : over ? nvgRGB(0x70, 0x72, 0x6c) : white);
+				nvgFill(vg);
+			}
+			if (held)
+				text(x + 18, 37, lane == kPan ? "PAN" : "LEVEL", 11, NVG_ALIGN_LEFT, dim, sans);
+			if (tr.mute && !held) {
+				rect(x + 76, 26, 18, 14, nvgRGB(255, 200, 0));
+				text(x + 85, 37, "M", 12, NVG_ALIGN_CENTER, black, sans);
+			}
+			if (tr.solo && !held) {
+				rect(x + 96, 26, 18, 14, nvgRGB(0, 0xa0, 0xff));
+				text(x + 105, 37, "S", 12, NVG_ALIGN_CENTER, black, sans);
+			}
+			const int value = held ? v.at[lane] : tr.value[lane];
+			std::snprintf(buf, sizeof buf, lane == kPan ? "%+.2f V" : "%.2f V", tart::volts(tr, lane, value));
+			text(x + 114, 58, buf, 14, NVG_ALIGN_RIGHT, white, mono);
+			const uint8_t* c = kLiveColors[tr.color % kColors];
+			const float y0 = 66, h = 64, mid = y0 + h / 2; // the bar: LEVEL from the bottom, PAN from the middle
+			rect(x + 44, y0, 32, h, nvgRGB(0x20, 0x22, 0x26));
+			const float base = lane == kPan ? mid : y0 + h;
+			const float edge = lane == kPan ? mid - h / 2 * (value - 32768) / 32768.f : y0 + h - h * value / 65535.f;
+			rect(x + 44, std::min(edge, base), 32, std::max(std::abs(base - edge), 1.f), nvgRGB(c[0], c[1], c[2]));
+		}
 	} else if (v.held >= 0) { // a held step: its note
 		const Note& n = v.notes[v.held];
 		int grid = kGrids[v.s.track[ui.track].grid];
@@ -178,65 +220,67 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 		const Track& tr = v.s.track[ui.track];
 		const uint8_t* tc = kLiveColors[tr.color % kColors];
 		const bool drum = tr.type == Drum;
-		std::snprintf(buf, sizeof buf, "Track %d \xC2\xB7 Scene %d%s", ui.track + 1, ui.scene + 1,
-					  drum ? " \xC2\xB7 Drum" : "");
-		text(8, 46, buf, 18, NVG_ALIGN_LEFT, white, sans);
-		int length = v.length[ui.track][ui.scene];
-		const bool rec = ui.recTrack == ui.track && ui.recScene == ui.scene;          // a take runs here
-		const float x0 = 8, w = 944, y0 = 54, h = ui.screen == kClipScreen ? 70 : 62; // larger on the Clip screen
-		if (!length) {
-			text(480, 96, "Empty slot", 24, NVG_ALIGN_CENTER, dim, sans);
-		} else {
-			lengthName(buf, sizeof buf, length);
-			const NVGcolor red = nvgRGB(0xff, 0x30, 0x30);
-			if (rec && ui.recOpen) { // the length is not known yet
-				text(952, 46, "Recording", 18, NVG_ALIGN_RIGHT, red, sans);
+		if (ui.screen != kMixScreen) { // the Mix screen has no clip overview
+			std::snprintf(buf, sizeof buf, "Track %d \xC2\xB7 Scene %d%s", ui.track + 1, ui.scene + 1,
+						  drum ? " \xC2\xB7 Drum" : "");
+			text(8, 46, buf, 18, NVG_ALIGN_LEFT, white, sans);
+			int length = v.length[ui.track][ui.scene];
+			const bool rec = ui.recTrack == ui.track && ui.recScene == ui.scene;          // a take runs here
+			const float x0 = 8, w = 944, y0 = 54, h = ui.screen == kClipScreen ? 70 : 62; // larger on the Clip screen
+			if (!length) {
+				text(480, 96, "Empty slot", 24, NVG_ALIGN_CENTER, dim, sans);
 			} else {
-				text(952, 46, buf, 18, NVG_ALIGN_RIGHT, dim, sans);
-				if (rec)
-					text(942 - nvgTextBounds(vg, 0, 0, buf, nullptr, nullptr), 46, "REC", 18, NVG_ALIGN_RIGHT, red,
-						 sans);
+				lengthName(buf, sizeof buf, length);
+				const NVGcolor red = nvgRGB(0xff, 0x30, 0x30);
+				if (rec && ui.recOpen) { // the length is not known yet
+					text(952, 46, "Recording", 18, NVG_ALIGN_RIGHT, red, sans);
+				} else {
+					text(952, 46, buf, 18, NVG_ALIGN_RIGHT, dim, sans);
+					if (rec)
+						text(942 - nvgTextBounds(vg, 0, 0, buf, nullptr, nullptr), 46, "REC", 18, NVG_ALIGN_RIGHT, red,
+							 sans);
+				}
+				rect(x0, y0, w, h, nvgRGB(0x20, 0x22, 0x26));
+				int lo = 127, hi = 0;
+				for (int i = 0; i < v.nNotes; i++)
+					lo = std::min<int>(lo, v.notes[i].pitch), hi = std::max<int>(hi, v.notes[i].pitch);
+				int span = std::max(hi - lo + 1, 12); // semitones the box shows, from the lowest note
+				if (drum)
+					lo = kDrumNote, span = kLanes; // the lanes
+				float nh = std::max(h / span, 2.f);
+				for (int i = 0; i < v.nNotes; i++) {
+					const Note& n = v.notes[i];
+					if (n.tick >= length || (drum && (n.pitch < lo || n.pitch >= lo + span)))
+						continue;
+					float x = x0 + w * n.tick / length,
+						  nw = std::max(w * std::min<int>(n.len, length - n.tick) / length, 2.f);
+					nvgBeginPath(vg);
+					nvgRect(vg, x, y0 + h - nh * (n.pitch - lo + 1), nw, nh - 1);
+					nvgFillColor(vg, nvgRGB(tc[0], tc[1], tc[2]));
+					nvgFill(vg);
+				}
+				if (v.nShown) { // the touched CC's envelope: a step at every jump
+					auto y = [&](int value) { return y0 + h - 1 - (h - 2) * (float)value / 65535.f; };
+					nvgBeginPath(vg);
+					nvgMoveTo(vg, x0, y(v.shown[0].value));
+					for (int i = 0; i < v.nShown; i++)
+						nvgLineTo(vg, x0 + w * std::min<int>(v.shown[i].tick, length) / length, y(v.shown[i].value));
+					nvgLineTo(vg, x0 + w, y(v.shown[v.nShown - 1].value));
+					nvgStrokeColor(vg, white);
+					nvgStrokeWidth(vg, 2);
+					nvgStroke(vg);
+				}
+				if (t.playing && tr.playing == ui.scene) {
+					float x = x0 + w * (float)(std::max<int64_t>(t.tick - tr.startTick, 0) % length) / length;
+					nvgBeginPath(vg);
+					nvgRect(vg, x, y0, 2, h);
+					nvgFillColor(vg, nvgRGB(0x40, 0xd0, 0x60));
+					nvgFill(vg);
+				}
 			}
-			rect(x0, y0, w, h, nvgRGB(0x20, 0x22, 0x26));
-			int lo = 127, hi = 0;
-			for (int i = 0; i < v.nNotes; i++)
-				lo = std::min<int>(lo, v.notes[i].pitch), hi = std::max<int>(hi, v.notes[i].pitch);
-			int span = std::max(hi - lo + 1, 12); // semitones the box shows, from the lowest note
-			if (drum)
-				lo = kDrumNote, span = kLanes; // the lanes
-			float nh = std::max(h / span, 2.f);
-			for (int i = 0; i < v.nNotes; i++) {
-				const Note& n = v.notes[i];
-				if (n.tick >= length || (drum && (n.pitch < lo || n.pitch >= lo + span)))
-					continue;
-				float x = x0 + w * n.tick / length,
-					  nw = std::max(w * std::min<int>(n.len, length - n.tick) / length, 2.f);
-				nvgBeginPath(vg);
-				nvgRect(vg, x, y0 + h - nh * (n.pitch - lo + 1), nw, nh - 1);
-				nvgFillColor(vg, nvgRGB(tc[0], tc[1], tc[2]));
-				nvgFill(vg);
-			}
-			if (v.nShown) { // the touched CC's envelope: a step at every jump
-				auto y = [&](int value) { return y0 + h - 1 - (h - 2) * (float)value / 65535.f; };
-				nvgBeginPath(vg);
-				nvgMoveTo(vg, x0, y(v.shown[0].value));
-				for (int i = 0; i < v.nShown; i++)
-					nvgLineTo(vg, x0 + w * std::min<int>(v.shown[i].tick, length) / length, y(v.shown[i].value));
-				nvgLineTo(vg, x0 + w, y(v.shown[v.nShown - 1].value));
-				nvgStrokeColor(vg, white);
-				nvgStrokeWidth(vg, 2);
-				nvgStroke(vg);
-			}
-			if (t.playing && tr.playing == ui.scene) {
-				float x = x0 + w * (float)(std::max<int64_t>(t.tick - tr.startTick, 0) % length) / length;
-				nvgBeginPath(vg);
-				nvgRect(vg, x, y0, 2, h);
-				nvgFillColor(vg, nvgRGB(0x40, 0xd0, 0x60));
-				nvgFill(vg);
-			}
+			if (status)
+				text(8, 130, status, 14, NVG_ALIGN_LEFT, dim, sans);
 		}
-		if (status)
-			text(8, 130, status, 14, NVG_ALIGN_LEFT, dim, sans);
 
 		// Bottom band: the tracks, the selected one inverted; with Fixed Length held, its lengths.
 		for (int i = 0; i < kTracks; i++) {
@@ -248,7 +292,7 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 				continue;
 			}
 			const uint8_t* c = kLiveColors[v.s.track[i].color % kColors];
-			NVGcolor color = nvgRGB(c[0], c[1], c[2]);
+			NVGcolor color = silent(v.s, i) ? nvgRGB(0x58, 0x5a, 0x56) : nvgRGB(c[0], c[1], c[2]); // muted: dark gray
 			bool selected = i == ui.track;
 			if (selected)
 				rect(120.f * i + 3, 138, 114, 20, color);

@@ -63,7 +63,7 @@ struct Track {
 	uint8_t bipolar = 0;                  // bit c: CC c is -5 V to +5 V (else 0 V to 10 V)
 	uint16_t value[kAutos] = {};          // what each lane outputs without automation; a playing clip writes it
 	uint16_t overridden = 0;              // transient: bit j: lane j ignores the playing clip until it launches again
-										  // E4 adds mute, solo
+	bool mute = false, solo = false;      // saved: MUTE and SOLO (see silent)
 };
 
 enum Popup : uint8_t {
@@ -78,7 +78,7 @@ enum Popup : uint8_t {
 	kLoopTooLongPopup
 };
 enum Pads : uint8_t { kSession, kNote };
-enum Screens : uint8_t { kHome, kScaleScreen, kClipScreen, kBrowseScreen, kDeviceScreen };
+enum Screens : uint8_t { kHome, kScaleScreen, kClipScreen, kBrowseScreen, kDeviceScreen, kMixScreen };
 
 struct Transport {
 	float bpm = 120; // the internal tempo; a patched CLOCK overrides it, the TEMPO input scales it
@@ -105,7 +105,9 @@ struct Ui {
 	// Quantize: quantTo and recQuant index kQuantToNames, quantAmount is a percent, recQuantOn is Record Quantize.
 	uint8_t quantTo = 4 /*1/16*/, quantAmount = 100, recQuant = 4;
 	bool recQuantOn = false;
-	bool automate = false; // AUTOMATE: a take records the encoders of the Device screen
+	bool automate = false;     // AUTOMATE: a take records the encoders of the Device and Mix screens
+	uint8_t defaultLevel = 10; // Default LEVEL in volts (0..10): what Delete + touch resets a LEVEL to
+	bool mixPans = false;      // the Mix screen's encoders are PAN (else LEVEL)
 	// transient
 	uint8_t page = 0;       // the sequencer's page of 8 steps (a drum track: 32)
 	uint8_t pad[64] = {};   // velocity of each held pad, row * 8 + col
@@ -132,6 +134,12 @@ struct Ui {
 	bool recFresh = false, recOpen = false;
 	int64_t recEnd = -1;
 	uint16_t writing = 0; // the take's lanes that are being written (bit j: lane j of recTrack)
+	// MUTE and SOLO share one state: muteSoloLock is the mode a long press locked (0 none, 1 Mute, 2 Solo), muteSoloAt
+	// when the press that is held began (-1: none, or already used) and muteSoloUsed whether a lower button was pressed
+	// meanwhile (no tap).
+	uint8_t muteSoloLock = 0;
+	double muteSoloAt = -1;
+	bool muteSoloUsed = false;
 };
 
 struct Session {
@@ -171,6 +179,8 @@ extern const uint8_t kLiveColors[kColors][3];
 /** Palette slots of the Push's LEDs for the tracks: 100 + t full, 108 + t a quarter of it. They avoid the white LEDs'
  * indices (16, 48, 127) and the fixed colours 122..127. */
 constexpr uint8_t kPaletteFull = 100, kPaletteDim = kPaletteFull + kTracks;
+/** The 17th palette slot: yellow, for MUTE. ponytail: calibrate on the hardware. */
+constexpr uint8_t kPaletteYellow = kPaletteFull + 2 * kTracks;
 
 /** A length as the Home screen names it: "1 Bar", "2 Bars", "3 Beats" or "100 ticks". */
 void lengthName(char* buf, size_t size, int length);
@@ -209,6 +219,17 @@ void setText(char* dst, size_t size, const char* text);
 
 /** Copies `name` (UTF-8) into the track, cut on a character boundary. */
 void setName(Track& t, const char* name);
+
+/** Whether track `t` is silent: muted, or another track is soloed and it is not. */
+inline bool silent(const Session& s, int t) {
+	bool any = false;
+	for (const Track& k : s.track)
+		any |= k.solo;
+	return s.track[t].mute || (any && !s.track[t].solo);
+}
+
+/** The LEVEL value of `volts` (0..10 V). */
+uint16_t levelValue(int volts);
 
 /** The volts of a lane's value `v`: LEVEL 0 to 10 V, PAN and bipolar CCs -5 to +5 V, other CCs 0 to 10 V. */
 float volts(const Track& t, int lane, int v);
@@ -249,9 +270,9 @@ struct Outputs {
 	bool clk = false, reset = false, run = false, metro = false; // this sample; the caller makes pulses of them
 	float metroV = 0;
 	bool midiClock = false, midiStart = false;
-	bool palette = false; // the track colours changed (or never went out): send `rgb`, then reapply
-	uint32_t rgb[16] =
-		{}; // 0xRRGGBB for palette index kPaletteFull + k (kPaletteDim is k = 8..15); valid with `ledsDone`
+	bool palette = false;  // the track colours changed (or never went out): send `rgb`, then reapply
+	uint32_t rgb[17] = {}; // 0xRRGGBB for palette index kPaletteFull + k (kPaletteDim is k = 8..15, kPaletteYellow 16);
+						   // valid with `ledsDone`
 };
 
 class Machine {
@@ -290,9 +311,9 @@ class Machine {
 	void loopPad(State& st, int index, int vel);
 	bool browseButton(State& st, int button);
 	void noteEncoder(State& st, int encoder, int delta);
-	void valueEncoder(State& st, int lane, int delta);
+	void valueEncoder(State& st, int encoder, int track, int lane, int delta);
 	void stepLock(State& st, int lane, int delta);
-	void deleteLane(State& st, int lane);
+	void deleteLane(State& st, int track, int lane);
 	void write(State& st, int lane, int pos);
 	void endWrite(State& st, int lane, bool stop = true);
 	void session(State& st, int index);
@@ -360,6 +381,7 @@ class Machine {
 	uint32_t nextId_ = 0;
 	// What process() reads without the lock: copies of the state, refreshed under it.
 	int voices_[kTracks] = {}, selected_ = 0;
+	bool muted_[kTracks] = {};   // silent(): LEVEL 0 V and the gates closed
 	uint8_t type_[kTracks] = {}; // a change silences the track and switches its voices between rotating and 16 channels
 	uint32_t rgb_[kTracks] = {};
 	float bend_ = 0; // V

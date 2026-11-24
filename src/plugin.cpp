@@ -1090,9 +1090,9 @@ struct Tart : Module {
 		palette.bytes.resize(17); // the capacity process() writes into
 	}
 
-	/** The 16 palette entries of the track colours, then the reapply: 17 SysEx messages (audio thread). */
+	/** The 17 palette entries (the track colours, then yellow), then the reapply: 18 SysEx messages (audio thread). */
 	void sendPalette(int64_t frame) {
-		for (int k = 0; k < 16; k++) {
+		for (int k = 0; k < 17; k++) {
 			uint32_t c = out.rgb[k];
 			push2::paletteEntry((uint8_t)(tart::kPaletteFull + k), (uint8_t)(c >> 16), (uint8_t)(c >> 8), (uint8_t)c, 0,
 								palette.bytes.data());
@@ -1225,18 +1225,21 @@ struct Tart : Module {
 				json_array_append_new(values, json_integer(v));
 			json_object_set_new(trackJ, "ccNames", ccNames);
 			json_object_set_new(trackJ, "values", values);
+			json_object_set_new(trackJ, "mute", json_boolean(tr.mute));
+			json_object_set_new(trackJ, "solo", json_boolean(tr.solo));
 			json_array_append_new(tracks, trackJ);
 		}
 		return json_pack("{s:b, s:o, s:o, s:{s:f, s:i, s:i, s:b}, s:{s:i, s:i, s:i, s:b, s:b}, "
-						 "s:{s:i, s:i, s:i, s:i, s:i, s:b, s:i, s:i, s:i, s:i, s:b, s:b}, s:o, s:i, s:i}",
+						 "s:{s:i, s:i, s:i, s:i, s:i, s:b, s:i, s:i, s:i, s:i, s:b, s:b, s:i, s:b}, s:o, s:i, s:i}",
 						 "pushAuto", pushAuto, "pushIn", pushIn.toJson(), "pushOut", pushOut.toJson(), "transport",
 						 "bpm", (double)t.bpm, "swing", (int)t.swing, "quant", (int)t.quant, "metronome", t.metronome,
 						 "scale", "root", (int)sc.root, "scale", (int)sc.scale, "layout", (int)sc.layout, "inKey",
 						 sc.inKey, "fixed", sc.fixed, "ui", "pads", (int)u.pads, "noteLayout", (int)u.noteLayout,
 						 "screen", (int)u.screen, "track", (int)u.track, "scene", (int)u.scene, "fixedOn", u.fixedOn,
 						 "fixedBars", (int)u.fixedBars, "quantTo", (int)u.quantTo, "quantAmount", (int)u.quantAmount,
-						 "recQuant", (int)u.recQuant, "recQuantOn", u.recQuantOn, "automate", u.automate, "tracks",
-						 tracks, "clkDivision", clkDivision, "ppc", ppc);
+						 "recQuant", (int)u.recQuant, "recQuantOn", u.recQuantOn, "automate", u.automate,
+						 "defaultLevel", (int)u.defaultLevel, "mixPans", u.mixPans, "tracks", tracks, "clkDivision",
+						 clkDivision, "ppc", ppc);
 	}
 
 	void dataFromJson(json_t* root) override {
@@ -1277,15 +1280,17 @@ struct Tart : Module {
 		tart::Ui& ui = st->s.ui;
 		int pads = ui.pads, noteLayout = ui.noteLayout, screen = ui.screen, track = ui.track, scene = ui.scene,
 			fixedOn = ui.fixedOn, fixedBars = ui.fixedBars, quantTo = ui.quantTo, quantAmount = ui.quantAmount,
-			recQuant = ui.recQuant, recQuantOn = ui.recQuantOn, automate = ui.automate;
-		json_unpack(uiJ, "{s?i, s?i, s?i, s?i, s?i, s?b, s?i, s?i, s?i, s?i, s?b, s?b}", "pads", &pads, "noteLayout",
-					&noteLayout, "screen", &screen, "track", &track, "scene", &scene, "fixedOn", &fixedOn, "fixedBars",
-					&fixedBars, "quantTo", &quantTo, "quantAmount", &quantAmount, "recQuant", &recQuant, "recQuantOn",
-					&recQuantOn, "automate", &automate);
+			recQuant = ui.recQuant, recQuantOn = ui.recQuantOn, automate = ui.automate, defaultLevel = ui.defaultLevel,
+			mixPans = ui.mixPans;
+		json_unpack(uiJ, "{s?i, s?i, s?i, s?i, s?i, s?b, s?i, s?i, s?i, s?i, s?b, s?b, s?i, s?b}", "pads", &pads,
+					"noteLayout", &noteLayout, "screen", &screen, "track", &track, "scene", &scene, "fixedOn", &fixedOn,
+					"fixedBars", &fixedBars, "quantTo", &quantTo, "quantAmount", &quantAmount, "recQuant", &recQuant,
+					"recQuantOn", &recQuantOn, "automate", &automate, "defaultLevel", &defaultLevel, "mixPans",
+					&mixPans);
 		ui.pads = u8(pads), ui.noteLayout = u8(noteLayout), ui.screen = u8(screen), ui.track = u8(track);
 		ui.scene = u8(scene), ui.fixedOn = fixedOn, ui.fixedBars = u8(fixedBars);
 		ui.quantTo = u8(quantTo), ui.quantAmount = u8(quantAmount), ui.recQuant = u8(recQuant);
-		ui.recQuantOn = recQuantOn, ui.automate = automate;
+		ui.recQuantOn = recQuantOn, ui.automate = automate, ui.defaultLevel = u8(defaultLevel), ui.mixPans = mixPans;
 		for (size_t i = 0; i < tart::kTracks && i < json_array_size(tracksJ); i++) {
 			tart::Track& tr = st->s.track[i];
 			const char* name = nullptr;
@@ -1297,9 +1302,9 @@ struct Tart : Module {
 			tr.color = u8(color), tr.voices = u8(voices), tr.octave = (int8_t)clamp(octave, -128, 127);
 			tr.type = u8(type), tr.lane = u8(lane);
 			json_t* trackJ = json_array_get(tracksJ, i);
-			int bipolar = tr.bipolar;
-			json_unpack(trackJ, "{s?i}", "bipolar", &bipolar);
-			tr.bipolar = u8(bipolar);
+			int bipolar = tr.bipolar, mute = tr.mute, solo = tr.solo;
+			json_unpack(trackJ, "{s?i, s?b, s?b}", "bipolar", &bipolar, "mute", &mute, "solo", &solo);
+			tr.bipolar = u8(bipolar), tr.mute = mute, tr.solo = solo;
 			json_t *namesJ = json_object_get(trackJ, "ccNames"), *valuesJ = json_object_get(trackJ, "values");
 			for (int c = 0; c < tart::kCcs; c++)
 				if (const char* text = json_string_value(json_array_get(namesJ, c)))
@@ -1591,6 +1596,23 @@ struct TartWidget : ModuleWidget {
 		menu->addChild(createIndexSubmenuItem(
 			"CLOCK input: pulses per beat", divisions, [=] { return index(m->ppc); },
 			[=](size_t i) { m->ppc = kDivisions[i]; }));
+		std::vector<std::string> volts;
+		for (int v = 0; v <= 10; v++)
+			volts.push_back(std::to_string(v) + " V");
+		menu->addChild(createIndexSubmenuItem(
+			"Default LEVEL", volts,
+			[=] {
+				tart::View v;
+				m->machine.view(v);
+				return (size_t)v.s.ui.defaultLevel;
+			},
+			[=](size_t i) {
+				m->machine.edit([=](tart::State& st) { // every track's LEVEL goes there too
+					st.s.ui.defaultLevel = (uint8_t)i;
+					for (tart::Track& tr : st.s.track)
+						tr.value[tart::kLevel] = tart::levelValue((int)i);
+				});
+			}));
 		menu->addChild(createSubmenuItem("Track", "", [=](Menu* sub) {
 			tart::View v;
 			m->machine.view(v);

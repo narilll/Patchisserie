@@ -35,17 +35,19 @@ The panel shows the name SLICE, the track window and six output jacks, two to a 
 | SLICE | Title | The module name, in the band along the top of the panel. |
 | Window | Display | The number of the track, from 1 to 8, in the track's color. It shows a dash when the Slice has no track, and then a hint when it is not next to a Tart or a Slice. |
 | V/OCT | Output | The pitch of each voice, 1 V per octave, with 0 V as C4 (MIDI note 60). It is a polyphonic cable with one channel for each voice of the track. The touch strip of the Push bends it by up to 2 semitones. |
-| GATE | Output | 10 V while a note is held on that voice and 0 V otherwise. Polyphonic, one channel for each voice. When a voice plays a new note while the old one is still held, the gate drops for one sample so that envelopes start again. |
+| GATE | Output | 10 V while a note is held on that voice and 0 V otherwise, and 0 V on every channel while the track is muted or muted by a solo. Polyphonic, one channel for each voice. When a voice plays a new note while the old one is still held, the gate drops for one sample so that envelopes start again. |
 | VEL | Output | The velocity of the note on each voice, from 0 V to 10 V. Polyphonic, one channel for each voice. The voltage stays after the note ends, until the voice plays again. |
 | CC | Output | The 8 CC lanes of the track, one channel each, CC 1 on channel 1. Each channel is 0 V to 10 V or -5 V to +5 V, as the **Range** of that CC says in the **Track** menu of the Tart. 0 V at the start. |
-| LEVEL | Output | The level of the track, 0 V to 10 V. 10 V at the start. |
+| LEVEL | Output | The level of the track, 0 V to 10 V. 10 V at the start, or the **Default LEVEL** of the Tart. 0 V while the track is muted or muted by a solo. |
 | PAN | Output | The pan of the track, -5 V to +5 V. 0 V (the middle) at the start. |
 
 The number of channels on V/OCT, GATE and VEL is the number of voices of the track, set with **Voices** in the **Track** menu of the Tart. The default is 1.
 
 **Drum tracks.** When the track is a Drum track (see [Drum tracks](tart.md#drum-tracks) in the Tart manual), the three outputs always have 16 channels, and **Voices** is ignored. Channel 1 is the first drum pad, channel 2 the second, and channel 16 the sixteenth. The V/OCT of each channel does not change: it is the pitch of the pad's MIDI note, 1 V per octave with 0 V as MIDI note 60, so channel 1 is -2 V (MIDI note 36), channel 2 is -1.917 V and channel 16 is -0.75 V (MIDI note 51). GATE of a channel is 10 V while that pad's note sounds, and VEL is its velocity. The touch strip does not bend a drum track.
 
-**CC, LEVEL and PAN.** These three follow the automation of the clip that the track is playing, and move smoothly between the ticks of the clock. A lane without automation sends the value the track has for it, and it stays there when the clip stops. See [CC and automation](tart.md#cc-and-automation) in the Tart manual. You change the CC values and make automation for the CC lanes on the Push, see [Device mode](tart.md#device-mode) and [Step automation](tart.md#step-automation). LEVEL and PAN have no encoders yet, so with a new patch they stay at the values in the table.
+**CC, LEVEL and PAN.** These three follow the automation of the clip that the track is playing, and move smoothly between the ticks of the clock. A lane without automation sends the value the track has for it, and it stays there when the clip stops. See [CC and automation](tart.md#cc-and-automation) in the Tart manual. You change the CC values and make automation for the CC lanes on the Push, see [Device mode](tart.md#device-mode) and [Step automation](tart.md#step-automation), and the LEVEL and PAN of the tracks on the Mix screen, see [Mix mode](tart.md#mix-mode).
+
+**Mute and solo.** While the track is muted, or another track is soloed and this one is not (see [Mute and Solo](tart.md#mute-and-solo) in the Tart manual), LEVEL is 0 V and every channel of GATE is 0 V. The clip goes on playing, and V/OCT, VEL, CC and PAN keep following it, so when the track sounds again, it is in the right place. A note that is still held when you unmute the track opens its gate at once.
 
 ## Context menu reference
 
@@ -70,4 +72,4 @@ A Slice saves its **Track** setting. Which track it plays by position follows fr
 - A Slice plays one track. For all eight tracks you need eight Slices in a row, or Slices with chosen tracks.
 - Slices work only on the right of a Tart or of another Slice. They do not work on its left.
 - The chain passes on the tracks one sample later for each Slice, because Rack passes messages between modules with one sample of delay. You will not hear this.
-- LEVEL and PAN only move when a clip has automation, which comes from a loaded patch for now, and the CC outputs only move when you turn an encoder of the Device screen or a clip has automation. There is no mute, and no way yet to change LEVEL and PAN from the Push.
+- The CC outputs only move when you turn an encoder of the Device screen or a clip has automation, and LEVEL and PAN when you turn an encoder of the Mix screen or a clip has automation. A muted track closes its gates and sets LEVEL to 0 V, but its V/OCT, VEL, CC and PAN outputs still move.

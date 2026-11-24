@@ -421,7 +421,7 @@ TEST(tart_machine_threads) {
 		tart::Inputs in;
 		tart::Outputs out;
 		push2::Leds want;
-		push2::Event ev[23];
+		push2::Event ev[31];
 		ev[0] = dec({0xB0, push2::cc::kTempo, 1});
 		ev[1] = dec({0xB0, push2::cc::Metronome, 127});
 		ev[2] = dec({0x90, 36, 100}); // a pad and the touch strip
@@ -445,10 +445,18 @@ TEST(tart_machine_threads) {
 		ev[20] = dec({0xB0, push2::cc::Automate, 0});
 		ev[21] = dec({0xB0, 71, 40});
 		ev[22] = dec({0x90, 0, 0});
+		ev[23] = dec({0xB0, push2::cc::Mute, 127}); // MUTE and SOLO taps, a lower button while one is held
+		ev[24] = dec({0xB0, push2::cc::Mute, 0});
+		ev[25] = dec({0xB0, push2::cc::Solo, 127});
+		ev[26] = dec({0xB0, push2::cc::Track1Below + 2, 127});
+		ev[27] = dec({0xB0, push2::cc::Solo, 0});
+		ev[28] = dec({0xB0, push2::cc::Mix, 127}); // the Mix screen and a turn of track 2's LEVEL
+		ev[29] = dec({0xB0, 72, 3});
+		ev[30] = dec({0xB0, push2::cc::Mix, 0});
 		tart::SliceFrame frame;
 		in.play = true;
 		for (int i = 0; i < 20000; i++) {
-			in.events = ev, in.nEvents = i % 7 == 0 ? 23 : 0, in.frame = i;
+			in.events = ev, in.nEvents = i % 7 == 0 ? 31 : 0, in.frame = i;
 			m.process(in, out, want, &frame);
 			in.play = false;
 		}
@@ -4241,4 +4249,481 @@ TEST(automate_fuzz) {
 		grown += after > before;
 	}
 	CHECK(written > 800 && grown > 250); // the run did write, with doors shutting
+}
+
+// ---- Mix, Mute, Solo, Default LEVEL (E4.4)
+
+namespace {
+
+/** `seconds` of audio time at 48 kHz. */
+void wait(Rig& r, double seconds) {
+	r.run_((int)(seconds * 48000));
+}
+
+/** The LEDs as the Push would be told at this sample. */
+void ledsOf(Rig& r) {
+	r.in.leds = true;
+	r.step();
+}
+
+} // namespace
+
+TEST(mix_volumes_pans) {
+	using namespace push2::cc;
+	Rig r(false);
+	r.click(Mix);
+	CHECK(r.view().s.ui.screen == tart::kMixScreen && !r.view().s.ui.mixPans);
+	r.turn(0, -1); // VOLUMES: one raw unit is 312 of 65535, like a Device encoder
+	r.turn(3, -2);
+	auto st = r.state();
+	CHECK(st->s.track[0].value[tart::kLevel] == 65535 - 312 && st->s.track[3].value[tart::kLevel] == 65535 - 624);
+	CHECK(st->s.track[1].value[tart::kLevel] == 65535 && st->s.track[0].value[tart::kPan] == 32768);
+	r.press(Shift); // finer
+	r.turn(0, 31);
+	r.press(Shift, 0);
+	CHECK(r.state()->s.track[0].value[tart::kLevel] == 65535); // clamped at the top
+	r.click(Track1Above + 1);                                  // PANS
+	CHECK(r.view().s.ui.mixPans);
+	r.turn(1, 1);
+	r.turn(0, 127);
+	st = r.state();
+	CHECK(st->s.track[1].value[tart::kPan] == 32768 + 312 && st->s.track[0].value[tart::kPan] == 32768 - 312);
+	CHECK(st->s.track[1].value[tart::kLevel] == 65535);
+	CHECK_NEAR(tart::volts(st->s.track[1], tart::kPan, st->s.track[1].value[tart::kPan]), 0.0475f, 1e-3);
+	// The master encoder does nothing here.
+	push2::Event master = dec({0xB0, push2::cc::kMasterVolume, 5});
+	r.step(&master);
+	auto after = r.state();
+	CHECK(std::memcmp(after->s.track, st->s.track, sizeof st->s.track) == 0 && after->s.transport.swing == 0);
+	// The LEDs: the chosen box white, the other dark gray, the rest dark; MIX full.
+	ledsOf(r);
+	CHECK(r.want.cc[Track1Above].color == push2::kRgbDarkGray && r.want.cc[Track1Above + 1].color == push2::kRgbWhite);
+	CHECK(r.want.cc[Track1Above + 2].color == push2::kBlack && r.want.cc[Track8Above].color == push2::kBlack);
+	CHECK(r.want.cc[Mix].color == push2::kWhiteFull);
+	r.click(Track1Above); // VOLUMES again
+	ledsOf(r);
+	CHECK(!r.view().s.ui.mixPans && r.want.cc[Track1Above].color == push2::kRgbWhite);
+	// Lower buttons still select tracks; the upper ones do nothing on other screens.
+	r.click(Track1Below + 4);
+	CHECK(r.view().s.ui.track == 4);
+	r.click(Mix);
+	CHECK(r.view().s.ui.screen == tart::kHome);
+	ledsOf(r);
+	CHECK(r.want.cc[Mix].color == push2::kWhiteDark && r.want.cc[Track1Above].color == push2::kBlack);
+	r.click(Track1Above + 1);
+	CHECK(!r.view().s.ui.mixPans);
+	r.turn(0, -1); // closed: the encoder does nothing
+	CHECK(r.state()->s.track[0].value[tart::kLevel] == 65535);
+	// MIX is momentary when held, as DEVICE.
+	r.press(Mix);
+	CHECK(r.view().s.ui.screen == tart::kMixScreen);
+	wait(r, 0.4);
+	r.press(Mix, 0);
+	CHECK(r.view().s.ui.screen == tart::kHome);
+}
+
+TEST(mute_tap_hold_lock) {
+	using namespace push2::cc;
+	Rig r(false);
+	auto st = [&](int t) { return r.state()->s.track[t]; };
+	r.click(Mute); // a tap toggles the selected track
+	CHECK(st(0).mute && !st(1).mute);
+	r.click(Mute);
+	CHECK(!st(0).mute);
+	r.click(Track1Below + 2);
+	wait(r, 0.5); // 0.5 s is still a tap
+	r.press(Mute);
+	wait(r, 0.5);
+	r.press(Mute, 0);
+	CHECK(st(2).mute && r.view().s.ui.muteSoloLock == 0);
+	// A lower button while MUTE is held toggles that track and doesn't select it; the release is no tap.
+	r.press(Mute);
+	r.click(Track1Below + 4);
+	r.click(Track1Below + 5);
+	r.press(Mute, 0);
+	CHECK(st(4).mute && st(5).mute && st(2).mute && r.view().s.ui.track == 2);
+	CHECK(!st(0).mute);
+	// A hold of 0.6 s locks the mode until the next press.
+	r.press(Mute);
+	wait(r, 0.7);
+	r.press(Mute, 0);
+	CHECK(r.view().s.ui.muteSoloLock == 1 && st(2).mute); // the release toggled nothing
+	r.click(Track1Below + 5);                             // locked: lower buttons toggle without MUTE held
+	r.click(Track1Below + 6);
+	CHECK(!st(5).mute && st(6).mute && r.view().s.ui.track == 2);
+	ledsOf(r);
+	CHECK(r.want.cc[Mute].channel == push2::kPulseHalf && r.want.cc[Mute].color == tart::kPaletteYellow &&
+		  r.want.cc[Mute].base == push2::kBlack);
+	// Another long press locks the other one instead.
+	r.press(Solo);
+	wait(r, 0.7);
+	r.press(Solo, 0);
+	CHECK(r.view().s.ui.muteSoloLock == 2);
+	r.click(Track1Below + 1);
+	CHECK(st(1).solo && !st(1).mute);
+	// Pressing the locked button unlocks and does nothing else.
+	r.press(Solo);
+	CHECK(r.view().s.ui.muteSoloLock == 0);
+	r.press(Solo, 0);
+	CHECK(st(2).solo == false && st(1).solo);
+	r.click(Track1Below + 3); // plain selection again
+	CHECK(r.view().s.ui.track == 3 && !st(3).solo);
+	// MUTE and SOLO can be told apart: a locked Mute with SOLO tapped toggles the selected track's solo.
+	r.press(Mute);
+	wait(r, 0.7);
+	r.press(Mute, 0);
+	r.click(Solo);
+	CHECK(st(3).solo && r.view().s.ui.muteSoloLock == 1);
+	// Not saved: sanitize drops the lock.
+	auto s = r.state();
+	tart::sanitize(*s);
+	CHECK(s->s.ui.muteSoloLock == 0 && s->s.ui.muteSoloAt == -1 && s->s.track[6].mute && s->s.track[3].solo);
+}
+
+TEST(solo_exclusive_mutes_others) {
+	using namespace push2::cc;
+	SliceRig r(false);
+	r.run_(2);
+	for (int t = 0; t < tart::kTracks; t++)
+		CHECK(r.f.track[t].level == 10);
+	r.click(Solo); // track 1
+	r.run_(2);
+	for (int t = 0; t < tart::kTracks; t++)
+		CHECK(r.f.track[t].level == (t == 0 ? 10 : 0));
+	r.press(Solo); // soloing track 3 un-solos track 1
+	r.click(Track1Below + 2);
+	r.press(Solo, 0);
+	auto st = r.state();
+	CHECK(!st->s.track[0].solo && st->s.track[2].solo && !st->s.track[1].solo);
+	r.run_(2);
+	for (int t = 0; t < tart::kTracks; t++)
+		CHECK(r.f.track[t].level == (t == 2 ? 10 : 0));
+	// Solo wins over nothing: a muted track that is soloed is silent; unsoloing leaves the mutes alone.
+	r.press(Mute);
+	r.click(Track1Below + 2);
+	r.press(Mute, 0);
+	r.run_(2);
+	CHECK(r.f.track[2].level == 0 && r.f.track[1].level == 0);
+	r.press(Solo);
+	r.click(Track1Below + 2);
+	r.press(Solo, 0);
+	r.run_(2);
+	CHECK(r.f.track[2].level == 0 && r.f.track[1].level == 10 && r.f.track[0].level == 10);
+	r.press(Mute); // unmute track 3
+	r.click(Track1Below + 2);
+	r.press(Mute, 0);
+	r.run_(2);
+	CHECK(r.f.track[2].level == 10);
+	// silent() is what the Push and the display use
+	auto s = r.state();
+	s->s.track[5].solo = true;
+	CHECK(tart::silent(s->s, 0) && !tart::silent(s->s, 5));
+}
+
+TEST(mute_gates_level_playhead_runs) {
+	using namespace push2::cc;
+	SliceRig r;
+	fill(r, 0, 0);                                      // a note on tick 0, 24 ticks long
+	setPoints(r, 1, {{0, 0}, {384, 65535}});            // CC 2 ramps over the clip
+	setPoints(r, tart::kLevel, {{0, 65535}, {384, 0}}); // and so does LEVEL, down
+	r.m.edit([](tart::State& st) { st.s.track[0].playing = 0, st.s.transport.quant = 0; });
+	r.click(Play);
+	runTo(r, 4);
+	r.run_(2);
+	CHECK(r.f.track[0].gate[0] == 10 && r.f.track[0].level > 9.f);
+	r.click(Mute);
+	r.run_(2);
+	CHECK(r.f.track[0].gate[0] == 0 && r.f.track[0].level == 0); // silent: LEVEL 0 V, the gate closed
+	int64_t tick = r.view().s.transport.tick;
+	float cc = r.f.track[0].cc[1];
+	runTo(r, tick + 8);
+	r.run_(2);
+	auto v = r.view();
+	CHECK(v.s.transport.tick > tick && r.f.track[0].cc[1] > cc);                         // the clip and its CC run on
+	CHECK(v.s.track[0].value[tart::kLevel] < 65535 - 1000 && r.f.track[0].gate[0] == 0); // LEVEL's value runs on too
+	CHECK(r.f.track[1].gate[0] == 0 && r.f.track[1].level == 10);                        // another track isn't touched
+	r.click(Mute); // an unmute mid-note opens the gate at once (the note lasts 24 ticks)
+	r.run_(2);
+	CHECK(v.s.track[0].mute && !r.state()->s.track[0].mute);
+	CHECK(r.f.track[0].gate[0] == 10 && r.f.track[0].level > 0.f && r.f.track[0].level < 10.f);
+	// A pad played on a muted track is silent too, and sounds as it is unmuted.
+	r.m.edit([](tart::State& st) { st.s.track[0].playing = tart::kNone; });
+	runTo(r, 600);
+	r.run_(2);
+	CHECK(r.f.track[0].gate[0] == 0);
+	r.pad(0, 0, 100);
+	r.run_(2);
+	CHECK(r.f.track[0].gate[0] == 10);
+	r.click(Mute);
+	r.run_(2);
+	CHECK(r.f.track[0].gate[0] == 0);
+	r.click(Mute);
+	r.run_(2);
+	CHECK(r.f.track[0].gate[0] == 10);
+	r.pad(0, 0, 0);
+}
+
+TEST(mix_step_lock) {
+	using namespace push2::cc;
+	Rig r;
+	r.click(Layout);
+	r.tap(0, 2); // a 2-bar clip; step 3 is ticks 48..72
+	r.click(Mix);
+	r.click(Track1Above + 1); // PANS: encoder 1 is LEVEL all the same
+	r.pad(0, 2, 100);
+	r.turn(0, -1); // encoder 1: the selected track's LEVEL
+	CHECK((pointsOf(r, tart::kLevel) == Pts{{48, 65535}, {48, 65535 - 312}, {72, 65535 - 312}, {72, 65535}}));
+	r.turn(1, 1); // encoder 2: its PAN
+	CHECK((pointsOf(r, tart::kPan) == Pts{{48, 32768}, {48, 32768 + 312}, {72, 32768 + 312}, {72, 32768}}));
+	auto v = r.view();
+	CHECK(v.at[tart::kLevel] == 65535 - 312 && v.at[tart::kPan] == 32768 + 312); // what the display shows
+	r.turn(2, 3);                                                                // the other encoders do nothing
+	r.turn(7, 3);
+	for (int lane = 0; lane < tart::kCcs; lane++)
+		CHECK(pointsOf(r, lane).empty());
+	auto st = r.state();
+	CHECK(st->s.track[0].value[tart::kLevel] == 65535 && st->s.track[1].value[tart::kLevel] == 65535); // no value moves
+	r.turn(0, -1); // a second turn moves the same segment
+	CHECK(pointsOf(r, tart::kLevel)[1].second == 65535 - 624);
+	r.pad(0, 2, 0);
+	CHECK(r.view().nNotes == 1); // the lock was an edit: the note stays
+	undoClick(r);                // one undo step for the hold
+	CHECK(pointsOf(r, tart::kLevel).empty() && pointsOf(r, tart::kPan).empty() && r.view().nNotes == 1);
+	// Without a held step the same encoders are the tracks' values.
+	r.turn(0, -1);
+	CHECK(r.state()->s.track[0].value[tart::kPan] == 32768 - 312 && r.state()->s.track[0].value[tart::kLevel] == 65535);
+}
+
+TEST(delete_touch_level_default) {
+	using namespace push2::cc;
+	Rig r(false);
+	fill(r, 0, 0);
+	r.m.edit([](tart::State& st) { st.s.ui.defaultLevel = 5; });
+	r.click(Mix);
+	r.turn(2, -3);
+	r.turn(3, -1);
+	CHECK(r.state()->s.track[2].value[tart::kLevel] == 65535 - 936);
+	r.press(Delete);
+	r.turn(2, -3); // Delete held: a turn does nothing
+	CHECK(r.state()->s.track[2].value[tart::kLevel] == 65535 - 936);
+	touch(r, 2), touch(r, 2, false);
+	auto st = r.state();
+	CHECK(st->s.track[2].value[tart::kLevel] == tart::levelValue(5) &&
+		  st->s.track[3].value[tart::kLevel] == 65535 - 312);
+	CHECK(tart::levelValue(5) == 32768); // 5 V
+	r.press(Delete, 0);
+	// PANS: back to 0 V.
+	r.click(Track1Above + 1);
+	r.turn(1, 5);
+	r.press(Delete);
+	touch(r, 1), touch(r, 1, false);
+	r.press(Delete, 0);
+	CHECK(r.state()->s.track[1].value[tart::kPan] == 32768);
+	// A track whose clip (in the selected scene) has points on the lane loses them instead, one undo step.
+	r.m.edit([](tart::State& s) {
+		tart::Clip& c = s.clip[1][0];
+		c.length = tart::kBar, c.nPoints[tart::kPan] = 2, c.points[tart::kPan][1] = {96, 9};
+		s.s.track[1].value[tart::kPan] = 1234;
+	});
+	r.press(Delete);
+	touch(r, 1), touch(r, 1, false);
+	r.press(Delete, 0);
+	st = r.state();
+	CHECK(st->clip[1][0].nPoints[tart::kPan] == 0 && st->s.track[1].value[tart::kPan] == 1234);
+	undoClick(r);
+	CHECK(r.state()->clip[1][0].nPoints[tart::kPan] == 2);
+	// Not on Home.
+	r.click(Mix);
+	r.press(Delete);
+	touch(r, 2);
+	r.press(Delete, 0);
+	CHECK(r.state()->clip[1][0].nPoints[tart::kPan] == 2 && r.state()->s.track[2].value[tart::kLevel] == 32768);
+}
+
+TEST(default_level_menu_sets_all) {
+	using namespace push2::cc;
+	SliceRig r(false);
+	for (int volts = 0; volts <= 10; volts++) {
+		CHECK_NEAR(tart::volts(tart::Track(), tart::kLevel, tart::levelValue(volts)), volts, 1e-3);
+		r.m.edit([=](tart::State& st) { // what the menu item does
+			st.s.ui.defaultLevel = (uint8_t)volts;
+			for (tart::Track& tr : st.s.track)
+				tr.value[tart::kLevel] = tart::levelValue(volts);
+		});
+		r.run_(2);
+		for (int t = 0; t < tart::kTracks; t++)
+			CHECK_NEAR(r.f.track[t].level, volts, 1e-3);
+	}
+	r.m.edit([](tart::State& st) { st.s.ui.defaultLevel = 3; });
+	r.click(Mix);
+	r.press(Delete);
+	touch(r, 6), touch(r, 6, false);
+	r.press(Delete, 0);
+	r.run_(2);
+	CHECK_NEAR(r.f.track[6].level, 3, 1e-3);
+	CHECK(r.state()->s.track[5].value[tart::kLevel] == tart::levelValue(10)); // the others stay
+	auto st = std::make_unique<tart::State>();                                // a new patch: 10 V everywhere
+	CHECK(st->s.ui.defaultLevel == 10 && st->s.track[0].value[tart::kLevel] == tart::levelValue(10));
+}
+
+TEST(mute_solo_leds) {
+	using namespace push2::cc;
+	Rig r(false);
+	ledsOf(r);
+	CHECK(r.want.cc[Mute].color == push2::kWhiteDark && r.want.cc[Mute].channel == 0);
+	CHECK(r.want.cc[Solo].color == push2::kWhiteDark && r.want.cc[Solo].channel == 0);
+	CHECK(r.out.rgb[16] == 0xFFC800 && tart::kPaletteYellow == 116); // the 17th palette entry
+	r.press(Mute);                                                   // held: yellow
+	ledsOf(r);
+	CHECK(r.want.cc[Mute].color == tart::kPaletteYellow && r.want.cc[Mute].channel == 0);
+	CHECK(r.want.cc[Solo].color == push2::kWhiteDark);
+	r.press(Mute, 0); // a tap muted track 1: yellow while it is the selected one
+	ledsOf(r);
+	CHECK(r.want.cc[Mute].color == tart::kPaletteYellow && r.want.cc[Mute].channel == 0);
+	r.click(Track1Below + 1); // another track is selected: dim again
+	ledsOf(r);
+	CHECK(r.want.cc[Mute].color == push2::kWhiteDark);
+	r.click(Track1Below);
+	r.click(Mute); // unmuted
+	ledsOf(r);
+	CHECK(r.want.cc[Mute].color == push2::kWhiteDark);
+	r.press(Solo);
+	ledsOf(r);
+	CHECK(r.want.cc[Solo].color == push2::kBlue && r.want.cc[Solo].channel == 0);
+	r.press(Solo, 0);
+	ledsOf(r);
+	CHECK(r.want.cc[Solo].color == push2::kBlue); // track 1 is soloed
+	r.click(Solo);
+	ledsOf(r);
+	CHECK(r.want.cc[Solo].color == push2::kWhiteDark);
+	r.press(Solo); // locked: pulses between black and blue
+	wait(r, 0.7);
+	r.press(Solo, 0);
+	ledsOf(r);
+	CHECK(r.want.cc[Solo].channel == push2::kPulseHalf && r.want.cc[Solo].color == push2::kBlue &&
+		  r.want.cc[Solo].base == push2::kBlack);
+	CHECK(r.want.cc[Mute].color == push2::kWhiteDark);
+	r.click(Solo); // unlocks
+	ledsOf(r);
+	CHECK(r.want.cc[Solo].channel == 0 && r.want.cc[Solo].color == push2::kWhiteDark);
+}
+
+TEST(lower_button_colors) {
+	using namespace push2::cc;
+	Rig r(false);
+	auto lower = [&](int t) { return r.want.cc[Track1Below + t]; };
+	ledsOf(r);
+	CHECK(lower(0).color == push2::kRgbWhite && lower(1).color == tart::kPaletteFull + 1 &&
+		  lower(7).color == tart::kPaletteFull + 7);
+	r.m.edit([](tart::State& st) { st.s.track[1].mute = true; });
+	ledsOf(r);
+	CHECK(lower(1).color == push2::kRgbDarkGray && lower(2).color == tart::kPaletteFull + 2); // muted: dark gray
+	r.click(Track1Below + 1);
+	ledsOf(r);
+	CHECK(lower(1).color == push2::kRgbDarkGray && lower(0).color == tart::kPaletteFull); // selected but muted, as Live
+	r.m.edit([](tart::State& st) { st.s.track[1].mute = false; });
+	ledsOf(r);
+	CHECK(lower(1).color == push2::kRgbWhite); // selected: white
+	r.m.edit([](tart::State& st) { st.s.track[4].solo = true; });
+	ledsOf(r);
+	CHECK(lower(4).color == push2::kBlue);                                                 // soloed: blue
+	CHECK(lower(2).color == push2::kRgbDarkGray && lower(0).color == push2::kRgbDarkGray); // muted by the solo
+	CHECK(lower(1).color == push2::kRgbDarkGray); // selected but muted by the solo
+	CHECK(lower(7).color == push2::kRgbDarkGray);
+	for (int t = 0; t < 8; t++)
+		CHECK(lower(t).channel == 0);
+	// The same while MUTE or SOLO is held or locked (the lower buttons are the same).
+	r.press(Mute);
+	ledsOf(r);
+	CHECK(lower(4).color == push2::kBlue && lower(2).color == push2::kRgbDarkGray);
+	r.press(Mute, 0);
+	// Stop Clip held keeps its own colours: red pulses where a clip plays, nothing elsewhere.
+	r.m.edit([](tart::State& st) { st.s.track[3].playing = 0; });
+	r.press(StopClip);
+	ledsOf(r);
+	CHECK(lower(3).color == push2::kBlack && lower(3).channel == push2::kPulseHalf && lower(3).base == push2::kRed);
+	CHECK(lower(4).color == push2::kBlack && lower(4).channel == 0 && lower(1).color == push2::kBlack);
+	r.press(StopClip, 0);
+	// The Mix screen shows the same lower buttons.
+	r.click(Mix);
+	ledsOf(r);
+	CHECK(lower(4).color == push2::kBlue && lower(1).color == push2::kRgbDarkGray);
+}
+
+TEST(sanitize_mixer) {
+	auto st = std::make_unique<tart::State>();
+	st->s.track[0].mute = true, st->s.track[1].solo = true, st->s.ui.mixPans = true;
+	st->s.ui.defaultLevel = 200;
+	st->s.ui.screen = tart::kMixScreen;
+	st->s.ui.muteSoloLock = 2, st->s.ui.muteSoloAt = 5, st->s.ui.muteSoloUsed = true;
+	tart::sanitize(*st);
+	CHECK(st->s.track[0].mute && st->s.track[1].solo && st->s.ui.mixPans); // saved
+	CHECK(st->s.ui.defaultLevel == 10 && st->s.ui.screen == tart::kHome);
+	CHECK(!st->s.track[2].mute && !st->s.track[2].solo);
+	CHECK(st->s.ui.muteSoloLock == 0 && st->s.ui.muteSoloAt == -1 && !st->s.ui.muteSoloUsed);
+	// The saved values survive, and an old patch (a fresh State) is unmuted at 10 V.
+	st->s.ui.defaultLevel = 4;
+	tart::sanitize(*st);
+	CHECK(st->s.ui.defaultLevel == 4);
+	tart::State fresh;
+	CHECK(!fresh.s.track[0].mute && !fresh.s.track[0].solo && !fresh.s.ui.mixPans && fresh.s.ui.defaultLevel == 10);
+}
+
+TEST(mix_automate_writes_level) {
+	using namespace push2::cc;
+	SliceRig r;
+	fill(r, 0, 0);
+	fill(r, 1, 0);
+	r.m.edit([](tart::State& st) { // track 2 plays a clip with a LEVEL curve of its own
+		tart::Clip& c = st.clip[1][0];
+		c.nPoints[tart::kLevel] = 2, c.points[tart::kLevel][0] = {0, 65535}, c.points[tart::kLevel][1] = {384, 0};
+		st.s.track[1].playing = 0;
+	});
+	r.click(Automate);
+	r.click(Mix);
+	r.click(Record);
+	runTo(r, 24);
+	touch(r, 0);
+	touch(r, 1);
+	runTo(r, 30);
+	CHECK(r.view().s.ui.writing == 0 && pointsOf(r, tart::kLevel).empty()); // the touch alone writes nothing
+	r.turn(0, -10);                                                         // 65535 - 3120, written from the next tick
+	CHECK(r.view().s.ui.writing == 1 << tart::kLevel);
+	runTo(r, 40);
+	r.run_(20);
+	CHECK_NEAR(r.f.track[0].level, (65535 - 3120) * 10.f / 65535, 1e-3);
+	// Another track's encoder only overrides: its curve is kept and its lane is held.
+	r.turn(1, -1);
+	auto st = r.state();
+	CHECK(st->s.track[1].overridden == 1 << tart::kLevel && st->clip[1][0].nPoints[tart::kLevel] == 2);
+	CHECK(st->s.ui.writing == 1 << tart::kLevel && r.view().s.ui.recTrack == 0);
+	touch(r, 0, false);
+	touch(r, 1, false);
+	CHECK(r.view().s.ui.writing == 0);
+	CHECK(tart::envelope(r.state()->clip[0][0], tart::kLevel, 35) == 65535 - 3120);
+	for (int lane = 0; lane < tart::kCcs; lane++)
+		CHECK(pointsOf(r, lane).empty());
+	// PANS: the same encoder writes the PAN lane.
+	r.click(Track1Above + 1);
+	touch(r, 0);
+	r.turn(0, 10);
+	CHECK(r.view().s.ui.writing == 1 << tart::kPan);
+	runTo(r, 60);
+	touch(r, 0, false);
+	CHECK(!pointsOf(r, tart::kPan).empty() && r.view().s.ui.writing == 0);
+	CHECK(tart::envelope(r.state()->clip[0][0], tart::kPan, 55) == 32768 + 3120);
+	// A touch that moves from a Device lane to Mix ends the first lane's write.
+	touch(r, 2);
+	r.click(Mix); // closes
+	r.click(Device);
+	touch(r, 2, false);
+	touch(r, 3);
+	r.turn(3, 5); // Device encoder 4 writes CC 4
+	CHECK(r.view().s.ui.writing == 1 << 3);
+	r.click(Device);
+	r.click(Mix);
+	r.turn(3, 5); // Mix encoder 4 belongs to track 4: an override at most, no write
+	CHECK(r.view().s.ui.writing == 1 << 3);
+	touch(r, 3, false);
+	CHECK(r.view().s.ui.writing == 0);
 }

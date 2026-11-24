@@ -161,9 +161,10 @@ void eraseNotes(Clip& c, int t0, int t1, int p0, int p1) {
 	c.nNotes = (uint16_t)(std::remove_if(c.notes, c.notes + c.nNotes, in) - c.notes);
 }
 
-/** The value a lane returns to (Delete + touch): 0 V, the middle of a bipolar range, 10 V for LEVEL. */
-uint16_t defaultValue(const Track& t, int lane) {
-	return lane == kLevel ? 65535 : lane == kPan || (t.bipolar >> lane & 1) ? 32768 : 0;
+/** The value a lane returns to (Delete + touch): 0 V, the middle of a bipolar range (also PAN), Default LEVEL for
+ * LEVEL. */
+uint16_t defaultValue(const Ui& u, const Track& t, int lane) {
+	return lane == kLevel ? levelValue(u.defaultLevel) : lane == kPan || (t.bipolar >> lane & 1) ? 32768 : 0;
 }
 
 /** Replaces the points of `lane` with a tick in [t0, t1] by the `n` sorted ones in `add`. False, and nothing changed,
@@ -231,6 +232,27 @@ int64_t takeEnd(const Session& s, const Track& tr) {
  * playhead: in the selected slot). */
 uint8_t hot(const Ui& u, bool head = false) {
 	return u.recTrack == u.track && (!head || u.recScene == u.scene) ? push2::kRed : push2::kGreen;
+}
+
+// MUTE and SOLO: a press shorter than this is a tap, a longer one locks the mode (Ableton's value).
+constexpr double kMuteSoloSeconds = 0.6;
+
+/** What the lower buttons toggle: 1 mute, 2 solo (the button held, else the mode a long press locked), 0 select. */
+int muteSoloMode(const Ui& u) {
+	return u.button[push2::cc::Mute] ? 1 : u.button[push2::cc::Solo] ? 2 : u.muteSoloLock;
+}
+
+/** Toggles the mute (mode 1) or the solo (mode 2) of a track; soloing it clears every other solo. */
+void toggleMuteSolo(Session& s, int mode, int track) {
+	Track& t = s.track[track];
+	if (mode == 1) {
+		t.mute = !t.mute;
+		return;
+	}
+	bool on = !t.solo;
+	for (Track& k : s.track)
+		k.solo = false;
+	t.solo = on;
 }
 
 /** Whole detents of an encoder: `delta` raw units added to the remainder `acc`, `units` per detent. */
@@ -357,6 +379,10 @@ float volts(const Track& t, int lane, int v) {
 	return bipolar ? (float)(v - 32768) * 5.f / 32768.f : (float)v * 10.f / 65535.f;
 }
 
+uint16_t levelValue(int volts) {
+	return (uint16_t)((65535 * std::min(std::max(volts, 0), 10) + 5) / 10);
+}
+
 int envelope(const Clip& c, int lane, int tick, bool arriving) {
 	const Point *p = c.points[lane], *e = p + c.nPoints[lane];
 	if (p == e)
@@ -411,7 +437,8 @@ void sanitize(State& st) {
 	u.touched = 0, u.popup = kNoPopup, u.popupAt = u.now = 0, u.screenAt = u.padsAt = -1;
 	u.prevPads = kSession, u.dup = -1, u.browse = 0;
 	u.recTrack = -1, u.recScene = 0, u.recFresh = u.recOpen = false, u.recEnd = -1, u.writing = 0;
-	u.automate = u.automate != 0;
+	u.automate = u.automate != 0, u.mixPans = u.mixPans != 0, u.defaultLevel = std::min<uint8_t>(u.defaultLevel, 10);
+	u.muteSoloLock = 0, u.muteSoloAt = -1, u.muteSoloUsed = false;
 	for (auto& row : st.clip)
 		for (Clip& c : row) { // `playing` is transient, so a clip needs no more than sorted notes of sound values
 			c.length = std::min<uint16_t>(c.length, kMaxLength);
@@ -456,6 +483,7 @@ void sanitize(State& st) {
 		t.playing = t.queued = kNone;
 		t.launchTick = t.startTick = 0;
 		t.overridden = 0;
+		t.mute = t.mute != 0, t.solo = t.solo != 0;
 	}
 }
 
@@ -585,7 +613,8 @@ void Machine::handle(State& st, const push2::Event& e) {
 	case Event::Button:
 		ui.button[e.index & 127] = e.value != 0;
 		if (!e.value) {
-			if ((e.index == push2::cc::Scale || e.index == push2::cc::Clip || e.index == push2::cc::Device) &&
+			if ((e.index == push2::cc::Scale || e.index == push2::cc::Clip || e.index == push2::cc::Device ||
+				 e.index == push2::cc::Mix) &&
 				ui.screenAt >= 0) {
 				if (ui.now - ui.screenAt >= kHoldSeconds)
 					ui.screen = kHome; // held: the screen was only there for as long as the button
@@ -600,6 +629,15 @@ void Machine::handle(State& st, const push2::Event& e) {
 				if (ui.quantizeAt >= 0 && !ui.quantizeUsed && ui.now - ui.quantizeAt < kHoldSeconds)
 					quantizeClip(st, 0, 127);
 				ui.quantizeAt = -1;
+			}
+			if ((e.index == push2::cc::Mute || e.index == push2::cc::Solo) && ui.muteSoloAt >= 0) {
+				// a tap toggles the selected track (unless a lower button was used); a hold locks the mode
+				int mode = e.index == push2::cc::Mute ? 1 : 2;
+				if (ui.now - ui.muteSoloAt >= kMuteSoloSeconds)
+					ui.muteSoloLock = (uint8_t)mode;
+				else if (!ui.muteSoloUsed)
+					toggleMuteSolo(s, mode, ui.track);
+				ui.muteSoloAt = -1;
 			}
 			if (e.index == push2::cc::Duplicate)
 				ui.dup = -1;
@@ -633,6 +671,12 @@ void Machine::handle(State& st, const push2::Event& e) {
 			} else {
 				ui.automate = !ui.automate;
 			}
+		} else if (e.index == push2::cc::Mute || e.index == push2::cc::Solo) {
+			int mode = e.index == push2::cc::Mute ? 1 : 2;
+			if (ui.muteSoloLock == mode) // the locked button: unlock, and its release does nothing
+				ui.muteSoloLock = 0, ui.muteSoloAt = -1;
+			else
+				ui.muteSoloAt = ui.now, ui.muteSoloUsed = false;
 		} else if (e.index == push2::cc::Note || e.index == push2::cc::Session) {
 			ui.prevPads = ui.pads, ui.pads = e.index == push2::cc::Note ? kNote : kSession;
 			ui.padsAt = ui.now, ui.heldStep = -1;
@@ -645,9 +689,11 @@ void Machine::handle(State& st, const push2::Event& e) {
 			doubleLoop(st);
 		} else if (ui.button[push2::cc::Quantize] && e.index == push2::cc::Track1Above + 4) { // Record Quantize
 			ui.recQuantOn = !ui.recQuantOn, ui.quantizeUsed = true;
-		} else if (e.index == push2::cc::Scale || e.index == push2::cc::Clip || e.index == push2::cc::Device) {
+		} else if (e.index == push2::cc::Scale || e.index == push2::cc::Clip || e.index == push2::cc::Device ||
+				   e.index == push2::cc::Mix) {
 			uint8_t to = e.index == push2::cc::Scale  ? kScaleScreen
 						 : e.index == push2::cc::Clip ? kClipScreen
+						 : e.index == push2::cc::Mix  ? kMixScreen
 													  : kDeviceScreen;
 			ui.screen = ui.screen == to ? (uint8_t)kHome : to;
 			ui.screenAt = ui.screen == to ? ui.now : -1;
@@ -656,15 +702,21 @@ void Machine::handle(State& st, const push2::Event& e) {
 			ui.browse = std::min<uint8_t>(s.track[ui.track].type, kBrowseTypes - 1);
 		} else if (ui.screen == kScaleScreen && scaleButton(s.scale, e.index)) {
 		} else if (ui.screen == kBrowseScreen && browseButton(st, e.index)) {
+		} else if (ui.screen == kMixScreen &&
+				   (e.index == push2::cc::Track1Above || e.index == push2::cc::Track1Above + 1)) {
+			ui.mixPans = e.index != push2::cc::Track1Above; // VOLUMES, PANS
 		} else if (e.index == push2::cc::StopClip) {
 			if (ui.button[push2::cc::Shift])
 				for (int k = 0; k < kTracks; k++)
 					stopTrack(s, k, false);
 		} else if (e.index >= push2::cc::Track1Below && e.index <= push2::cc::Track8Below) {
+			int n = e.index - push2::cc::Track1Below;
 			if (ui.button[push2::cc::StopClip])
-				stopTrack(s, e.index - push2::cc::Track1Below, false);
+				stopTrack(s, n, false);
+			else if (int mode = muteSoloMode(ui))
+				toggleMuteSolo(s, mode, n), ui.muteSoloUsed = true;
 			else
-				select(ui, e.index - push2::cc::Track1Below, ui.scene);
+				select(ui, n, ui.scene);
 		} else if (e.index >= push2::cc::Left && e.index <= push2::cc::Down) { // no scrolling: all 64 slots fit
 			int d = e.index == push2::cc::Left ? -1 : e.index == push2::cc::Right ? 1 : 0;
 			int v = e.index == push2::cc::Up ? -1 : e.index == push2::cc::Down ? 1 : 0;
@@ -738,7 +790,12 @@ void Machine::handle(State& st, const push2::Event& e) {
 			if (n)
 				setLength(st, (st.clip[ui.track][ui.scene].length / kPpqn + n) * kPpqn);
 		} else if (e.index < 8 && ui.screen == kDeviceScreen) { // the Device screen: CC 1 to 8, or a held step's lock
-			valueEncoder(st, e.index, e.value);
+			valueEncoder(st, e.index, ui.track, e.index, e.value);
+		} else if (e.index < 8 && ui.screen == kMixScreen) { // the Mix screen: LEVEL or PAN of each track, or a held
+			if (ui.heldStep < 0) // step's lock on the selected track (encoder 1 LEVEL, 2 PAN)
+				valueEncoder(st, e.index, e.index, ui.mixPans ? kPan : kLevel, e.value);
+			else if (e.index < 2)
+				valueEncoder(st, e.index, ui.track, e.index ? kPan : kLevel, e.value);
 		} else if (e.index < 4 && ui.heldStep >= 0) { // a held step: Nudge, Length, Length fine, Velocity
 			noteEncoder(st, e.index, e.value);
 		} else if (e.index == push2::kSwingId) {
@@ -749,8 +806,12 @@ void Machine::handle(State& st, const push2::Event& e) {
 	case Event::Touch:
 		if (e.index < 32)
 			ui.touched = e.value ? ui.touched | 1u << e.index : ui.touched & ~(1u << e.index);
-		if (e.value && e.index < 8 && ui.screen == kDeviceScreen && ui.button[push2::cc::Delete])
-			deleteLane(st, e.index);
+		if (e.value && e.index < 8 && ui.button[push2::cc::Delete]) {
+			if (ui.screen == kDeviceScreen)
+				deleteLane(st, ui.track, e.index);
+			else if (ui.screen == kMixScreen)
+				deleteLane(st, e.index, ui.mixPans ? kPan : kLevel);
+		}
 		if (!e.value && e.index < 8 && writeBy_[e.index] >= 0) // the touch ends what its turns wrote
 			endWrite(st, writeBy_[e.index]), writeBy_[e.index] = -1;
 		if (!e.value && e.index == push2::kStrip)
@@ -1291,16 +1352,15 @@ void Machine::noteEncoder(State& st, int encoder, int delta) {
 	}
 }
 
-/** An encoder turned on the Device screen: with a step held a step lock, else CC `lane` + 1 of the selected track moves
- * (DELETE held: nothing, the touch cleared it). While Automate is on, the take's clip plays on this track and the
- * encoder is touched, the lane is written from the first turn until the touch ends (see write). Otherwise a lane that
- * the track's playing clip has points for is overridden until the clip launches again. ponytail: the encoder number is
- * the lane here; Mix (E4.4) maps its encoders to LEVEL and PAN. */
-void Machine::valueEncoder(State& st, int lane, int delta) {
+/** An encoder turned on the Device or Mix screen: `lane` of `track` moves (DELETE held: nothing, the touch cleared it);
+ * with a step held, a step lock on the selected clip instead. While Automate is on, the take's clip plays on this
+ * track and the encoder is touched, the lane is written from the first turn until the touch ends (see write).
+ * Otherwise a lane that the track's playing clip has points for is overridden until the clip launches again. */
+void Machine::valueEncoder(State& st, int encoder, int track, int lane, int delta) {
 	Ui& ui = st.s.ui;
 	if (ui.button[push2::cc::Delete])
 		return;
-	Track& tr = st.s.track[ui.track];
+	Track& tr = st.s.track[track];
 	int d = delta * kValueUnits / (ui.button[push2::cc::Shift] ? kFineDivisor : 1);
 	if (ui.heldStep >= 0) {
 		stepLock(st, lane, d);
@@ -1308,11 +1368,13 @@ void Machine::valueEncoder(State& st, int lane, int delta) {
 	}
 	const uint16_t was = tr.value[lane];
 	tr.value[lane] = (uint16_t)std::min(std::max(tr.value[lane] + d, 0), 65535);
-	if (ui.automate && ui.recTrack == ui.track && tr.playing == ui.recScene && ui.touched >> lane & 1) {
+	if (ui.automate && ui.recTrack == track && tr.playing == ui.recScene && ui.touched >> encoder & 1) {
+		if (writeBy_[encoder] >= 0 && writeBy_[encoder] != lane) // the screen changed under a touch: that lane ends
+			endWrite(st, writeBy_[encoder]);
 		if (!(ui.writing >> lane & 1))
 			door_[lane].on = false, door_[lane].pre = was;
-		ui.writing |= (uint16_t)(1 << lane), tr.overridden &= (uint16_t)~(1 << lane), writeBy_[lane] = (int8_t)lane;
-	} else if (tr.playing != kNone && st.clip[ui.track][tr.playing].nPoints[lane]) {
+		ui.writing |= (uint16_t)(1 << lane), tr.overridden &= (uint16_t)~(1 << lane), writeBy_[encoder] = (int8_t)lane;
+	} else if (tr.playing != kNone && st.clip[track][tr.playing].nPoints[lane]) {
 		tr.overridden |= (uint16_t)(1 << lane);
 	}
 }
@@ -1436,18 +1498,18 @@ void Machine::stepLock(State& st, int lane, int delta) {
 	replacePoints(c, lane, start, end, add, n);
 }
 
-/** Delete + touch of an encoder on the Device screen: the selected clip's points on the lane go, one undo step; with
- * none, the lane's value goes back to its default. */
-void Machine::deleteLane(State& st, int lane) {
+/** Delete + touch of an encoder on the Device or Mix screen: the points of the lane in the track's clip of the selected
+ * scene go, one undo step; with none, the lane's value goes back to its default. */
+void Machine::deleteLane(State& st, int track, int lane) {
 	Ui& ui = st.s.ui;
-	Clip& c = st.clip[ui.track][ui.scene];
-	Track& tr = st.s.track[ui.track];
+	Clip& c = st.clip[track][ui.scene];
+	Track& tr = st.s.track[track];
 	if (c.nPoints[lane]) {
 		gesture_++; // the touch is a gesture of its own
-		checkpoint(ui.track, ui.scene);
+		checkpoint(track, ui.scene);
 		c.nPoints[lane] = 0;
 	} else {
-		tr.value[lane] = defaultValue(tr, lane);
+		tr.value[lane] = defaultValue(ui, tr, lane);
 	}
 }
 
@@ -1631,6 +1693,19 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 	white(push2::cc::Scale, u.screen == kScaleScreen || u.button[push2::cc::Scale]);
 	white(push2::cc::Clip, u.screen == kClipScreen || u.button[push2::cc::Clip]);
 	white(push2::cc::Device, u.screen == kDeviceScreen || u.button[push2::cc::Device]);
+	white(push2::cc::Mix, u.screen == kMixScreen || u.button[push2::cc::Mix]);
+	// MUTE and SOLO: the mode locked pulses, a held button or a muted (soloed) selected track is lit, else dim.
+	for (int mode = 1; mode <= 2; mode++) {
+		int b = mode == 1 ? push2::cc::Mute : push2::cc::Solo;
+		uint8_t color = mode == 1 ? kPaletteYellow : push2::kBlue;
+		out.cc[b] = u.muteSoloLock == mode ? push2::Led{color, push2::kPulseHalf, push2::kBlack}
+					: u.button[b] || (mode == 1 ? tr.mute : tr.solo) ? push2::Led{color, push2::kStatic}
+																	 : push2::Led{push2::kWhiteDark, push2::kStatic};
+	}
+	if (u.screen == kMixScreen) // VOLUMES and PANS: the chosen one white, the other dark gray
+		for (int i = 0; i < 2; i++)
+			out.cc[push2::cc::Track1Above + i] = {i == u.mixPans ? push2::kRgbWhite : push2::kRgbDarkGray,
+												  push2::kStatic};
 	white(push2::cc::FixedLength, u.fixedOn || u.button[push2::cc::FixedLength]);
 	if (u.button[push2::cc::Undo] || (u.button[Shift] ? undoTop_ != undoEnd_ : undoTop_ != undoBottom_))
 		white(push2::cc::Undo, u.button[push2::cc::Undo]); // dim: there is something to undo (Shift: to redo)
@@ -1676,7 +1751,11 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 		}
 	} else {
 		for (int t = 0; t < kTracks; t++)
-			out.cc[push2::cc::Track1Below + t] = {t == u.track ? push2::kRgbWhite : (uint8_t)(kPaletteFull + t),
+			out.cc[push2::cc::Track1Below + t] = {s.track[t].solo
+													  ? push2::kBlue // as Live: selected white unless silent
+												  : silent(s, t) ? push2::kRgbDarkGray
+												  : t == u.track ? push2::kRgbWhite
+																 : (uint8_t)(kPaletteFull + t),
 												  push2::kStatic};
 	}
 	if (u.pads == kSession) {
@@ -2009,6 +2088,8 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 			}
 		}
 		t.shownBpm = (in.clockConnected ? (float)clock_.cps() : cps_) * 60.f;
+		for (int i = 0; i < kTracks; i++)
+			muted_[i] = silent(s, i);
 		for (int i = 0; i < kTracks; i++) {
 			voices_[i] = s.track[i].voices;
 			const uint8_t* c = kLiveColors[s.track[i].color % kColors];
@@ -2023,6 +2104,7 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 			for (int i = 0; i < kTracks; i++)
 				sentColor_[i] = s.track[i].color;
 		selected_ = s.ui.track, bend_ = s.ui.bend * 2.f / 12.f;
+		out.rgb[2 * kTracks] = 0xFFC800; // ponytail: calibrate on the hardware
 		leds(*state_, want);
 		out.ledsDone = true;
 		unlock();
@@ -2041,11 +2123,11 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 			o.channels = (uint8_t)v.channels();
 			for (int c = 0; c < o.channels; c++)
 				o.voct[c] = (drum ? (float)(kDrumNote + c - 60) / 12.f : v.pitchV(c)) + bend,
-				o.gate[c] = v.gate(c) ? 10.f : 0.f, o.vel[c] = v.velV(c);
+				o.gate[c] = v.gate(c) && !muted_[t] ? 10.f : 0.f, o.vel[c] = v.velV(c);
 			auto lane = [&](int j) { return from_[t][j] + (to_[t][j] - from_[t][j]) * frac; };
 			for (int c = 0; c < kCcs; c++)
 				o.cc[c] = lane(c);
-			o.level = lane(kLevel), o.pan = lane(kPan), o.rgb = rgb_[t];
+			o.level = muted_[t] ? 0.f : lane(kLevel), o.pan = lane(kPan), o.rgb = rgb_[t];
 		}
 		v.tick();
 	}

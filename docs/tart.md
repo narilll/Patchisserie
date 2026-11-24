@@ -29,15 +29,17 @@ Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad contro
 23. [Device mode](#device-mode)
 24. [Step automation](#step-automation)
 25. [Automate](#automate)
-26. [The Home screen](#the-home-screen)
-27. [The lights](#the-lights)
-28. [The Push controls](#the-push-controls)
-29. [Context menu reference](#context-menu-reference)
-30. [Display status words](#display-status-words)
-31. [More than one Tart](#more-than-one-tart)
-32. [What is saved with the patch](#what-is-saved-with-the-patch)
-33. [Limitations](#limitations)
-34. [Credits and licenses](#credits-and-licenses)
+26. [Mix mode](#mix-mode)
+27. [Mute and Solo](#mute-and-solo)
+28. [The Home screen](#the-home-screen)
+29. [The lights](#the-lights)
+30. [The Push controls](#the-push-controls)
+31. [Context menu reference](#context-menu-reference)
+32. [Display status words](#display-status-words)
+33. [More than one Tart](#more-than-one-tart)
+34. [What is saved with the patch](#what-is-saved-with-the-patch)
+35. [Limitations](#limitations)
+36. [Credits and licenses](#credits-and-licenses)
 
 ## Quick start
 
@@ -138,6 +140,8 @@ Tart has eight tracks, numbered 1 to 8. A track is one instrument: it has its ow
 **Name.** Each track has a name, which the bottom row of the display shows. Change it with **Name** in the **Track** menu. The names are "Track 1" to "Track 8" at the start.
 
 **Type.** Each track has a type, Melodic or Drum. See [Track types and Browse](#track-types-and-browse).
+
+**Level, pan, mute and solo.** Each track also has a LEVEL and a PAN, which you set on the [Mix screen](#mix-mode), and it can be muted or soloed with [MUTE and SOLO](#mute-and-solo).
 
 ## Track types and Browse
 
@@ -500,15 +504,15 @@ Each track has 8 CC lanes, numbered CC 1 to CC 8, and two more lanes, LEVEL and 
 
 **Names and ranges.** A CC lane has a name, which is empty at the start and shows as "CC 1" to "CC 8", and a range. The range is either 0 V to 10 V, which is the start, or -5 V to +5 V. Set both with **CC** in the **Track** menu. See the [Context menu reference](#context-menu-reference). A name can have 15 bytes at most. The range of LEVEL is always 0 V to 10 V, and the range of PAN is always -5 V to +5 V.
 
-**The value of a lane.** When a lane has no automation, it sends the value that the track has for it. The start values are 0 V for each CC lane (the middle, 0 V, for a lane with the range -5 V to +5 V), 10 V for LEVEL and 0 V for PAN. Changing the range of a CC lane in the menu sets that lane back to the start value of the new range.
+**The value of a lane.** When a lane has no automation, it sends the value that the track has for it. The start values are 0 V for each CC lane (the middle, 0 V, for a lane with the range -5 V to +5 V), 10 V for LEVEL (you can change that with **Default LEVEL** in the context menu) and 0 V for PAN. Changing the range of a CC lane in the menu sets that lane back to the start value of the new range.
 
 **Automation.** Each clip can store automation: for every lane, a line of points that goes through a value at each point, and rises or falls in a straight line between two points. When a clip with automation plays, the lane follows its line while the clip loops, and the outputs of the Slice move smoothly between the ticks of the clock. Before the first point the lane holds the value of the first point, and after the last point it holds the last value. A lane that the playing clip has no points for keeps its value. When the clip stops, each lane stays at the last value it had. Automation is part of the clip: it is copied with DUPLICATE, deleted with the clip, doubled by [Double Loop](#double-loop) and taken back by [Undo](#undo-and-redo) together with the notes. A lane holds at most 256 points, and Double Loop says "Clip full" when the doubled points would not fit.
 
-**Editing automation.** You change the value of a CC lane with the encoders on the [Device screen](#device-mode), and you draw automation into a clip with [step automation](#step-automation): hold a step on the Device screen and turn an encoder. DELETE with a touch of an encoder takes the automation of that lane out of the selected clip. You record automation while you play with [Automate](#automate): turn an encoder during a take. You cannot draw it freely, and LEVEL and PAN have no encoders yet, so their automation exists only in a clip that was stored in a patch.
+**Editing automation.** You change the value of a CC lane with the encoders on the [Device screen](#device-mode), and you draw automation into a clip with [step automation](#step-automation): hold a step on the Device screen and turn an encoder. DELETE with a touch of an encoder takes the automation of that lane out of the selected clip. You record automation while you play with [Automate](#automate): turn an encoder during a take. You cannot draw it freely. LEVEL and PAN are changed, drawn and recorded on the [Mix screen](#mix-mode) in the same ways.
 
 ## Device mode
 
-Press DEVICE on the Push to open the Device screen, where encoders 1 to 8 are the eight CC lanes of the selected track. Press DEVICE again to close it. If you hold DEVICE for 0.3 seconds or longer, the screen stays open only while you hold the button, and closes when you let go. Opening it closes the Scale screen or the Clip screen, and the other way round. The DEVICE button is full white while the screen is open and while you hold it, and dim white otherwise.
+Press DEVICE on the Push to open the Device screen, where encoders 1 to 8 are the eight CC lanes of the selected track. Press DEVICE again to close it. If you hold DEVICE for 0.3 seconds or longer, the screen stays open only while you hold the button, and closes when you let go. Opening it closes the Scale screen, the Clip screen or the Mix screen, and the other way round. The DEVICE button is full white while the screen is open and while you hold it, and dim white otherwise.
 
 The top row shows one cell over each encoder: the name of the CC lane (or "CC 1" to "CC 8" if it has no name), and its value in volts, as "5.00 V" for a lane with the range 0 V to 10 V and as "+2.50 V" for a lane with the range -5 V to +5 V. A white dot at the left of the name means that the clip of the track has automation for the lane. A gray dot means that you turned the encoder while the clip was playing the automation, so that the lane is overridden. A red dot means that a [take](#automate) is writing the lane. The middle shows the selected clip as on the Home screen. While you touch an encoder, the middle also shows the automation of that lane in the selected clip as a white line, from the bottom (the lowest value) to the top (the highest value) of the picture. When you touch several encoders, it shows the one with the lowest number. The buttons above the display stay dark. The buttons below the display still select the track, and the cells then show the CC lanes of that track.
 
@@ -520,7 +524,7 @@ The top row shows one cell over each encoder: the name of the CC lane (or "CC 1"
 
 **Overridden lanes.** When the playing clip of the selected track has automation for a lane and you turn the encoder of that lane, the lane keeps the value that you set, and the clip's automation for it is ignored, until the clip is launched again. The lane shows the gray dot meanwhile. Launching the clip again, even the clip that is already playing, makes the lane follow the automation again, and so does SHIFT with AUTOMATE (see [Automate](#automate)). A lane that a take writes is not overridden: writing it makes it follow the clip again. Turning an encoder for a lane that the playing clip has no automation for just changes its value, and so does turning it while no clip plays. The value stays when a clip stops, as described in [CC and automation](#cc-and-automation). The values of the CC lanes are not part of Undo.
 
-**Differences from Ableton Live.** Live has no screen that you toggle with DEVICE and no momentary hold, because its Device mode is a mode of the Push. In Tart the Device screen is the only way to reach the CC lanes. A lane stays overridden when you add a step lock to it, until the clip is launched again. The values show in volts. There is no list of devices or parameters, and LEVEL and PAN have no encoders yet.
+**Differences from Ableton Live.** Live has no screen that you toggle with DEVICE and no momentary hold, because its Device mode is a mode of the Push. In Tart the Device screen is the only way to reach the CC lanes. A lane stays overridden when you add a step lock to it, until the clip is launched again. The values show in volts. There is no list of devices or parameters. LEVEL and PAN are on the [Mix screen](#mix-mode), not here.
 
 ## Step automation
 
@@ -530,19 +534,21 @@ The first turn starts from the value of the lane at the middle of the step: the 
 
 If you press an empty step and turn an encoder, the press still puts a note on the step, and the note stays. The note of a step that you hold and turn an encoder on also stays when you let go, as it does when you edit it with the note encoders. A hold of one step, with all its turns, and with the note if the press made one, is one step of [Undo](#undo-and-redo).
 
+On the [Mix screen](#mix-mode) you can hold a step too: encoder 1 then makes a step lock of the LEVEL of the selected track, and encoder 2 one of its PAN. Everything above applies to them as well.
+
 A lock uses up to 4 points of the lane, and fewer when some would change nothing. A lane holds at most 256 points. When the lock does not fit, the display says "Clip full" and the lane stays as it was. On the Home screen, the encoders of a held step still edit the note, see [The Melodic Sequencer](#the-melodic-sequencer).
 
 **Differences from Ableton Live.** In Live, you hold a step without a note too, and that does not make a note. In Tart, the press on an empty step makes its note. A step lock sets the value, in raw encoder steps, and not by an amount that you can type.
 
 ## Automate
 
-AUTOMATE switches Automate on or off, and with Automate on, a [take](#recording) records the turns of the encoders of the [Device screen](#device-mode) into the clip as [automation](#cc-and-automation). As in Live, where you need the Automation Arm and Session Record, recording needs both Automate and a running take.
+AUTOMATE switches Automate on or off, and with Automate on, a [take](#recording) records the turns of the encoders of the [Device screen](#device-mode) and the [Mix screen](#mix-mode) into the clip as [automation](#cc-and-automation). As in Live, where you need the Automation Arm and Session Record, recording needs both Automate and a running take.
 
 **What it takes to write a lane.** All of these must be true, and then the lane of an encoder is written:
 
 - Automate is on. The button is red.
 - A take is running, and the clip of the take is playing. A take that is still waiting for its clip to start writes nothing.
-- The selected track is the track of the take, and the Device screen is open.
+- On the Device screen: the selected track is the track of the take. On the Mix screen: the encoder is the one of the track of the take, so encoder 3 for a take on track 3, and it writes the LEVEL or the PAN of that track, whichever the screen shows. The encoders of the other tracks never write: they only override, as in [Mix mode](#mix-mode).
 - You touch the encoder, and then turn it. DELETE and a held step make something else of the turn: see [Device mode](#device-mode) and [Step automation](#step-automation).
 
 Writing starts with the first turn after the touch, and not with the touch alone. It goes on until you let go of the encoder, whether you keep turning it or not, and a lane keeps the last value you set while you hold it still. If a condition is not true, a turn does what it does in [Device mode](#device-mode): it changes the value, and it overrides a lane that the playing clip has automation for. Turning an encoder that you do not touch also does not write.
@@ -551,7 +557,7 @@ Writing starts with the first turn after the touch, and not with the touch alone
 
 **What stays and what is replaced.** The part of the clip before the tick of your first turn is not changed: the line that the lane had arrives at that tick, and then the lane jumps to your value. If the lane had no automation, it holds the value that it had before your first turn up to that tick. The stretch from there until you let go of the encoder is replaced by what you write, in every pass of the loop for as long as you hold it. When you let go, the old line comes back at once, from where it was at that tick, with a jump. A lane that had no automation holds the last value that you set for the rest of the clip. If you hold the encoder over the end of the clip, the next pass starts at the beginning of the clip and replaces what is there, and the end of the clip holds your last value.
 
-**When writing ends.** A lane stops being written when you let go of its encoder, and every lane stops when the take ends, in any of the ways listed in [Recording](#recording), even if you still touch the encoder. The lights and the display tell you: the dot of a lane that is being written is red on the Device screen. The take is one step of [Undo and Redo](#undo-and-redo), with the notes, and the automation written during it is part of that step.
+**When writing ends.** A lane stops being written when you let go of its encoder, and every lane stops when the take ends, in any of the ways listed in [Recording](#recording), even if you still touch the encoder. The lights and the display tell you: the dot of a lane that is being written is red on the Device screen and the Mix screen. The take is one step of [Undo and Redo](#undo-and-redo), with the notes, and the automation written during it is part of that step.
 
 | Control | What it does |
 |---|---|
@@ -563,9 +569,46 @@ Writing starts with the first turn after the touch, and not with the touch alone
 
 - Live may start writing as soon as you touch the encoder. Tart starts with the first turn, because the touch alone is not a change of the value. This is a guess about Live, which is not confirmed.
 - Live's Session Record is RECORD in Tart: Automate does nothing until a take runs, and it does not start one.
-- There is no Arrangement automation, and no automation of the mixer yet: LEVEL and PAN have no encoders until a later version, although Tart can already write any lane.
+- There is no Arrangement automation. Mute and solo cannot be automated, but LEVEL and PAN can.
 - The values are raw encoder steps, and the points that Tart keeps follow its own rule, not Live's.
 - The size of the tolerance of the points, and the steps of the encoders, are guesses that may change after tests on the Push.
+
+## Mix mode
+
+Press MIX on the Push to open the Mix screen, where the eight encoders are the LEVEL or the PAN of tracks 1 to 8, one track for each encoder. Press MIX again to close it. If you hold MIX for 0.3 seconds or longer, the screen stays open only while you hold the button, and closes when you let go. Opening it closes the Scale screen, the Clip screen, the Device screen or the Browse screen, and the other way round. The MIX button is full white while the screen is open and while you hold it, and dim white otherwise.
+
+The first two buttons above the display choose what the encoders change. VOLUMES (button 1) makes them the LEVEL of each track, and PANS (button 2) makes them the PAN. The chosen button is white and the other one is dark gray. The other six buttons above the display are dark and do nothing. VOLUMES is chosen at the start, and Tart saves your choice. The buttons below the display still select the track.
+
+The top row shows a box VOLUMES and a box PANS over the first two buttons, and the chosen one is white. In each column it shows the track of that encoder: the value in volts, as "7.50 V" for a LEVEL and as "+1.25 V" for a PAN, and a bar. The bar of a LEVEL fills from the bottom, and the bar of a PAN fills from the middle, upward for a value above 0 V and downward for one below. The bar has the color of the track. A dot at the left of the column has the same meaning as on the [Device screen](#device-mode): white when the clip of the track has automation for the lane, gray when the lane is overridden, and red while a [take](#automate) writes it. A yellow M means that the track is muted and a blue S that it is soloed, see [Mute and Solo](#mute-and-solo). The middle of the display has no picture of the clip here, and the bottom row shows the track names as always.
+
+| Control | What it does |
+|---|---|
+| Encoders 1 to 8 | Change the LEVEL (VOLUMES) or the PAN (PANS) of tracks 1 to 8. A full turn is about the whole range, and with SHIFT held the steps are 31 times finer. The value stops at the ends of the range. |
+| VOLUMES, PANS | The first and the second button above the display choose LEVEL or PAN for the encoders. |
+| A held step | Encoder 1 makes a [step lock](#step-automation) of the LEVEL of the selected track, encoder 2 one of its PAN, and encoders 3 to 8 do nothing. This does not depend on VOLUMES and PANS. The first two columns then show the LEVEL and the PAN of the selected track at the held step, and the other columns are empty. |
+| DELETE and a touch of an encoder | For the track of that encoder and the lane that the screen shows: if the track's clip in the selected scene has automation for the lane, takes it away, as one step of [Undo](#undo-and-redo). If it has none, sets the lane back to its start value, which is **Default LEVEL** for a LEVEL and 0 V for a PAN. While DELETE is held, turning an encoder does nothing. |
+| Master volume encoder | Does nothing. |
+
+**Overridden lanes and recording.** These work as on the Device screen. When the clip that a track is playing has automation for the LEVEL or the PAN, and you turn the encoder of that track, the lane keeps the value that you set until the clip is launched again, and the dot is gray. SHIFT with AUTOMATE makes every overridden lane follow its clip again. During a [take](#automate) with Automate on, a touched encoder of the track of the take writes its LEVEL or PAN, and the encoders of the other tracks only override. The values of the lanes are not part of [Undo](#undo-and-redo).
+
+**Differences from Ableton Live.** Live's MIX button switches between Track Mix and Global Mix. Tart has only a screen like Global Mix, with the volume and the pan of every track. There are no sends, no Track Mix, no cue or master level, and no list of tracks to scroll, because all eight fit. The values show in volts and are the voltages that a [Slice](slice.md) sends out. The master volume encoder does nothing. The size of an encoder step is a guess that may change after tests on the Push.
+
+## Mute and Solo
+
+MUTE and SOLO silence tracks. A track is silent when it is muted, and also when any track is soloed and the track itself is not. A silent track sends 0 V on the LEVEL output of its [Slice](slice.md) and 0 V on every channel of its GATE output, so that nothing that follows the gate or the level makes a sound. Everything else goes on as before: the clip plays on and its playhead moves, and V/OCT, VEL, CC, PAN and the automation of every lane (also LEVEL, whose value goes on moving but is not sent) run as if nothing had happened. A pad that you play on a silent track gives no gate either. When you unmute a track in the middle of a note, the gate opens at once and the note sounds from there to its end.
+
+The two buttons work in the same way: MUTE switches the mute of a track and SOLO its solo.
+
+- **A tap** (a press that you let go of in less than 0.6 seconds) switches the selected track on or off.
+- **Hold the button and press a button below the display** to switch that track on or off. The track is not selected. You can press several buttons while you hold. When you let go after a short hold in which you used a button below the display, nothing else happens.
+- **A long hold** (0.6 seconds or longer) locks the mode when you let go. While MUTE is locked, the buttons below the display switch the mute of the track, and while SOLO is locked, the solo, without holding anything. They do not select tracks. Press the locked button again to unlock: that press does nothing else. Locking SOLO unlocks MUTE and the other way round.
+- **Solo is exclusive.** Soloing a track takes the solo off every other track. Taking the solo off the last soloed track makes all tracks sound again, except the muted ones. A muted track that is also soloed is silent.
+
+The lock is not saved with the patch. Whether a track is muted or soloed is saved.
+
+**The lights.** MUTE is yellow while you hold it and while the selected track is muted, pulses between yellow and dark while it is locked, and is dim white otherwise. SOLO is the same in blue. The buttons below the display are blue for a soloed track, dark gray for a silent track, white for the selected track when it is not silent, and have the color of the track otherwise. As in Live, a selected track that is muted is dark gray, not white. While STOP CLIP is held, they show what STOP CLIP shows. The same colors are used on every screen. On the display, the name of a silent track in the bottom row is dark gray, on every screen, and the [Mix screen](#mix-mode) shows a yellow M or a blue S in the column of the track.
+
+**Differences from Ableton Live.** Live mutes the sound of the track, and Tart has no sound of its own, so it silences the outputs of the Slice instead, as described above. Mute and solo cannot be automated, and they are not part of [Undo](#undo-and-redo). Solo is always exclusive, whereas Live lets you turn that off. The lock time of 0.6 seconds is taken from Live's Push script and has not been checked on the Push.
 
 ## The Home screen
 
@@ -590,7 +633,9 @@ The Push display is 960 pixels wide and 160 pixels high. The mirror on the panel
 
 **While you hold FIXED LENGTH**, the top row shows FIXED LENGTH with On or Off, and the bottom row shows the eight [lengths](#fixed-length) instead of the track names.
 
-**The bottom row** shows the names of the eight tracks, each in its own [color](#colors). The selected track is drawn as a filled box. A small triangle in front of a name means that a clip plays on that track, and a blinking square means that its stop is waiting. See [Tracks](#tracks).
+**The bottom row** shows the names of the eight tracks, each in its own [color](#colors), or in dark gray while the track is [silent](#mute-and-solo). The selected track is drawn as a filled box. A small triangle in front of a name means that a clip plays on that track, and a blinking square means that its stop is waiting. See [Tracks](#tracks).
+
+**The Mix screen.** While the [Mix screen](#mix-mode) is open, the top row shows VOLUMES and PANS over the first two buttons and, for each track, a value, a bar and a dot, and the middle has no clip. The bottom row stays.
 
 **The Browse screen.** While [Browse](#track-types-and-browse) is open, the display shows CLOSE over the first button above it, TYPE with the type of the selected track over encoder 1, the list of types with a filled box on the cursor and a dot on the current type, and LOAD over the last button below it.
 
@@ -620,11 +665,12 @@ Tart lights the Push buttons that do something in this version. All other button
 - **DOUBLE LOOP** is dim white while the selected slot has a clip, full white while you hold it, and dark otherwise.
 - **BROWSE** is dim white, and full white while the [Browse screen](#track-types-and-browse) is open. While it is open, the last button below the display (LOAD) and the first button above it (CLOSE) are white, and the other buttons above and below the display are dark.
 - **RECORD** is dim white while there is no [take](#recording), red during a take, and blinking between red and dark while a take waits to start or to end.
-- **DEVICE** is full white while the [Device screen](#device-mode) is open and dim white otherwise.
+- **DEVICE** is full white while the [Device screen](#device-mode) is open and dim white otherwise, and **MIX** is the same for the [Mix screen](#mix-mode). On the Mix screen, the first button above the display (VOLUMES) and the second (PANS) are white for the chosen one and dark gray for the other.
+- **MUTE** and **SOLO** are dim white, yellow (MUTE) or blue (SOLO) while you hold the button or while the selected track is muted or soloed, and pulse between that color and dark while the mode is locked. See [Mute and Solo](#mute-and-solo).
 - **AUTOMATE** is red while [Automate](#automate) is on, and dim white while it is off. It is full white while you hold it with Automate off.
 - **FIXED LENGTH** is full white while [Fixed Length](#fixed-length) is on and dim white while it is off.
 - In the Melodic Sequencer, Melodic Sequencer + 32 Notes and the Drum Sequencer, **PAGE LEFT** and **PAGE RIGHT** are dim white when there is a page to go to, and the eight scene buttons show the step size. The pads are described in [The Melodic Sequencer](#the-melodic-sequencer) and [The Drum Sequencer](#the-drum-sequencer).
-- The eight buttons below the display are white for the selected track and in their own color for the others. While the Scale screen is open they are the option buttons described in [Scale mode](#scale-mode), and so are the upper buttons 2 to 7. The buttons above the display are dark on the Device screen.
+- The eight buttons below the display are blue for a soloed track, white for the selected track, dark gray for a [silent](#mute-and-solo) track and in their own color for the others. While the Scale screen is open they are the option buttons described in [Scale mode](#scale-mode), and so are the upper buttons 2 to 7. The buttons above the display are dark on the Device screen, and on the Mix screen except for the first two.
 - The pads and the scene buttons in Session mode are described in [Session mode](#session-mode).
 - The pads in Note mode are described in [Note mode](#note-mode), and the pads of a drum track in [Drum tracks](#drum-tracks) and [The Drum Sequencer](#the-drum-sequencer).
 
@@ -659,12 +705,14 @@ Tart lights the Push buttons that do something in this version. All other button
 | FIXED LENGTH | Tap to switch [Fixed Length](#fixed-length) on or off. Hold it and use the buttons below the display to choose the length, and the first button above the display to switch it on or off. |
 | AUTOMATE | Switches [Automate](#automate) on or off. With SHIFT held, makes overridden lanes follow their clips again. With DELETE held, takes away all the automation of the selected clip. Neither combination switches Automate. |
 | DEVICE | Opens or closes the [Device screen](#device-mode), where encoders 1 to 8 are the CC lanes of the selected track. Held for 0.3 seconds or longer, it is open only while you hold it. |
+| MIX | Opens or closes the [Mix screen](#mix-mode), where encoders 1 to 8 are the LEVEL or the PAN of the eight tracks. The buttons above the display choose VOLUMES or PANS. Held for 0.3 seconds or longer, it is open only while you hold it. |
+| MUTE, SOLO | A tap mutes or solos the selected track. Held, the buttons below the display mute or solo the track. A hold of 0.6 seconds or longer locks the mode. See [Mute and Solo](#mute-and-solo). |
 | Encoders 1 to 4 | On the Home screen, in the Melodic Sequencer, Melodic Sequencer + 32 Notes and the Drum Sequencer, while you hold a step: Nudge, Length, Length fine and Velocity of its note, or of every note of the step in Melodic Sequencer + 32 Notes. |
 | OCTAVE UP, OCTAVE DOWN | Move the pads of the selected track one octave up or down. They do nothing on a drum track. |
-| Buttons below the display | Select the track. While STOP CLIP is held, they stop the track. While FIXED LENGTH is held, they choose the length. |
+| Buttons below the display | Select the track. While STOP CLIP is held, they stop the track. While FIXED LENGTH is held, they choose the length. While MUTE or SOLO is held or locked, they mute or solo the track. |
 | LEFT, RIGHT | Move the selected slot to the previous or the next track. On the Scale screen, they move four scales back or forward. |
 | UP, DOWN | Move the selected slot to the previous or the next scene. On the Scale screen, they select the previous or the next scale. |
-| Encoders and the buttons above and below the display | On the Scale screen, they set the key, the layout and the scale. See [Scale mode](#scale-mode). On the Clip screen, encoder 1 sets the length of the clip. See [Clip mode](#clip-mode). On the Device screen, encoders 1 to 8 set the CC lanes, or, with a step held, make a step lock, and DELETE with a touch of an encoder clears the lane. During a take with Automate on, turning a touched encoder records the lane. See [Device mode](#device-mode), [Step automation](#step-automation) and [Automate](#automate). |
+| Encoders and the buttons above and below the display | On the Scale screen, they set the key, the layout and the scale. See [Scale mode](#scale-mode). On the Clip screen, encoder 1 sets the length of the clip. See [Clip mode](#clip-mode). On the Device screen, encoders 1 to 8 set the CC lanes, or, with a step held, make a step lock, and DELETE with a touch of an encoder clears the lane. During a take with Automate on, turning a touched encoder records the lane. See [Device mode](#device-mode), [Step automation](#step-automation) and [Automate](#automate). On the Mix screen, encoders 1 to 8 set the LEVEL or the PAN of the tracks, and the first two buttons above the display choose which. See [Mix mode](#mix-mode). |
 | Touch strip | Bends the pitch of the selected track by up to 2 semitones. It does nothing on a drum track. |
 
 The other controls of the Push do nothing yet.
@@ -679,6 +727,7 @@ Right-click the panel to open the context menu. Tart adds these entries below Ra
 | **Launch quantization** | A submenu with 14 choices: None, 8 Bars, 4 Bars, 2 Bars, 1 Bar, 1/2, 1/2T, 1/4, 1/4T, 1/8, 1/8T, 1/16, 1/16T and 1/32. It sets when a launch or a stop happens (see [Session mode](#session-mode)). The default is 1 Bar. |
 | **CLK output: pulses per beat** | A submenu with 1, 2, 4, 8, 16, 24, 32, 48 and 96. It sets how many pulses the CLK output sends in each beat. The default is 4. |
 | **CLOCK input: pulses per beat** | A submenu with the same numbers. It tells Tart how many pulses of an external clock make a beat. The default is 4. Use 24 for a clock at 24 PPQN (pulses per quarter note, which is the same as a beat). |
+| **Default LEVEL** | A submenu with 0 V to 10 V in steps of 1 V. The default is 10 V. Choosing a value sets the LEVEL of every track to it at once, and it is the value that DELETE with a touch of a LEVEL encoder on the [Mix screen](#mix-mode) sets back. Tart saves it with the patch. |
 | **Track** | A submenu with one entry for each track, "Track 1" to "Track 8", which shows the track's name. Each entry has a **Name** text field, where each change renames the track at once, a **Color** grid of 70 swatches, where a click sets the track's color at once (see [Colors](#colors)), a **Voices** submenu with 1 to 16 voices, which a drum track ignores (the default is 1), and a **Type** submenu with Melodic and Drum (the default is Melodic). See [Track types and Browse](#track-types-and-browse). The last entry is **CC**: a submenu with "CC 1" to "CC 8", each showing the name of the CC lane. Each has a **Name** text field, where each change renames the lane at once, and a **Range** submenu with "0 V to 10 V" (the default) and "-5 V to +5 V". Changing the range sets that lane back to the start value of the new range. See [CC and automation](#cc-and-automation). |
 | **Find Push automatically** | When ticked (the default), Tart looks for the Push's User port every two seconds and opens it, and it reopens it when you unplug and replug the Push. Untick it to choose the ports yourself. |
 | **Push MIDI input (User Port)** | The MIDI port that Tart reads the Push's pads, buttons, encoders and touch strip from. Below the heading are Rack's usual MIDI choices: the driver, then the device. Pick the port whose name ends in "User Port". Leave the channel on its default so that every message arrives. |
@@ -710,7 +759,7 @@ If you duplicate the owning Tart, the copy closes the ports it copied and stays 
 
 ## What is saved with the patch
 
-Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices, the octave, the type and the selected drum lane, the names and ranges of its 8 CC lanes and the current value of each of its 10 lanes (the 8 CC lanes, LEVEL and PAN), and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty, and the [automation](#cc-and-automation) of every clip that has some. It also saves the settings of [Quantize](#quantize): QUANTIZE TO, AMOUNT, REC QUANT and whether Record Quantize is on. It saves whether [Automate](#automate) is on. It also saves the selected track and scene, the pad mode, the launch quantization, which layout of Note mode is open (64 Notes, the Melodic Sequencer or Melodic Sequencer + 32 Notes), and whether Fixed Length is on and its length. A patch from an older version has no types, and all its tracks are Melodic, and Automate is off. It also has no CC names, ranges, values or automation, and the lanes start as described in [CC and automation](#cc-and-automation). The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. The steps of [Undo](#undo-and-redo) are not saved, and neither is a running take: a patch that you save during a take with an open length keeps the clip with a length of 32 bars. See [Limitations](#limitations). Which lanes are overridden is not saved. The Scale screen, the Clip screen, the Device screen and the Browse screen are not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
+Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices, the octave, the type and the selected drum lane, the names and ranges of its 8 CC lanes and the current value of each of its 10 lanes (the 8 CC lanes, LEVEL and PAN), and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty, and the [automation](#cc-and-automation) of every clip that has some. It also saves the settings of [Quantize](#quantize): QUANTIZE TO, AMOUNT, REC QUANT and whether Record Quantize is on. It saves whether [Automate](#automate) is on, whether each track is muted or soloed, **Default LEVEL**, and whether the Mix screen shows VOLUMES or PANS. It also saves the selected track and scene, the pad mode, the launch quantization, which layout of Note mode is open (64 Notes, the Melodic Sequencer or Melodic Sequencer + 32 Notes), and whether Fixed Length is on and its length. A patch from an older version has no types, and all its tracks are Melodic, and Automate is off. It also has no mute or solo, so every track sounds, **Default LEVEL** is 10 V and the Mix screen shows VOLUMES. It also has no CC names, ranges, values or automation, and the lanes start as described in [CC and automation](#cc-and-automation). The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. The steps of [Undo](#undo-and-redo) are not saved, and neither is a running take: a patch that you save during a take with an open length keeps the clip with a length of 32 bars. See [Limitations](#limitations). Which lanes are overridden is not saved, and neither is a locked MUTE or SOLO. The Scale screen, the Clip screen, the Device screen, the Mix screen and the Browse screen are not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
 
 ## Limitations
 
@@ -720,9 +769,9 @@ Tart saves these things with the patch: the internal tempo, the swing, the metro
 - The sequencers make notes of velocity 100 and edit one step at a time. In Melodic Sequencer + 32 Notes, the encoders change at most 16 notes of the step, the chord is shared by all tracks and is not saved, and there is no Shift+OCTAVE. You cannot select several steps, and a second pad that you hold at the same time does nothing, unless it is a later step in the row of the first one.
 - A clip holds at most 4096 notes, and a track plays at most 64 notes at once. When a clip is full, a new note is not added and the display says "Clip full". A 32-bar drum clip with a note on every sixteenth of every lane would need twice that.
 - The Melodic Sequencer and Melodic Sequencer + 32 Notes do not work on a [drum track](#drum-tracks): its notes come from the [Drum Sequencer](#the-drum-sequencer). A drum track has no Euclid type, no 16 Velocities or 64 Pads layout, and no mute or solo for single pads. The Drum Sequencer has no loop start, no page that follows the playhead, no double tap and no Duplicate for a page. The Browse screen lists only the two types.
-- Tart sends the notes and the CC, LEVEL and PAN signals of the tracks only through [Slice](slice.md) modules. [Automation](#cc-and-automation) of the CC lanes is made with [step locks](#step-automation), which are flat over a step, and with [Automate](#automate) during a take. LEVEL and PAN have no encoders yet, so their automation and values only come from a loaded patch, and there is no way yet to mute a track or to set its level from the Push.
+- Tart sends the notes and the CC, LEVEL and PAN signals of the tracks only through [Slice](slice.md) modules. [Automation](#cc-and-automation) of the CC lanes is made with [step locks](#step-automation), which are flat over a step, and with [Automate](#automate) during a take. LEVEL and PAN are set on the [Mix screen](#mix-mode), and a muted or soloed track silences only the LEVEL and GATE outputs of its Slice, see [Mute and Solo](#mute-and-solo). The Mix screen has no sends and no master level.
 - A lane holds at most 256 points. A step lock uses up to 4, so a lane takes about 64 isolated locks, and the display says "Clip full" when one does not fit. A take that writes a lane with [Automate](#automate) stops writing it three points before the limit.
-- The encoders of the [Device screen](#device-mode) take one step for 312 of the 65535 values of a lane, about 210 steps for a full turn, and 31 times fewer with SHIFT held. This is a guess too. A lane that you turned stays overridden until the clip is launched again.
+- The encoders of the [Device screen](#device-mode) and the [Mix screen](#mix-mode) take one step for 312 of the 65535 values of a lane, about 210 steps for a full turn, and 31 times fewer with SHIFT held. This is a guess too. A lane that you turned stays overridden until the clip is launched again.
 - A pad that sounds when you change the number of voices of its track is cut off.
 - Push buttons other than the ones in the table above do nothing, and so does the master volume encoder.
 - The list of scales is Live's list as far as it is known, and it may be missing scales that Live added lately. If the encoders on the Scale screen move too fast or too slow on your Push, tell the author.
