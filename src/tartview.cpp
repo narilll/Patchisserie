@@ -101,6 +101,11 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 		}
 		rect(120.f * 7 + 3, 138, 114, 20, white);
 		text(120.f * 7 + 60, 154, "LOAD", 15, NVG_ALIGN_CENTER, black, sans);
+	} else if (ui.screen == kSetupScreen) { // DISPLAY LIGHT and LED BRIGHTNESS over encoders 2 and 3, in percent
+		std::snprintf(buf, sizeof buf, "%d %%", (v.s.setup.display * 100 + 127) / 255);
+		setting(1, "DISPLAY LIGHT", buf);
+		std::snprintf(buf, sizeof buf, "%d %%", (v.s.setup.led * 100 + 63) / 127);
+		setting(2, "LED BRIGHTNESS", buf);
 	} else if (ui.screen == kClipScreen) { // the length of the selected clip, as bars.beats.ticks
 		int length = v.length[ui.track][ui.scene];
 		if (length) {
@@ -252,8 +257,8 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 		const Track& tr = v.s.track[ui.track];
 		const uint8_t* tc = kLiveColors[tr.color % kColors];
 		const bool drum = tr.type == Drum || (tr.type == Euclidean && v.euclid.mode == kEuclidDrum);
-		if (ui.screen != kMixScreen) { // the Mix screen has no clip overview
-			char lane[16] = "";        // the Euclid screen's lane
+		if (ui.screen != kMixScreen && ui.screen != kSetupScreen) { // these screens have no clip overview
+			char lane[16] = "";                                     // the Euclid screen's lane
 			if (euclid && !v.euclid.mode)
 				std::snprintf(lane, sizeof lane, " \xC2\xB7 Lane %d", tr.lane + 1);
 			std::snprintf(buf, sizeof buf, "Track %d \xC2\xB7 Scene %d%s%s", ui.track + 1, ui.scene + 1,

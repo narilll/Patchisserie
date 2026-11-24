@@ -34,15 +34,16 @@ Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad contro
 28. [Automate](#automate)
 29. [Mix mode](#mix-mode)
 30. [Mute and Solo](#mute-and-solo)
-31. [The Home screen](#the-home-screen)
-32. [The lights](#the-lights)
-33. [The Push controls](#the-push-controls)
-34. [Context menu reference](#context-menu-reference)
-35. [Display status words](#display-status-words)
-36. [More than one Tart](#more-than-one-tart)
-37. [What is saved with the patch](#what-is-saved-with-the-patch)
-38. [Limitations](#limitations)
-39. [Credits and licenses](#credits-and-licenses)
+31. [The Setup screen](#the-setup-screen)
+32. [The Home screen](#the-home-screen)
+33. [The lights](#the-lights)
+34. [The Push controls](#the-push-controls)
+35. [Context menu reference](#context-menu-reference)
+36. [Display status words](#display-status-words)
+37. [More than one Tart](#more-than-one-tart)
+38. [What is saved with the patch](#what-is-saved-with-the-patch)
+39. [Limitations](#limitations)
+40. [Credits and licenses](#credits-and-licenses)
 
 ## Quick start
 
@@ -75,6 +76,8 @@ SUBSYSTEM=="usb", ATTR{idVendor}=="2982", ATTR{idProduct}=="1967", MODE="0666"
 ```
 
 Then run `sudo udevadm control --reload-rules && sudo udevadm trigger` and unplug and replug the Push.
+
+The brightness of the Push, its lights and its display, is set on the [Setup screen](#the-setup-screen).
 
 ## The panel
 
@@ -786,6 +789,25 @@ The lock is not saved with the patch. Whether a track is muted or soloed is save
 
 **Differences from Ableton Live.** Live mutes the sound of the track, and Tart has no sound of its own, so it silences the outputs of the Slice instead, as described above. Mute and solo cannot be automated, MASTER is not touched by them, and they are not part of [Undo](#undo-and-redo). Solo is always exclusive, whereas Live lets you turn that off. The lock time of 0.6 seconds is taken from Live's Push script and has not been checked on the Push.
 
+## The Setup screen
+
+Press SETUP to open the Setup screen, where you set how bright the Push is, as in Ableton Live. Press SETUP again to close it. SETUP is a switch, so holding it does not close the screen when you let go. NOTE and SESSION close it too, and SCALE, CLIP, DEVICE, MIX and BROWSE replace it with their own screens.
+
+The screen has two settings, each over its encoder, and shows each value in percent:
+
+- **DISPLAY LIGHT** (encoder 2) is the brightness of the display. It goes from 1 % to 100 %, and 100 % is the standard. It does not go to 0 %, so the display cannot go dark and leave you without a way back.
+- **LED BRIGHTNESS** (encoder 3) is the brightness of all the lights of the Push, pads and buttons. It goes from 10 % to 100 %, and 100 % is the standard.
+
+The other encoders do nothing on this screen. Even with a step held, they do not edit its note. The buttons above the display are dark, and the buttons below it still select tracks. The settings are not a change to a clip, so Undo does not take them back.
+
+**The power supply.** A Push 2 without its own power supply, on USB power alone, limits itself: the lights go no higher than 8 of 127, and the display no higher than about 7 % of its full brightness. This is the Push's own protection and no setting of Tart can change it.
+
+**When Tart sends them.** Tart sends the brightness to the Push each time you turn an encoder, and again every time it connects to the Push, so the Push has the values of the patch even if you never open this screen.
+
+**Saved.** Both settings are saved with the patch. A patch from an older version has no settings and opens with the standard ones, 100 % and 100 %. This differs from Live, which keeps them for the whole computer: two patches can have different brightness.
+
+**Differences from Ableton Live.** Live's Setup screen has more settings: Workflow, Aftertouch, the pad sensitivity, gain and dynamics, and an Info page with the firmware update. Tart has none of them, and its lower buttons keep selecting tracks, where they choose the page in Live. Live also fades the lights in when it starts, and Tart does not. How far one turn of an encoder moves the brightness is Tart's own choice.
+
 ## The Home screen
 
 The Push display is 960 pixels wide and 160 pixels high. The mirror on the panel shows the same picture. The display is split into eight columns, one above each encoder and one above each button of the rows above and below the display.
@@ -841,6 +863,7 @@ Tart lights the Push buttons that do something in this version. All other button
 - **UNDO** is dim white while there is a step to undo, or, while you hold SHIFT, a step to redo, and dark when there is none. It is full white while you hold it.
 - **QUANTIZE** is dim white, and full white while you hold it. While its settings show, the fifth button above the display is white when Record Quantize is on and dark gray when it is off.
 - **DOUBLE LOOP** is dim white while the selected slot has a clip, full white while you hold it, and dark otherwise.
+- **SETUP** is dim white, and full white while the [Setup screen](#the-setup-screen) is open or while you hold it.
 - **BROWSE** is dim white, and full white while the [Browse screen](#track-types-and-browse) is open. While it is open, the last button below the display (LOAD) and the first button above it (CLOSE) are white, and the other buttons above and below the display are dark.
 - **RECORD** is dim white while there is no [take](#recording), red during a take, and blinking between red and dark while a take waits to start or to end.
 - **DEVICE** is full white while the [Device screen](#device-mode) is open and dim white otherwise, and **MIX** is the same for the [Mix screen](#mix-mode). On the Mix screen, the first button above the display (VOLUMES) and the second (PANS) are white for the chosen one and dark gray for the other.
@@ -887,9 +910,11 @@ Tart lights the Push buttons that do something in this version. All other button
 | FIXED LENGTH | Tap to switch [Fixed Length](#fixed-length) on or off. Hold it and use the buttons below the display to choose the length, and the first button above the display to switch it on or off. |
 | AUTOMATE | Switches [Automate](#automate) on or off. With SHIFT held, makes overridden lanes follow their clips again. With DELETE held, takes away all the automation of the selected clip, and the step locks of a Euclid clip. Neither combination switches Automate. |
 | DEVICE | Opens or closes the [Device screen](#device-mode), where encoders 1 to 8 are the CC lanes of the selected track. Held for 0.3 seconds or longer, it is open only while you hold it. |
+| SETUP | Opens or closes the [Setup screen](#the-setup-screen), where encoders 2 and 3 are DISPLAY LIGHT and LED BRIGHTNESS. A switch, not momentary. NOTE and SESSION close it. |
 | MIX | Opens or closes the [Mix screen](#mix-mode), where encoders 1 to 8 are the LEVEL, the PAN, SEND A or SEND B of the eight tracks. The first four buttons above the display choose VOLUMES, PANS, SEND A or SEND B. Held for 0.3 seconds or longer, it is open only while you hold it. |
 | MUTE, SOLO | A tap mutes or solos the selected track. Held, the buttons below the display mute or solo the track. A hold of 0.6 seconds or longer locks the mode. See [Mute and Solo](#mute-and-solo). |
 | Master volume encoder | Sets the MASTER output on every screen: one step is 312 of the 65535 values of the range, as on the Device screen, and SHIFT makes the steps 31 times finer. While you touch it, and for a second after a turn, the display shows "MASTER 8.50 V" in the same way as it shows the tempo. |
+| Encoders 2 and 3 on the Setup screen | Set DISPLAY LIGHT and LED BRIGHTNESS. The other encoders do nothing there, and a held step is not edited. |
 | Encoders 1 to 8 on a Euclid track | On the Home screen of a [Euclid track](#euclid-tracks), edit the settings of the selected clip: STEPS, PULSES, ROTATE, PROB, VEL and SEED, and in MELODIC mode OCTAVES and CHANGE. See [Euclid tracks](#euclid-tracks). |
 | Encoders 1 to 8 with a step pad held on a Euclid track | On the Device screen, make a [step locks on the pattern](#step-locks-on-a-euclid-track) of CC 1 to CC 8 on that step of the pattern. On the Mix screen, encoders 1 to 4 lock the LEVEL, the PAN, SEND A and SEND B. |
 | First two buttons above the display on a Euclid track | On the Home screen of a Euclid track, DRUM and MELODIC set the mode of the selected clip. |
@@ -946,11 +971,12 @@ If you duplicate the owning Tart, the copy closes the ports it copied and stays 
 
 ## What is saved with the patch
 
-Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices, the octave, the type (Melodic, Drum or Euclid) and the selected drum lane, the names and ranges of its 8 CC lanes and the current value of each of its 12 lanes (the 8 CC lanes, LEVEL, PAN, SEND A and SEND B), and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty, the [automation](#cc-and-automation) of every clip that has some, and the [Euclid settings](#euclid-tracks) of every clip that has others than the standard ones, with the step size, and the [step locks on the pattern](#step-locks-on-a-euclid-track) of every clip that has some. It also saves the settings of [Quantize](#quantize): QUANTIZE TO, AMOUNT, REC QUANT and whether Record Quantize is on. It saves whether [Automate](#automate) is on, whether each track is muted or soloed, **Default LEVEL**, which lane the Mix screen shows (VOLUMES, PANS, SEND A or SEND B), whether each send is post-fader or pre-fader, and the value of MASTER. It also saves the selected track and scene, the pad mode, the launch quantization, which layout of Note mode is open (64 Notes, the Melodic Sequencer or Melodic Sequencer + 32 Notes), and whether Fixed Length is on and its length. A patch from an older version has no types, and all its tracks are Melodic, and Automate is off. It also has no Euclid settings, so every clip has the standard ones, and no step locks. It also has no mute or solo, so every track sounds, **Default LEVEL** is 10 V and the Mix screen shows VOLUMES. A patch from before the sends has no sends and no MASTER value either: the sends are 0 V and post-fader, and MASTER is 10 V. A patch that was saved with PANS chosen opens on PANS. It also has no CC names, ranges, values or automation, and the lanes start as described in [CC and automation](#cc-and-automation). The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. The steps of [Undo](#undo-and-redo) are not saved, and neither is a running take: a patch that you save during a take with an open length keeps the clip with a length of 32 bars. See [Limitations](#limitations). Which lanes are overridden is not saved, and neither is a locked MUTE or SOLO. The Scale screen, the Clip screen, the Device screen, the Mix screen and the Browse screen are not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. For each track it also saves whether [Repeat](#repeat) is on and its rate. A patch from before Repeat has Repeat off at 1/8 on every track. [Accent](#accent) is not saved, so it is off in a loaded patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
+Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices, the octave, the type (Melodic, Drum or Euclid) and the selected drum lane, the names and ranges of its 8 CC lanes and the current value of each of its 12 lanes (the 8 CC lanes, LEVEL, PAN, SEND A and SEND B), and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty, the [automation](#cc-and-automation) of every clip that has some, and the [Euclid settings](#euclid-tracks) of every clip that has others than the standard ones, with the step size, and the [step locks on the pattern](#step-locks-on-a-euclid-track) of every clip that has some. It also saves the settings of [Quantize](#quantize): QUANTIZE TO, AMOUNT, REC QUANT and whether Record Quantize is on. It saves whether [Automate](#automate) is on, whether each track is muted or soloed, **Default LEVEL**, which lane the Mix screen shows (VOLUMES, PANS, SEND A or SEND B), whether each send is post-fader or pre-fader, and the value of MASTER. It also saves the brightness of the Push, DISPLAY LIGHT and LED BRIGHTNESS, set on the [Setup screen](#the-setup-screen); a patch from an older version has the standard 100 % for both. It also saves the selected track and scene, the pad mode, the launch quantization, which layout of Note mode is open (64 Notes, the Melodic Sequencer or Melodic Sequencer + 32 Notes), and whether Fixed Length is on and its length. A patch from an older version has no types, and all its tracks are Melodic, and Automate is off. It also has no Euclid settings, so every clip has the standard ones, and no step locks. It also has no mute or solo, so every track sounds, **Default LEVEL** is 10 V and the Mix screen shows VOLUMES. A patch from before the sends has no sends and no MASTER value either: the sends are 0 V and post-fader, and MASTER is 10 V. A patch that was saved with PANS chosen opens on PANS. It also has no CC names, ranges, values or automation, and the lanes start as described in [CC and automation](#cc-and-automation). The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. The steps of [Undo](#undo-and-redo) are not saved, and neither is a running take: a patch that you save during a take with an open length keeps the clip with a length of 32 bars. See [Limitations](#limitations). Which lanes are overridden is not saved, and neither is a locked MUTE or SOLO. The Scale screen, the Clip screen, the Device screen, the Mix screen, the Setup screen and the Browse screen are not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. For each track it also saves whether [Repeat](#repeat) is on and its rate. A patch from before Repeat has Repeat off at 1/8 on every track. [Accent](#accent) is not saved, so it is off in a loaded patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
 
 ## Limitations
 
 - After STOP, or after you load a patch, no clip plays. Launch the clips again in Session mode. See [Session mode](#session-mode) for the ways it differs from Live.
+- The steps of an encoder on the [Setup screen](#the-setup-screen) are a guess, and so is the fact that the display never goes below 1 %.
 - [Undo](#undo-and-redo) takes back the last 32 changes to clips, and nothing else. It is not saved with the patch and does not use Rack's own Cmd/Ctrl+Z.
 - [Recording](#recording) has no count-in, no Capture MIDI and no Arrangement recording. [Automate](#automate) records the encoders of the Device screen only while a take runs. Only the keyboard pads of Note mode (in Melodic Sequencer + 32 Notes, the lower 4 rows) and the lane pads of a drum track are recorded, not the touch strip or the sequencer pads. A take with an open length can be 32 bars at most.
 - The sequencers make notes of velocity 100, or 127 with Accent on, and edit one step at a time. In Melodic Sequencer + 32 Notes, the encoders change at most 16 notes of the step, the chord is shared by all tracks and is not saved, and there is no Shift+OCTAVE. You cannot select several steps, and a second pad that you hold at the same time does nothing, unless it is a later step in the row of the first one.

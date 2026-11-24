@@ -26,6 +26,9 @@ constexpr int kNoteUnits[4] = {2, 8, 2, 1};
 // ponytail: raw encoder deltas per change of the Euclid screen's STEPS, PULSES, ROTATE, PROB, VEL, SEED, OCTAVES and
 // CHANGE, and SHIFT makes it 4 times as many; guesses, calibrate on the hardware.
 constexpr int kEuclidUnits[8] = {8, 8, 8, 2, 1, 4, 30, 2};
+// ponytail: raw encoder deltas per step of the Setup screen's DISPLAY LIGHT and LED BRIGHTNESS (encoders 2 and 3); they
+// keep Live's 120 : 60 steps for the two ranges and are guesses, calibrate on the hardware.
+constexpr int kSetupUnits[8] = {0, 1, 2, 0, 6, 6, 6, 0};
 // The ticks of a step by resolution (the scene buttons from the bottom, as printed): 1/4, 1/4t, 1/8, 1/8t, 1/16, 1/16t,
 // 1/32, 1/32t.
 // ponytail: a repeated note lasts half its rate (Live's gate is unverified); calibrate on the hardware.
@@ -655,6 +658,10 @@ State::State() {
 	}
 }
 
+void clampSetup(Setup& h) {
+	h.display = std::max(h.display, kMinDisplay), h.led = std::min(std::max(h.led, kMinLed), (uint8_t)127);
+}
+
 void sanitize(State& st) {
 	Transport& t = st.s.transport;
 	t.bpm = std::isfinite(t.bpm) ? std::min(std::max(t.bpm, 20.f), 300.f) : 120.f;
@@ -690,6 +697,7 @@ void sanitize(State& st) {
 	u.sendPre = std::min<uint8_t>(u.sendPre, 3), u.defaultLevel = std::min<uint8_t>(u.defaultLevel, 10);
 	u.muteSoloLock = 0, u.muteSoloAt = -1, u.muteSoloUsed = false;
 	u.accent = false, u.accentAt = -1, u.repeatAt = -1;
+	clampSetup(st.s.setup);
 	for (auto& row : st.clip)
 		for (Clip& c : row) { // `playing` is transient, so a clip needs no more than sorted notes of sound values
 			c.length = std::min<uint16_t>(c.length, kMaxLength);
@@ -982,6 +990,8 @@ void Machine::handle(State& st, const push2::Event& e) {
 			else
 				ui.muteSoloAt = ui.now, ui.muteSoloUsed = false;
 		} else if (e.index == push2::cc::Note || e.index == push2::cc::Session) {
+			if (ui.screen == kSetupScreen)
+				ui.screen = kHome; // NOTE and SESSION close it (as Live)
 			ui.prevPads = ui.pads, ui.pads = e.index == push2::cc::Note ? kNote : kSession;
 			ui.padsAt = ui.now, ui.heldStep = -1;
 		} else if (e.index == push2::cc::FixedLength)
@@ -1001,6 +1011,8 @@ void Machine::handle(State& st, const push2::Event& e) {
 													  : kDeviceScreen;
 			ui.screen = ui.screen == to ? (uint8_t)kHome : to;
 			ui.screenAt = ui.screen == to ? ui.now : -1;
+		} else if (e.index == push2::cc::Setup) { // toggles, never momentary (as Live)
+			ui.screen = ui.screen == kSetupScreen ? kHome : kSetupScreen, ui.screenAt = -1;
 		} else if (e.index == push2::cc::Browse) {
 			ui.screen = ui.screen == kBrowseScreen ? kHome : kBrowseScreen;
 			ui.browse = std::min<uint8_t>(s.track[ui.track].type, kBrowseTypes - 1);
@@ -1106,6 +1118,8 @@ void Machine::handle(State& st, const push2::Event& e) {
 		} else if (e.index < 7 && ui.screen == kBrowseScreen) { // the Browse screen: the cursor
 			int n = steps(accBrowse_, e.value, kScaleUnits);
 			ui.browse = (uint8_t)std::min(std::max(ui.browse + n, 0), kBrowseTypes - 1);
+		} else if (e.index < 8 && ui.screen == kSetupScreen) { // the Setup screen: DISPLAY LIGHT, LED BRIGHTNESS
+			setupEncoder(st, e.index, e.value);
 		} else if (e.index == 0 && ui.screen == kClipScreen) { // the Clip screen: the length of the selected clip
 			int n = steps(accClip_, e.value, kLengthUnits);
 			if (n)
@@ -1181,6 +1195,17 @@ void Machine::quantizeEncoder(State& st, int encoder, int delta) {
 		pick(ui.quantAmount, accAmount_, kSwingUnits, 100);
 	else if (encoder == 4)
 		pick(ui.recQuant, accRecQuant_, kQuantUnits, 7);
+}
+
+/** An encoder of the Setup screen: DISPLAY LIGHT (encoder 2) and LED BRIGHTNESS (encoder 3), in Live's ranges. */
+void Machine::setupEncoder(State& st, int encoder, int delta) {
+	Setup& h = st.s.setup;
+	uint8_t* const field[8] = {nullptr, &h.display, &h.led};
+	if (!field[encoder])
+		return;
+	const int n = steps(accSetup_[encoder], delta, kSetupUnits[encoder]);
+	*field[encoder] = (uint8_t)std::min(std::max(*field[encoder] + n, 0), 255);
+	clampSetup(h);
 }
 
 /** Quantize: moves the starts of the selected clip's notes with a pitch in [p0, p1] toward the grid (Quantize To,
@@ -2286,6 +2311,7 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 	if (st.clip[u.track][u.scene].length || u.button[push2::cc::DoubleLoop])
 		white(push2::cc::DoubleLoop, u.button[push2::cc::DoubleLoop]);
 	white(push2::cc::Browse, u.screen == kBrowseScreen || u.button[push2::cc::Browse]);
+	white(push2::cc::Setup, u.screen == kSetupScreen || u.button[push2::cc::Setup]);
 	if (u.screen == kBrowseScreen) { // LOAD and CLOSE; the other buttons stay dark
 		out.cc[push2::cc::Track8Below] = out.cc[push2::cc::Track1Above] = {push2::kRgbWhite, push2::kStatic};
 	} else if (u.screen == kScaleScreen) { // the roots (the selected one white), In Key (always on) and Fixed
@@ -2795,6 +2821,9 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 				sentColor_[i] = s.track[i].color;
 		selected_ = s.ui.track, bend_ = s.ui.bend * 2.f / 12.f;
 		out.rgb[2 * kTracks] = 0xFFC800; // ponytail: calibrate on the hardware
+		out.setup = s.setup; // what changed since the Push got it: the first pass (never sent) and each edit
+		out.setupSend = (uint8_t)((s.setup.led != sentSetup_.led) | (s.setup.display != sentSetup_.display) << 1);
+		sentSetup_ = s.setup;
 		leds(*state_, want);
 		out.ledsDone = true;
 		unlock();

@@ -630,15 +630,17 @@ int main() {
 			// Quantize held (its settings), with the Quantized popup, and the split layout with a step of two notes
 			// held, then the Device screen: CC 1 to 3 automated, CC 3 overridden, CC 4 bipolar and named, the
 			// envelope of CC 1 (touched), and again with a step held (values at it), then the Euclid screen of a
-			// Drum clip with a lane and of a Melodic clip
+			// Drum clip with a lane and of a Melodic clip, then the Setup screen
+			view->s.setup = {128, 64};
 			view->automated[0] = 0b111, view->s.track[0].overridden = 0b100, view->s.track[0].bipolar = 1 << 3;
 			view->s.track[0].value[3] = 40000, view->s.track[0].value[0] = 65535;
 			std::snprintf(view->s.track[0].ccName[3], tart::kCcNameBytes, "Cutoff");
 			view->lane = 0, view->shown[0] = {0, 0}, view->shown[1] = {100, 0}, view->shown[2] = {100, 50000},
 			view->shown[3] = {250, 50000};
-			for (uint8_t id : {tart::kHome, tart::kScaleScreen, tart::kHome, tart::kHome, tart::kClipScreen,
-							   tart::kBrowseScreen, tart::kHome, tart::kHome, tart::kHome, tart::kHome,
-							   tart::kDeviceScreen, tart::kDeviceScreen, tart::kHome, tart::kHome}) {
+			for (uint8_t id :
+				 {tart::kHome, tart::kScaleScreen, tart::kHome, tart::kHome, tart::kClipScreen, tart::kBrowseScreen,
+				  tart::kHome, tart::kHome, tart::kHome, tart::kHome, tart::kDeviceScreen, tart::kDeviceScreen,
+				  tart::kHome, tart::kHome, tart::kSetupScreen}) {
 				view->s.ui.screen = id, view->s.scale.scale = 20, view->s.ui.browse = 1;
 				view->s.ui.button[push2::cc::Quantize] = pass == 7, view->s.ui.quantizeAt = 0;
 				view->s.ui.now = pass == 7 ? 1 : 0.5, view->s.ui.recQuantOn = pass == 7;

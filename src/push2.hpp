@@ -255,6 +255,20 @@ inline void paletteEntry(uint8_t i, uint8_t r, uint8_t g, uint8_t b, uint8_t w, 
 	out[16] = 0xF7;
 }
 
+// ---- Setup ("Global LED Brightness" 0x06, "Display Backlight" 0x08)
+
+/** Set LED Brightness: 0..127 (a Push on USB power alone limits it to 8). */
+inline void ledBrightness(uint8_t b, uint8_t out[9]) {
+	const uint8_t m[] = {0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x06, (uint8_t)(b & 0x7F), 0xF7};
+	std::memcpy(out, m, sizeof m);
+}
+
+/** Set Display Brightness: 0..255 as its low 7 bits, then the high bit (USB power alone limits it to 100). */
+inline void displayBrightness(uint8_t b, uint8_t out[10]) {
+	const uint8_t m[] = {0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x08, (uint8_t)(b & 0x7F), (uint8_t)(b >> 7), 0xF7};
+	std::memcpy(out, m, sizeof m);
+}
+
 // ---- Display frame ("Pixel Data", "Pixel Color Encoding", "XORing Pixel Data")
 
 /** `rgba`: kWidth*kHeight RGBA8, bottom row first (glReadPixels). `frame`: kFrameBytes, top row first, each pixel 16

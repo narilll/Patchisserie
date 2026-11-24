@@ -49,6 +49,19 @@ TEST(push2_pad_notes) {
 	CHECK(!push2::padOf(100, r, c));
 }
 
+TEST(push2_setup_sysex) { // the examples of Ableton's Push 2 interface manual
+	uint8_t led[9], display[10];
+	push2::ledBrightness(64, led);
+	const uint8_t l64[] = {0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x06, 0x40, 0xF7};
+	CHECK(!std::memcmp(led, l64, sizeof l64));
+	push2::displayBrightness(255, display);
+	const uint8_t d255[] = {0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x08, 0x7F, 0x01, 0xF7};
+	CHECK(!std::memcmp(display, d255, sizeof d255));
+	push2::displayBrightness(64, display);
+	const uint8_t d64[] = {0xF0, 0x00, 0x21, 0x1D, 0x01, 0x01, 0x08, 0x40, 0x00, 0xF7};
+	CHECK(!std::memcmp(display, d64, sizeof d64));
+}
+
 TEST(push2_user_port) {
 	for (const char* n : {"Ableton Push 2 User Port", "MIDIIN2 (Ableton Push 2)", "MIDIOUT2 (Ableton Push 2)",
 						  "MIDIIN2 (Ableton Push 2) 3", "Ableton Push 2:Ableton Push 2 MIDI 2 20:1",
@@ -426,7 +439,7 @@ TEST(tart_machine_threads) {
 		tart::Inputs in;
 		tart::Outputs out;
 		push2::Leds want;
-		push2::Event ev[73];
+		push2::Event ev[77];
 		ev[0] = dec({0xB0, push2::cc::kTempo, 1});
 		ev[1] = dec({0xB0, push2::cc::Metronome, 127});
 		ev[2] = dec({0x90, 36, 100}); // a pad and the touch strip
@@ -500,10 +513,14 @@ TEST(tart_machine_threads) {
 		ev[70] = dec({0x80, 36, 0});
 		ev[71] = dec({0xB0, push2::cc::Repeat, 127});
 		ev[72] = dec({0xB0, push2::cc::Repeat, 0});
+		ev[73] = dec({0xB0, push2::cc::Setup, 127}); // SETUP, an encoder turn of DISPLAY LIGHT, SETUP again
+		ev[74] = dec({0xB0, push2::cc::Setup, 0});
+		ev[75] = dec({0xB0, push2::cc::kTrack1 + 1, 124});
+		ev[76] = dec({0xB0, push2::cc::Setup, 127});
 		tart::SliceFrame frame;
 		in.play = true;
 		for (int i = 0; i < 20000; i++) {
-			in.events = ev, in.nEvents = i % 7 == 0 ? 73 : 0, in.frame = i;
+			in.events = ev, in.nEvents = i % 7 == 0 ? 77 : 0, in.frame = i;
 			m.process(in, out, want, &frame);
 			in.play = false;
 		}
@@ -7847,4 +7864,88 @@ TEST(repeat_overdub_no_double) {
 	CHECK(perTick[144] == 1 && perTick[528] == 1 && perTick[564] == 1 && perTick[576] == 1);
 	for (const auto& p : perTick)
 		CHECK(p.second == 1);
+}
+
+TEST(setup_screen) {
+	using namespace push2::cc;
+	Rig r;
+	r.in.leds = true;
+	r.step();
+	CHECK(r.want.cc[Setup].color == push2::kWhiteDark);
+	r.click(Setup);
+	r.step();
+	CHECK(r.view().s.ui.screen == tart::kSetupScreen && r.want.cc[Setup].color == push2::kWhiteFull);
+	r.press(Setup, 0); // a toggle, never momentary: a 1 s hold keeps it open
+	r.click(Setup);
+	r.press(Setup);
+	r.run_(48000);
+	r.press(Setup, 0);
+	CHECK(r.view().s.ui.screen == tart::kSetupScreen);
+	r.click(Note); // NOTE closes it
+	CHECK(r.view().s.ui.screen == tart::kHome);
+	r.click(Setup), r.click(Session);
+	CHECK(r.view().s.ui.screen == tart::kHome && r.view().s.ui.pads == tart::kSession);
+	r.click(Setup), r.click(Device); // another screen replaces it
+	CHECK(r.view().s.ui.screen == tart::kDeviceScreen);
+	r.click(Setup), r.click(Setup);
+	CHECK(r.view().s.ui.screen == tart::kHome);
+	// The encoders: 2 is DISPLAY LIGHT (255 to 2), 3 is LED BRIGHTNESS (127 to 13); the others do nothing.
+	r.click(Setup);
+	r.turn(1, -60);
+	CHECK(r.view().s.setup.display == 195 && r.view().s.setup.led == 127);
+	r.turn(2, -20);
+	CHECK(r.view().s.setup.display == 195 && r.view().s.setup.led == 117);
+	for (int i = 0; i < 12; i++)
+		r.turn(1, -60), r.turn(2, -60);
+	CHECK(r.view().s.setup.display == tart::kMinDisplay && r.view().s.setup.led == tart::kMinLed);
+	for (int i = 0; i < 12; i++)
+		r.turn(1, 60), r.turn(2, 60);
+	CHECK(r.view().s.setup.display == 255 && r.view().s.setup.led == 127);
+	r.turn(1, -20);
+	for (int e : {0, 3, 4, 5, 6, 7})
+		r.turn(e, 20);
+	CHECK(r.view().s.setup.display == 235 && r.view().s.setup.led == 127);
+	Rig q; // with a step held, the turns edit no note
+	q.click(Layout);
+	q.tap(0, 3);
+	q.pad(0, 3, 100);
+	q.click(Setup);
+	q.turn(1, 20), q.turn(2, -20), q.turn(0, 20), q.turn(3, 20);
+	const auto v = q.view(); // still held: the note is as it was
+	q.pad(0, 3, 0);
+	CHECK(v.nNotes == 1 && v.notes[0].vel == 100 && v.notes[0].tick == 72 && v.s.setup.led == 117);
+}
+
+TEST(setup_send_bits) {
+	using namespace push2::cc;
+	Rig r;
+	r.in.leds = true;
+	r.step(); // the first pass: the Push has nothing yet
+	CHECK(r.out.ledsDone && r.out.setupSend == 3 && r.out.setup.display == 255 && r.out.setup.led == 127);
+	r.step();
+	CHECK(r.out.setupSend == 0);
+	r.click(Setup);
+	r.step();
+	CHECK(r.out.setupSend == 0);
+	r.turn(2, -20); // LED only
+	CHECK(r.out.setupSend == 1 && r.out.setup.led == 117);
+	r.step();
+	CHECK(r.out.setupSend == 0);
+	r.turn(1, -20); // display only
+	CHECK(r.out.setupSend == 2 && r.out.setup.display == 235);
+	r.turn(1, 60); // at the top already: nothing changes, nothing is sent
+	r.turn(1, 60);
+	r.step();
+	CHECK(r.out.setupSend == 0);
+	tart::Setup h = {0, 200};
+	tart::clampSetup(h);
+	CHECK(h.display == 2 && h.led == 127);
+	h = {255, 3};
+	tart::clampSetup(h);
+	CHECK(h.display == 255 && h.led == 13);
+	auto st = std::make_unique<tart::State>();
+	st->s.setup = {1, 255};
+	tart::sanitize(*st);
+	CHECK(st->s.setup.display == 2 && st->s.setup.led == 127);
+	CHECK(tart::Session().setup.display == 255 && tart::Session().setup.led == 127); // an old patch: Live's defaults
 }

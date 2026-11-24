@@ -107,7 +107,7 @@ enum Popup : uint8_t {
 	kLoopTooLongPopup
 };
 enum Pads : uint8_t { kSession, kNote };
-enum Screens : uint8_t { kHome, kScaleScreen, kClipScreen, kBrowseScreen, kDeviceScreen, kMixScreen };
+enum Screens : uint8_t { kHome, kScaleScreen, kClipScreen, kBrowseScreen, kDeviceScreen, kMixScreen, kSetupScreen };
 
 struct Transport {
 	float bpm = 120; // the internal tempo; a patched CLOCK overrides it, the TEMPO input scales it
@@ -176,11 +176,20 @@ struct Ui {
 	double repeatAt = -1; // when the press of REPEAT began (-1: none)
 };
 
+/** The Push's own settings, which the Setup screen edits and Tart sends to it: Live's ranges and defaults. */
+struct Setup {
+	uint8_t display = 255, led = 127; // DISPLAY LIGHT kMinDisplay..255, LED BRIGHTNESS kMinLed..127
+};
+constexpr uint8_t kMinDisplay = 2, kMinLed = 13; // Live's lowest (Push2/setup_component.py)
+/** Clamps a Setup into its ranges (a patch can hold anything). */
+void clampSetup(Setup& h);
+
 struct Session {
 	Transport transport;
 	Scale scale;
 	Ui ui;
 	Track track[kTracks];
+	Setup setup;
 };
 
 struct State {
@@ -340,6 +349,8 @@ struct Outputs {
 	float master = 10.f; // the MASTER output's volts, every sample
 	bool midiClock = false, midiStart = false;
 	bool palette = false;  // the track colours changed (or never went out): send `rgb`, then reapply
+	uint8_t setupSend = 0; // with ledsDone: what changed since it went out: bit 0 LED brightness, bit 1 display
+	Setup setup = {};      // the values to send, valid with `ledsDone`
 	uint32_t rgb[17] = {}; // 0xRRGGBB for palette index kPaletteFull + k (kPaletteDim is k = 8..15, kPaletteYellow 16);
 						   // valid with `ledsDone`
 };
@@ -380,6 +391,7 @@ class Machine {
 	void loopPad(State& st, int index, int vel);
 	bool browseButton(State& st, int button);
 	void noteEncoder(State& st, int encoder, int delta);
+	void setupEncoder(State& st, int encoder, int delta);
 	void fullVelocity(State& st);
 	void valueEncoder(State& st, int encoder, int track, int lane, int delta);
 	void stepLock(State& st, int lane, int delta);
@@ -476,7 +488,8 @@ class Machine {
 	Request request_ = Request::None;
 	bool sync_ = true; // take the lock this sample
 	int accTempo_ = 0, accSwing_ = 0, accScale_[8] = {}, accNote_[4] = {}, accClip_ = 0, accBrowse_ = 0,
-		accQuantTo_ = 0, accAmount_ = 0, accRecQuant_ = 0, accEuclid_[8] = {};
+		accQuantTo_ = 0, accAmount_ = 0, accRecQuant_ = 0, accEuclid_[8] = {}, accSetup_[8] = {};
+	Setup sentSetup_ = {0, 0}; // what the Push has (0: never sent, below every minimum)
 	// What the Slice reads: each lane's volts at the last tick and at the next, mirrored under the lock.
 	float from_[kTracks][kAutos] = {}, to_[kTracks][kAutos] = {};
 	int64_t lastTick_ = 0;
