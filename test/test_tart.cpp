@@ -425,7 +425,7 @@ TEST(tart_machine_threads) {
 		tart::Inputs in;
 		tart::Outputs out;
 		push2::Leds want;
-		push2::Event ev[63];
+		push2::Event ev[65];
 		ev[0] = dec({0xB0, push2::cc::kTempo, 1});
 		ev[1] = dec({0xB0, push2::cc::Metronome, 127});
 		ev[2] = dec({0x90, 36, 100}); // a pad and the touch strip
@@ -489,10 +489,12 @@ TEST(tart_machine_threads) {
 		ev[60] = dec({0xB0, 73, 4});
 		ev[61] = dec({0xB0, push2::cc::kMasterVolume, 127});
 		ev[62] = dec({0xB0, push2::cc::Mix, 0});
+		ev[63] = dec({0xB0, push2::cc::Accent, 127});
+		ev[64] = dec({0xB0, push2::cc::Accent, 0});
 		tart::SliceFrame frame;
 		in.play = true;
 		for (int i = 0; i < 20000; i++) {
-			in.events = ev, in.nEvents = i % 7 == 0 ? 63 : 0, in.frame = i;
+			in.events = ev, in.nEvents = i % 7 == 0 ? 65 : 0, in.frame = i;
 			m.process(in, out, want, &frame);
 			in.play = false;
 		}
@@ -5672,6 +5674,153 @@ TEST(euclid_mode_buttons) {
 	r.m.edit([](tart::State& s) { s.s.track[0].type = tart::Melodic; });
 	r.click(Track1Above + 1);
 	CHECK(settingsOf(r).mode == tart::kEuclidDrum);
+}
+
+namespace {
+
+/** The velocity (volts) of the first sounding channel of track 0 (-1: none). */
+float soundingVel(SliceRig& r) {
+	for (int c = 0; c < 16; c++)
+		if (r.f.track[0].gate[c] > 0)
+			return r.f.track[0].vel[c];
+	return -1;
+}
+
+} // namespace
+
+TEST(accent_tap_and_hold) {
+	using namespace push2::cc;
+	Rig r;
+	r.in.leds = true;
+	r.step();
+	CHECK(r.want.cc[Accent].color == push2::kWhiteDark && r.want.cc[Accent].channel == 0); // off: dim
+	r.click(Accent);
+	r.step();
+	CHECK(r.view().s.ui.accent && r.want.cc[Accent].color == push2::kWhiteDark &&
+		  r.want.cc[Accent].channel == push2::kPulseHalf && r.want.cc[Accent].base == push2::kWhiteFull);
+	r.click(Accent);
+	CHECK(!r.view().s.ui.accent);
+	r.press(Accent); // held for 0.3 s: on while held, off after
+	CHECK(r.view().s.ui.accent);
+	r.run_(14400);
+	CHECK(r.view().s.ui.accent);
+	r.press(Accent, 0);
+	CHECK(!r.view().s.ui.accent);
+	r.click(Accent); // on, then a hold ends off (as Live), not "toggled back"
+	r.press(Accent), r.run_(14400), r.press(Accent, 0);
+	CHECK(!r.view().s.ui.accent);
+	Rig q(false); // Session mode: nothing, dark
+	q.in.leds = true;
+	q.click(Accent);
+	q.step();
+	CHECK(!q.view().s.ui.accent && q.want.cc[Accent].color == 0);
+	auto st = std::make_unique<tart::State>();
+	st->s.ui.accent = true, st->s.ui.accentAt = 5;
+	tart::sanitize(*st);
+	CHECK(!st->s.ui.accent && st->s.ui.accentAt == -1);
+}
+
+TEST(accent_velocity) {
+	using namespace push2::cc;
+	for (int on = 0; on < 2; on++) {
+		const int v = on ? 127 : 100;
+		const float volts = on ? 10.f : 40 / 127.f * 10;
+		SliceRig r; // a played pad: 40 sounds at 127 with ACCENT, and the pad shows the press
+		r.run_(2);
+		if (on)
+			r.click(Accent);
+		r.pad(0, 0, 40);
+		CHECK_NEAR(soundingVel(r), volts, 1e-4);
+		CHECK(r.view().s.ui.pad[0] == 40);
+		r.pad(0, 0, 0);
+		Rig m; // the Melodic Sequencer's new step
+		if (on)
+			m.click(Accent);
+		m.click(Layout);
+		m.tap(0, 3);
+		CHECK(m.view().nNotes == 1 && m.view().notes[0].vel == v);
+		Rig sp; // the split layout: an empty step with a chord, then a pitch added to a held step
+		if (on)
+			sp.click(Accent);
+		split(sp);
+		sp.pad(0, 0, 100), sp.pad(0, 2, 100), sp.pad(0, 0, 0), sp.pad(0, 2, 0);
+		stap(sp, 0);
+		CHECK(sp.view().nNotes == 2 && sp.view().notes[0].vel == v && sp.view().notes[1].vel == v);
+		sstep(sp, 3), sp.tap(0, 4), sstep(sp, 3, 0);
+		CHECK(notesOf(sp).size() == 5 && notesOf(sp)[4].vel == v);
+		SliceRig d; // a drum lane pad and a drum step
+		drumTrack(d);
+		d.run_(2);
+		if (on)
+			d.click(Accent);
+		d.pad(1, 1, 40);
+		CHECK_NEAR(soundingVel(d), volts, 1e-4);
+		d.pad(1, 1, 0);
+		dtap(d, 2);
+		CHECK(d.view().nNotes == 1 && d.view().notes[0].vel == v);
+		Rig t; // a take records the sounding velocity
+		if (on)
+			t.click(Accent);
+		t.click(Record);
+		t.run_(4);
+		hold(t, 24, 48, 0, 40);
+		runTo(t, 60);
+		t.click(Record);
+		runTo(t, 384);
+		CHECK(t.view().nNotes == 1 && t.view().notes[0].vel == (on ? 127 : 40));
+	}
+	// A Euclid clip's own notes keep their VEL; its lane pad sounds at 127.
+	SliceRig e;
+	euclidTrack(e, 0, [](tart::Euclid& x) { lane(x, 0, 16, 4); }, tart::kBar, false);
+	e.run_(2);
+	e.click(Accent);
+	e.pad(0, 0, 40);
+	CHECK_NEAR(soundingVel(e), 10.f, 1e-4);
+	e.pad(0, 0, 0);
+	const tart::Euclid before = settingsOf(e);
+	CHECK(before.lane[0].velocity == 100); // the clip's VEL is not touched by ACCENT
+}
+
+TEST(accent_held_step_full_velocity) {
+	using namespace push2::cc;
+	Rig r;
+	r.click(Layout);
+	r.tap(0, 3);
+	r.pad(0, 3, 100); // hold the step
+	CHECK(r.view().notes[0].vel == 100);
+	r.click(Accent);
+	CHECK(r.view().notes[0].vel == 127 && !r.view().s.ui.accent && r.view().s.ui.heldEdited);
+	r.pad(0, 3, 0); // the release keeps the note
+	CHECK(r.view().nNotes == 1);
+	r.click(Undo); // one undo step
+	CHECK(r.view().notes[0].vel == 100);
+	r.pad(0, 3, 100);
+	r.click(Accent);
+	r.click(Accent); // already 127: no new undo step, no toggle either
+	r.pad(0, 3, 0);
+	CHECK(r.view().notes[0].vel == 127 && !r.view().s.ui.accent);
+	Rig s; // split: all the step's notes
+	split(s);
+	s.pad(0, 0, 100), s.pad(0, 2, 100), s.pad(0, 0, 0), s.pad(0, 2, 0);
+	stap(s, 0);
+	sstep(s, 0);
+	s.click(Accent);
+	sstep(s, 0, 0);
+	CHECK(s.view().nNotes == 2 && s.view().notes[0].vel == 127 && s.view().notes[1].vel == 127);
+	Rig d; // a drum step
+	drumTrack(d);
+	dtap(d, 2);
+	dstep(d, 2);
+	d.click(Accent);
+	dstep(d, 2, 0);
+	CHECK(d.view().notes[0].vel == 127 && !d.view().s.ui.accent);
+	Rig e; // a Euclid track with a step held: ACCENT toggles
+	euclidTrack(e, 0, [](tart::Euclid& x) { lane(x, 0, 16, 4); }, tart::kBar, false);
+	e.run_(2);
+	e.pad(7, 0, 100);
+	e.click(Accent);
+	e.pad(7, 0, 0);
+	CHECK(e.view().s.ui.accent);
 }
 
 TEST(scene_buttons_match_labels) { // the top button reads 1/32t (Push2-map: CC 43), the bottom 1/4 (CC 36)

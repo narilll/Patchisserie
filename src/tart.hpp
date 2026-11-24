@@ -169,6 +169,8 @@ struct Ui {
 	uint8_t muteSoloLock = 0;
 	double muteSoloAt = -1;
 	bool muteSoloUsed = false;
+	bool accent = false;  // ACCENT: pads and new steps at velocity 127
+	double accentAt = -1; // when the press of ACCENT began (-1: none)
 };
 
 struct Session {
@@ -375,6 +377,7 @@ class Machine {
 	void loopPad(State& st, int index, int vel);
 	bool browseButton(State& st, int button);
 	void noteEncoder(State& st, int encoder, int delta);
+	void fullVelocity(State& st);
 	void valueEncoder(State& st, int encoder, int track, int lane, int delta);
 	void stepLock(State& st, int lane, int delta);
 	void deleteLane(State& st, int track, int lane);

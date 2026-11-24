@@ -30,6 +30,10 @@ constexpr int kEuclidUnits[8] = {8, 8, 8, 2, 1, 4, 30, 2};
 // 1/32, 1/32t.
 constexpr int kGrid[8] = {96, 64, 48, 32, 24, 16, 12, 8};
 /** The step size (an index of kGrid) of a scene button's CC, and the CC of a step size: the top button is 1/32t. */
+/** The velocity of a note a sequencer makes: 100, or 127 with ACCENT. */
+inline uint8_t stepVelocity(const Ui& u) {
+	return u.accent ? 127 : 100;
+}
 constexpr int sceneGrid(int cc) {
 	return cc - push2::cc::Scene8;
 }
@@ -683,6 +687,7 @@ void sanitize(State& st) {
 	u.automate = u.automate != 0, u.mixLane = std::min<uint8_t>(u.mixLane, 3),
 	u.sendPre = std::min<uint8_t>(u.sendPre, 3), u.defaultLevel = std::min<uint8_t>(u.defaultLevel, 10);
 	u.muteSoloLock = 0, u.muteSoloAt = -1, u.muteSoloUsed = false;
+	u.accent = false, u.accentAt = -1;
 	for (auto& row : st.clip)
 		for (Clip& c : row) { // `playing` is transient, so a clip needs no more than sorted notes of sound values
 			c.length = std::min<uint16_t>(c.length, kMaxLength);
@@ -916,6 +921,11 @@ void Machine::handle(State& st, const push2::Event& e) {
 					toggleMuteSolo(s, mode, ui.track);
 				ui.muteSoloAt = -1;
 			}
+			if (e.index == push2::cc::Accent && ui.accentAt >= 0) { // a hold ends it off, as Live
+				if (ui.now - ui.accentAt >= kHoldSeconds)
+					ui.accent = false;
+				ui.accentAt = -1;
+			}
 			if (e.index == push2::cc::Duplicate)
 				ui.dup = -1;
 			if (e.index == push2::cc::FixedLength) { // a tap toggles; a hold, or choosing a length, doesn't
@@ -937,6 +947,11 @@ void Machine::handle(State& st, const push2::Event& e) {
 				show(redo ? kRedoPopup : kUndoPopup);
 		} else if (e.index == push2::cc::Record) {
 			record(st);
+		} else if (e.index == push2::cc::Accent) { // Note mode only; with a step held, its notes go to 127 (as Live)
+			if (ui.pads == kNote && ui.heldStep >= 0 && s.track[ui.track].type != Euclidean)
+				fullVelocity(st);
+			else if (ui.pads == kNote)
+				ui.accent = !ui.accent, ui.accentAt = ui.now;
 		} else if (e.index == push2::cc::Automate) { // Shift: automation follows the clips again; Delete: no automation
 			Clip& c = st.clip[ui.track][ui.scene];
 			if (ui.button[push2::cc::Shift]) {
@@ -1292,7 +1307,8 @@ void Machine::pad(State& st, int i, int vel) {
 /** Starts the note of pad `i` on the selected track. A drum track plays it on the voice channel of its lane. */
 void Machine::play(Session& s, int i, int pitch, int vel) {
 	Live& l = live_[i];
-	l = {++nextId_, s.ui.track, (uint8_t)pitch, (uint8_t)vel};
+	const uint8_t sounds = s.ui.accent ? 127 : (uint8_t)vel; // ACCENT: full velocity, the pad shows the press
+	l = {++nextId_, s.ui.track, (uint8_t)pitch, sounds};
 	s.ui.pad[i] = (uint8_t)vel;
 	const Ui& u = s.ui;
 	int length = state_->clip[l.track][u.recScene].length;
@@ -1300,7 +1316,7 @@ void Machine::play(Session& s, int i, int pitch, int vel) {
 		l.rec = u.recScene, l.at = atTicks_,
 		l.pos = (uint16_t)(std::max<int64_t>(atTicks_ - s.track[l.track].startTick, 0) % length);
 	int midichan = layout_[l.track] == Drum ? pitch - kDrumNote + 1 : 0;
-	voice_[l.track].noteOn(l.id, (float)pitch, (float)vel / 127.f, midichan);
+	voice_[l.track].noteOn(l.id, (float)pitch, (float)l.vel / 127.f, midichan);
 }
 
 /** A pad of a drum track: the lower left 4 x 4 are the lanes (row * 4 + col, from the bottom left), which a press
@@ -1599,6 +1615,24 @@ void Machine::sceneButton(State& st, int scene) {
 	}
 }
 
+/** ACCENT with a step held: its notes (the split layout: every note of the step) go to velocity 127, one undo step. */
+void Machine::fullVelocity(State& st) {
+	Ui& ui = st.s.ui;
+	Clip& c = st.clip[ui.track][ui.scene];
+	const int grid = kGrid[st.s.track[ui.track].grid];
+	int start, pitch = stepOf(st.s, ui.heldStep, start), idx[16], n = 0; // ponytail: 16 notes, as noteEncoder
+	if (st.s.track[ui.track].type != Drum && ui.noteLayout == 2)
+		n = std::min(stepNotes(c, start, grid, idx, 16), 16);
+	else if (int h = findNote(c, pitch, start, grid); h >= 0)
+		idx[n++] = h;
+	ui.heldEdited = true; // the press is an edit: the release keeps the note
+	if (std::none_of(idx, idx + n, [&](int i) { return c.notes[i].vel != 127; }))
+		return;
+	checkpoint(ui.track, ui.scene);
+	for (int k = 0; k < n; k++)
+		c.notes[idx[k]].vel = 127;
+}
+
 /** A sequencer pad: tap a step to put a note on it (the first one makes the clip) or to take it off, hold it and turn
  * an encoder to edit it, or hold it and press a later step of its row (a drum lane: of the page) for a long note. */
 void Machine::sequencer(State& st, int i, int vel) {
@@ -1638,7 +1672,7 @@ void Machine::sequencer(State& st, int i, int vel) {
 			return;
 		}
 		checkpoint(ui.track, ui.scene);
-		Note note = {(uint16_t)start, (uint16_t)std::min(grid, length - start), (uint8_t)pitch, 100};
+		Note note = {(uint16_t)start, (uint16_t)std::min(grid, length - start), (uint8_t)pitch, stepVelocity(ui)};
 		insertNote(c, note); // there is room, and findNote found no note there
 		ui.heldStep = (int8_t)i, ui.heldHad = ui.heldEdited = false;
 		c.length = (uint16_t)length;
@@ -1674,7 +1708,7 @@ void Machine::splitPad(State& st, int i, int vel) {
 				ui.popup = kClipFullPopup, ui.popupAt = ui.now;
 			} else {
 				checkpoint(ui.track, ui.scene);
-				insertNote(c, {(uint16_t)hs, (uint16_t)std::min(grid, c.length - hs), (uint8_t)p, 100});
+				insertNote(c, {(uint16_t)hs, (uint16_t)std::min(grid, c.length - hs), (uint8_t)p, stepVelocity(ui)});
 			}
 			ui.heldEdited = true;
 		} else {
@@ -1730,7 +1764,8 @@ void Machine::splitPad(State& st, int i, int vel) {
 		checkpoint(ui.track, ui.scene);
 		for (int p = 0; p < 128; p++)
 			if (chordHas(s, p))
-				insertNote(c, {(uint16_t)start, (uint16_t)std::min(grid, length - start), (uint8_t)p, 100});
+				insertNote(c,
+						   {(uint16_t)start, (uint16_t)std::min(grid, length - start), (uint8_t)p, stepVelocity(ui)});
 		ui.heldStep = (int8_t)i, ui.heldHad = ui.heldEdited = false;
 		c.length = (uint16_t)length;
 		if (created)
@@ -2223,6 +2258,9 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 		u.automate ? push2::Led{push2::kRed, push2::kStatic}
 				   : push2::Led{u.button[push2::cc::Automate] ? push2::kWhiteFull : push2::kWhiteDark, push2::kStatic};
 	white(push2::cc::Quantize, u.button[push2::cc::Quantize]);
+	if (u.pads == kNote) // ACCENT: pulsing while on (Live's slow pulse), dim while off; dark in Session mode
+		out.cc[push2::cc::Accent] = u.accent ? push2::Led{push2::kWhiteDark, push2::kPulseHalf, push2::kWhiteFull}
+											 : push2::Led{push2::kWhiteDark, push2::kStatic};
 	if (st.clip[u.track][u.scene].length || u.button[push2::cc::DoubleLoop])
 		white(push2::cc::DoubleLoop, u.button[push2::cc::DoubleLoop]);
 	white(push2::cc::Browse, u.screen == kBrowseScreen || u.button[push2::cc::Browse]);
