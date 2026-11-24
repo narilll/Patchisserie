@@ -2463,7 +2463,7 @@ void Machine::euclidTick(State& st, int t, int64_t k) {
 }
 
 /** Tick `k` for pad `i`, held with REPEAT: a note on every line of its track's rate, counted from the transport's
- * start, swung as the clips' notes are. */
+ * start, swung as the clips' notes are. A take on its track records each one at its line. */
 void Machine::repeatTick(State& st, int i, int64_t k) {
 	const Live& l = live_[i];
 	const Track& tr = st.s.track[l.track];
@@ -2477,6 +2477,16 @@ void Machine::repeatTick(State& st, int i, int64_t k) {
 			continue;
 		if (nActive_[l.track] == kActive)
 			return;
+		Ui& u = st.s.ui; // a take on this track keeps the note at its line, as it sounds
+		Clip& c = st.clip[l.track][u.recScene];
+		if (u.recTrack == l.track && tr.playing == u.recScene && c.length && tr.type != Euclidean &&
+			line >= tr.startTick) {
+			if (c.nNotes >= kMaxNotes)
+				u.popup = kClipFullPopup, u.popupAt = u.now;
+			else if (insertNote(c, {(uint16_t)((line - tr.startTick) % c.length),
+									(uint16_t)std::min(len, (int)c.length), l.pitch, l.vel}) < 0)
+				continue; // the clip has it (a later pass of the overdub) and plays it itself
+		}
 		const uint32_t id = ++nextId_;
 		voice_[l.track].noteOn(id, (float)l.pitch, (float)l.vel / 127.f,
 							   layout_[l.track] == Drum ? l.pitch - kDrumNote + 1 : 0);

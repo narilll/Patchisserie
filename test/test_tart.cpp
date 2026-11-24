@@ -7718,3 +7718,133 @@ TEST(sanitize_repeat) {
 	CHECK(st->s.track[1].rate == 7 && st->s.track[1].repeat && st->s.ui.repeatAt == -1);
 	CHECK(tart::Track().rate == 2 && !tart::Track().repeat); // an old patch: Repeat off at 1/8
 }
+
+namespace {
+
+/** The (tick, len, vel) of the notes of slot (0, 0), in order. */
+std::vector<std::array<int, 3>> clipNotes(Rig& r) {
+	auto st = r.state();
+	std::vector<std::array<int, 3>> v;
+	for (int i = 0; i < st->clip[0][0].nNotes; i++)
+		v.push_back({st->clip[0][0].notes[i].tick, st->clip[0][0].notes[i].len, st->clip[0][0].notes[i].vel});
+	return v;
+}
+
+/** A take of a 1 Bar clip that starts at tick 96 (launch quantization 1/4), Repeat at 1/16 with swing 100, and Record
+ * Quantize on at 1/4, which would move the repeats if it were applied. RECORD is pressed at tick 10. */
+void repeatTake(RepRig& r, int voices = 1) {
+	setQuant(r, 7);
+	setQuantize(r, 0, 100, 0, true);
+	r.m.edit([=](tart::State& st) {
+		st.s.ui.fixedOn = true, st.s.ui.fixedBars = 2, st.s.track[0].voices = (uint8_t)voices;
+	});
+	repeatOn(r, 4, 100);
+	r.to(10);
+	r.click(push2::cc::Record);
+}
+
+} // namespace
+
+TEST(repeat_records_take) {
+	{
+		RepRig r; // the lines 144..240 of the grid (pressed after the swung 120), minus the clip's start (96)
+		repeatTake(r);
+		r.to(134);
+		r.pad(0, 0, 100);
+		r.to(260);
+		r.pad(0, 0, 0);
+		r.to(300);
+		const std::vector<std::array<int, 3>> want = {
+			{48, 12, 100}, {72, 12, 100}, {96, 12, 100}, {120, 12, 100}, {144, 12, 100}};
+		CHECK(clipNotes(r) == want);
+		CHECK((r.ticks() == std::vector<int>{144, 180, 192, 228, 240})); // the swung 168 sounds at 180
+	}
+	{
+		RepRig r; // with ACCENT: 127; a hold across the end of the clip wraps to its start
+		repeatTake(r);
+		r.click(push2::cc::Accent);
+		r.to(134);
+		r.pad(0, 0, 40);
+		r.to(520);
+		r.pad(0, 0, 0);
+		const auto n = clipNotes(r);
+		CHECK(n.size() == 16 && n[0][0] == 0 && n[1][0] == 24 && n[15][0] == 360);
+		CHECK(std::all_of(n.begin(), n.end(), [](const std::array<int, 3>& x) { return x[1] == 12 && x[2] == 127; }));
+	}
+}
+
+TEST(repeat_record_conditions) {
+	{
+		RepRig r; // before the clip starts nothing is recorded
+		repeatTake(r);
+		r.to(20);
+		r.pad(0, 0, 100);
+		r.to(90);
+		r.pad(0, 0, 0);
+		CHECK(clipNotes(r).empty());
+	}
+	{
+		RepRig r; // another track's take records nothing from this track's pad
+		repeatTake(r);
+		r.m.edit([](tart::State& st) { st.s.ui.recTrack = 3; });
+		r.to(134);
+		r.pad(0, 0, 100);
+		r.to(260);
+		r.pad(0, 0, 0);
+		CHECK(clipNotes(r).empty());
+	}
+	{
+		RepRig r; // the take ends mid-hold: earlier repeats stay, later ones are not recorded; one Undo takes the take
+		repeatTake(r);
+		r.to(134);
+		r.pad(0, 0, 100);
+		r.to(200);
+		r.click(push2::cc::Record);
+		r.to(300);
+		r.pad(0, 0, 0);
+		CHECK(r.view().s.ui.recTrack == -1);
+		CHECK(clipNotes(r).size() == 3); // the lines 144, 168 and 192
+		r.click(push2::cc::Undo);
+		CHECK(r.view().length[0][0] == 0 && clipNotes(r).empty());
+	}
+	{
+		RepRig r; // a Euclid track records no pads, so no repeats
+		euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 16, 0); }, tart::kBar, false);
+		repeatTake(r);
+		r.to(134);
+		r.pad(0, 0, 100);
+		r.to(260);
+		r.pad(0, 0, 0);
+		CHECK(r.state()->clip[0][0].nNotes == 0);
+	}
+	{
+		RepRig r; // a full clip: the repeat still sounds and the display says so
+		repeatTake(r);
+		r.m.edit([](tart::State& st) {
+			tart::Clip& c = st.clip[0][0];
+			c.length = tart::kBar, c.nNotes = tart::kMaxNotes;
+			for (int i = 0; i < tart::kMaxNotes; i++)
+				c.notes[i] = {(uint16_t)(400 + i / 128), 1, (uint8_t)(i % 128), 100}; // past the end: silent
+		});
+		r.to(134);
+		r.pad(0, 0, 100);
+		r.to(160);
+		CHECK(r.view().s.ui.popup == tart::kClipFullPopup);
+		CHECK((r.ticks() == std::vector<int>{144}));
+	}
+}
+
+TEST(repeat_overdub_no_double) {
+	RepRig r; // two voices: on the second pass a note of the clip is played by the clip, not again by the repeat
+	repeatTake(r, 2);
+	r.to(134);
+	r.pad(0, 0, 100);
+	r.to(700);
+	r.pad(0, 0, 0);
+	std::map<int, int> perTick;
+	for (const Rep& x : r.got)
+		perTick[x.tick]++;
+	CHECK(perTick[144] == 1 && perTick[528] == 1 && perTick[564] == 1 && perTick[576] == 1);
+	for (const auto& p : perTick)
+		CHECK(p.second == 1);
+}
