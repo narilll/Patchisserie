@@ -218,6 +218,14 @@ inline bool quantizeSettings(const Ui& u) {
 	return u.button[push2::cc::Quantize] && u.quantizeAt >= 0 && u.now - u.quantizeAt >= kHoldSeconds;
 }
 
+/** Whether the Euclid screen shows: a Euclid track is selected and the Home screen shows its settings (not Quantize's
+ * or Fixed Length's), in Session and Note mode alike. */
+inline bool euclidHome(const Session& s) {
+	const Ui& u = s.ui;
+	return s.track[u.track].type == Euclidean && u.screen == kHome && !quantizeSettings(u) &&
+		   !u.button[push2::cc::FixedLength];
+}
+
 /** What Transport::quant (the launch quantization) is called, in order: None, 8 Bars ... 1/32. */
 extern const char* const kQuantNames[14];
 
@@ -353,6 +361,12 @@ class Machine {
 	void tick(State& st, int64_t k, Outputs& out);
 	void layout(const State& st, int t);
 	void euclidTick(State& st, int t, int64_t k);
+	void euclidPad(State& st, int i, int vel);
+	void euclidEncoder(State& st, int encoder, int delta);
+	void euclidModeButton(State& st, int mode);
+	void euclidGridButton(State& st, int grid);
+	void euclidReset(State& st, int encoder);
+	Euclid& euclidEdit(State& st);
 	void checkpoint(int track, int scene);
 	void record(State& st);
 	void endTake(bool discard = false);
@@ -417,7 +431,7 @@ class Machine {
 	Request request_ = Request::None;
 	bool sync_ = true; // take the lock this sample
 	int accTempo_ = 0, accSwing_ = 0, accScale_[8] = {}, accNote_[4] = {}, accClip_ = 0, accBrowse_ = 0,
-		accQuantTo_ = 0, accAmount_ = 0, accRecQuant_ = 0;
+		accQuantTo_ = 0, accAmount_ = 0, accRecQuant_ = 0, accEuclid_[8] = {};
 	// What the Slice reads: each lane's volts at the last tick and at the next, mirrored under the lock.
 	float from_[kTracks][kAutos] = {}, to_[kTracks][kAutos] = {};
 	int64_t lastTick_ = 0;

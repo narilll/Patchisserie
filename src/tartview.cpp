@@ -49,6 +49,11 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 		text(120.f * column + 6, y, label, 12, NVG_ALIGN_LEFT, dim, sans);
 		text(120.f * (column + width) - 6, y, value, 14, NVG_ALIGN_RIGHT, white, mono);
 	};
+	auto setting = [&](int column, const char* label, const char* value) { // a bigger value under its label
+		text(120.f * column + 6, 40, label, 12, NVG_ALIGN_LEFT, dim, sans);
+		text(120.f * (column + 1) - 6, 60, value, 18, NVG_ALIGN_RIGHT, white, mono);
+	};
+	const bool euclid = euclidHome(v.s);
 	if (ui.screen == kScaleScreen) {
 		const Scale& sc = v.s.scale;
 		// Top: the layout (encoder 1), the roots C G D A E B (upper buttons 2..7), the direction (encoder 8).
@@ -103,10 +108,6 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 			cell(0, 1, "LENGTH", buf);
 		}
 	} else if (quantizeSettings(ui)) { // SWING, QUANTIZE TO, AMOUNT and REC QUANT over their encoders, the switch above
-		auto setting = [&](int column, const char* label, const char* value) {
-			text(120.f * column + 6, 40, label, 12, NVG_ALIGN_LEFT, dim, sans);
-			text(120.f * (column + 1) - 6, 60, value, 18, NVG_ALIGN_RIGHT, white, mono);
-		};
 		std::snprintf(buf, sizeof buf, "%d %%", t.swing);
 		setting(0, "SWING", buf);
 		setting(1, "QUANTIZE TO", kQuantToNames[std::min<int>(ui.quantTo, 7)]);
@@ -118,6 +119,27 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 			 ui.recQuantOn ? black : white, sans);
 	} else if (ui.button[push2::cc::FixedLength]) {
 		cell(0, 1, "FIXED LENGTH", ui.fixedOn ? "On" : "Off");
+	} else if (euclid) { // DRUM and MELODIC over upper 1 and 2, then the settings of the lane (Drum) or the rhythm
+		const Euclid& e = v.euclid;
+		const bool melodic = e.mode == kEuclidMelodic;
+		for (int k = 0; k < 2; k++) {
+			rect(120.f * k + 3, 2, 114, 20, k == e.mode ? white : nvgRGB(0x30, 0x32, 0x36));
+			text(120.f * k + 60, 18, k ? "MELODIC" : "DRUM", 15, NVG_ALIGN_CENTER, k == e.mode ? black : white, sans);
+		}
+		const EuclidLane& x = e.lane[melodic ? kEuclidRhythm : v.s.track[ui.track].lane];
+		const int n = std::min(std::max<int>(x.steps, 1), kMaxSteps);
+		auto number = [&](int column, const char* label, int value, const char* unit = "") {
+			std::snprintf(buf, sizeof buf, "%d%s", value, unit);
+			setting(column, label, buf);
+		};
+		number(0, "STEPS", n);
+		number(1, "PULSES", std::min<int>(x.pulses, n));
+		number(2, "ROTATE", x.rotation % n);
+		number(3, "PROB", x.probability, " %");
+		number(4, "VEL", x.velocity);
+		number(5, "SEED", e.seed);
+		if (melodic)
+			number(6, "OCTAVES", e.octaves), number(7, "CHANGE", e.change, " %");
 	} else if (ui.screen == kDeviceScreen) { // CC 1 to 8: the name and a dot (white: automated, gray: overridden) over
 		const Track& tr = v.s.track[ui.track]; // the value, which is the one at the held step while one is held
 		for (int j = 0; j < kCcs; j++) {
@@ -221,25 +243,34 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 		const uint8_t* tc = kLiveColors[tr.color % kColors];
 		const bool drum = tr.type == Drum || (tr.type == Euclidean && v.euclid.mode == kEuclidDrum);
 		if (ui.screen != kMixScreen) { // the Mix screen has no clip overview
-			std::snprintf(buf, sizeof buf, "Track %d \xC2\xB7 Scene %d%s", ui.track + 1, ui.scene + 1,
+			char lane[16] = "";        // the Euclid screen's lane
+			if (euclid && !v.euclid.mode)
+				std::snprintf(lane, sizeof lane, " \xC2\xB7 Lane %d", tr.lane + 1);
+			std::snprintf(buf, sizeof buf, "Track %d \xC2\xB7 Scene %d%s%s", ui.track + 1, ui.scene + 1,
 						  tr.type == Drum        ? " \xC2\xB7 Drum"
 						  : tr.type == Euclidean ? " \xC2\xB7 Euclid"
-												 : "");
-			text(8, 46, buf, 18, NVG_ALIGN_LEFT, white, sans);
+												 : "",
+						  lane);
+			// The Euclid screen has its settings in the middle too: a smaller header and box.
+			const float hy = euclid ? 80 : 46, hs = euclid ? 16 : 18;
+			text(8, hy, buf, hs, NVG_ALIGN_LEFT, white, sans);
 			int length = v.length[ui.track][ui.scene];
-			const bool rec = ui.recTrack == ui.track && ui.recScene == ui.scene;          // a take runs here
-			const float x0 = 8, w = 944, y0 = 54, h = ui.screen == kClipScreen ? 70 : 62; // larger on the Clip screen
+			const bool rec = ui.recTrack == ui.track && ui.recScene == ui.scene; // a take runs here
+			const float x0 = 8, w = 944, y0 = euclid ? 86 : 54,
+						h = euclid                     ? 38
+							: ui.screen == kClipScreen ? 70
+													   : 62; // larger on the Clip screen
 			if (!length) {
-				text(480, 96, "Empty slot", 24, NVG_ALIGN_CENTER, dim, sans);
+				text(480, euclid ? 112 : 96, "Empty slot", 24, NVG_ALIGN_CENTER, dim, sans);
 			} else {
 				lengthName(buf, sizeof buf, length);
 				const NVGcolor red = nvgRGB(0xff, 0x30, 0x30);
 				if (rec && ui.recOpen) { // the length is not known yet
-					text(952, 46, "Recording", 18, NVG_ALIGN_RIGHT, red, sans);
+					text(952, hy, "Recording", hs, NVG_ALIGN_RIGHT, red, sans);
 				} else {
-					text(952, 46, buf, 18, NVG_ALIGN_RIGHT, dim, sans);
+					text(952, hy, buf, hs, NVG_ALIGN_RIGHT, dim, sans);
 					if (rec)
-						text(942 - nvgTextBounds(vg, 0, 0, buf, nullptr, nullptr), 46, "REC", 18, NVG_ALIGN_RIGHT, red,
+						text(942 - nvgTextBounds(vg, 0, 0, buf, nullptr, nullptr), hy, "REC", hs, NVG_ALIGN_RIGHT, red,
 							 sans);
 				}
 				rect(x0, y0, w, h, nvgRGB(0x20, 0x22, 0x26));

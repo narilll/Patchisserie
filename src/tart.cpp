@@ -23,6 +23,9 @@ constexpr int kSwingUnits = 2;
 // ponytail: raw encoder deltas per change of a held step's Nudge, Length (a step), Length fine (a tick) and Velocity
 // (1); guesses like the ones above, calibrate on the hardware.
 constexpr int kNoteUnits[4] = {2, 8, 2, 1};
+// ponytail: raw encoder deltas per change of the Euclid screen's STEPS, PULSES, ROTATE, PROB, VEL, SEED, OCTAVES and
+// CHANGE, and SHIFT makes it 4 times as many; guesses, calibrate on the hardware.
+constexpr int kEuclidUnits[8] = {8, 8, 8, 2, 1, 4, 30, 2};
 // The ticks of a step by resolution (the scene buttons from the top): 1/4, 1/4t, 1/8, 1/8t, 1/16, 1/16t, 1/32, 1/32t.
 constexpr int kGrid[8] = {96, 64, 48, 32, 24, 16, 12, 8};
 // The steps of a drum track's page, and what one pad of its loop selector covers at a step size: a page, up to a bar.
@@ -368,6 +371,23 @@ int euclidAt(const Session& s, int track, const Euclid& e, const uint32_t* mask,
 		return 0;
 	out[0] = {0, 0, (uint8_t)pitch, x.velocity};
 	return 1;
+}
+
+/** Field `f` of the Euclid screen (the encoder: 0 STEPS, 1 PULSES, 2 ROTATE, 3 PROB, 4 VEL, 5 SEED, 6 OCTAVES, 7
+ * CHANGE) of `e`, the lane `lane` for the first five: its stored value, which `set` (when not -1) replaces. */
+int euclidField(Euclid& e, int lane, int f, int set = -1) {
+	EuclidLane& x = e.lane[lane];
+	int was = f == 5 ? e.seed : 0;
+	uint8_t* b[8] = {&x.steps, &x.pulses, &x.rotation, &x.probability, &x.velocity, nullptr, &e.octaves, &e.change};
+	if (f == 5) {
+		if (set >= 0)
+			e.seed = (uint16_t)set;
+		return was;
+	}
+	was = *b[f];
+	if (set >= 0)
+		*b[f] = (uint8_t)set;
+	return was;
 }
 
 } // namespace
@@ -828,6 +848,8 @@ void Machine::handle(State& st, const push2::Event& e) {
 		} else if (ui.screen == kMixScreen &&
 				   (e.index == push2::cc::Track1Above || e.index == push2::cc::Track1Above + 1)) {
 			ui.mixPans = e.index != push2::cc::Track1Above; // VOLUMES, PANS
+		} else if (euclidHome(s) && (e.index == push2::cc::Track1Above || e.index == push2::cc::Track1Above + 1)) {
+			euclidModeButton(st, e.index - push2::cc::Track1Above); // DRUM, MELODIC
 		} else if (e.index == push2::cc::StopClip) {
 			if (ui.button[push2::cc::Shift])
 				for (int k = 0; k < kTracks; k++)
@@ -857,8 +879,10 @@ void Machine::handle(State& st, const push2::Event& e) {
 			if (e.index >= push2::cc::Scene8 && e.index <= push2::cc::Scene1)
 				sceneButton(st, push2::cc::Scene1 - e.index);
 		} else if (s.track[ui.track].type == Euclidean) {
-			// ponytail: OCTAVE, LAYOUT, PAGE and the scene buttons do nothing on a Euclid track until E5.2/E5.3; this
-			// also keeps the sequencer branch from setting Track::grid for it.
+			// ponytail: OCTAVE, LAYOUT and PAGE do nothing on a Euclid track until E5.3 (OCTAVE); the scene buttons are
+			// the clip's step size, and this keeps the sequencer branch from setting Track::grid for it.
+			if (e.index >= push2::cc::Scene8 && e.index <= push2::cc::Scene1)
+				euclidGridButton(st, push2::cc::Scene1 - e.index);
 		} else if (drum && (e.index == push2::cc::OctaveUp || e.index == push2::cc::OctaveDown ||
 							e.index == push2::cc::Layout)) {
 			// drum pads have no octave and no sequencer layout
@@ -922,6 +946,8 @@ void Machine::handle(State& st, const push2::Event& e) {
 				valueEncoder(st, e.index, e.index, ui.mixPans ? kPan : kLevel, e.value);
 			else if (e.index < 2)
 				valueEncoder(st, e.index, ui.track, e.index ? kPan : kLevel, e.value);
+		} else if (e.index < 8 && euclidHome(s)) { // the Euclid screen: the settings of the selected clip
+			euclidEncoder(st, e.index, e.value);
 		} else if (e.index < 4 && ui.heldStep >= 0) { // a held step: Nudge, Length, Length fine, Velocity
 			noteEncoder(st, e.index, e.value);
 		} else if (e.index == push2::kSwingId) {
@@ -932,6 +958,11 @@ void Machine::handle(State& st, const push2::Event& e) {
 	case Event::Touch:
 		if (e.index < 32)
 			ui.touched = e.value ? ui.touched | 1u << e.index : ui.touched & ~(1u << e.index);
+		if (e.value && e.index < 8 && euclidHome(s)) { // a touch is a gesture: one undo step for its turns
+			gesture_++;
+			if (ui.button[push2::cc::Delete])
+				euclidReset(st, e.index);
+		}
 		if (e.value && e.index < 8 && ui.button[push2::cc::Delete]) {
 			if (ui.screen == kDeviceScreen)
 				deleteLane(st, ui.track, e.index);
@@ -1078,8 +1109,10 @@ void Machine::pad(State& st, int i, int vel) {
 			session(st, i);
 		return;
 	}
-	if (s.track[s.ui.track].type == Euclidean)
-		return; // ponytail: the pads of a Euclid track come with E5.2
+	if (s.track[s.ui.track].type == Euclidean) {
+		euclidPad(st, i, vel);
+		return;
+	}
 	if (s.track[s.ui.track].type == Drum) {
 		drumPad(st, i, vel);
 		return;
@@ -1138,6 +1171,89 @@ void Machine::drumPad(State& st, int i, int vel) {
 		if (!s.ui.button[push2::cc::Select])
 			play(s, i, kDrumNote + lane, vel);
 	}
+}
+
+/** A Euclid edit begins: keeps the selected clip for Undo, and an empty slot first gets a clip of the Fixed Length
+ * setting, launched as one a sequencer makes (at once when stopped, without starting the transport). Returns the
+ * clip's settings. */
+Euclid& Machine::euclidEdit(State& st) {
+	Ui& ui = st.s.ui;
+	Clip& c = st.clip[ui.track][ui.scene];
+	checkpoint(ui.track, ui.scene);
+	if (!c.length)
+		c.length = (uint16_t)(kPpqn << ui.fixedBars), launch(st.s, ui.track, ui.scene);
+	return c.euclid;
+}
+
+/** A pad of a Euclid track in Note mode: Drum mode's lane pads (lower left 4 x 4) play their channel and select the
+ * lane (SELECT: only select; DELETE: the lane's settings go back to the standard ones). The step pads show the pattern
+ * and the rest does nothing, as Melodic mode's keyboard until E5.3. */
+void Machine::euclidPad(State& st, int i, int vel) {
+	Session& s = st.s;
+	Ui& ui = s.ui;
+	Clip& c = st.clip[ui.track][ui.scene];
+	if (!vel || i / 8 > 3 || i % 8 > 3 || c.euclid.mode != kEuclidDrum)
+		return;
+	const int lane = i / 8 * 4 + i % 8;
+	if (ui.button[push2::cc::Delete]) {
+		const EuclidLane standard;
+		if (c.length && std::memcmp(&c.euclid.lane[lane], &standard, sizeof standard))
+			checkpoint(ui.track, ui.scene), c.euclid.lane[lane] = standard;
+		return;
+	}
+	s.track[ui.track].lane = (uint8_t)lane; // (pad() lets no pad through while QUANTIZE is held)
+	if (!ui.button[push2::cc::Select])
+		play(s, i, kDrumNote + lane, vel);
+}
+
+/** Encoder `encoder` turned on the Euclid screen: Drum mode edits the selected lane (encoders 1 to 5) and SEED, Melodic
+ * mode the rhythm, SEED, OCTAVES and CHANGE. The value moves from the effective one (PULSES and ROTATE count against
+ * STEPS), and a turn that changes nothing makes no clip and no undo step. */
+void Machine::euclidEncoder(State& st, int encoder, int delta) {
+	Ui& ui = st.s.ui;
+	Euclid& e = st.clip[ui.track][ui.scene].euclid;
+	const bool melodic = e.mode == kEuclidMelodic;
+	if (ui.button[push2::cc::Delete] || (encoder > 5 && !melodic))
+		return;
+	const int lane = melodic ? kEuclidRhythm : st.s.track[ui.track].lane, n = laneSteps(e.lane[lane]);
+	int v = euclidField(e, lane, encoder);
+	if (encoder == 1)
+		v = std::min(v, n);
+	else if (encoder == 2)
+		v %= n;
+	static const int kLow[8] = {1, 0, 0, 0, 1, 0, 1, 0};
+	const int high[8] = {kMaxSteps, n, n - 1, 100, 127, kMaxSeed, kMaxOctaves, 100};
+	const int d = steps(accEuclid_[encoder], delta, kEuclidUnits[encoder] * (ui.button[push2::cc::Shift] ? 4 : 1));
+	const int to = encoder == 2 ? ((v + d) % n + n) % n : std::min(std::max(v + d, kLow[encoder]), high[encoder]);
+	if (to == v)
+		return;
+	euclidField(euclidEdit(st), lane, encoder, to);
+}
+
+/** DELETE + touch of encoder `encoder` on the Euclid screen: the field goes back to its standard value (one undo step
+ * for the touch; an empty slot and a field that is standard stay as they are). */
+void Machine::euclidReset(State& st, int encoder) {
+	Ui& ui = st.s.ui;
+	Clip& c = st.clip[ui.track][ui.scene];
+	const bool melodic = c.euclid.mode == kEuclidMelodic;
+	if (!c.length || (encoder > 5 && !melodic))
+		return;
+	Euclid standard;
+	const int lane = melodic ? kEuclidRhythm : st.s.track[ui.track].lane, want = euclidField(standard, lane, encoder);
+	if (euclidField(c.euclid, lane, encoder) != want)
+		checkpoint(ui.track, ui.scene), euclidField(c.euclid, lane, encoder, want);
+}
+
+/** DRUM (upper button 1) or MELODIC (2) on the Euclid screen: the mode of the selected clip. */
+void Machine::euclidModeButton(State& st, int mode) {
+	if (st.clip[st.s.ui.track][st.s.ui.scene].euclid.mode != mode)
+		euclidEdit(st).mode = (uint8_t)mode;
+}
+
+/** A scene button in Note mode on a Euclid track: the step size of the selected clip. */
+void Machine::euclidGridButton(State& st, int grid) {
+	if (st.clip[st.s.ui.track][st.s.ui.scene].euclid.grid != grid)
+		euclidEdit(st).grid = (uint8_t)grid;
 }
 
 /** A loop pad covers loopTicks of the clip (a page of steps, up to a bar). A press inside the clip views its page, one
@@ -1672,6 +1788,12 @@ static void sessionLeds(const State& st, push2::Leds& out) {
 	}
 }
 
+/** The eight scene buttons as step sizes: `grid` white, the others dark gray. */
+static void gridLeds(int grid, push2::Leds& out) {
+	for (int i = 0; i < 8; i++)
+		out.cc[push2::cc::Scene1 - i] = {i == grid ? push2::kRgbWhite : push2::kRgbDarkGray, push2::kStatic};
+}
+
 /** The page buttons (lit where there is a page to go to) and the step sizes on the scene buttons, for both sequencers.
  */
 static void pageLeds(const State& st, push2::Leds& out) {
@@ -1683,8 +1805,7 @@ static void pageLeds(const State& st, push2::Leds& out) {
 		white(push2::cc::PageLeft, u.button[push2::cc::PageLeft]);
 	if (u.page < last)
 		white(push2::cc::PageRight, u.button[push2::cc::PageRight]);
-	for (int i = 0; i < 8; i++)
-		out.cc[push2::cc::Scene1 - i] = {i == tr.grid ? push2::kRgbWhite : push2::kRgbDarkGray, push2::kStatic};
+	gridLeds(tr.grid, out);
 }
 
 /** The sequencer's LEDs: notes in the track's color (dim for soft ones), the empty steps dark gray (white in a root
@@ -1761,6 +1882,42 @@ static int stepLeds(const State& st, const uint8_t* vel, push2::Leds& out) {
 	return pos;
 }
 
+/** The 16 lane pads (lower left 4 x 4) of a drum track and of a Euclid track in Drum mode: the selected lane white, a
+ * sounding one green, else the track's colour, dim when `has[lane]` is false. */
+static void laneLeds(const State& st, const filo::VoiceAllocator& voice, const bool* has, push2::Leds& out) {
+	const Ui& u = st.s.ui;
+	const Track& tr = st.s.track[u.track];
+	for (int lane = 0; lane < kLanes; lane++)
+		out.note[push2::padNote(lane / 4, lane % 4)] = {voice.gate(lane)  ? hot(u)
+														: lane == tr.lane ? push2::kRgbWhite
+														: has[lane]       ? (uint8_t)(kPaletteFull + u.track)
+																		  : (uint8_t)(kPaletteDim + u.track),
+														push2::kStatic};
+}
+
+/** The 32 step pads of a Euclid track: the pattern of `lane` of the selected clip in its own time (pad k is step k, the
+ * top row steps 1 to 8): a pulse in the track's colour (dim below VEL 64), a rest dark gray, black from STEPS on, and
+ * the lane's own current step since the launch green (red in a take), whatever the clip's length. */
+static void euclidStepLeds(const State& st, int lane, push2::Leds& out) {
+	const Session& s = st.s;
+	const Ui& u = s.ui;
+	const Track& tr = s.track[u.track];
+	const Clip& c = st.clip[u.track][u.scene];
+	const EuclidLane& x = c.euclid.lane[lane];
+	const int n = laneSteps(x), grid = kGrid[std::min<int>(c.euclid.grid, 7)];
+	const uint32_t mask = euclidMask(x);
+	const int head = s.transport.playing && tr.playing == u.scene && c.length
+						 ? (int)(std::max<int64_t>(s.transport.tick - tr.startTick, 0) / grid % n)
+						 : -1;
+	for (int k = 0; k < kMaxSteps; k++)
+		out.note[push2::padNote(7 - k / 8, k % 8)] = {k >= n             ? push2::kBlack
+													  : k == head        ? hot(u, true)
+													  : !(mask >> k & 1) ? push2::kRgbDarkGray
+													  : x.velocity < 64  ? (uint8_t)(kPaletteDim + u.track)
+																		 : (uint8_t)(kPaletteFull + u.track),
+													  push2::kStatic};
+}
+
 /** A drum track's LEDs. Lanes: the selected one white, a sounding one green, else the track's colour, dim when the
  * clip has no note on it. Steps of the selected lane: the playhead green, a held one white, a note in the track's
  * colour (dim for soft ones), an empty one dark gray, nothing past the end of the clip. Loop pads: the playing one
@@ -1782,12 +1939,7 @@ static void drumLeds(const State& st, const filo::VoiceAllocator& voice, push2::
 		if (n.pitch == kDrumNote + tr.lane && step >= 0 && step < kDrumSteps)
 			vel[step] = n.vel;
 	}
-	for (int lane = 0; lane < kLanes; lane++)
-		out.note[push2::padNote(lane / 4, lane % 4)] = {voice.gate(lane)  ? hot(u)
-														: lane == tr.lane ? push2::kRgbWhite
-														: has[lane]       ? (uint8_t)(kPaletteFull + u.track)
-																		  : (uint8_t)(kPaletteDim + u.track),
-														push2::kStatic};
+	laneLeds(st, voice, has, out);
 	int pos = stepLeds(st, vel, out);
 	int page = kDrumSteps * grid;
 	for (int row = 0; row < 4; row++)
@@ -1835,6 +1987,10 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 		for (int i = 0; i < 2; i++)
 			out.cc[push2::cc::Track1Above + i] = {i == u.mixPans ? push2::kRgbWhite : push2::kRgbDarkGray,
 												  push2::kStatic};
+	if (euclidHome(s)) // DRUM and MELODIC: the clip's mode white, the other dark gray
+		for (int i = 0; i < 2; i++)
+			out.cc[push2::cc::Track1Above + i] = {
+				i == st.clip[u.track][u.scene].euclid.mode ? push2::kRgbWhite : push2::kRgbDarkGray, push2::kStatic};
 	white(push2::cc::FixedLength, u.fixedOn || u.button[push2::cc::FixedLength]);
 	if (u.button[push2::cc::Undo] || (u.button[Shift] ? undoTop_ != undoEnd_ : undoTop_ != undoBottom_))
 		white(push2::cc::Undo, u.button[push2::cc::Undo]); // dim: there is something to undo (Shift: to redo)
@@ -1895,8 +2051,19 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 		drumLeds(st, voice_[u.track], out);
 		return;
 	}
-	if (tr.type == Euclidean) // ponytail: its pads, OCTAVE, LAYOUT, PAGE and scene buttons stay dark until E5.2
+	if (tr.type ==
+		Euclidean) { // the step size, the pattern of the lane, and in Drum mode the lanes; OCTAVE (until E5.3),
+		const Euclid& e = st.clip[u.track][u.scene].euclid; // LAYOUT, PAGE and the other pads stay dark
+		const bool drum = e.mode == kEuclidDrum;
+		bool has[kLanes];
+		for (int l = 0; l < kLanes; l++)
+			has[l] = e.lane[l].pulses > 0;
+		gridLeds(e.grid, out);
+		euclidStepLeds(st, drum ? tr.lane : kEuclidRhythm, out);
+		if (drum)
+			laneLeds(st, voice_[u.track], has, out);
 		return;
+	}
 	if (tr.octave > 0)
 		white(push2::cc::OctaveDown, u.button[push2::cc::OctaveDown]);
 	if (tr.octave < kMaxOctave)

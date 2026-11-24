@@ -5306,37 +5306,445 @@ TEST(sanitize_euclid) {
 	CHECK(st->s.track[0].type == tart::Euclidean && st->s.track[1].type == tart::Melodic);
 }
 
-TEST(euclid_note_mode_inert) {
-	using namespace push2::cc;
-	SliceRig r;
-	r.m.edit([](tart::State& s) { s.s.track[0].type = tart::Euclidean; });
+// ---- The Euclid screen and Drum mode on the pads (E5.2)
+
+namespace {
+
+/** Track 0 is a Euclid track whose slot (0, 0) is empty and selected. */
+void euclidEmpty(Rig& r) {
+	r.m.edit([](tart::State& st) { st.s.track[0].type = tart::Euclidean; });
 	r.run_(2);
-	r.pad(0, 0, 100); // the pads, the octave, the layout, the pages and the scene buttons: nothing yet
-	r.pad(7, 0, 100), r.pad(7, 0, 0), r.pad(0, 5, 100), r.pad(0, 5, 0);
-	r.press(Quantize), r.pad(0, 0, 100), r.pad(0, 0, 0), r.press(Quantize, 0);
-	r.press(Delete), r.pad(1, 1, 100), r.pad(1, 1, 0), r.press(Delete, 0);
-	for (int b : {(int)OctaveUp, (int)OctaveDown, (int)Layout, (int)PageLeft, (int)PageRight, (int)Scene1, Scene1 - 3,
-				  Scene1 - 7})
-		r.click(b);
-	CHECK(r.f.track[0].gate[0] == 0);
-	auto st = r.state();
-	CHECK(st->s.track[0].octave == 3 && st->s.track[0].grid == 4 && st->s.ui.noteLayout == 0 &&
-		  st->s.ui.heldStep == -1);
-	CHECK(st->s.ui.page == 0 && st->s.ui.popup == tart::kNoPopup);
-	for (const auto& row : st->clip)
-		for (const tart::Clip& c : row)
-			CHECK(c.length == 0 && c.nNotes == 0);
+}
+
+/** Encoder `id` turned by `raw` raw units, in messages of at most 60. */
+void spin(Rig& r, int id, int raw) {
+	while (raw) {
+		int d = std::max(-60, std::min(raw, 60));
+		r.turn(id, d), raw -= d;
+	}
+}
+
+tart::Euclid settingsOf(Rig& r, int track = 0, int scene = 0) {
+	return r.state()->clip[track][scene].euclid;
+}
+
+/** The colour of the pad (row 0 = bottom) in the last LED refresh. */
+int padColor(Rig& r, int row, int col) {
+	return r.want.note[push2::padNote(row, col)].color;
+}
+
+/** The Rig runs to `tick` of a clip that plays from the start, with the LEDs refreshed. */
+void ledsAt(Rig& r, int tick) {
+	r.in.play = true;
+	r.run_(tick * 250 + 10);
 	r.in.leds = true;
 	r.step();
-	for (int row = 0; row < 8; row++)
-		for (int col = 0; col < 8; col++)
-			CHECK(r.want.note[push2::padNote(row, col)].color == 0);
-	for (int b : {(int)OctaveUp, (int)OctaveDown, (int)Layout, (int)PageLeft, (int)PageRight, (int)Scene1, Scene1 - 3,
-				  Scene1 - 7})
-		CHECK(r.want.cc[b].color == 0);
-	// The type is the track's, not the pads': a melodic track still plays them.
-	r.m.edit([](tart::State& s) { s.s.track[0].type = tart::Melodic; });
-	r.run_(2);
-	r.pad(0, 0, 100);
+}
+
+} // namespace
+
+TEST(euclid_screen_encoders) {
+	for (int note = 0; note < 2; note++) { // Note and Session mode alike
+		Rig r(note);
+		euclidEmpty(r);
+		auto lane = [&](int l = 0) { return settingsOf(r).lane[l]; };
+		spin(r, 1, 8); // PULSES: 8 raw units a pulse
+		CHECK(lane().pulses == 1 && lane().steps == 16);
+		spin(r, 1, 8 * 40);
+		CHECK(lane().pulses == 16); // clamped at STEPS
+		spin(r, 1, -8 * 8);
+		CHECK(lane().pulses == 8);
+		spin(r, 2, 8 * 3);
+		CHECK(lane().rotation == 3);
+		spin(r, 2, 8 * 14);
+		CHECK(lane().rotation == 1); // ROTATE wraps
+		spin(r, 2, -8 * 2);
+		CHECK(lane().rotation == 15);
+		spin(r, 2, -8 * 15);
+		CHECK(lane().rotation == 0);
+		spin(r, 0, -8 * 12); // STEPS 16 -> 4: the pulses are kept but count as 4, and 16 gives the 8 back
+		CHECK(lane().steps == 4 && lane().pulses == 8);
+		spin(r, 1, 8); // already at STEPS: nothing changes
+		CHECK(lane().pulses == 8);
+		spin(r, 0, 8 * 12);
+		CHECK(lane().steps == 16 && lane().pulses == 8);
+		spin(r, 0, 8 * 50), spin(r, 0, -8 * 50 - 8 * 31);
+		CHECK(lane().steps == 1);
+		spin(r, 0, 8 * 15);
+		spin(r, 3, -2 * 30), CHECK(lane().probability == 70);
+		spin(r, 3, 2 * 99), CHECK(lane().probability == 100);
+		spin(r, 4, 100), CHECK(lane().velocity == 127);
+		spin(r, 4, -300), CHECK(lane().velocity == 1);
+		spin(r, 5, 4 * 1500), CHECK(settingsOf(r).seed == 999);
+		spin(r, 5, -4 * 2000), CHECK(settingsOf(r).seed == 0);
+		spin(r, 5, 4 * 12), CHECK(settingsOf(r).seed == 12);
+		// Drum mode: encoders 7 and 8 do nothing, and the selected lane is the one that changes.
+		spin(r, 6, 300), spin(r, 7, 300);
+		CHECK(settingsOf(r).octaves == 1 && settingsOf(r).change == 0);
+		r.m.edit([](tart::State& st) { st.s.track[0].lane = 5; });
+		spin(r, 1, 8);
+		CHECK(lane(5).pulses == 1 && lane(0).pulses == 8);
+		// DELETE held: the turns do nothing.
+		r.press(push2::cc::Delete);
+		spin(r, 1, 80), spin(r, 5, 40);
+		r.press(push2::cc::Delete, 0);
+		CHECK(lane(5).pulses == 1 && settingsOf(r).seed == 12);
+		// Melodic mode: the rhythm, SEED, OCTAVES and CHANGE.
+		r.click(push2::cc::Track1Above + 1);
+		spin(r, 1, 8 * 3), CHECK(lane(tart::kEuclidRhythm).pulses == 3 && lane(5).pulses == 1);
+		spin(r, 6, 30), CHECK(settingsOf(r).octaves == 2);
+		spin(r, 6, 300), CHECK(settingsOf(r).octaves == 4);
+		spin(r, 6, -30 * 9), CHECK(settingsOf(r).octaves == 1);
+		spin(r, 7, 2 * 30), CHECK(settingsOf(r).change == 30);
+		spin(r, 7, 2 * 100), CHECK(settingsOf(r).change == 100);
+		spin(r, 5, 4), CHECK(settingsOf(r).seed == 13);
+		CHECK(r.view().euclid.lane[tart::kEuclidRhythm].pulses == 3);
+	}
+}
+
+TEST(euclid_shift_fine) {
+	Rig r;
+	euclidEmpty(r);
+	r.press(push2::cc::Shift);
+	spin(r, 1, 8);
+	CHECK(settingsOf(r).lane[0].pulses == 0 && r.state()->clip[0][0].length == 0); // 32 raw units a pulse
+	spin(r, 1, 24);
+	CHECK(settingsOf(r).lane[0].pulses == 1);
+	spin(r, 3, -8);
+	CHECK(settingsOf(r).lane[0].probability == 99);
+	r.press(push2::cc::Shift, 0);
+	spin(r, 3, -2);
+	CHECK(settingsOf(r).lane[0].probability == 98);
+}
+
+TEST(euclid_first_edit_makes_clip) {
+	using namespace push2::cc;
+	Rig r;
+	euclidEmpty(r);
+	spin(r, 3, 10); // PROB up at 100: nothing, no clip, no undo step
+	auto st = r.state();
+	CHECK(st->clip[0][0].length == 0 && st->s.track[0].playing == tart::kNone);
+	r.click(Undo);
+	CHECK(r.view().s.ui.popup == tart::kNoPopup);
+	spin(r, 1, 16); // PULSES: a 2 Bar clip, playing at once, with the transport still stopped
+	st = r.state();
+	CHECK(st->clip[0][0].length == 2 * tart::kBar && st->s.track[0].playing == 0 && !r.view().s.transport.playing);
+	CHECK(st->clip[0][0].euclid.lane[0].pulses == 2 && st->clip[0][0].nNotes == 0);
+	r.click(Undo); // one step takes the clip away again
+	st = r.state();
+	CHECK(st->clip[0][0].length == 0 && st->s.track[0].playing == tart::kNone);
+	// A scene button does the same, and so does MELODIC; DRUM on an empty slot changes nothing.
+	Rig q;
+	euclidEmpty(q);
+	q.click(Track1Above);
+	CHECK(q.state()->clip[0][0].length == 0);
+	q.click(Scene1 - 2);
+	CHECK(q.state()->clip[0][0].length == 2 * tart::kBar && settingsOf(q).grid == 2 &&
+		  q.state()->s.track[0].playing == 0);
+	q.click(Scene1 - 2); // the size it has: no step
+	q.click(Undo);
+	CHECK(q.state()->clip[0][0].length == 0 && q.state()->s.track[0].playing == tart::kNone);
+	// While the transport plays the launch waits for the launch quantization.
+	Rig p;
+	euclidEmpty(p);
+	p.in.play = true;
+	p.run_(300);
+	spin(p, 1, 8);
+	auto sp = p.state();
+	CHECK(sp->clip[0][0].length == 2 * tart::kBar && sp->s.track[0].playing == tart::kNone &&
+		  sp->s.track[0].queued == 0);
+}
+
+TEST(euclid_undo_per_touch) {
+	Rig r;
+	euclidEmpty(r);
+	touch(r, 1);
+	r.turn(1, 8), r.turn(1, 8), r.turn(1, 8);
+	touch(r, 1, false);
+	CHECK(settingsOf(r).lane[0].pulses == 3);
+	touch(r, 1);
+	r.turn(1, 8), r.turn(1, 8);
+	touch(r, 1, false);
+	CHECK(settingsOf(r).lane[0].pulses == 5);
+	r.click(push2::cc::Undo); // the second touch only
+	CHECK(settingsOf(r).lane[0].pulses == 3 && r.state()->clip[0][0].length != 0);
+	r.click(push2::cc::Undo); // the first touch, which made the clip
+	CHECK(settingsOf(r).lane[0].pulses == 0 && r.state()->clip[0][0].length == 0);
+	// A touch on another encoder is another step, even in the same clip.
+	touch(r, 1), r.turn(1, 8), touch(r, 1, false);
+	touch(r, 3), r.turn(3, -2), touch(r, 3, false);
+	r.click(push2::cc::Undo);
+	CHECK(settingsOf(r).lane[0].pulses == 1 && settingsOf(r).lane[0].probability == 100);
+}
+
+TEST(euclid_delete_touch_resets) {
+	using namespace push2::cc;
+	Rig r;
+	euclidEmpty(r);
+	r.press(Delete); // an empty slot: no clip, no step
+	touch(r, 1), touch(r, 1, false);
+	r.press(Delete, 0);
+	CHECK(r.state()->clip[0][0].length == 0);
+	r.m.edit([](tart::State& st) {
+		tart::Clip& c = st.clip[0][0];
+		c.length = tart::kBar;
+		lane(c.euclid, 0, 8, 5, 3, 40, 90);
+		c.euclid.seed = 77;
+	});
+	r.press(Delete);
+	touch(r, 1), touch(r, 1, false); // PULSES -> 0
+	CHECK(settingsOf(r).lane[0].pulses == 0 && settingsOf(r).lane[0].steps == 8);
+	touch(r, 1), touch(r, 1, false); // already standard: nothing
+	touch(r, 0), touch(r, 0, false), touch(r, 5), touch(r, 5, false);
+	touch(r, 6), touch(r, 6, false); // OCTAVES in Drum mode: nothing
+	r.press(Delete, 0);
+	tart::Euclid e = settingsOf(r);
+	CHECK(e.lane[0].steps == 16 && e.lane[0].rotation == 3 && e.lane[0].probability == 40 && e.seed == 0);
+	r.click(Undo); // one step per touch: SEED, then STEPS, then PULSES
+	CHECK(settingsOf(r).seed == 77 && settingsOf(r).lane[0].steps == 16);
+	r.click(Undo);
+	CHECK(settingsOf(r).lane[0].steps == 8 && settingsOf(r).lane[0].pulses == 0);
+	r.click(Undo);
+	CHECK(settingsOf(r).lane[0].pulses == 5);
+	r.press(Delete); // Melodic mode: CHANGE and OCTAVES go back too
+	r.m.edit(
+		[](tart::State& st) { st.clip[0][0].euclid.mode = tart::kEuclidMelodic, st.clip[0][0].euclid.change = 20; });
+	touch(r, 7), touch(r, 7, false);
+	r.press(Delete, 0);
+	CHECK(settingsOf(r).change == 0);
+}
+
+TEST(euclid_mode_buttons) {
+	using namespace push2::cc;
+	SliceRig r;
+	euclidEmpty(r);
+	auto up = [&](int i) { return r.want.cc[Track1Above + i].color; };
+	r.in.leds = true;
+	r.step();
+	CHECK(up(0) == push2::kRgbWhite && up(1) == push2::kRgbDarkGray && r.f.track[0].channels == 16);
+	r.click(Track1Above); // DRUM on an empty slot: nothing
+	CHECK(r.state()->clip[0][0].length == 0);
+	r.click(Track1Above + 1); // MELODIC: makes the clip, one undo step, and the layout switches to the Voices
+	r.step();
+	auto st = r.state();
+	CHECK(st->clip[0][0].length == 2 * tart::kBar && st->clip[0][0].euclid.mode == tart::kEuclidMelodic);
+	CHECK(up(0) == push2::kRgbDarkGray && up(1) == push2::kRgbWhite && r.f.track[0].channels == 1);
+	r.click(Track1Above + 1); // the same again: nothing
+	r.click(Undo);
+	r.step();
+	CHECK(r.state()->clip[0][0].length == 0 && r.f.track[0].channels == 16 && up(0) == push2::kRgbWhite);
+	// A clip that exists: the switch is one step, and the notes of the other layout stop.
+	r.m.edit([](tart::State& s) {
+		lane(s.clip[0][0].euclid, 0, 16, 16);
+		s.clip[0][0].length = tart::kBar, s.s.track[0].playing = 0;
+	});
+	r.in.play = true;
+	r.run_(300);
 	CHECK(r.f.track[0].gate[0] == 10);
+	r.click(Track1Above + 1);
+	r.run_(2);
+	CHECK(r.f.track[0].channels == 1 && r.f.track[0].gate[0] == 0 && settingsOf(r).mode == tart::kEuclidMelodic);
+	r.click(Undo);
+	CHECK(settingsOf(r).mode == tart::kEuclidDrum);
+	// Session mode too; but not on the Device screen, with Fixed Length held, or with Quantize's settings.
+	r.m.edit([](tart::State& s) { s.s.ui.pads = tart::kSession; });
+	r.click(Track1Above + 1);
+	CHECK(settingsOf(r).mode == tart::kEuclidMelodic);
+	r.click(Track1Above);
+	CHECK(settingsOf(r).mode == tart::kEuclidDrum);
+	r.click(Device);
+	r.click(Track1Above + 1);
+	CHECK(settingsOf(r).mode == tart::kEuclidDrum);
+	r.click(Device);
+	r.press(FixedLength);
+	r.click(Track1Above + 1);
+	CHECK(settingsOf(r).mode == tart::kEuclidDrum);
+	r.press(FixedLength, 0);
+	r.press(Quantize);
+	r.run_(16000);
+	r.click(Track1Above + 1);
+	r.press(Quantize, 0);
+	CHECK(settingsOf(r).mode == tart::kEuclidDrum);
+	// A melodic or drum track has no such buttons.
+	r.m.edit([](tart::State& s) { s.s.track[0].type = tart::Melodic; });
+	r.click(Track1Above + 1);
+	CHECK(settingsOf(r).mode == tart::kEuclidDrum);
+}
+
+TEST(euclid_grid_per_clip) {
+	using namespace push2::cc;
+	SliceRig r;
+	euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 16, 16); });
+	r.m.edit([](tart::State& s) {
+		s.clip[0][1].length = tart::kBar, lane(s.clip[0][1].euclid, 0, 16, 16);
+		s.s.track[1].grid = 6, s.s.track[1].type = tart::Euclidean;
+	});
+	r.click(Scene1 - 2); // 1/8 on the selected clip
+	auto st = r.state();
+	CHECK(st->clip[0][0].euclid.grid == 2 && st->clip[0][1].euclid.grid == 4 && st->s.track[0].grid == 4);
+	r.in.leds = true;
+	r.step();
+	for (int i = 0; i < 8; i++)
+		CHECK(r.want.cc[Scene1 - i].color == (i == 2 ? push2::kRgbWhite : push2::kRgbDarkGray));
+	auto v = rises(r, 96000); // E(16,16) at 1/8: a rise every 48 ticks
+	std::vector<int> want;
+	for (int t = 0; t < 384; t += 48)
+		want.push_back(t);
+	CHECK(ticksOf(v, 0, 0) == want);
+	r.m.edit([](tart::State& s) { s.s.ui.scene = 1; });
+	r.step();
+	CHECK(r.want.cc[Scene1 - 4].color == push2::kRgbWhite && r.want.cc[Scene1 - 2].color == push2::kRgbDarkGray);
+	r.click(Undo); // one step, which the scene's selection doesn't matter to
+	CHECK(r.state()->clip[0][0].euclid.grid == 4);
+	// Duplicate copies the size to a track with another Track::grid, and leaves that grid alone.
+	r.click(Scene1 - 7);
+	r.m.edit([](tart::State& s) { s.s.ui.pads = tart::kSession; });
+	r.press(Duplicate);
+	slot(r, 0, 1, 100), slot(r, 0, 1, 0);
+	tapSlot(r, 1, 3);
+	r.press(Duplicate, 0);
+	st = r.state();
+	CHECK(st->clip[1][3].euclid.grid == 7 && st->s.track[1].grid == 6);
+}
+
+TEST(euclid_drum_pads) {
+	using namespace push2::cc;
+	SliceRig r;
+	euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 16, 4), lane(e, 3, 8, 5, 1, 70, 90); }, tart::kBar, false);
+	r.run_(2);
+	r.pad(0, 2, 100); // lane 3 plays channel 2 and is selected
+	CHECK(r.f.track[0].gate[2] == 10 && r.f.track[0].voct[2] == (tart::kDrumNote + 2 - 60) / 12.f);
+	CHECK(r.view().s.track[0].lane == 2);
+	r.pad(0, 2, 0);
+	CHECK(r.f.track[0].gate[2] == 0);
+	r.press(Select);
+	r.pad(1, 0, 100); // SELECT: only selects
+	CHECK(r.f.track[0].gate[4] == 0 && r.view().s.track[0].lane == 4);
+	r.pad(1, 0, 0);
+	r.press(Select, 0);
+	// DELETE + lane resets that lane: one undo step; nothing on a lane that is standard.
+	r.press(Delete);
+	r.pad(0, 3, 100), r.pad(0, 3, 0);
+	CHECK(r.f.track[0].gate[3] == 0 && r.view().s.track[0].lane == 4);
+	const tart::EuclidLane standard;
+	const tart::Euclid now = settingsOf(r);
+	CHECK(!std::memcmp(&now.lane[3], &standard, sizeof standard));
+	r.pad(0, 1, 100), r.pad(0, 1, 0);
+	r.press(Delete, 0);
+	r.click(Undo);
+	CHECK(settingsOf(r).lane[3].pulses == 5 && settingsOf(r).lane[0].pulses == 4);
+	r.click(Undo);
+	CHECK(r.view().s.ui.popup == tart::kUndoPopup && settingsOf(r).lane[3].pulses == 5);
+	// The step pads and the lower right 4 x 4 add no note, make no clip and hold nothing; so do PAGE, OCTAVE, LAYOUT.
+	Rig q;
+	euclidEmpty(q);
+	for (int row : {4, 5, 7})
+		for (int col : {0, 5})
+			q.pad(row, col, 100), q.pad(row, col, 0);
+	q.pad(0, 5, 100), q.pad(3, 7, 100), q.pad(3, 7, 0), q.pad(0, 5, 0);
+	for (int b : {(int)OctaveUp, (int)OctaveDown, (int)Layout, (int)PageLeft, (int)PageRight})
+		q.click(b);
+	auto st = q.state();
+	CHECK(st->clip[0][0].length == 0 && st->clip[0][0].nNotes == 0 && st->s.ui.heldStep == -1);
+	CHECK(st->s.track[0].octave == 3 && st->s.ui.noteLayout == 0 && st->s.ui.page == 0 && st->s.track[0].lane == 0);
+	// QUANTIZE held: a lane pad does nothing.
+	q.press(Quantize);
+	q.pad(0, 2, 100), q.pad(0, 2, 0);
+	q.press(Quantize, 0);
+	CHECK(q.state()->s.track[0].lane == 0 && q.view().s.ui.popup == tart::kNoPopup);
+	// A melodic track still plays its keyboard.
+	q.m.edit([](tart::State& s) { s.s.track[0].type = tart::Melodic; });
+	q.run_(2);
+	q.pad(0, 0, 100);
+	CHECK(q.view().s.ui.pad[0] == 100);
+}
+
+TEST(euclid_drum_leds) {
+	using namespace push2::cc;
+	Rig r;
+	euclidTrack(r, 0, [](tart::Euclid& e) {
+		lane(e, 0, 16, 5), lane(e, 1, 5, 2, 0, 100, 50), lane(e, 2, 3, 3), lane(e, 4, 4, 1, 1);
+	});
+	r.m.edit([](tart::State& s) { s.s.track[0].lane = 1; });
+	const int full = tart::kPaletteFull, dim = tart::kPaletteDim;
+	auto pad = [&](int k) { return padColor(r, 7 - k / 8, k % 8); }; // the step pad k of the shown pattern
+	r.in.leds = true;
+	r.step();
+	// Lane 2 (5 steps, 2 pulses, VEL 50): x.x.. in the dim colour, dark gray rests, black from STEPS on.
+	CHECK(pat(tart::euclidMask(mk(5, 2)), 5) == "x.x..");
+	CHECK(pad(0) == dim && pad(1) == push2::kRgbDarkGray && pad(2) == dim && pad(3) == push2::kRgbDarkGray &&
+		  pad(4) == push2::kRgbDarkGray);
+	for (int k = 5; k < 32; k++)
+		CHECK(pad(k) == push2::kBlack);
+	// The lanes: the selected one white, with pulses the colour, without dim; the lower right, PAGE, OCTAVE dark.
+	CHECK(padColor(r, 0, 1) == push2::kRgbWhite && padColor(r, 0, 0) == full && padColor(r, 0, 2) == full &&
+		  padColor(r, 0, 3) == dim && padColor(r, 1, 0) == full && padColor(r, 1, 1) == dim);
+	for (int row = 0; row < 4; row++)
+		for (int col = 4; col < 8; col++)
+			CHECK(padColor(r, row, col) == push2::kBlack);
+	for (int b : {(int)PageLeft, (int)PageRight, (int)OctaveUp, (int)OctaveDown, (int)Layout})
+		CHECK(r.want.cc[b].color == 0);
+	for (int i = 0; i < 8; i++)
+		CHECK(r.want.cc[Scene1 - i].color == (i == 4 ? push2::kRgbWhite : push2::kRgbDarkGray));
+	// A 16-step lane in the full colour; a rest, and the pad past STEPS (a 3-step lane).
+	r.m.edit([](tart::State& s) { s.s.track[0].lane = 0; });
+	r.step();
+	CHECK(pat(tart::euclidMask(mk(16, 5)), 16) == "x..x..x..x..x...");
+	CHECK(pad(0) == full && pad(1) == push2::kRgbDarkGray && pad(3) == full && pad(15) == push2::kRgbDarkGray);
+	r.m.edit([](tart::State& s) { s.s.track[0].lane = 1; });
+	// The playhead is the lane's own step: at step 5 since the launch a 5-step lane is on step 1 again while a 16-step
+	// lane is on step 5; at step 7, on 3 (pad 2) and 7. The lanes with a pulse on the step sound: green.
+	ledsAt(r, 24 * 5 + 5);
+	CHECK(pad(0) == push2::kGreen && pad(5) == push2::kBlack);
+	CHECK(padColor(r, 0, 1) == push2::kGreen && padColor(r, 0, 2) == push2::kGreen &&
+		  padColor(r, 1, 0) == push2::kGreen);
+	CHECK(padColor(r, 0, 0) == full && padColor(r, 0, 3) == dim); // lane 1 has no pulse on step 5, lane 4 none at all
+	r.run_(24 * 2 * 250);
+	r.in.leds = true;
+	r.step();
+	CHECK(pad(2) == push2::kGreen && pad(0) == dim);
+	r.m.edit([](tart::State& s) { s.s.track[0].lane = 0; });
+	r.step();
+	CHECK(pad(7) == push2::kGreen && pad(5) == push2::kRgbDarkGray); // step 7 since the launch of 16
+	// A take on the slot: the playhead is red.
+	r.m.edit([](tart::State& s) { s.s.ui.recTrack = 0, s.s.ui.recScene = 0; });
+	r.step();
+	CHECK(pad(7) == push2::kRed);
+}
+
+TEST(euclid_no_step_lock) {
+	Rig r;
+	euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 16, 4); }, tart::kBar, false);
+	r.click(push2::cc::Device);
+	r.pad(7, 3, 100); // a step pad of the pattern: nothing is held
+	CHECK(r.view().s.ui.heldStep == -1);
+	r.turn(0, 10); // CC 1 only moves its value (3120)
+	r.pad(7, 3, 0);
+	auto st = r.state();
+	CHECK(st->s.track[0].value[0] == 3120 && st->clip[0][0].nPoints[0] == 0 && st->clip[0][0].nNotes == 0);
+	CHECK(st->s.track[0].overridden == 0);
+}
+
+TEST(euclid_record_no_pads) {
+	using namespace push2::cc;
+	SliceRig r;
+	euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 16, 4); }, tart::kBar, false);
+	r.click(Automate);
+	r.click(Device);
+	r.click(Record); // a take on the clip: it launches and starts the transport
+	runTo(r, 24);
+	r.pad(0, 5 - 4, 100); // a lane pad (lane 2): played, not recorded
+	CHECK(r.f.track[0].gate[1] == 10);
+	runTo(r, 40);
+	r.pad(0, 1, 0);
+	touch(r, 0);
+	r.turn(0, 10);
+	runTo(r, 60);
+	touch(r, 0, false);
+	r.click(Record);
+	auto st = r.state();
+	CHECK(st->clip[0][0].nNotes == 0 && st->clip[0][0].nPoints[0] >= 2 && st->s.ui.recTrack == -1);
+	r.click(Undo); // the whole take is one step
+	st = r.state();
+	CHECK(st->clip[0][0].nNotes == 0 && st->clip[0][0].nPoints[0] == 0 && st->clip[0][0].length == tart::kBar);
 }

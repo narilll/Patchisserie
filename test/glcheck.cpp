@@ -629,20 +629,24 @@ int main() {
 			// then the Clip screen, the Browse screen, the Home screen of a drum track, and the Home screen with
 			// Quantize held (its settings), with the Quantized popup, and the split layout with a step of two notes
 			// held, then the Device screen: CC 1 to 3 automated, CC 3 overridden, CC 4 bipolar and named, the
-			// envelope of CC 1 (touched), and again with a step held (values at it)
+			// envelope of CC 1 (touched), and again with a step held (values at it), then the Euclid screen of a
+			// Drum clip with a lane and of a Melodic clip
 			view->automated[0] = 0b111, view->s.track[0].overridden = 0b100, view->s.track[0].bipolar = 1 << 3;
 			view->s.track[0].value[3] = 40000, view->s.track[0].value[0] = 65535;
 			std::snprintf(view->s.track[0].ccName[3], tart::kCcNameBytes, "Cutoff");
 			view->lane = 0, view->shown[0] = {0, 0}, view->shown[1] = {100, 0}, view->shown[2] = {100, 50000},
 			view->shown[3] = {250, 50000};
-			for (uint8_t id :
-				 {tart::kHome, tart::kScaleScreen, tart::kHome, tart::kHome, tart::kClipScreen, tart::kBrowseScreen,
-				  tart::kHome, tart::kHome, tart::kHome, tart::kHome, tart::kDeviceScreen, tart::kDeviceScreen}) {
+			for (uint8_t id : {tart::kHome, tart::kScaleScreen, tart::kHome, tart::kHome, tart::kClipScreen,
+							   tart::kBrowseScreen, tart::kHome, tart::kHome, tart::kHome, tart::kHome,
+							   tart::kDeviceScreen, tart::kDeviceScreen, tart::kHome, tart::kHome}) {
 				view->s.ui.screen = id, view->s.scale.scale = 20, view->s.ui.browse = 1;
 				view->s.ui.button[push2::cc::Quantize] = pass == 7, view->s.ui.quantizeAt = 0;
 				view->s.ui.now = pass == 7 ? 1 : 0.5, view->s.ui.recQuantOn = pass == 7;
 				view->s.ui.popup = pass == 8 ? tart::kQuantizedPopup : tart::kTempoPopup, view->s.ui.popupAt = 0;
-				view->s.track[0].type = pass == 6 ? tart::Drum : tart::Melodic;
+				view->s.track[0].type = pass == 6 ? tart::Drum : pass >= 12 ? tart::Euclidean : tart::Melodic;
+				view->euclid.mode = pass == 13 ? tart::kEuclidMelodic : tart::kEuclidDrum, view->euclid.seed = 123,
+				view->euclid.change = 30, view->euclid.octaves = 2, view->s.track[0].lane = 4;
+				view->euclid.lane[4] = {12, 7, 3, 80, 100}, view->euclid.lane[tart::kEuclidRhythm] = {8, 5, 1, 100, 90};
 				view->s.ui.pads = tart::kNote, view->s.ui.noteLayout = pass == 9 ? 2 : 0,
 				view->heldCount = pass == 9 ? 2 : 0;
 				view->nShown = id == tart::kDeviceScreen ? 4 : 0, view->s.ui.heldStep = pass == 11 ? 2 : -1;
