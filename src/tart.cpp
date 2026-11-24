@@ -878,9 +878,12 @@ void Machine::handle(State& st, const push2::Event& e) {
 		} else if (ui.pads == kSession) {
 			if (e.index >= push2::cc::Scene8 && e.index <= push2::cc::Scene1)
 				sceneButton(st, push2::cc::Scene1 - e.index);
-		} else if (s.track[ui.track].type == Euclidean) {
-			// ponytail: OCTAVE, LAYOUT and PAGE do nothing on a Euclid track until E5.3 (OCTAVE); the scene buttons are
-			// the clip's step size, and this keeps the sequencer branch from setting Track::grid for it.
+		} else if (s.track[ui.track].type == Euclidean &&
+				   !((e.index == push2::cc::OctaveUp || e.index == push2::cc::OctaveDown) &&
+					 st.clip[ui.track][ui.scene].euclid.mode == kEuclidMelodic)) {
+			// LAYOUT and PAGE do nothing on a Euclid track, OCTAVE only in Melodic mode (it falls through to the octave
+			// code below); the scene buttons are the clip's step size, and this keeps the sequencer branch from
+			// setting Track::grid for it.
 			if (e.index >= push2::cc::Scene8 && e.index <= push2::cc::Scene1)
 				euclidGridButton(st, push2::cc::Scene1 - e.index);
 		} else if (drum && (e.index == push2::cc::OctaveUp || e.index == push2::cc::OctaveDown ||
@@ -1186,13 +1189,23 @@ Euclid& Machine::euclidEdit(State& st) {
 }
 
 /** A pad of a Euclid track in Note mode: Drum mode's lane pads (lower left 4 x 4) play their channel and select the
- * lane (SELECT: only select; DELETE: the lane's settings go back to the standard ones). The step pads show the pattern
- * and the rest does nothing, as Melodic mode's keyboard until E5.3. */
+ * lane (SELECT: only select; DELETE: the lane's settings go back to the standard ones). Melodic mode's lower four rows
+ * are the keyboard: played, never recorded (play() leaves a Euclid track out of a take). The step pads show the
+ * pattern and do nothing. */
 void Machine::euclidPad(State& st, int i, int vel) {
 	Session& s = st.s;
 	Ui& ui = s.ui;
 	Clip& c = st.clip[ui.track][ui.scene];
-	if (!vel || i / 8 > 3 || i % 8 > 3 || c.euclid.mode != kEuclidDrum)
+	if (!vel || i / 8 > 3)
+		return;
+	if (c.euclid.mode == kEuclidMelodic) {
+		bool root, inScale;
+		const int p = padPitch(s.scale, s.track[ui.track].octave, i / 8, i % 8, root, inScale);
+		if (p >= 0 && layout_[ui.track] == Melodic) // the outputs follow the playing clip: no note on its drum lanes
+			play(s, i, p, vel);
+		return;
+	}
+	if (i % 8 > 3)
 		return;
 	const int lane = i / 8 * 4 + i % 8;
 	if (ui.button[push2::cc::Delete]) {
@@ -1202,7 +1215,7 @@ void Machine::euclidPad(State& st, int i, int vel) {
 		return;
 	}
 	s.track[ui.track].lane = (uint8_t)lane; // (pad() lets no pad through while QUANTIZE is held)
-	if (!ui.button[push2::cc::Select])
+	if (!ui.button[push2::cc::Select] && layout_[ui.track] == Drum) // (a playing Melodic clip: no note)
 		play(s, i, kDrumNote + lane, vel);
 }
 
@@ -2051,34 +2064,40 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 		drumLeds(st, voice_[u.track], out);
 		return;
 	}
-	if (tr.type ==
-		Euclidean) { // the step size, the pattern of the lane, and in Drum mode the lanes; OCTAVE (until E5.3),
-		const Euclid& e = st.clip[u.track][u.scene].euclid; // LAYOUT, PAGE and the other pads stay dark
+	const bool euclid = tr.type == Euclidean;
+	if (euclid) { // the step size and the pattern of the lane; Drum mode the lanes, Melodic mode the keyboard below
+		const Euclid& e = st.clip[u.track][u.scene].euclid; // (LAYOUT, PAGE and OCTAVE in Drum mode stay dark)
 		const bool drum = e.mode == kEuclidDrum;
 		bool has[kLanes];
 		for (int l = 0; l < kLanes; l++)
 			has[l] = e.lane[l].pulses > 0;
 		gridLeds(e.grid, out);
 		euclidStepLeds(st, drum ? tr.lane : kEuclidRhythm, out);
-		if (drum)
+		if (drum) {
 			laneLeds(st, voice_[u.track], has, out);
-		return;
+			return;
+		}
 	}
 	if (tr.octave > 0)
 		white(push2::cc::OctaveDown, u.button[push2::cc::OctaveDown]);
 	if (tr.octave < kMaxOctave)
 		white(push2::cc::OctaveUp, u.button[push2::cc::OctaveUp]);
-	white(push2::cc::Layout, u.noteLayout || u.button[push2::cc::Layout]);
-	if (u.noteLayout == 1) {
+	if (!euclid)
+		white(push2::cc::Layout, u.noteLayout || u.button[push2::cc::Layout]);
+	if (!euclid && u.noteLayout == 1) {
 		seqLeds(st, out);
 		return;
 	}
 	bool held[128] = {}; // pitches sounding from the pads: lit on every pad with that pitch
 	for (int i = 0; i < 64; i++)
 		held[live_[i].pitch & 127] |= u.pad[i] != 0;
+	if (euclid && layout_[u.track] == Melodic) // and the notes the clip plays
+		for (int c = 0; c < voice_[u.track].channels(); c++)
+			if (voice_[u.track].gate(c))
+				held[std::min(std::max((int)std::lround(voice_[u.track].pitchV(c) * 12.f + 60.f), 0), 127)] = true;
 	// The split layout: the steps above, and the chord (a held step's notes while one is held) in dim colour below.
 	bool mark[128] = {};
-	if (u.noteLayout == 2) {
+	if (!euclid && u.noteLayout == 2) {
 		const Clip& c = st.clip[u.track][u.scene];
 		int grid = kGrid[tr.grid], heldAt = -1;
 		uint8_t vel[kDrumSteps] = {};
@@ -2096,7 +2115,7 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 		pageLeds(st, out);
 		stepLeds(st, vel, out);
 	}
-	for (int row = 0; row < (u.noteLayout == 2 ? 4 : 8); row++)
+	for (int row = 0; row < (euclid || u.noteLayout == 2 ? 4 : 8); row++)
 		for (int col = 0; col < 8; col++) {
 			bool root, inScale;
 			int p = padPitch(s.scale, tr.octave, row, col, root, inScale);
