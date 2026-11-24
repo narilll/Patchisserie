@@ -263,9 +263,116 @@ int steps(int& acc, int delta, int units) {
 	return n;
 }
 
+// ---- Euclid (E5): generated live from the clip's settings and the steps since the launch, never written to notes
+
+/** A pure integer hash, the same on every platform (no std::rand): the draw of (seed, what, a, b). */
+uint32_t draw(uint32_t seed, uint32_t what, uint32_t a, uint32_t b) {
+	uint32_t x = seed * 0x9E3779B1u ^ what * 0x85EBCA77u ^ a * 0xC2B2AE3Du ^ b * 0x27D4EB2Fu;
+	x ^= x >> 16;
+	x *= 0x7FEB352Du;
+	x ^= x >> 15;
+	x *= 0x846CA68Bu;
+	x ^= x >> 16;
+	return x; // draw(0,1,0,0) == 0xc4a0e45c, draw(7,17,3,2) == 0x676a73d9
+}
+
+/** Bjorklund's pattern of `k` pulses in `n` steps (Toussaint's group pairing, in the canonical form that starts with a
+ * pulse): bit p is step p. n 1..32, k 0..n. */
+uint32_t bjorklund(int n, int k) {
+	if (k <= 0)
+		return 0;
+	if (k >= n)
+		return n >= 32 ? ~0u : (1u << n) - 1;
+	struct G {
+		uint32_t bits;
+		int len;
+	} a[32], b[32], rest[32];
+	int na = k, nb = n - k;
+	for (int i = 0; i < na; i++)
+		a[i] = {1, 1};
+	for (int i = 0; i < nb; i++)
+		b[i] = {0, 1};
+	while (nb > 1) {
+		int m = std::min(na, nb), nr = 0;
+		for (int i = m; i < (na > m ? na : nb); i++)
+			rest[nr++] = na > m ? a[i] : b[i];
+		for (int i = 0; i < m; i++)
+			a[i] = {a[i].bits | b[i].bits << a[i].len, a[i].len + b[i].len};
+		na = m, nb = nr, std::copy(rest, rest + nr, b);
+	}
+	uint32_t bits = 0;
+	int pos = 0;
+	for (int i = 0; i < na; i++)
+		bits |= a[i].bits << pos, pos += a[i].len;
+	for (int i = 0; i < nb; i++)
+		bits |= b[i].bits << pos, pos += b[i].len;
+	return bits;
+}
+
+// ponytail: a melodic note that changed more than this many passes of its rhythm ago falls back to the base melody.
+constexpr int kMutationScan = 256;
+
+int laneSteps(const EuclidLane& l) {
+	return std::min(std::max<int>(l.steps, 1), kMaxSteps);
+}
+
+/** The scale degree of pulse `k` (its index in the unrotated pattern) on pass `pass` of the melodic rhythm, of `nd`
+ * degrees. CHANGE accumulates: each pass gives the pulse a new pitch with that chance, and a changed one keeps it until
+ * it changes again, so the pitch comes from the last pass at or before this one that changed it (0: the base). */
+int degree(const Euclid& e, int k, int64_t pass, int nd) {
+	int64_t from = 0;
+	for (int64_t l = pass; e.change && l >= std::max<int64_t>(pass - kMutationScan, 1); l--)
+		if (draw(e.seed, 32, (uint32_t)k, (uint32_t)l) % 100 < e.change) {
+			from = l;
+			break;
+		}
+	return (int)((uint64_t)draw(e.seed, 33, (uint32_t)k, (uint32_t)from) * (uint32_t)nd >> 32);
+}
+
+/** The patterns of the clip's playing lanes (Drum: lanes 0..15, Melodic: lane kEuclidRhythm), the others 0. */
+void euclidMasks(const Euclid& e, uint32_t* mask /*[kLanes + 1]*/) {
+	std::fill(mask, mask + kLanes + 1, 0u);
+	if (e.mode == kEuclidDrum)
+		for (int l = 0; l < kLanes; l++)
+			mask[l] = euclidMask(e.lane[l]);
+	else
+		mask[kEuclidRhythm] = euclidMask(e.lane[kEuclidRhythm]);
+}
+
+/** The notes of step `n` since the launch (tick and length are the caller's): Drum, a pulse of each lane that passes
+ * its probability, on its lane's note; Melodic, at most one, pitched from the scale. */
+int euclidAt(const Session& s, int track, const Euclid& e, const uint32_t* mask, int64_t n, Note* out) {
+	const uint32_t step = (uint32_t)n; // ponytail: wraps after 2^32 steps (years)
+	int count = 0;
+	if (e.mode == kEuclidDrum) {
+		for (int l = 0; l < kLanes; l++) {
+			const EuclidLane& x = e.lane[l];
+			if (mask[l] >> (n % laneSteps(x)) & 1 && draw(e.seed, 1 + l, step, 0) % 100 < (uint32_t)x.probability)
+				out[count++] = {0, 0, (uint8_t)(kDrumNote + l), x.velocity};
+		}
+		return count;
+	}
+	const EuclidLane& x = e.lane[kEuclidRhythm];
+	const int steps = laneSteps(x), p = (int)(n % steps);
+	if (!(mask[kEuclidRhythm] >> p & 1) || draw(e.seed, 1 + kEuclidRhythm, step, 0) % 100 >= (uint32_t)x.probability)
+		return 0;
+	// A pulse is keyed by its index k in the unrotated pattern, so ROTATE moves the phrase with the rhythm.
+	const int q = (p - x.rotation % steps + steps) % steps;
+	const int k = __builtin_popcount(bjorklund(steps, std::min<int>(x.pulses, steps)) & ((1u << q) - 1));
+	const int nd = __builtin_popcount(kScales[s.scale.scale % kScaleCount].mask) * e.octaves;
+	Scale sq = s.scale; // the degrees of the scale from the root in the track's octave, as seqPitch does
+	sq.layout = 1, sq.inKey = true, sq.fixed = false;
+	bool root, inScale;
+	int pitch = padPitch(sq, s.track[track].octave, degree(e, k, n / steps, nd), 0, root, inScale);
+	if (pitch < 0)
+		return 0;
+	out[0] = {0, 0, (uint8_t)pitch, x.velocity};
+	return 1;
+}
+
 } // namespace
 
-const char* const kTypeNames[kBrowseTypes] = {"Melodic", "Drum"};
+const char* const kTypeNames[kBrowseTypes] = {"Melodic", "Drum", "Euclid"};
 
 const char* const kQuantToNames[8] = {"1/4", "1/8", "1/8T", "1/8+T", "1/16", "1/16T", "1/16+T", "1/32"};
 
@@ -443,6 +550,21 @@ void sanitize(State& st) {
 		for (Clip& c : row) { // `playing` is transient, so a clip needs no more than sorted notes of sound values
 			c.length = std::min<uint16_t>(c.length, kMaxLength);
 			c.nNotes = c.length ? std::min<uint16_t>(c.nNotes, kMaxNotes) : 0;
+			Euclid& e = c.euclid;
+			if (!c.length) {
+				e = Euclid(); // an empty slot holds the defaults, so a clip made in it starts from them
+			} else {
+				e.seed = std::min<uint16_t>(e.seed, kMaxSeed), e.mode = std::min<uint8_t>(e.mode, kEuclidMelodic);
+				e.octaves = std::min<uint8_t>(std::max<uint8_t>(e.octaves, 1), kMaxOctaves);
+				e.change = std::min<uint8_t>(e.change, 100), e.grid = std::min<uint8_t>(e.grid, 7), e.spare = 0;
+				for (EuclidLane& l : e.lane) {
+					l.steps = std::min<uint8_t>(std::max<uint8_t>(l.steps, 1), kMaxSteps);
+					l.pulses = std::min<uint8_t>(l.pulses, kMaxSteps),
+					l.rotation = std::min<uint8_t>(l.rotation, kMaxSteps - 1);
+					l.probability = std::min<uint8_t>(l.probability, 100);
+					l.velocity = std::min<uint8_t>(std::max<uint8_t>(l.velocity, 1), 127);
+				}
+			}
 			int n = 0;
 			for (int i = 0; i < c.nNotes; i++) {
 				Note x = c.notes[i];
@@ -475,7 +597,8 @@ void sanitize(State& st) {
 			setText(cc, kCcNameBytes, text);
 		}
 		t.color = std::min<uint8_t>(t.color, kColors - 1);
-		t.type = t.type == Drum ? Drum : Melodic; // ponytail: Euclid comes with E5
+		if (t.type > Euclidean)
+			t.type = Melodic;
 		t.lane = std::min<uint8_t>(t.lane, kLanes - 1);
 		t.voices = std::min<uint8_t>(std::max<uint8_t>(t.voices, 1), 16);
 		t.grid = std::min<uint8_t>(t.grid, 7);
@@ -733,6 +856,9 @@ void Machine::handle(State& st, const push2::Event& e) {
 		} else if (ui.pads == kSession) {
 			if (e.index >= push2::cc::Scene8 && e.index <= push2::cc::Scene1)
 				sceneButton(st, push2::cc::Scene1 - e.index);
+		} else if (s.track[ui.track].type == Euclidean) {
+			// ponytail: OCTAVE, LAYOUT, PAGE and the scene buttons do nothing on a Euclid track until E5.2/E5.3; this
+			// also keeps the sequencer branch from setting Track::grid for it.
 		} else if (drum && (e.index == push2::cc::OctaveUp || e.index == push2::cc::OctaveDown ||
 							e.index == push2::cc::Layout)) {
 			// drum pads have no octave and no sequencer layout
@@ -848,7 +974,7 @@ void Machine::quantizeEncoder(State& st, int encoder, int delta) {
 void Machine::quantizeClip(State& st, int p0, int p1) {
 	Ui& ui = st.s.ui;
 	Clip& c = st.clip[ui.track][ui.scene];
-	if (!c.length)
+	if (!c.length || st.s.track[ui.track].type == Euclidean) // a Euclid track plays no notes of the clip's
 		return;
 	checkpoint(ui.track, ui.scene);
 	for (int i = 0; i < c.nNotes; i++)
@@ -952,6 +1078,8 @@ void Machine::pad(State& st, int i, int vel) {
 			session(st, i);
 		return;
 	}
+	if (s.track[s.ui.track].type == Euclidean)
+		return; // ponytail: the pads of a Euclid track come with E5.2
 	if (s.track[s.ui.track].type == Drum) {
 		drumPad(st, i, vel);
 		return;
@@ -979,10 +1107,10 @@ void Machine::play(Session& s, int i, int pitch, int vel) {
 	s.ui.pad[i] = (uint8_t)vel;
 	const Ui& u = s.ui;
 	int length = state_->clip[l.track][u.recScene].length;
-	if (u.recTrack == l.track && s.track[l.track].playing == u.recScene && length)
+	if (u.recTrack == l.track && s.track[l.track].playing == u.recScene && length && s.track[l.track].type != Euclidean)
 		l.rec = u.recScene, l.at = atTicks_,
 		l.pos = (uint16_t)(std::max<int64_t>(atTicks_ - s.track[l.track].startTick, 0) % length);
-	int midichan = s.track[l.track].type == Drum ? pitch - kDrumNote + 1 : 0;
+	int midichan = layout_[l.track] == Drum ? pitch - kDrumNote + 1 : 0;
 	voice_[l.track].noteOn(l.id, (float)pitch, (float)vel / 127.f, midichan);
 }
 
@@ -1098,7 +1226,8 @@ void Machine::clear(State& st, int track, int scene) {
 	if (st.clip[track][scene].length)
 		checkpoint(track, scene);
 	vacate(st, track, scene);
-	std::memset(static_cast<void*>(&st.clip[track][scene]), 0, sizeof(Clip)); // all zero is the empty clip
+	std::memset(static_cast<void*>(&st.clip[track][scene]), 0, sizeof(Clip)); // all zero is the empty clip...
+	st.clip[track][scene].euclid = Euclid();                                  // ...with the Euclid defaults
 }
 
 /** Copies a slot (an empty one empties the destination). */
@@ -1766,6 +1895,8 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 		drumLeds(st, voice_[u.track], out);
 		return;
 	}
+	if (tr.type == Euclidean) // ponytail: its pads, OCTAVE, LAYOUT, PAGE and scene buttons stay dark until E5.2
+		return;
 	if (tr.octave > 0)
 		white(push2::cc::OctaveDown, u.button[push2::cc::OctaveDown]);
 	if (tr.octave < kMaxOctave)
@@ -1813,6 +1944,66 @@ void Machine::leds(const State& st, push2::Leds& out) const {
 		}
 }
 
+/** The voices of track `t` follow what it plays: 16 channels, one for each lane, for a drum track and for a Euclid
+ * track whose clip (the playing one, else the one in the selected scene) is in Drum mode; else its Voices, rotating. A
+ * change of type or of layout silences the track. */
+void Machine::layout(const State& st, int t) {
+	const Track& tr = st.s.track[t];
+	const Euclid& e = st.clip[t][tr.playing != kNone ? tr.playing : st.s.ui.scene].euclid;
+	const uint8_t want = tr.type == Drum || (tr.type == Euclidean && e.mode == kEuclidDrum) ? Drum : Melodic;
+	if (tr.type == type_[t] && want == layout_[t])
+		return;
+	type_[t] = tr.type, layout_[t] = want;
+	voice_[t].allOff(), nActive_[t] = 0;
+	voice_[t].setMode(want == Drum ? filo::VoiceAllocator::MPE : filo::VoiceAllocator::Rotate);
+	voice_[t].setChannels(want == Drum ? kLanes : tr.voices);
+}
+
+uint32_t euclidMask(const EuclidLane& l) {
+	const int n = laneSteps(l), r = l.rotation % n;
+	const uint32_t m = bjorklund(n, std::min<int>(l.pulses, n)), full = n >= 32 ? ~0u : (1u << n) - 1;
+	return r ? ((m << r) | (m >> (n - r))) & full : m; // ROTATE moves the pulses later
+}
+
+int euclidNotes(const Session& s, int track, const Euclid& e, int64_t t0, int length, Note* out, int max) {
+	uint32_t mask[kLanes + 1];
+	euclidMasks(e, mask);
+	const int grid = kGrid[std::min<int>(e.grid, 7)];
+	int count = 0;
+	// ponytail: a melodic note's degree is scanned for each note (up to kMutationScan draws); memoize per pulse and
+	// pass if the frame time shows it.
+	for (int64_t n = (t0 + grid - 1) / grid; n * grid < t0 + length && count < max; n++) {
+		Note at[kLanes];
+		for (int i = 0, c = euclidAt(s, track, e, mask, n, at); i < c && count < max; i++, count++)
+			out[count] = {(uint16_t)(n * grid - t0), (uint16_t)grid, at[i].pitch, at[i].vel};
+	}
+	return count;
+}
+
+/** Tick `k` of a Euclid track: the notes of the step that starts on it (steps are counted from the launch, whatever the
+ * clip's length), swung as the clip's notes are. */
+void Machine::euclidTick(State& st, int t, int64_t k) {
+	const Track& tr = st.s.track[t];
+	const Euclid& e = st.clip[t][tr.playing].euclid;
+	const int grid = kGrid[std::min<int>(e.grid, 7)], d = (st.s.transport.swing * 12 + 50) / 100;
+	for (int pass = 0; pass <= (d > 0); pass++) {
+		const int64_t rel = k - tr.startTick - (pass ? d : 0);
+		if (rel < 0 || rel % grid || (d > 0 && (rel % 48 == 24) != (pass == 1)))
+			continue;
+		uint32_t mask[kLanes + 1];
+		euclidMasks(e, mask);
+		Note at[kLanes];
+		for (int i = 0, c = euclidAt(st.s, t, e, mask, rel / grid, at); i < c; i++) {
+			if (nActive_[t] == kActive)
+				break;
+			const uint32_t id = ++nextId_;
+			voice_[t].noteOn(id, (float)at[i].pitch, (float)at[i].vel / 127.f,
+							 layout_[t] == Drum ? at[i].pitch - kDrumNote + 1 : 0);
+			active_[t][nActive_[t]++] = {id, k + grid};
+		}
+	}
+}
+
 /** Tick `k`: the launches that are due, the notes that end, then the notes that start in each track's clip. A note
  * that ends on the tick another starts is released first, so the voice retriggers. */
 void Machine::tick(State& st, int64_t k, Outputs& out) {
@@ -1834,6 +2025,7 @@ void Machine::tick(State& st, int64_t k, Outputs& out) {
 				tr.playing = tr.queued, tr.startTick = k, tr.overridden = 0;
 			tr.queued = kNone;
 		}
+		layout(st, t); // after a launch, before its first notes: the new clip may want other channels
 		for (int i = 0; i < nActive_[t];) {
 			if (active_[t][i].off <= k)
 				v.noteOff(active_[t][i].id), active_[t][i] = active_[t][--nActive_[t]];
@@ -1854,6 +2046,10 @@ void Machine::tick(State& st, int64_t k, Outputs& out) {
 			int e = envelope(c, j, pos);
 			if (e >= 0 && !(tr.overridden >> j & 1))
 				tr.value[j] = (uint16_t)e;
+		}
+		if (tr.type == Euclidean) {
+			euclidTick(st, t, k);
+			continue;
 		}
 		bool drum = tr.type == Drum;
 		// Swing delays the notes exactly on an even sixteenth (tick 24 of 48) by up to 12 ticks, where they start late.
@@ -1929,7 +2125,7 @@ void Machine::endTake(bool discard) {
 		if (tr.queued == u.recScene)
 			tr.queued = kNone;
 		if (u.recFresh)
-			std::memset(static_cast<void*>(&c), 0, sizeof(Clip));
+			std::memset(static_cast<void*>(&c), 0, sizeof(Clip)), c.euclid = Euclid();
 	} else if (u.recOpen) {
 		c.length = (uint16_t)((u.recEnd >= 0 ? u.recEnd : takeEnd(st.s, tr)) - tr.startTick);
 	}
@@ -2058,14 +2254,9 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 		for (int i = 0; i < in.nEvents; i++)
 			handle(*state_, in.events[i]);
 		out.consumed = in.nEvents > 0;
-		for (int i = 0; i < kTracks; i++) { // a track changed type (Browse or the menu): silence it, switch its voices
-			if (s.track[i].type == type_[i])
-				continue;
-			type_[i] = s.track[i].type;
-			voice_[i].allOff(), nActive_[i] = 0;
-			voice_[i].setMode(type_[i] == Drum ? filo::VoiceAllocator::MPE : filo::VoiceAllocator::Rotate);
-			voice_[i].setChannels(type_[i] == Drum ? kLanes : s.track[i].voices);
-		}
+		for (int i = 0; i < kTracks;
+			 i++) // a track changed type (Browse or the menu) or layout: silence it, switch its voices
+			layout(*state_, i);
 		// ponytail: at most 8 ticks per sample, the rest follow on the next samples; only an external clock at 1 or 2
 		// pulses per beat jumps that far.
 		for (int n = 0; n < 8 && clock_.started() && nextTick_ <= due; n++)
@@ -2115,7 +2306,7 @@ void Machine::process(const Inputs& in, Outputs& out, push2::Leds& want, SliceFr
 	float frac = clock_.started() ? (float)std::min(std::max(at * kPpqn - (double)lastTick_, 0.), 1.) : 0.f;
 	for (int t = 0; t < kTracks; t++) {
 		filo::VoiceAllocator& v = voice_[t];
-		bool drum = type_[t] == Drum; // 16 channels, one for each lane, whatever Voices says
+		bool drum = layout_[t] == Drum; // 16 channels, one for each lane, whatever Voices says
 		v.setChannels(drum ? kLanes : voices_[t]);
 		if (slice) {
 			SliceTrack& o = slice->track[t];
@@ -2168,8 +2359,11 @@ void Machine::view(View& v) {
 		if (u.touched >> b & 1)
 			v.lane = (uint8_t)b, v.nShown = clip.nPoints[b],
 			std::copy(clip.points[b], clip.points[b] + v.nShown, v.shown);
-	v.nNotes = clip.nNotes;
-	std::copy(clip.notes, clip.notes + clip.nNotes, v.notes);
+	const bool euclid = v.s.track[u.track].type == Euclidean;
+	v.euclid = clip.euclid;
+	v.nNotes = euclid ? 0 : clip.nNotes; // a Euclid slot's notes are generated below
+	if (!euclid)
+		std::copy(clip.notes, clip.notes + clip.nNotes, v.notes);
 	v.held = -1;
 	v.heldCount = 0;
 	if (u.pads == kNote && (u.noteLayout || v.s.track[u.track].type == Drum) && u.heldStep >= 0) {
@@ -2187,6 +2381,15 @@ void Machine::view(View& v) {
 		}
 	}
 	unlock();
+	if (euclid) { // the Euclid notes of the pass of the clip the playhead is in, so the box shows what plays under it
+		const Track& tr = v.s.track[u.track];
+		const int length = v.length[u.track][u.scene];
+		const int64_t pass = v.s.transport.playing && tr.playing == u.scene && length
+								 ? std::max<int64_t>(v.s.transport.tick - tr.startTick, 0) / length
+								 : 0;
+		v.nNotes =
+			(uint16_t)(length ? euclidNotes(v.s, u.track, v.euclid, pass * length, length, v.notes, kMaxNotes) : 0);
+	}
 }
 
 void Machine::save(State& st) {

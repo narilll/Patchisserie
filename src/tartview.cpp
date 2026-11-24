@@ -219,10 +219,12 @@ void paint(NVGcontext* vg, const View& v, int sans, int mono, const char* status
 		// Middle: the selected slot, its notes over time and the playhead.
 		const Track& tr = v.s.track[ui.track];
 		const uint8_t* tc = kLiveColors[tr.color % kColors];
-		const bool drum = tr.type == Drum;
+		const bool drum = tr.type == Drum || (tr.type == Euclidean && v.euclid.mode == kEuclidDrum);
 		if (ui.screen != kMixScreen) { // the Mix screen has no clip overview
 			std::snprintf(buf, sizeof buf, "Track %d \xC2\xB7 Scene %d%s", ui.track + 1, ui.scene + 1,
-						  drum ? " \xC2\xB7 Drum" : "");
+						  tr.type == Drum        ? " \xC2\xB7 Drum"
+						  : tr.type == Euclidean ? " \xC2\xB7 Euclid"
+												 : "");
 			text(8, 46, buf, 18, NVG_ALIGN_LEFT, white, sans);
 			int length = v.length[ui.track][ui.scene];
 			const bool rec = ui.recTrack == ui.track && ui.recScene == ui.scene;          // a take runs here

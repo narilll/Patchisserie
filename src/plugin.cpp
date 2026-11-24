@@ -1199,6 +1199,19 @@ struct Tart : Module {
 						json_array_append_new(notes, json_pack("[i, i, i, i]", c.notes[i].tick, c.notes[i].len,
 															   c.notes[i].pitch, c.notes[i].vel));
 					clip = json_pack("{s:i, s:o}", "length", c.length, "notes", notes);
+					// "euclid": the clip's Euclid settings with 17 lanes [steps, pulses, rotation, probability,
+					// velocity] (16 drum lanes, then the melodic rhythm), only when they aren't the defaults.
+					static const tart::Euclid fresh = {};
+					if (std::memcmp(&c.euclid, &fresh, sizeof fresh)) { // no padding: see the static_assert
+						json_t* lanesJ = json_array();
+						for (const tart::EuclidLane& l : c.euclid.lane)
+							json_array_append_new(lanesJ, json_pack("[i, i, i, i, i]", l.steps, l.pulses, l.rotation,
+																	l.probability, l.velocity));
+						json_object_set_new(clip, "euclid",
+											json_pack("{s:i, s:i, s:i, s:i, s:i, s:o}", "mode", c.euclid.mode, "seed",
+													  c.euclid.seed, "octaves", c.euclid.octaves, "change",
+													  c.euclid.change, "grid", c.euclid.grid, "lanes", lanesJ));
+					}
 					// "automation": a list of [tick, value] points for each of the 10 lanes (8 CCs, LEVEL, PAN), only
 					// when some lane has points.
 					if (std::any_of(c.nPoints, c.nPoints + tart::kAutos, [](uint16_t n) { return n > 0; })) {
@@ -1319,6 +1332,7 @@ struct Tart : Module {
 				json_t* notesJ = json_object_get(clipJ, "notes");
 				c.length = c.nNotes = 0;
 				std::fill(c.nPoints, c.nPoints + tart::kAutos, 0);
+				c.euclid = tart::Euclid();
 				if (!json_is_object(clipJ))
 					continue;
 				c.length =
@@ -1332,6 +1346,24 @@ struct Tart : Module {
 					};
 					c.notes[c.nNotes++] = {(uint16_t)at(0, 65535), (uint16_t)at(1, 65535), (uint8_t)at(2, 255),
 										   (uint8_t)at(3, 255)};
+				}
+				if (json_t* eJ =
+						json_object_get(clipJ, "euclid")) { // every key optional: patches from before E5 have none
+					int mode = c.euclid.mode, seed = c.euclid.seed, octaves = c.euclid.octaves,
+						change = c.euclid.change, grid = c.euclid.grid;
+					json_unpack(eJ, "{s?i, s?i, s?i, s?i, s?i}", "mode", &mode, "seed", &seed, "octaves", &octaves,
+								"change", &change, "grid", &grid);
+					c.euclid.mode = u8(mode), c.euclid.seed = (uint16_t)clamp(seed, 0, 65535),
+					c.euclid.octaves = u8(octaves);
+					c.euclid.change = u8(change), c.euclid.grid = u8(grid);
+					json_t* lanesE = json_object_get(eJ, "lanes");
+					for (size_t l = 0; l < tart::kLanes + 1 && l < json_array_size(lanesE); l++) {
+						tart::EuclidLane& x = c.euclid.lane[l];
+						uint8_t* field[5] = {&x.steps, &x.pulses, &x.rotation, &x.probability, &x.velocity};
+						for (size_t i = 0; i < 5; i++)
+							if (json_t* v = json_array_get(json_array_get(lanesE, l), i); json_is_integer(v))
+								*field[i] = u8((int)json_integer_value(v));
+					}
 				}
 				json_t* lanesJ = json_object_get(clipJ, "automation");
 				for (size_t l = 0; l < tart::kAutos && l < json_array_size(lanesJ); l++) {

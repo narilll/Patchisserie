@@ -33,10 +33,24 @@ struct Note {
 struct Point {
 	uint16_t tick, value; // value: 0..65535 across the lane's range
 };
-struct Euclid {
-	uint8_t mode, steps, pulses, rotation, probability, velocity, octaves, change;
-	uint32_t seed; // E5
+constexpr int kLanes = 16, kDrumNote = 36; // Euclid needs kLanes: drum track lane n is the MIDI note kDrumNote + n
+constexpr int kEuclidRhythm = kLanes, kMaxSteps = 32, kMaxSeed = 999, kMaxOctaves = 4;
+/** One Euclid rhythm: `pulses` spread over `steps` (Bjorklund), turned `rotation` steps later. Pulses above steps
+ * count as steps and rotation counts modulo steps, so shortening a pattern loses nothing. */
+struct EuclidLane {
+	uint8_t steps = 16, pulses = 0, rotation = 0, probability = 100 /*%*/, velocity = 100;
 };
+enum EuclidMode : uint8_t { kEuclidDrum, kEuclidMelodic };
+/** A clip's Euclid settings, played while its track is a Euclid track: Drum mode plays lane[0..15] on the 16 drum
+ * lanes, Melodic mode lane[kEuclidRhythm] with pitches from the scale. */
+struct Euclid {
+	uint16_t seed = 0; // 0..kMaxSeed
+	uint8_t mode = kEuclidDrum, octaves = 1 /*1..4*/, change = 0 /*%*/;
+	uint8_t grid = 4;  // the step size, an index of kGrid (the scene buttons): 1/16
+	uint8_t spare = 0; // keeps the size even, so there is no padding
+	EuclidLane lane[kLanes + 1];
+};
+static_assert(sizeof(EuclidLane) == 5 && sizeof(Euclid) == 92, "no padding: the JSON compares with memcmp");
 struct Clip {
 	uint16_t length = 0, nNotes = 0; // length 0 = empty slot
 	Note notes[kMaxNotes] = {};      // sorted (tick, pitch), unique
@@ -45,10 +59,10 @@ struct Clip {
 	Euclid euclid = {};
 };
 
-enum Type : uint8_t { Melodic, Drum, Euclidean /*E5*/ };
-/** What Browse lists (E5 adds Euclid): the track types by name. Drum tracks have kLanes lanes, lane n is the MIDI note
- * kDrumNote + n and plays on the voice channel n of the track's 16. */
-constexpr int kBrowseTypes = 2, kLanes = 16, kDrumNote = 36;
+enum Type : uint8_t { Melodic, Drum, Euclidean };
+/** What Browse lists: the track types by name. Drum tracks have kLanes lanes, lane n is the MIDI note kDrumNote + n and
+ * plays on the voice channel n of the track's 16. */
+constexpr int kBrowseTypes = 3;
 extern const char* const kTypeNames[kBrowseTypes];
 enum : int8_t { kNone = -1, kStopQueued = -2 };
 
@@ -170,7 +184,15 @@ struct View {
 	uint8_t lane = 255;
 	uint16_t nShown = 0;
 	Point shown[kMaxPoints];
+	Euclid euclid = {}; // the selected slot's
 };
+
+/** The Euclid notes that start in [t0, t0 + length) ticks after the clip's launch, at ticks relative to t0, before
+ * swing, sorted, at most `max`. */
+int euclidNotes(const Session& s, int track, const Euclid& e, int64_t t0, int length, Note* out, int max);
+
+/** The pattern of a lane: bit p set = a pulse on step p, the rotation applied. */
+uint32_t euclidMask(const EuclidLane& l);
 
 /** Live's 70 clip colours as the Push shows them, by index (a track's `color`). They are also the Slice's number
  * colours. */
@@ -329,6 +351,8 @@ class Machine {
 	void tap(Transport& t);
 	void setLength(State& st, int ticks);
 	void tick(State& st, int64_t k, Outputs& out);
+	void layout(const State& st, int t);
+	void euclidTick(State& st, int t, int64_t k);
 	void checkpoint(int track, int scene);
 	void record(State& st);
 	void endTake(bool discard = false);
@@ -382,7 +406,9 @@ class Machine {
 	// What process() reads without the lock: copies of the state, refreshed under it.
 	int voices_[kTracks] = {}, selected_ = 0;
 	bool muted_[kTracks] = {};   // silent(): LEVEL 0 V and the gates closed
-	uint8_t type_[kTracks] = {}; // a change silences the track and switches its voices between rotating and 16 channels
+	uint8_t type_[kTracks] = {}; // a change silences the track (see layout)
+	uint8_t layout_[kTracks] =
+		{}; // Drum: 16 channels, one for each lane; else the track's Voices (Euclid: by the clip)
 	uint32_t rgb_[kTracks] = {};
 	float bend_ = 0; // V
 	float sr_ = 48000, bpm_ = 120, cps_ = 0, freePhase_ = 0;

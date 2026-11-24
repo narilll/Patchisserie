@@ -1,6 +1,6 @@
 # Tart
 
-Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad controller with 64 pads, buttons, encoders (endless knobs), a touch strip and a small color display. Tart is meant to become an 8-track Session sequencer for the Push 2. This version has a transport and clock, a Session view with 8 tracks and 8 scenes of clips, a keyboard for the 8 tracks, drum pads and a drum step sequencer for drum tracks, and a step sequencer and live recording that make the clips. The transport starts and stops, keeps the tempo, and sends a clock, a run signal and a metronome to your patch, and you drive all of it from the Push as well as from the jacks. In Note mode you play the pads in the scale and the color of your choice, and the notes go to the tracks, which you take out of Tart with [Slice](slice.md) modules placed on its right. You make the clips by recording what you play, or in the Melodic Sequencer or, on a drum track, the Drum Sequencer, which use the pads as steps, and you start and stop them in Session mode, where the pads are a grid of clips. This manual explains how to connect the Push, what the jacks and the Push controls do, and how to read the display.
+Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad controller with 64 pads, buttons, encoders (endless knobs), a touch strip and a small color display. Tart is meant to become an 8-track Session sequencer for the Push 2. This version has a transport and clock, a Session view with 8 tracks and 8 scenes of clips, a keyboard for the 8 tracks, drum pads and a drum step sequencer for drum tracks, Euclid tracks that play rhythms and melodies from a few settings, and a step sequencer and live recording that make the clips. The transport starts and stops, keeps the tempo, and sends a clock, a run signal and a metronome to your patch, and you drive all of it from the Push as well as from the jacks. In Note mode you play the pads in the scale and the color of your choice, and the notes go to the tracks, which you take out of Tart with [Slice](slice.md) modules placed on its right. You make the clips by recording what you play, or in the Melodic Sequencer or, on a drum track, the Drum Sequencer, which use the pads as steps, and you start and stop them in Session mode, where the pads are a grid of clips. This manual explains how to connect the Push, what the jacks and the Push controls do, and how to read the display.
 
 ## Contents
 
@@ -17,29 +17,30 @@ Tart is a module for VCV Rack 2 that connects to an Ableton Push 2, a pad contro
 11. [Melodic Sequencer + 32 Notes](#melodic-sequencer--32-notes)
 12. [Drum tracks](#drum-tracks)
 13. [The Drum Sequencer](#the-drum-sequencer)
-14. [Fixed Length](#fixed-length)
-15. [Recording](#recording)
-16. [Swing](#swing)
-17. [Scale mode](#scale-mode)
-18. [Clip mode](#clip-mode)
-19. [Quantize](#quantize)
-20. [Double Loop](#double-loop)
-21. [Undo and Redo](#undo-and-redo)
-22. [CC and automation](#cc-and-automation)
-23. [Device mode](#device-mode)
-24. [Step automation](#step-automation)
-25. [Automate](#automate)
-26. [Mix mode](#mix-mode)
-27. [Mute and Solo](#mute-and-solo)
-28. [The Home screen](#the-home-screen)
-29. [The lights](#the-lights)
-30. [The Push controls](#the-push-controls)
-31. [Context menu reference](#context-menu-reference)
-32. [Display status words](#display-status-words)
-33. [More than one Tart](#more-than-one-tart)
-34. [What is saved with the patch](#what-is-saved-with-the-patch)
-35. [Limitations](#limitations)
-36. [Credits and licenses](#credits-and-licenses)
+14. [Euclid tracks](#euclid-tracks)
+15. [Fixed Length](#fixed-length)
+16. [Recording](#recording)
+17. [Swing](#swing)
+18. [Scale mode](#scale-mode)
+19. [Clip mode](#clip-mode)
+20. [Quantize](#quantize)
+21. [Double Loop](#double-loop)
+22. [Undo and Redo](#undo-and-redo)
+23. [CC and automation](#cc-and-automation)
+24. [Device mode](#device-mode)
+25. [Step automation](#step-automation)
+26. [Automate](#automate)
+27. [Mix mode](#mix-mode)
+28. [Mute and Solo](#mute-and-solo)
+29. [The Home screen](#the-home-screen)
+30. [The lights](#the-lights)
+31. [The Push controls](#the-push-controls)
+32. [Context menu reference](#context-menu-reference)
+33. [Display status words](#display-status-words)
+34. [More than one Tart](#more-than-one-tart)
+35. [What is saved with the patch](#what-is-saved-with-the-patch)
+36. [Limitations](#limitations)
+37. [Credits and licenses](#credits-and-licenses)
 
 ## Quick start
 
@@ -131,7 +132,7 @@ Tart has eight tracks, numbered 1 to 8. A track is one instrument: it has its ow
 
 **Selecting a track.** Press one of the eight buttons below the display. The button of the selected track is white and the others are lit in their track's [color](#colors). LEFT and RIGHT select the previous and the next track. The selected track is drawn as a filled box in the bottom row of the [Home screen](#the-home-screen).
 
-**Voices.** A voice is one note that can sound at the same time as others. Each track has from 1 to 16 voices, and 1 at the start. Set it with **Voices** in the **Track** menu. With one voice, a new note takes over from the old one. With more, the notes are shared out over the voices in turn, and a new note takes over the oldest voice when all of them are busy. A [drum track](#drum-tracks) ignores **Voices**: it always has 16.
+**Voices.** A voice is one note that can sound at the same time as others. Each track has from 1 to 16 voices, and 1 at the start. Set it with **Voices** in the **Track** menu. With one voice, a new note takes over from the old one. With more, the notes are shared out over the voices in turn, and a new note takes over the oldest voice when all of them are busy. A [drum track](#drum-tracks) ignores **Voices**: it always has 16, and so does a [Euclid track](#euclid-tracks) while its clip is in Drum mode.
 
 **Taking a track out of Tart.** Tart itself has no jacks for the notes. Place a [Slice](slice.md) module directly to the right of Tart. The first Slice gives you the first track, the next Slice to its right the second, and so on, or you can pick the track in each Slice's menu. A Slice has V/OCT, GATE and VEL outputs with one channel for each voice of its track. If there is no Slice, the pads still light up but nothing is heard.
 
@@ -139,21 +140,21 @@ Tart has eight tracks, numbered 1 to 8. A track is one instrument: it has its ow
 
 **Name.** Each track has a name, which the bottom row of the display shows. Change it with **Name** in the **Track** menu. The names are "Track 1" to "Track 8" at the start.
 
-**Type.** Each track has a type, Melodic or Drum. See [Track types and Browse](#track-types-and-browse).
+**Type.** Each track has a type, Melodic, Drum or Euclid. See [Track types and Browse](#track-types-and-browse).
 
 **Level, pan, mute and solo.** Each track also has a LEVEL and a PAN, which you set on the [Mix screen](#mix-mode), and it can be muted or soloed with [MUTE and SOLO](#mute-and-solo).
 
 ## Track types and Browse
 
-A track has a type, which says what its pads and its notes mean. There are two types. A **Melodic** track is the kind of track that Tart has had so far: its pads play notes in a scale, and its Voices share the notes out. A **Drum** track has one pad for each of 16 drum sounds, and it sends each sound to its own channel. See [Drum tracks](#drum-tracks). Every track is Melodic at the start.
+A track has a type, which says what its pads and its notes mean. There are three types. A **Melodic** track is the kind of track that Tart has had so far: its pads play notes in a scale, and its Voices share the notes out. A **Drum** track has one pad for each of 16 drum sounds, and it sends each sound to its own channel. See [Drum tracks](#drum-tracks). A **Euclid** track plays rhythms and melodies that Tart works out from a few settings of each clip, and you do not put notes on it. See [Euclid tracks](#euclid-tracks). Every track is Melodic at the start.
 
-**Browse.** Press BROWSE on the Push to open the Browse screen for the selected track, and press BROWSE again to close it. The screen lists the types, Melodic and Drum. A filled box marks the one you point at, which is the cursor, and a small dot marks the type the track has now. When you open the screen, the cursor is on the type of the track. Move the cursor with UP and DOWN, or by turning any of the encoders 1 to 7. Press the last button below the display, which the screen calls LOAD, to give the selected track the type under the cursor and close the screen. Press the first button above the display, which the screen calls CLOSE, to close the screen and change nothing.
+**Browse.** Press BROWSE on the Push to open the Browse screen for the selected track, and press BROWSE again to close it. The screen lists the types, Melodic, Drum and Euclid. A filled box marks the one you point at, which is the cursor, and a small dot marks the type the track has now. When you open the screen, the cursor is on the type of the track. Move the cursor with UP and DOWN, or by turning any of the encoders 1 to 7. Press the last button below the display, which the screen calls LOAD, to give the selected track the type under the cursor and close the screen. Press the first button above the display, which the screen calls CLOSE, to close the screen and change nothing.
 
 While the Browse screen is open, BROWSE is full white, LOAD and CLOSE are white, and every other button above and below the display is dark and does nothing. The track buttons do not select tracks, LEFT and RIGHT do nothing, and UP and DOWN move the cursor and not the selected slot, so you always change the type of the track that was selected when you opened the screen. The pads go on working. Browse has no list of sounds yet: it lists only the track types.
 
 **Changing the type in the menu.** **Type** in the **Track** menu of each track does the same, and works for any track, selected or not.
 
-**Changing the type loses nothing.** The clips of a track stay as they are. A note is the same note in both types, and a drum track uses only the pitches from 36 to 51. The notes outside that range stay in the clip but stay silent while the track is a drum track, and they play again when you change the track back to Melodic. Changing the type stops the sound of that track at once, including the notes that you are holding.
+**Changing the type loses nothing.** The clips of a track stay as they are. A clip keeps its notes and its Euclid settings side by side, and the type of the track chooses which of them play: a Euclid track plays only the settings, and a Melodic or Drum track plays only the notes. A note is the same note in both of the other types, and a drum track uses only the pitches from 36 to 51. The notes outside that range stay in the clip but stay silent while the track is a drum track, and they play again when you change the track back to Melodic. Changing the type stops the sound of that track at once, including the notes that you are holding.
 
 **Differences from Ableton Live.** Live's Browse screen is a browser for instruments, samples and presets. Tart's lists only the track types, and chooses a type, not a sound.
 
@@ -332,6 +333,53 @@ The lane whose steps you see is the selected lane. Press a lane pad to select an
 
 **Differences from Ableton Live.** There is no loop start in Tart, so a clip always starts at its first bar and a loop pad only sets the length. The page does not follow the playhead. A double tap does nothing. There are no 16 Velocities and 64 Pads layouts, no mute and solo for single pads, and no Duplicate for a page.
 
+## Euclid tracks
+
+A Euclid track is a track whose [type](#track-types-and-browse) is Euclid. Instead of notes that you put on steps, it plays a rhythm that Tart works out from a few numbers. The rhythm is a Euclidean rhythm: a number of pulses spread over a number of steps as evenly as they can be. For example, 3 pulses over 8 steps are played as `x..x..x.`, where `x` is a pulse and `.` is a rest, and 5 pulses over 8 steps as `x.xx.xx.`. Each clip has its own settings, so every slot of a Euclid track can hold another rhythm.
+
+**What belongs to the clip.** The Euclid settings are part of the clip, and they are copied, deleted and taken back with it. A clip keeps its notes and its Euclid settings side by side, and the type of the track chooses which of them play. A Euclid track plays only the settings of its clips and ignores their notes. If you change the track back to Melodic or Drum, it plays the notes again, and nothing is lost.
+
+**Two modes.** Each clip is in Drum mode or in Melodic mode, and Drum mode is the standard.
+
+- In **Drum mode**, the clip has 16 lanes, one for each lane of a [drum track](#drum-tracks), and each lane has a rhythm of its own. The lanes play on the 16 channels of the track's [Slice](slice.md) exactly as a drum track does: lane 1 is channel 1 with the MIDI note 36, and lane 16 is channel 16 with the MIDI note 51.
+- In **Melodic mode**, the clip has one rhythm, the melodic rhythm, and each of its pulses plays one note of the [scale](#scale-mode). The track plays them on its Voices, as a Melodic track does.
+
+**The settings.** A rhythm (a lane in Drum mode, or the melodic rhythm) has five settings, and the clip has four more. The settings are always inside these ranges.
+
+| Setting | Range | Standard | What it does |
+|---|---|---|---|
+| Steps | 1 to 32 | 16 | How many steps the rhythm has before it starts again. |
+| Pulses | 0 to Steps | 0 | How many pulses are spread over the steps. More pulses than steps count as one pulse on every step. With 0 pulses the lane is silent, so a new clip is silent until you set some pulses. |
+| Rotation | 0 to Steps minus 1 | 0 | Turns the rhythm later by that many steps. A rotation of 1 turns `x..x..x.` into `.x..x..x`, and a rotation of Steps or more counts from the start again. |
+| Probability | 0 to 100 % | 100 % | The chance that a pulse plays. |
+| Velocity | 1 to 127 | 100 | The velocity of the notes of the rhythm. |
+| Seed | 0 to 999 | 0 | Decides which pulses play when Probability is below 100 %, and which notes the melody has. Another seed gives another pattern. |
+| Octaves | 1 to 4 | 1 | In Melodic mode, how many octaves of the scale the melody uses. |
+| Change | 0 to 100 % | 0 % | In Melodic mode, how often a pulse of the melody gets a new note. See below. |
+| Step size | 1/4 to 1/32t | 1/16 | How long a step is. It is chosen with the scene buttons, as in the [Melodic Sequencer](#the-melodic-sequencer), and 1/16 is the standard. |
+
+Lowering Steps or Pulses loses nothing: the rhythm uses the smaller number, and it uses the larger one again when you raise it again.
+
+**How a clip plays.** A step lasts as long as the step size of the clip, and every note of a Euclid track lasts one step. The steps are counted from the moment the clip is launched, and each rhythm runs on its own length, so a lane of 5 steps and a lane of 16 steps drift against each other and meet again every 80 steps. The rhythms start again at step 1 only when the clip is launched, when it is launched again, and when the transport goes back to its start (PLAY, or the RESET jack). The length of the clip does not change them. It only decides when the automation of the clip starts again, and which stretch the picture on the [Home screen](#the-home-screen) shows. You still set the length of an existing clip in [Clip mode](#clip-mode), and a clip made by [RECORD](#recording) gets the length that RECORD gives it.
+
+**Probability and Seed.** A pulse that has a Probability below 100 % plays or stays silent according to a draw that depends only on the Seed, on the rhythm and on the number of the step since the launch. It is not random in the usual way: the clip plays the same pattern at every launch, after every RESET, and after you load the patch again. Turn the Seed to get another pattern.
+
+**The melody.** The notes come from the scale of the [Scale screen](#scale-mode), counted from its root in the octave of the track, upward through Octaves octaves. The track keeps the octave it has, because OCTAVE UP and OCTAVE DOWN do nothing on a Euclid track yet. Each pulse of the rhythm has a note of its own, which depends on the Seed. A note that would be above the MIDI note 127 is left out. A change of the scale or the root changes the melody at once, also while it plays. With Change above 0, each pass of the melodic rhythm, which is one run through its Steps, gives every pulse the chance Change to get a new note, and a pulse keeps its new note until it changes again. At 0 % the melody is the same on every pass, and at 100 % every pulse has a new note on every pass. Rotation turns the melody with the rhythm.
+
+**Swing.** [Swing](#swing) delays the steps that start exactly on the second sixteenth of an eighth note, counted from the launch of the clip, as it delays the notes of a melodic clip. Only the step sizes 1/16, 1/32 and 1/32t have such steps, so nothing moves with the other sizes.
+
+**The Slice.** In Drum mode the track has 16 channels on its Slice, as a drum track has, and in Melodic mode it has as many as its Voices. The clip that decides is the playing one, and when no clip plays, the clip of the selected scene. When this changes, the sound of the track stops at once and the Slice changes its number of channels.
+
+**Editing clips.** [DUPLICATE](#session-mode) copies the settings with the clip, with the step size, and DELETE empties the slot and puts the standard settings back. [Undo and Redo](#undo-and-redo) take the settings back with the rest of the clip. [DOUBLE LOOP](#double-loop) and the length of the [Clip screen](#clip-mode) change the length of the clip and repeat or cut its automation, and the notes of the Euclid settings do not change. Tapping QUANTIZE does nothing on a Euclid track: it has no notes to quantize, and the popup does not show. RECORD makes a take as on any track, with the same lights and the same end, but a Euclid track has no pads to record. A take records the automation of the encoders of the Device and Mix screens when [Automate](#automate) is on.
+
+**Automation.** The CC, LEVEL and PAN points of a Euclid clip play as on any clip, in the time of the clip. A Euclid track has no steps that you can hold, so it has no [step locks](#step-automation). Record the automation with Automate during a take instead.
+
+**In this version.** The settings come only from a saved patch, and the pads of a Euclid track are dark in Note mode. You choose the type in the **Type** menu of the track or on the [Browse screen](#track-types-and-browse). A clip that you make with [RECORD](#recording) starts with the standard settings, so it is silent until a patch gives it pulses.
+
+**The display and the lights.** The [Home screen](#the-home-screen) adds "Euclid" to the track and scene line, and the picture of the clip shows the notes that the settings play in the pass of the clip that the playhead is in, with one row for each lane in Drum mode and the pitches going up in Melodic mode. The picture changes at every pass of the clip, because the rhythms do not repeat with it.
+
+**Differences from Ableton Live.** Live has no Euclid tracks. This is Tart's own idea. The rhythms start from the launch and ignore the length of the clip, which is not how a clip of notes plays, and the step size belongs to the clip, where in Live the step size of the sequencer only changes the view.
+
 ## Fixed Length
 
 Fixed Length is the length that a new clip gets, and it decides how a [recording](#recording) into an empty slot works. It is a setting of the whole Tart, not of a track. It changes only clips that you make after you set it.
@@ -359,7 +407,7 @@ The chosen length is used for every clip that you make in the [Melodic Sequencer
 
 Press RECORD on the Push to record what you play on the pads into a clip, as in Ableton Live. A take is one recording, from the first press of RECORD to its end. A take records into the selected slot, which is the selected track and the selected scene at the moment you press RECORD. The take stays with that slot even if you select another one afterwards. Only one take can run at a time.
 
-**What is recorded.** Tart records the pads you play on the track of the take: the keyboard pads of [Note mode](#note-mode) and the lane pads of a [drum track](#drum-tracks). The pads of the sequencers are steps, not played notes, so they are not recorded as played, but a step you tap during a take is put into the clip as usual. Pads you play on another track are not recorded, and neither are touch strip bends. With [Automate](#automate) on, the encoders of the [Device screen](#device-mode) are recorded too. A note starts where you pressed the pad, rounded to the nearest tick (there are 96 ticks in a beat). Its length is the time until you let go of the pad, and at least one tick. Its velocity is the velocity of your press. With [Record Quantize](#quantize) on, the start is moved onto the grid of your choice instead. The note goes into the clip when you let go of the pad, so you hear the pad while you play and the new note from the next time the clip comes round. If a note with the same pitch already starts on the same tick, the old note stays and the new one is dropped. A clip holds at most 4096 notes. When it is full, the note is not added and the display says "Clip full".
+**What is recorded.** Tart records the pads you play on the track of the take: the keyboard pads of [Note mode](#note-mode) and the lane pads of a [drum track](#drum-tracks). The pads of the sequencers are steps, not played notes, so they are not recorded as played, but a step you tap during a take is put into the clip as usual. Pads you play on another track are not recorded, and neither are touch strip bends. A [Euclid track](#euclid-tracks) records no pads at all. With [Automate](#automate) on, the encoders of the [Device screen](#device-mode) are recorded too. A note starts where you pressed the pad, rounded to the nearest tick (there are 96 ticks in a beat). Its length is the time until you let go of the pad, and at least one tick. Its velocity is the velocity of your press. With [Record Quantize](#quantize) on, the start is moved onto the grid of your choice instead. The note goes into the clip when you let go of the pad, so you hear the pad while you play and the new note from the next time the clip comes round. If a note with the same pitch already starts on the same tick, the old note stays and the new one is dropped. A clip holds at most 4096 notes. When it is full, the note is not added and the display says "Clip full".
 
 **An empty slot with Fixed Length off.** The take makes a clip with an open length. It runs for as long as you record, up to 32 bars. The clip is launched like any launch: at the next point of the [launch quantization](#session-mode) while the transport is playing, and at once when the transport is stopped, which starts the transport. Until the clip starts, nothing is recorded. Press RECORD again to end the take. The take does not end at that moment but at the next whole unit counted from the start of the clip. The unit is the launch quantization, or one beat if that is shorter. With the standard 1 Bar, a take ends at the next bar line, so if you press RECORD one bar and a little later, it ends after two bars. The clip is as long as the take and goes on playing, and you can go on playing over it. While the end is waiting, RECORD blinks. If the take has not started yet, pressing RECORD cancels it, and the slot is empty again. The take also ends by itself when it reaches 32 bars, and then the clip is 32 bars long.
 
@@ -403,7 +451,7 @@ Swing moves the notes of a clip while it plays. It does not change the notes tha
 
 Press SCALE on the Push to open the Scale screen, where you choose the key and the layout of the pads. Press SCALE again to close it. If you hold SCALE for 0.3 seconds or longer, the screen stays open only while you hold the button, and closes when you let go. The SCALE button is full white while the screen is open and dim white otherwise.
 
-The pads keep playing while the Scale screen is open, and they change at once when you change a setting. Changing the scale never changes notes that are already recorded: it only changes which note each pad plays. The settings belong to the whole Tart, not to a track.
+The pads keep playing while the Scale screen is open, and they change at once when you change a setting. Changing the scale never changes notes that are already recorded: it only changes which note each pad plays. The settings belong to the whole Tart, not to a track. They also decide the notes of a [Euclid track](#euclid-tracks) in Melodic mode.
 
 | Control | What it does |
 |---|---|
@@ -441,7 +489,7 @@ An empty slot shows "Empty slot", and the encoder does nothing there. Make a cli
 
 ## Quantize
 
-Quantize moves the notes of a clip toward a grid, so that they sound tighter. Tap QUANTIZE on the Push to quantize every note of the selected clip. The popup in the middle of the display says, for example, "Quantized to: 1/16, 100%" for one second. Quantizing changes only where a note starts. Its length stays as it is, so the end of the note moves with the start. This is the same as on the Push in Ableton Live. Quantizing is one step of [Undo and Redo](#undo-and-redo).
+Quantize moves the notes of a clip toward a grid, so that they sound tighter. Tap QUANTIZE on the Push to quantize every note of the selected clip. On a [Euclid track](#euclid-tracks) a tap does nothing, because the track plays no notes of its clips. The popup in the middle of the display says, for example, "Quantized to: 1/16, 100%" for one second. Quantizing changes only where a note starts. Its length stays as it is, so the end of the note moves with the start. This is the same as on the Push in Ableton Live. Quantizing is one step of [Undo and Redo](#undo-and-redo).
 
 **How a note moves.** Each note moves toward the nearest line of the grid you chose with QUANTIZE TO. The AMOUNT says how far: at 100 percent the note lands on the line, at 50 percent it moves half of the way, and at 0 percent it does not move. The choices of QUANTIZE TO are 1/4, 1/8, 1/8T, 1/8+T, 1/16, 1/16T, 1/16+T and 1/32. The letter T means triplets, which divide a beat in three. A choice with +T, such as 1/8+T, has two grids, the straight one and the triplet one, and each note goes to the nearer line of the two. At the start, QUANTIZE TO is 1/16 and AMOUNT is 100 percent. A note that is moved to the end of the clip goes to the start of the clip instead, because the clip loops. If two notes of the same pitch end up on the same tick, only one of them is kept. Notes that start after the end of the clip, which do not play, are left alone.
 
@@ -479,7 +527,7 @@ Notes that start after the end of the clip, which do not play, are removed when 
 - The notes would not fit. A clip holds at most 4096 notes, and the popup says "Clip full".
 - A take with an open length is running in the slot, because the take sets the length. There is no popup then.
 
-A clip that plays goes on playing without a break. Its position in the loop does not change.
+A clip that plays goes on playing without a break. Its position in the loop does not change. On a [Euclid track](#euclid-tracks) the clip's automation is repeated and its Euclid settings stay as they are.
 
 ## Undo and Redo
 
@@ -492,6 +540,7 @@ These are the changes that Undo takes back, each as one step:
 - DELETE with a step, a lane pad or a loop pad of a drum track.
 - A loop pad that makes a clip, or that changes the length of a clip. Turning encoder 1 on the [Clip screen](#clip-mode) is one step for each press of CLIP.
 - Holding a step on the [Device screen](#device-mode) and turning encoders, the [step lock](#step-automation), is one step for the whole hold. DELETE with the touch of an encoder on the Device screen, which takes away the automation of a lane, is one step for each touch. So is DELETE with AUTOMATE, which takes away all the automation of the selected clip.
+- The [Euclid settings](#euclid-tracks) of a clip are part of the clip, so Undo takes back their deletion and the copy of a clip with them.
 - Deleting a clip with DELETE in [Session mode](#session-mode). Deleting a whole row with a scene button is one step for the whole row, and so is copying a row with DUPLICATE and a scene button. Copying a clip into one slot is one step, so copying it into more slots takes one UNDO for each.
 
 Undo and redo work on the clip contents only, and the automation of the clip is part of them. The values of the CC lanes that you set with the encoders of the Device screen are not taken back. If a clip is empty after Undo, the slot is empty again: a clip that was playing there stops at once, and a launch that was waiting is cancelled. A clip that Undo brings back does not start playing.
@@ -623,7 +672,7 @@ The Push display is 960 pixels wide and 160 pixels high. The mirror on the panel
 - POSITION: the bar, the beat and the sixteenth note since the start, for example 3.2.1. It stays where it was when you stop.
 - At the right end, a green triangle while Tart is playing and a gray square while it is stopped.
 
-**The middle** shows "Track 1 · Scene 1", the selected track and scene, with "· Drum" after them when the track is a [drum track](#drum-tracks). Under it is the clip in that slot. When the slot is empty, it says "Empty slot". Otherwise the length of the clip is at the right ("2 Bars", "1 Beat" and so on), and a box shows the notes of the clip over time in the color of the track, with the pitch going up. The box shows from the lowest note to the highest, and at least an octave. For a drum track it shows the pitches from 36 to 51, one row for each lane. While the clip plays, a green line moves across the box.
+**The middle** shows "Track 1 · Scene 1", the selected track and scene, with "· Drum" after them when the track is a [drum track](#drum-tracks), or "· Euclid" when it is a [Euclid track](#euclid-tracks). Under it is the clip in that slot. When the slot is empty, it says "Empty slot". Otherwise the length of the clip is at the right ("2 Bars", "1 Beat" and so on), and a box shows the notes of the clip over time in the color of the track, with the pitch going up. The box shows from the lowest note to the highest, and at least an octave. For a drum track it shows the pitches from 36 to 51, one row for each lane. For a Euclid track it shows the notes that the clip's Euclid settings play in the pass of the clip that the playhead is in, one row for each lane when the clip is in Drum mode. While the clip plays, a green line moves across the box.
 
 **While you hold a step** in the Melodic Sequencer, the top row shows NUDGE (the distance from the step in ticks), LENGTH (in steps), FINE (the length in ticks) and VELOCITY of its note over the first four encoders. In [Melodic Sequencer + 32 Notes](#melodic-sequencer--32-notes) it shows those of the first note of the step, and the number of its notes (NOTES) over encoder 5.
 
@@ -659,7 +708,7 @@ Tart lights the Push buttons that do something in this version. All other button
 - **SELECT**, **DELETE**, **DUPLICATE**, **NEW** and **STOP CLIP** are dim white, and turn full white while you hold them.
 - **SCALE** is full white while the [Scale screen](#scale-mode) is open and dim white otherwise, and **CLIP** is the same for the [Clip screen](#clip-mode).
 - **OCTAVE UP** and **OCTAVE DOWN** are dim white while the selected track can move in that direction, and dark when it cannot.
-- **LAYOUT** is dim white in Note mode, and full white while the [Melodic Sequencer](#the-melodic-sequencer) or [Melodic Sequencer + 32 Notes](#melodic-sequencer--32-notes) is open. On a [drum track](#drum-tracks), LAYOUT, **OCTAVE UP** and **OCTAVE DOWN** are dark.
+- **LAYOUT** is dim white in Note mode, and full white while the [Melodic Sequencer](#the-melodic-sequencer) or [Melodic Sequencer + 32 Notes](#melodic-sequencer--32-notes) is open. On a [drum track](#drum-tracks) and on a [Euclid track](#euclid-tracks), LAYOUT, **OCTAVE UP** and **OCTAVE DOWN** are dark.
 - **UNDO** is dim white while there is a step to undo, or, while you hold SHIFT, a step to redo, and dark when there is none. It is full white while you hold it.
 - **QUANTIZE** is dim white, and full white while you hold it. While its settings show, the fifth button above the display is white when Record Quantize is on and dark gray when it is off.
 - **DOUBLE LOOP** is dim white while the selected slot has a clip, full white while you hold it, and dark otherwise.
@@ -672,7 +721,7 @@ Tart lights the Push buttons that do something in this version. All other button
 - In the Melodic Sequencer, Melodic Sequencer + 32 Notes and the Drum Sequencer, **PAGE LEFT** and **PAGE RIGHT** are dim white when there is a page to go to, and the eight scene buttons show the step size. The pads are described in [The Melodic Sequencer](#the-melodic-sequencer) and [The Drum Sequencer](#the-drum-sequencer).
 - The eight buttons below the display are blue for a soloed track, white for the selected track, dark gray for a [silent](#mute-and-solo) track and in their own color for the others. While the Scale screen is open they are the option buttons described in [Scale mode](#scale-mode), and so are the upper buttons 2 to 7. The buttons above the display are dark on the Device screen, and on the Mix screen except for the first two.
 - The pads and the scene buttons in Session mode are described in [Session mode](#session-mode).
-- The pads in Note mode are described in [Note mode](#note-mode), and the pads of a drum track in [Drum tracks](#drum-tracks) and [The Drum Sequencer](#the-drum-sequencer).
+- The pads in Note mode are described in [Note mode](#note-mode), and the pads of a drum track in [Drum tracks](#drum-tracks) and [The Drum Sequencer](#the-drum-sequencer). On a [Euclid track](#euclid-tracks) in Note mode, the pads, PAGE LEFT, PAGE RIGHT and the scene buttons are dark.
 
 ## The Push controls
 
@@ -688,15 +737,15 @@ Tart lights the Push buttons that do something in this version. All other button
 | SESSION | Puts the pads in [Session mode](#session-mode), with the same tap and hold as NOTE. |
 | SCALE | Opens or closes the [Scale screen](#scale-mode). Held for 0.3 seconds or longer, it is open only while you hold it. |
 | CLIP | Opens or closes the [Clip screen](#clip-mode), where encoder 1 sets the length of the selected clip. Held for 0.3 seconds or longer, it is open only while you hold it. |
-| Pads | In Session mode, launch clips. In Note mode, play notes on the selected track, or in the Melodic Sequencer, the steps of its clip, or in Melodic Sequencer + 32 Notes, the 32 steps above and the lowest 4 rows of the keyboard below. On a [drum track](#drum-tracks), the lower left 4 by 4 pads play and select the 16 lanes, the 4 rows above are the steps of the selected lane, and the lower right 4 by 4 pads are the loop selector. See [The Drum Sequencer](#the-drum-sequencer). |
+| Pads | In Session mode, launch clips. In Note mode, play notes on the selected track, or in the Melodic Sequencer, the steps of its clip, or in Melodic Sequencer + 32 Notes, the 32 steps above and the lowest 4 rows of the keyboard below. On a [drum track](#drum-tracks), the lower left 4 by 4 pads play and select the 16 lanes, the 4 rows above are the steps of the selected lane, and the lower right 4 by 4 pads are the loop selector. See [The Drum Sequencer](#the-drum-sequencer). On a [Euclid track](#euclid-tracks) they do nothing yet. |
 | RECORD | Starts a [take](#recording) on the selected slot, or ends the one that runs. |
 | UNDO | Takes back the last change to a clip. With SHIFT held, does a change again that you took back. See [Undo and Redo](#undo-and-redo). |
-| QUANTIZE | Tap to quantize the selected clip. Hold for 0.3 seconds or longer to show the settings: encoder 1 SWING, encoder 2 QUANTIZE TO, encoder 3 AMOUNT, encoder 5 REC QUANT, and the fifth button above the display for Record Quantize. With a lane pad on a drum track, quantizes that lane. See [Quantize](#quantize). |
+| QUANTIZE | Tap to quantize the selected clip. Hold for 0.3 seconds or longer to show the settings: encoder 1 SWING, encoder 2 QUANTIZE TO, encoder 3 AMOUNT, encoder 5 REC QUANT, and the fifth button above the display for Record Quantize. With a lane pad on a drum track, quantizes that lane. It does nothing on a [Euclid track](#euclid-tracks). See [Quantize](#quantize). |
 | DOUBLE LOOP | Doubles the length of the selected clip and repeats its notes. See [Double Loop](#double-loop). |
 | BROWSE | Opens or closes the [Browse screen](#track-types-and-browse), where you choose the type of the selected track. On the screen, UP and DOWN and encoders 1 to 7 move the cursor, the last button below the display loads the type, and the first button above the display closes the screen. |
-| LAYOUT | In Note mode, switches the pads between 64 Notes, the [Melodic Sequencer](#the-melodic-sequencer) and [Melodic Sequencer + 32 Notes](#melodic-sequencer--32-notes). It does nothing on a drum track. |
-| PAGE LEFT, PAGE RIGHT | In the Melodic Sequencer, move to the previous or the next page of 8 steps. In the Drum Sequencer and Melodic Sequencer + 32 Notes, of 32 steps. |
-| Scene buttons | In Session mode, launch a row of clips. In the Melodic Sequencer, Melodic Sequencer + 32 Notes and the Drum Sequencer, set the step size: 1/4, 1/4t, 1/8, 1/8t, 1/16, 1/16t, 1/32 and 1/32t from the top. |
+| LAYOUT | In Note mode, switches the pads between 64 Notes, the [Melodic Sequencer](#the-melodic-sequencer) and [Melodic Sequencer + 32 Notes](#melodic-sequencer--32-notes). It does nothing on a drum track and on a Euclid track. |
+| PAGE LEFT, PAGE RIGHT | In the Melodic Sequencer, move to the previous or the next page of 8 steps. In the Drum Sequencer and Melodic Sequencer + 32 Notes, of 32 steps. They do nothing on a Euclid track. |
+| Scene buttons | In Session mode, launch a row of clips. In the Melodic Sequencer, Melodic Sequencer + 32 Notes and the Drum Sequencer, set the step size: 1/4, 1/4t, 1/8, 1/8t, 1/16, 1/16t, 1/32 and 1/32t from the top. They do nothing in Note mode on a Euclid track yet. |
 | STOP CLIP | Held, the buttons below the display stop a track. With SHIFT, stops every track. |
 | SELECT | Held with a pad or a scene button, selects a slot or a scene without launching. |
 | DELETE | Held with a pad, deletes the clip in Session mode and takes away the note in the Melodic Sequencer, and every note of a step in Melodic Sequencer + 32 Notes. On a drum track, it takes away the note of a step, every note of a lane with a lane pad, and every note of a loop pad's part of the clip. Held with a scene button in Session mode, deletes the row. |
@@ -708,12 +757,12 @@ Tart lights the Push buttons that do something in this version. All other button
 | MIX | Opens or closes the [Mix screen](#mix-mode), where encoders 1 to 8 are the LEVEL or the PAN of the eight tracks. The buttons above the display choose VOLUMES or PANS. Held for 0.3 seconds or longer, it is open only while you hold it. |
 | MUTE, SOLO | A tap mutes or solos the selected track. Held, the buttons below the display mute or solo the track. A hold of 0.6 seconds or longer locks the mode. See [Mute and Solo](#mute-and-solo). |
 | Encoders 1 to 4 | On the Home screen, in the Melodic Sequencer, Melodic Sequencer + 32 Notes and the Drum Sequencer, while you hold a step: Nudge, Length, Length fine and Velocity of its note, or of every note of the step in Melodic Sequencer + 32 Notes. |
-| OCTAVE UP, OCTAVE DOWN | Move the pads of the selected track one octave up or down. They do nothing on a drum track. |
+| OCTAVE UP, OCTAVE DOWN | Move the pads of the selected track one octave up or down. They do nothing on a drum track and on a Euclid track yet. |
 | Buttons below the display | Select the track. While STOP CLIP is held, they stop the track. While FIXED LENGTH is held, they choose the length. While MUTE or SOLO is held or locked, they mute or solo the track. |
 | LEFT, RIGHT | Move the selected slot to the previous or the next track. On the Scale screen, they move four scales back or forward. |
 | UP, DOWN | Move the selected slot to the previous or the next scene. On the Scale screen, they select the previous or the next scale. |
 | Encoders and the buttons above and below the display | On the Scale screen, they set the key, the layout and the scale. See [Scale mode](#scale-mode). On the Clip screen, encoder 1 sets the length of the clip. See [Clip mode](#clip-mode). On the Device screen, encoders 1 to 8 set the CC lanes, or, with a step held, make a step lock, and DELETE with a touch of an encoder clears the lane. During a take with Automate on, turning a touched encoder records the lane. See [Device mode](#device-mode), [Step automation](#step-automation) and [Automate](#automate). On the Mix screen, encoders 1 to 8 set the LEVEL or the PAN of the tracks, and the first two buttons above the display choose which. See [Mix mode](#mix-mode). |
-| Touch strip | Bends the pitch of the selected track by up to 2 semitones. It does nothing on a drum track. |
+| Touch strip | Bends the pitch of the selected track by up to 2 semitones. It does nothing on a drum track, and it does nothing on a Euclid track yet. |
 
 The other controls of the Push do nothing yet.
 
@@ -728,7 +777,7 @@ Right-click the panel to open the context menu. Tart adds these entries below Ra
 | **CLK output: pulses per beat** | A submenu with 1, 2, 4, 8, 16, 24, 32, 48 and 96. It sets how many pulses the CLK output sends in each beat. The default is 4. |
 | **CLOCK input: pulses per beat** | A submenu with the same numbers. It tells Tart how many pulses of an external clock make a beat. The default is 4. Use 24 for a clock at 24 PPQN (pulses per quarter note, which is the same as a beat). |
 | **Default LEVEL** | A submenu with 0 V to 10 V in steps of 1 V. The default is 10 V. Choosing a value sets the LEVEL of every track to it at once, and it is the value that DELETE with a touch of a LEVEL encoder on the [Mix screen](#mix-mode) sets back. Tart saves it with the patch. |
-| **Track** | A submenu with one entry for each track, "Track 1" to "Track 8", which shows the track's name. Each entry has a **Name** text field, where each change renames the track at once, a **Color** grid of 70 swatches, where a click sets the track's color at once (see [Colors](#colors)), a **Voices** submenu with 1 to 16 voices, which a drum track ignores (the default is 1), and a **Type** submenu with Melodic and Drum (the default is Melodic). See [Track types and Browse](#track-types-and-browse). The last entry is **CC**: a submenu with "CC 1" to "CC 8", each showing the name of the CC lane. Each has a **Name** text field, where each change renames the lane at once, and a **Range** submenu with "0 V to 10 V" (the default) and "-5 V to +5 V". Changing the range sets that lane back to the start value of the new range. See [CC and automation](#cc-and-automation). |
+| **Track** | A submenu with one entry for each track, "Track 1" to "Track 8", which shows the track's name. Each entry has a **Name** text field, where each change renames the track at once, a **Color** grid of 70 swatches, where a click sets the track's color at once (see [Colors](#colors)), a **Voices** submenu with 1 to 16 voices, which a drum track ignores, and so does a Euclid track while its clip is in Drum mode (the default is 1), and a **Type** submenu with Melodic, Drum and Euclid (the default is Melodic). See [Track types and Browse](#track-types-and-browse). The last entry is **CC**: a submenu with "CC 1" to "CC 8", each showing the name of the CC lane. Each has a **Name** text field, where each change renames the lane at once, and a **Range** submenu with "0 V to 10 V" (the default) and "-5 V to +5 V". Changing the range sets that lane back to the start value of the new range. See [CC and automation](#cc-and-automation). |
 | **Find Push automatically** | When ticked (the default), Tart looks for the Push's User port every two seconds and opens it, and it reopens it when you unplug and replug the Push. Untick it to choose the ports yourself. |
 | **Push MIDI input (User Port)** | The MIDI port that Tart reads the Push's pads, buttons, encoders and touch strip from. Below the heading are Rack's usual MIDI choices: the driver, then the device. Pick the port whose name ends in "User Port". Leave the channel on its default so that every message arrives. |
 | **Push MIDI output (User Port)** | The MIDI port that Tart sends light messages and the switch to User mode to. Below the heading are Rack's usual MIDI choices. Pick the Push's User Port here as well. Ignore the channel choice: Tart always overrides it, because the Push needs the channel byte of each message for its light animations. |
@@ -759,7 +808,7 @@ If you duplicate the owning Tart, the copy closes the ports it copied and stays 
 
 ## What is saved with the patch
 
-Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices, the octave, the type and the selected drum lane, the names and ranges of its 8 CC lanes and the current value of each of its 10 lanes (the 8 CC lanes, LEVEL and PAN), and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty, and the [automation](#cc-and-automation) of every clip that has some. It also saves the settings of [Quantize](#quantize): QUANTIZE TO, AMOUNT, REC QUANT and whether Record Quantize is on. It saves whether [Automate](#automate) is on, whether each track is muted or soloed, **Default LEVEL**, and whether the Mix screen shows VOLUMES or PANS. It also saves the selected track and scene, the pad mode, the launch quantization, which layout of Note mode is open (64 Notes, the Melodic Sequencer or Melodic Sequencer + 32 Notes), and whether Fixed Length is on and its length. A patch from an older version has no types, and all its tracks are Melodic, and Automate is off. It also has no mute or solo, so every track sounds, **Default LEVEL** is 10 V and the Mix screen shows VOLUMES. It also has no CC names, ranges, values or automation, and the lanes start as described in [CC and automation](#cc-and-automation). The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. The steps of [Undo](#undo-and-redo) are not saved, and neither is a running take: a patch that you save during a take with an open length keeps the clip with a length of 32 bars. See [Limitations](#limitations). Which lanes are overridden is not saved, and neither is a locked MUTE or SOLO. The Scale screen, the Clip screen, the Device screen, the Mix screen and the Browse screen are not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
+Tart saves these things with the patch: the internal tempo, the swing, the metronome setting, the CLK and CLOCK pulses per beat, whether **Find Push automatically** is ticked, the MIDI input port and the MIDI output port. It saves the scale settings: the root, the scale, In Key or Chromatic, Fixed, and the layout with its direction. For each track it saves the name, the color, the number of voices, the octave, the type (Melodic, Drum or Euclid) and the selected drum lane, the names and ranges of its 8 CC lanes and the current value of each of its 10 lanes (the 8 CC lanes, LEVEL and PAN), and its clips: the length and the notes (start, length, pitch and velocity) of every clip that is not empty, the [automation](#cc-and-automation) of every clip that has some, and the [Euclid settings](#euclid-tracks) of every clip that has others than the standard ones, with the step size. It also saves the settings of [Quantize](#quantize): QUANTIZE TO, AMOUNT, REC QUANT and whether Record Quantize is on. It saves whether [Automate](#automate) is on, whether each track is muted or soloed, **Default LEVEL**, and whether the Mix screen shows VOLUMES or PANS. It also saves the selected track and scene, the pad mode, the launch quantization, which layout of Note mode is open (64 Notes, the Melodic Sequencer or Melodic Sequencer + 32 Notes), and whether Fixed Length is on and its length. A patch from an older version has no types, and all its tracks are Melodic, and Automate is off. It also has no Euclid settings, so every clip has the standard ones. It also has no mute or solo, so every track sounds, **Default LEVEL** is 10 V and the Mix screen shows VOLUMES. It also has no CC names, ranges, values or automation, and the lanes start as described in [CC and automation](#cc-and-automation). The step size and the page of the sequencer are not saved, and neither is which clip plays, so a loaded patch plays no clip. The steps of [Undo](#undo-and-redo) are not saved, and neither is a running take: a patch that you save during a take with an open length keeps the clip with a length of 32 bars. See [Limitations](#limitations). Which lanes are overridden is not saved, and neither is a locked MUTE or SOLO. The Scale screen, the Clip screen, the Device screen, the Mix screen and the Browse screen are not saved, so a loaded patch opens on the Home screen. Whether Tart is playing is not saved, so it is always stopped when you load a patch. The held buttons, the held pads, the touch strip and the popups are not saved either, and loading a patch stops every note.
 
 ## Limitations
 
@@ -768,7 +817,8 @@ Tart saves these things with the patch: the internal tempo, the swing, the metro
 - [Recording](#recording) has no count-in, no Capture MIDI and no Arrangement recording. [Automate](#automate) records the encoders of the Device screen only while a take runs. Only the keyboard pads of Note mode (in Melodic Sequencer + 32 Notes, the lower 4 rows) and the lane pads of a drum track are recorded, not the touch strip or the sequencer pads. A take with an open length can be 32 bars at most.
 - The sequencers make notes of velocity 100 and edit one step at a time. In Melodic Sequencer + 32 Notes, the encoders change at most 16 notes of the step, the chord is shared by all tracks and is not saved, and there is no Shift+OCTAVE. You cannot select several steps, and a second pad that you hold at the same time does nothing, unless it is a later step in the row of the first one.
 - A clip holds at most 4096 notes, and a track plays at most 64 notes at once. When a clip is full, a new note is not added and the display says "Clip full". A 32-bar drum clip with a note on every sixteenth of every lane would need twice that.
-- The Melodic Sequencer and Melodic Sequencer + 32 Notes do not work on a [drum track](#drum-tracks): its notes come from the [Drum Sequencer](#the-drum-sequencer). A drum track has no Euclid type, no 16 Velocities or 64 Pads layout, and no mute or solo for single pads. The Drum Sequencer has no loop start, no page that follows the playhead, no double tap and no Duplicate for a page. The Browse screen lists only the two types.
+- The Melodic Sequencer and Melodic Sequencer + 32 Notes do not work on a [drum track](#drum-tracks): its notes come from the [Drum Sequencer](#the-drum-sequencer). A drum track has no 16 Velocities or 64 Pads layout, and no mute or solo for single pads. The Drum Sequencer has no loop start, no page that follows the playhead, no double tap and no Duplicate for a page. The Browse screen lists only the three types.
+- A [Euclid track](#euclid-tracks) gets its settings only from a saved patch in this version, its pads are dark in Note mode, and it has no [step locks](#step-automation). A pulse of a melody that got its note more than 256 passes of its rhythm ago falls back to its first note.
 - Tart sends the notes and the CC, LEVEL and PAN signals of the tracks only through [Slice](slice.md) modules. [Automation](#cc-and-automation) of the CC lanes is made with [step locks](#step-automation), which are flat over a step, and with [Automate](#automate) during a take. LEVEL and PAN are set on the [Mix screen](#mix-mode), and a muted or soloed track silences only the LEVEL and GATE outputs of its Slice, see [Mute and Solo](#mute-and-solo). The Mix screen has no sends and no master level.
 - A lane holds at most 256 points. A step lock uses up to 4, so a lane takes about 64 isolated locks, and the display says "Clip full" when one does not fit. A take that writes a lane with [Automate](#automate) stops writing it three points before the limit.
 - The encoders of the [Device screen](#device-mode) and the [Mix screen](#mix-mode) take one step for 312 of the 65535 values of a lane, about 210 steps for a full turn, and 31 times fewer with SHIFT held. This is a guess too. A lane that you turned stays overridden until the clip is launched again.

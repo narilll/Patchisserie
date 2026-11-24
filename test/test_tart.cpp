@@ -469,7 +469,10 @@ TEST(tart_machine_threads) {
 		m.edit([&](tart::State& st) {
 			st.s.transport.swing = (uint8_t)(n % 100), st.s.track[0].voices = (uint8_t)(n % 16 + 1);
 			st.clip[0][7].length = (uint16_t)(n % 3 * tart::kBar);
-			st.s.track[1].type = (uint8_t)(n++ / 7 % 2);
+			tart::Clip& e = st.clip[1][0]; // track 2 plays a Euclid clip whose settings and type the UI keeps changing
+			e.length = tart::kBar, e.euclid.lane[0].pulses = (uint8_t)(n % 9), e.euclid.mode = (uint8_t)(n / 5 % 2);
+			st.s.track[1].playing = 0;
+			st.s.track[1].type = (uint8_t)(n++ / 7 % 3);
 		});
 	}
 	audio.join();
@@ -500,9 +503,9 @@ TEST(tart_machine_threads) {
 TEST(state_layout) {
 	CHECK(std::is_trivially_copyable<tart::State>::value);
 	CHECK(tart::kMaxNotes == 4096);
-	CHECK(sizeof(tart::State) < 3 * 1024 * 1024);                // heap only: ~2.2 MB
+	CHECK(sizeof(tart::State) < 3 * 1024 * 1024);                // heap only: ~2.24 MB
 	CHECK(sizeof(tart::Machine) < 16 * 1024);                    // ~14.4 KB: from_/to_ add 640 bytes
-	CHECK(sizeof(tart::Clip) < 36 * 1024 && tart::kAutos == 10); // ~34.9 KB: 8 CCs, LEVEL, PAN
+	CHECK(sizeof(tart::Clip) < 36 * 1024 && tart::kAutos == 10); // ~34.9 KB: 8 CCs, LEVEL, PAN, Euclid (92 bytes)
 	CHECK(sizeof(tart::SliceFrame) < 2048);
 	CHECK(sizeof(tart::State) > 2 * 1024 * 1024);
 	auto st = std::make_unique<tart::State>();
@@ -681,9 +684,9 @@ TEST(sanitize_tracks) {
 	CHECK(t.color == 69 && t.voices == 1 && t.octave == tart::kMaxOctave && t.grid == 7 && t.type == tart::Melodic);
 	st->s.track[3].type = tart::Drum, st->s.track[3].lane = 99, st->s.track[4].type = tart::Euclidean;
 	st->s.ui.browse = 5, st->s.ui.screen = tart::kBrowseScreen;
-	tart::sanitize(*st); // Euclid is E5: a Melodic track until then
+	tart::sanitize(*st);
 	CHECK(st->s.track[3].type == tart::Drum && st->s.track[3].lane == tart::kLanes - 1);
-	CHECK(st->s.track[4].type == tart::Melodic && st->s.ui.browse == 0 && st->s.ui.screen == tart::kHome);
+	CHECK(st->s.track[4].type == tart::Euclidean && st->s.ui.browse == 0 && st->s.ui.screen == tart::kHome);
 	CHECK(t.playing == tart::kNone && t.queued == tart::kNone);
 	CHECK(st->s.track[2].voices == 16 && st->s.track[2].octave == 0);
 	CHECK(st->s.scale.root == 11 && st->s.scale.scale == 0 && st->s.scale.layout == 5);
@@ -1885,7 +1888,10 @@ TEST(browse_load_close) {
 	r.click(Down);
 	CHECK(r.view().s.ui.browse == 1 && r.view().s.ui.scene == 0);
 	r.click(Down);
-	CHECK(r.view().s.ui.browse == 1); // two types: stops at the end
+	CHECK(r.view().s.ui.browse == 2);
+	r.click(Down);
+	CHECK(r.view().s.ui.browse == 2); // three types: stops at the end
+	r.click(Up);
 	r.click(Up);
 	r.turn(6, 8); // encoders 1..7
 	CHECK(r.view().s.ui.browse == 1);
@@ -1910,6 +1916,10 @@ TEST(browse_load_close) {
 	CHECK(r.view().s.ui.screen == tart::kHome && r.view().s.track[2].type == tart::Drum);
 	r.click(Browse), r.click(Up), r.click(Track8Below); // back to Melodic
 	CHECK(r.view().s.track[2].type == tart::Melodic);
+	r.click(Browse), r.click(Down), r.click(Down), r.click(Track8Below); // Euclid
+	CHECK(r.view().s.track[2].type == tart::Euclidean);
+	r.click(Browse); // the cursor starts on the track's type
+	CHECK(r.view().s.ui.browse == tart::Euclidean);
 }
 
 TEST(type_switch_silences) {
@@ -4726,4 +4736,607 @@ TEST(mix_automate_writes_level) {
 	CHECK(r.view().s.ui.writing == 1 << 3);
 	touch(r, 3, false);
 	CHECK(r.view().s.ui.writing == 0);
+}
+
+// ---- Euclid tracks (E5.1)
+
+namespace {
+
+/** One gate rise of the Slice: the sample, track, channel and what the Slice read there. */
+struct Rise {
+	int frame, track, ch;
+	float voct, vel;
+};
+bool operator==(const Rise& a, const Rise& b) {
+	return a.frame == b.frame && a.track == b.track && a.ch == b.ch && a.voct == b.voct && a.vel == b.vel;
+}
+
+/** Steps `n` samples (`start`: from a Play or Reset on the first) and lists every gate rise, in time and channel order.
+ * At 120 BPM a tick is 250 samples; a note that starts as another ends rises one sample late (the retrigger gap). */
+std::vector<Rise> rises(SliceRig& r, int n, bool start = true) {
+	std::vector<Rise> out;
+	bool high[tart::kTracks][16] = {}; // a gate that is up at the start is not a rise
+	for (int t = 0; t < tart::kTracks; t++)
+		for (int c = 0; c < r.f.track[t].channels && c < 16; c++)
+			high[t][c] = !start && r.f.track[t].gate[c] > 5;
+	for (int i = 0; i < n; i++) {
+		r.in.play = r.in.reset = start && i == 0;
+		r.step();
+		for (int t = 0; t < tart::kTracks; t++)
+			for (int c = 0; c < 16; c++) {
+				const tart::SliceTrack& s = r.f.track[t];
+				bool g = c < s.channels && s.gate[c] > 5;
+				if (g && !high[t][c])
+					out.push_back({i, t, c, s.voct[c], s.vel[c]});
+				high[t][c] = g;
+			}
+	}
+	return out;
+}
+
+/** The ticks (frame / 250) of the rises of one channel. */
+std::vector<int> ticksOf(const std::vector<Rise>& v, int track, int ch) {
+	std::vector<int> out;
+	for (const Rise& x : v)
+		if (x.track == track && x.ch == ch)
+			out.push_back(x.frame / 250);
+	return out;
+}
+
+void lane(tart::Euclid& e, int l, int steps, int pulses, int rotation = 0, int prob = 100, int vel = 100) {
+	e.lane[l] = {(uint8_t)steps, (uint8_t)pulses, (uint8_t)rotation, (uint8_t)prob, (uint8_t)vel};
+}
+
+/** Track `t` becomes a Euclid track with a clip of `length` ticks in slot 0 (playing it), settings filled by `f`. */
+template <class F> void euclidTrack(Rig& r, int t, F f, int length = tart::kBar, bool playing = true) {
+	r.m.edit([&](tart::State& st) {
+		tart::Clip& c = st.clip[t][0];
+		c.length = (uint16_t)length;
+		f(c.euclid);
+		st.s.track[t].type = tart::Euclidean, st.s.track[t].playing = playing ? 0 : tart::kNone;
+	});
+}
+
+/** The pattern as the manual draws it: x for a pulse. */
+std::string pat(uint32_t mask, int steps) {
+	std::string s;
+	for (int i = 0; i < steps; i++)
+		s += mask >> i & 1 ? 'x' : '.';
+	return s;
+}
+tart::EuclidLane mk(int steps, int pulses, int rotation = 0) {
+	return {(uint8_t)steps, (uint8_t)pulses, (uint8_t)rotation, 100, 100};
+}
+
+/** The Euclid notes in [t0, t0 + length) of the clip's launch (track `track`'s octave, the Session's scale). */
+std::vector<tart::Note> gen(const tart::Session& s, const tart::Euclid& e, int64_t t0 = 0, int length = tart::kBar,
+							int track = 0) {
+	std::vector<tart::Note> v(tart::kMaxNotes);
+	v.resize((size_t)tart::euclidNotes(s, track, e, t0, length, v.data(), tart::kMaxNotes));
+	return v;
+}
+
+} // namespace
+
+TEST(euclid_bjorklund) {
+	CHECK(pat(tart::euclidMask(mk(8, 3)), 8) == "x..x..x.");
+	CHECK(pat(tart::euclidMask(mk(8, 5)), 8) == "x.xx.xx.");
+	CHECK(pat(tart::euclidMask(mk(16, 7)), 16) == "x..x.x.x..x.x.x.");
+	CHECK(pat(tart::euclidMask(mk(16, 9)), 16) == "x.xx.x.x.xx.x.x.");
+	CHECK(pat(tart::euclidMask(mk(12, 5)), 12) == "x..x.x..x.x.");
+	CHECK(pat(tart::euclidMask(mk(7, 4)), 7) == "x.x.x.x");
+	CHECK(pat(tart::euclidMask(mk(4, 0)), 4) == "....");
+	CHECK(pat(tart::euclidMask(mk(8, 3, 1)), 8) == ".x..x..x"); // ROTATE moves the pulses later
+	// Every length and pulse count: k pulses, one on the first step, gaps (all of them, round the ring) differ by at
+	// most 1; every rotation is the pattern shifted later by r.
+	for (int n = 1; n <= 32; n++)
+		for (int k = 0; k <= n; k++) {
+			uint32_t m = tart::euclidMask(mk(n, k));
+			CHECK(__builtin_popcount(m) == k && (k == 0 || (m & 1)) && (n == 32 || m >> n == 0));
+			int lo = 99, hi = 0, last = -1, first = -1;
+			for (int p = 0; p < n; p++)
+				if (m >> p & 1) {
+					if (last >= 0)
+						lo = std::min(lo, p - last), hi = std::max(hi, p - last);
+					first = first < 0 ? p : first, last = p;
+				}
+			if (k > 1) {
+				int wrap = first + n - last;
+				lo = std::min(lo, wrap), hi = std::max(hi, wrap);
+				CHECK(hi - lo <= 1);
+			}
+			for (int r = 0; r < n; r++) {
+				uint32_t t = tart::euclidMask(mk(n, k, r));
+				bool same = true;
+				for (int p = 0; p < n; p++)
+					same &= (t >> ((p + r) % n) & 1) == (m >> p & 1);
+				CHECK(same);
+			}
+		}
+	CHECK(tart::euclidMask(mk(16, 40)) == 0xFFFF);                            // more pulses than steps: every step
+	CHECK(tart::euclidMask(mk(16, 5, 20)) == tart::euclidMask(mk(16, 5, 4))); // the rotation counts modulo the steps
+	CHECK(tart::euclidMask(mk(32, 32)) == ~0u && tart::euclidMask(mk(1, 1)) == 1);
+}
+
+TEST(euclid_golden) {
+	auto st = std::make_unique<tart::State>();
+	tart::Euclid e;
+	lane(e, 0, 16, 16, 0, 50); // E(16,16) at probability 50, seed 0: which steps since the launch have a note
+	auto steps = [&](int64_t t0) {
+		std::vector<int> v;
+		for (const tart::Note& n : gen(st->s, e, t0)) {
+			CHECK(n.pitch == tart::kDrumNote && n.vel == 100 && n.len == 24 && n.tick % 24 == 0);
+			v.push_back((int)((t0 + n.tick) / 24));
+		}
+		return v;
+	};
+	CHECK(steps(0) == std::vector<int>({3, 9, 10, 11, 14, 15}));
+	CHECK(steps(384) == std::vector<int>({16, 17, 18, 20, 21, 22, 23, 24, 26, 27, 29}));
+	// The melodic rhythm E(8,8), C Major from octave 3: the pitch of each step since the launch, CHANGE 0 and 30.
+	tart::Euclid m;
+	m.mode = tart::kEuclidMelodic;
+	lane(m, tart::kEuclidRhythm, 8, 8);
+	auto pitches = [&](const tart::Euclid& x) {
+		std::vector<int> v;
+		for (const tart::Note& n : gen(st->s, x))
+			v.push_back(n.pitch);
+		return v;
+	};
+	CHECK(pitches(m) == std::vector<int>({45, 45, 41, 41, 40, 40, 45, 40, 45, 45, 41, 41, 40, 40, 45, 40}));
+	m.change = 30;
+	CHECK(pitches(m) == std::vector<int>({45, 45, 41, 41, 40, 40, 45, 40, 45, 45, 41, 41, 41, 47, 45, 40}));
+	m.seed = 1; // another seed, another melody
+	CHECK(pitches(m) != std::vector<int>({45, 45, 41, 41, 40, 40, 45, 40, 45, 45, 41, 41, 41, 47, 45, 40}));
+}
+
+TEST(euclid_drum_playback) {
+	SliceRig r;
+	euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 16, 4), lane(e, 2, 8, 3, 0, 100, 80); });
+	r.run_(2);
+	CHECK(r.f.track[0].channels == 16 && r.f.track[1].channels == 1);
+	auto v = rises(r, 96000);
+	std::vector<int> ch0, ch2;
+	for (const Rise& x : v) {
+		CHECK(x.track == 0 && (x.ch == 0 || x.ch == 2)); // no other lane
+		if (x.ch == 0)
+			ch0.push_back(x.frame);
+		else
+			ch2.push_back(x.frame), CHECK(x.voct == -22.f / 12 && std::fabs(x.vel - 80 / 127.f * 10) < 1e-4);
+	}
+	CHECK(ch0 == std::vector<int>({0, 24000, 48000, 72000}));
+	CHECK(ch2 == std::vector<int>({0, 72 * 250, 144 * 250, 192 * 250, 264 * 250, 336 * 250}));
+	CHECK(v[0].voct == -2.f && std::fabs(v[0].vel - 100 / 127.f * 10) < 1e-4);
+}
+
+TEST(euclid_melodic_playback) {
+	SliceRig r; // one voice
+	euclidTrack(r, 0, [](tart::Euclid& e) {
+		e.mode = tart::kEuclidMelodic, e.change = 30;
+		lane(e, tart::kEuclidRhythm, 8, 8, 0, 100, 90);
+	});
+	r.run_(2);
+	CHECK(r.f.track[0].channels == 1);
+	auto v = rises(r, 96000);
+	const int golden[16] = {45, 45, 41, 41, 40, 40, 45, 40, 45, 45, 41, 41, 41, 47, 45, 40};
+	CHECK(v.size() == 16);
+	for (size_t i = 0; i < v.size() && i < 16; i++)
+		CHECK(v[i].ch == 0 && v[i].frame / 250 == (int)i * 24 && v[i].voct == (golden[i] - 60) / 12.f &&
+			  std::fabs(v[i].vel - 90 / 127.f * 10) < 1e-4);
+	r.m.edit([](tart::State& st) { st.s.track[0].voices = 3; });
+	r.run_(2);
+	CHECK(r.f.track[0].channels == 3);           // the layout is Melodic: the track's Voices
+	push2::Event bend = dec({0xE0, 0x7F, 0x7F}); // the touch strip bends a melodic Euclid track
+	r.step(&bend);
+	auto st = r.state();
+	auto next = gen(st->s, st->clip[0][0].euclid, 0, 24 * 18)[17]; // tick 384 passed: the next rise is step 17
+	auto w = rises(r, 7000, false);
+	CHECK(!w.empty() && w[0].frame / 250 > 24 * 17 - 400 &&
+		  std::fabs(w[0].voct - ((next.pitch - 60) / 12.f + 1.f / 6)) < 1e-3);
+}
+
+TEST(euclid_free_running) {
+	SliceRig r;
+	euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 5, 3), lane(e, 1, 16, 4); });
+	auto v = rises(r, 160 * 24 * 250);
+	auto step = [&](int ch, int from, int to) { // the steps since the launch in [from, to) with a rise, from `from`
+		std::vector<int> s;
+		for (int t : ticksOf(v, 0, ch))
+			if (t % 24 == 0 && t / 24 >= from && t / 24 < to)
+				s.push_back(t / 24 - from);
+		return s;
+	};
+	CHECK(step(0, 0, 26) == std::vector<int>({0, 2, 4, 5, 7, 9, 10, 12, 14, 15, 17, 19, 20, 22, 24, 25}));
+	CHECK(step(0, 0, 80) == step(0, 80, 160) && step(1, 0, 80) == step(1, 80, 160)); // E(3,5) and E(4,16): 80 steps
+	CHECK(step(0, 0, 16) != step(0, 16, 32));                                        // not the clip's 16 steps
+	CHECK(step(1, 0, 16) == step(1, 16, 32));                                        // a 16-step lane is
+	CHECK(ticksOf(v, 0, 0).size() == (size_t)(160 / 5 * 3) && ticksOf(v, 0, 1).size() == (size_t)(160 / 16 * 4));
+	// A 1-beat clip changes no rise: the clip's length is not the patterns'.
+	SliceRig twin;
+	euclidTrack(twin, 0, [](tart::Euclid& e) { lane(e, 0, 5, 3), lane(e, 1, 16, 4); }, tart::kPpqn);
+	auto w = rises(twin, 160 * 24 * 250);
+	CHECK(w.size() == v.size() && std::equal(v.begin(), v.end(), w.begin()));
+	// A relaunch starts the patterns again (no pulse on tick 384 otherwise: step 16 of E(3,5) is a rest), and so does
+	// RESET.
+	SliceRig again(false);
+	euclidTrack(again, 0, [](tart::Euclid& e) { lane(e, 0, 5, 3); });
+	auto a = rises(again, 380 * 250);
+	CHECK(ticksOf(a, 0, 0).size() == 10 && ticksOf(a, 0, 0).back() == 15 * 24); // steps 0 .. 15
+	tapSlot(again, 0, 0);                                                       // queued for tick 384
+	auto b = rises(again, 400 * 250, false);
+	const int gap[8] = {0, 2, 4, 5, 7, 9, 10, 12};
+	CHECK(b.size() >= 8 && b[0].frame > 900 && b[0].frame < 1010); // tick 384, 380 ticks and the tap's 2 samples later
+	for (int i = 0; i < 8 && i < (int)b.size(); i++)
+		CHECK((b[i].frame - b[0].frame + 125) / 250 == gap[i] * 24); // (rounded: a rise may be a sample late)
+	auto c = rises(again, 26 * 24 * 250);                            // RESET: from step 0 again
+	std::vector<int> first, all = ticksOf(v, 0, 0);
+	std::copy_if(all.begin(), all.end(), std::back_inserter(first), [](int t) { return t < 26 * 24; });
+	CHECK(ticksOf(c, 0, 0) == first);
+}
+
+TEST(euclid_swing) {
+	auto ticks = [](SliceRig& r, int n) { // the first n rises, in ticks
+		std::vector<int> v;
+		for (const Rise& x : rises(r, 24000))
+			v.push_back(x.frame / 250);
+		v.resize(std::min<size_t>(v.size(), (size_t)n));
+		return v;
+	};
+	{ // E(16,16) at 1/16, swing 100: the second step of each pair is 12 ticks late. A step that starts as the note
+	  // before it sounds retriggers.
+		SliceRig r;
+		euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 16, 16); });
+		r.m.edit([](tart::State& st) { st.s.transport.swing = 100; });
+		CHECK(ticks(r, 4) == std::vector<int>({0, 36, 48, 84}));
+	}
+	{ // launched at tick 24 (a launch at 1/16 while the transport runs): the swing is counted from the launch
+		SliceRig r(false);
+		setQuant(r, 11);
+		euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 16, 16); }, tart::kBar, false);
+		r.m.edit([](tart::State& st) { st.s.transport.swing = 100; });
+		r.in.play = true;
+		r.step();
+		tapSlot(r, 0, 0); // two more samples
+		std::vector<int> v;
+		for (const Rise& x : rises(r, 48000, false))
+			v.push_back((x.frame + 3) / 250);
+		v.resize(4);
+		CHECK(v == std::vector<int>({24, 60, 72, 108}));
+	}
+	{ // 1/16t: no step lands on the second sixteenth, so none moves
+		SliceRig r;
+		euclidTrack(r, 0, [](tart::Euclid& e) { e.grid = 5, lane(e, 0, 16, 16); });
+		r.m.edit([](tart::State& st) { st.s.transport.swing = 100; });
+		CHECK(ticks(r, 6) == std::vector<int>({0, 16, 32, 48, 64, 80}));
+	}
+}
+
+TEST(euclid_probability_and_change) {
+	auto st = std::make_unique<tart::State>();
+	tart::Euclid e;
+	const int length = 24 * 1024; // 1024 steps
+	lane(e, 0, 16, 16, 0, 100);
+	CHECK(gen(st->s, e, 0, length).size() == 1024);
+	lane(e, 0, 16, 16, 0, 0);
+	CHECK(gen(st->s, e, 0, length).empty());
+	lane(e, 0, 16, 16, 0, 50);
+	size_t half = gen(st->s, e, 0, length).size();
+	CHECK(half > 410 && half < 614);
+	// CHANGE: the rhythm's pitches, `back` steps (one pass of the rhythm) apart, as a share that differs.
+	tart::Euclid m;
+	m.mode = tart::kEuclidMelodic, m.octaves = 4;
+	lane(m, tart::kEuclidRhythm, 8, 8);
+	auto differ = [&](const tart::Euclid& x, int back) {
+		std::vector<tart::Note> v = gen(st->s, x, 0, 24 * 2048);
+		int d = 0;
+		for (size_t i = (size_t)back; i < v.size(); i++)
+			d += v[i].pitch != v[i - back].pitch;
+		return 100.0 * d / (double)(v.size() - (size_t)back);
+	};
+	CHECK(differ(m, 8) == 0); // CHANGE 0: every pass is pass 0
+	m.change = 30;
+	CHECK(differ(m, 8) > 15 && differ(m, 8) < 40);
+	m.change = 100;
+	CHECK(differ(m, 8) > 70);
+	// A 5-step rhythm has a pass every 5 steps, whatever the clip's length.
+	lane(m, tart::kEuclidRhythm, 5, 5);
+	CHECK(differ(m, 5) > 70);
+	m.change = 0;
+	CHECK(differ(m, 5) == 0);
+}
+
+TEST(euclid_pitches_follow_scale) {
+	auto st = std::make_unique<tart::State>();
+	st->s.scale.root = 2, st->s.scale.scale = 1 /*Minor*/, st->s.track[0].octave = 2; // D minor from D2 (26)
+	auto inMinor = [](int pitch, int root) { return 0x5AD >> (((pitch - root) % 12 + 12) % 12) & 1; };
+	for (int octaves = 1; octaves <= 4; octaves++) {
+		tart::Euclid e;
+		e.mode = tart::kEuclidMelodic, e.octaves = (uint8_t)octaves, e.change = 50, e.seed = 3;
+		lane(e, tart::kEuclidRhythm, 16, 16);
+		std::set<int> seen;
+		for (const tart::Note& n : gen(st->s, e, 0, 12288)) {
+			CHECK(inMinor(n.pitch, 2) && n.pitch >= 26 && n.pitch < 26 + 12 * octaves);
+			seen.insert(n.pitch);
+		}
+		CHECK(seen.size() > (size_t)(octaves * 7 * 3 / 4)); // the notes are spread over the whole range
+	}
+	// A root change re-maps a playing melody at once.
+	SliceRig r;
+	r.m.edit([](tart::State& s) { s.s.scale.root = 2, s.s.scale.scale = 1, s.s.track[0].octave = 2; });
+	euclidTrack(r, 0, [](tart::Euclid& e) {
+		e.mode = tart::kEuclidMelodic, e.octaves = 2, e.change = 50;
+		lane(e, tart::kEuclidRhythm, 16, 16);
+	});
+	auto before = rises(r, 96000);
+	r.m.edit([](tart::State& s) { s.s.scale.root = 7; });
+	auto after = rises(r, 96000, false);
+	CHECK(before.size() == 16 && after.size() >= 15);
+	for (const Rise& x : before)
+		CHECK(inMinor((int)std::lround(x.voct * 12 + 60), 2));
+	for (const Rise& x : after) {
+		int p = (int)std::lround(x.voct * 12 + 60);
+		CHECK(inMinor(p, 7) && p >= 31 && p < 31 + 24);
+	}
+}
+
+namespace {
+
+/** Track 0 a melodic Euclid track, track 1 a drum one with lanes of 5, 7 and 16 steps, both with chance in them. */
+void deterministicTracks(Rig& r) {
+	euclidTrack(r, 0, [](tart::Euclid& e) {
+		e.mode = tart::kEuclidMelodic, e.change = 40, e.seed = 11;
+		lane(e, tart::kEuclidRhythm, 16, 7, 0, 60);
+	});
+	euclidTrack(r, 1, [](tart::Euclid& e) {
+		e.seed = 5;
+		lane(e, 0, 5, 3, 0, 70), lane(e, 1, 7, 4, 2, 70), lane(e, 2, 16, 5, 0, 70, 64);
+	});
+}
+
+/** The rises with their frames in ticks (a retrigger's late sample doesn't count), in time, track and channel order. */
+std::vector<Rise> inTicks(std::vector<Rise> v) {
+	for (Rise& x : v)
+		x.frame /= 250;
+	std::stable_sort(v.begin(), v.end(), [](const Rise& a, const Rise& b) {
+		return a.frame != b.frame ? a.frame < b.frame : a.track != b.track ? a.track < b.track : a.ch < b.ch;
+	});
+	return v;
+}
+
+} // namespace
+
+TEST(euclid_deterministic) {
+	const int bars = 6 * 96000;
+	SliceRig r;
+	deterministicTracks(r);
+	auto a = inTicks(rises(r, bars));
+	CHECK(a.size() > 60);
+	auto b = inTicks(rises(r, bars)); // RESET: the same again
+	CHECK(a == b);
+	// Saved, sanitized (a patch has no `playing`), loaded into another Rig and launched: the same again.
+	auto st = r.state();
+	tart::sanitize(*st);
+	st->s.track[0].playing = st->s.track[1].playing = 0;
+	SliceRig other;
+	other.m.load(*st);
+	CHECK(a == inTicks(rises(other, bars)));
+	// Each pass of the clip plays exactly what euclidNotes lists for it.
+	for (int pass = 0; pass < 6; pass++) {
+		for (int t = 0; t < 2; t++) {
+			std::vector<Rise> have;
+			for (const Rise& x : a)
+				if (x.track == t && x.frame / 384 == pass)
+					have.push_back({x.frame - pass * 384, t, x.ch, x.voct, x.vel});
+			std::vector<Rise> want;
+			for (const tart::Note& n : gen(st->s, st->clip[t][0].euclid, pass * 384, 384, t))
+				want.push_back({n.tick, t, t ? n.pitch - tart::kDrumNote : 0,
+								t ? (float)(n.pitch - 60) / 12.f : (float)(n.pitch - 60) / 12.f, n.vel / 127.f * 10});
+			CHECK(have.size() == want.size());
+			for (size_t i = 0; i < have.size() && i < want.size(); i++)
+				CHECK(have[i].frame == want[i].frame && have[i].ch == want[i].ch &&
+					  (t || have[i].voct == want[i].voct) && std::fabs(have[i].vel - want[i].vel) < 1e-4);
+		}
+	}
+}
+
+TEST(euclid_layout_follows_clip) {
+	SliceRig r(false);
+	r.m.edit([](tart::State& st) {
+		st.s.track[0].type = tart::Euclidean, st.s.track[0].voices = 2;
+		for (int sc = 0; sc < 2; sc++) { // scene 1 is a Drum clip, scene 2 a Melodic one
+			tart::Clip& c = st.clip[0][sc];
+			c.length = tart::kBar, c.euclid.mode = (uint8_t)sc;
+			lane(c.euclid, sc ? tart::kEuclidRhythm : 0, 16, 16);
+			if (!sc)
+				lane(c.euclid, 1, 16, 16);
+		}
+	});
+	r.run_(2);
+	CHECK(r.f.track[0].channels == 16); // stopped: the selected scene's clip decides
+	r.m.edit([](tart::State& st) { st.s.ui.scene = 1; });
+	r.run_(2);
+	CHECK(r.f.track[0].channels == 2);
+	r.m.edit([](tart::State& st) { st.s.ui.scene = 0, st.s.track[0].playing = 0; });
+	r.in.play = true;
+	r.run_(1);
+	tapSlot(r, 0, 1); // scene 2 waits for the next bar
+	r.run_(96000 - 3);
+	CHECK(r.f.track[0].channels == 16 && r.f.track[0].gate[0] == 10 && r.f.track[0].gate[1] == 10); // the drum clip
+	r.run_(2); // tick 384 and the retrigger's gap
+	CHECK(r.f.track[0].channels == 2 && r.f.track[0].gate[0] == 10 && r.f.track[0].gate[1] == 0);
+	CHECK(r.f.track[0].voct[0] != (float)(tart::kDrumNote - 60) / 12.f); // a melodic note, not lane 0's
+	// The playing clip decides, not the selected one: selecting the drum clip changes nothing now.
+	r.m.edit([](tart::State& st) { st.s.ui.scene = 0; });
+	r.run_(2);
+	CHECK(r.f.track[0].channels == 2);
+	// Stopped, it follows the selection again.
+	r.in.stop = true;
+	r.run_(3);
+	CHECK(r.f.track[0].channels == 16);
+}
+
+TEST(euclid_clip_ops) {
+	using namespace push2::cc;
+	auto same = [](const tart::Euclid& a, const tart::Euclid& b) { return !std::memcmp(&a, &b, sizeof a); };
+	auto settings = [](tart::Euclid& e) {
+		e.seed = 5, e.grid = 2, e.mode = tart::kEuclidMelodic, e.octaves = 3, e.change = 20;
+		lane(e, 3, 8, 3, 1, 50, 90), lane(e, tart::kEuclidRhythm, 12, 5, 2, 70, 80);
+	};
+	Rig r(false);
+	setQuant(r, 0);
+	euclidTrack(r, 0, settings, tart::kBar, false);
+	const tart::Euclid want = r.state()->clip[0][0].euclid;
+	// Duplicate: the settings go along, the step size too.
+	r.press(Duplicate);
+	slot(r, 0, 0, 100), slot(r, 0, 0, 0);
+	tapSlot(r, 1, 2);
+	r.press(Duplicate, 0);
+	CHECK(same(r.state()->clip[1][2].euclid, want) && r.state()->clip[1][2].euclid.grid == 2);
+	// Delete leaves the defaults; Undo brings the settings back.
+	r.press(Delete);
+	tapSlot(r, 0, 0);
+	r.press(Delete, 0);
+	auto st = r.state();
+	CHECK(st->clip[0][0].length == 0 && same(st->clip[0][0].euclid, tart::Euclid()));
+	r.click(Undo);
+	st = r.state();
+	CHECK(st->clip[0][0].length == tart::kBar && same(st->clip[0][0].euclid, want));
+	// A take that ends before its clip starts leaves the defaults in the slot it made.
+	Rig t(false);
+	t.in.play = true;
+	t.step();
+	t.click(Track1Below + 1);
+	t.click(Record); // a clip, queued for the next bar
+	CHECK(t.state()->clip[1][0].length == tart::kMaxLength);
+	t.click(New);
+	st = t.state();
+	CHECK(st->clip[1][0].length == 0 && same(st->clip[1][0].euclid, tart::Euclid()));
+	// Double Loop and a Clip-mode length change leave the Euclid notes alone: the gate trace over the next 2 bars is
+	// the one of a twin that did neither. The clip's own automation is repeated as E4.1 does.
+	auto trace = [&](int how) {
+		SliceRig x;
+		euclidTrack(x, 0, [](tart::Euclid& e) { lane(e, 0, 5, 3), lane(e, 1, 16, 5, 2, 60); });
+		x.m.edit([](tart::State& s) {
+			tart::Clip& c = s.clip[0][0];
+			c.nPoints[0] = 2, c.points[0][0] = {0, 0}, c.points[0][1] = {96, 65535};
+		});
+		if (how == 1)
+			x.click(DoubleLoop);
+		if (how == 2)
+			x.press(Clip), x.turn(0, -8), x.press(Clip, 0); // 4 beats -> 2
+		auto c = x.state()->clip[0][0];
+		CHECK(c.length == (how == 1 ? 2 * tart::kBar : how == 2 ? 2 * tart::kPpqn : tart::kBar));
+		CHECK(how != 1 || (c.nPoints[0] == 6 && c.points[0][3].tick == tart::kBar && c.points[0][4].tick == 480));
+		return inTicks(rises(x, 2 * 96000));
+	};
+	auto plain = trace(0);
+	CHECK(plain.size() > 20 && trace(1) == plain && trace(2) == plain);
+	// QUANTIZE tapped: no popup, no undo step; the same tap on a melodic track does quantize.
+	Rig q;
+	euclidTrack(q, 0, [](tart::Euclid& e) { lane(e, 0, 5, 3); });
+	q.m.edit([](tart::State& s) { s.clip[0][0].nNotes = 1, s.clip[0][0].notes[0] = {5, 10, 60, 100}; });
+	q.click(Quantize);
+	CHECK(q.view().s.ui.popup == tart::kNoPopup && q.state()->clip[0][0].notes[0].tick == 5);
+	q.click(Undo);
+	CHECK(q.view().s.ui.popup == tart::kNoPopup);
+	q.m.edit([](tart::State& s) { s.s.track[0].type = tart::Melodic; });
+	q.click(Quantize);
+	CHECK(q.view().s.ui.popup == tart::kQuantizedPopup && q.state()->clip[0][0].notes[0].tick == 0);
+}
+
+TEST(euclid_view_notes) {
+	SliceRig r;
+	euclidTrack(r, 0, [](tart::Euclid& e) { lane(e, 0, 5, 3), lane(e, 4, 16, 7, 0, 60); }, tart::kBar, false);
+	auto v = r.view();
+	CHECK(!std::memcmp(&v.euclid, &r.state()->clip[0][0].euclid, sizeof v.euclid));
+	auto want = gen(v.s, v.euclid, 0, tart::kBar);
+	CHECK(want.size() > 8 && v.nNotes == want.size());
+	for (size_t i = 0; i < want.size() && i < v.nNotes; i++)
+		CHECK(v.notes[i].tick == want[i].tick && v.notes[i].pitch == want[i].pitch && v.notes[i].len == 24 &&
+			  v.notes[i].pitch >= tart::kDrumNote && v.notes[i].pitch < tart::kDrumNote + tart::kLanes);
+	// Playing, in the fourth pass of the clip: what plays under the playhead, not the first pass.
+	r.m.edit([](tart::State& s) { s.s.track[0].playing = 0; });
+	r.in.play = true;
+	r.run_(1200 * 250 + 10); // tick 1200: pass 3 begins at 1152
+	v = r.view();
+	CHECK(v.s.transport.tick == 1200);
+	want = gen(v.s, v.euclid, 1152, tart::kBar);
+	auto first = gen(v.s, v.euclid, 0, tart::kBar);
+	CHECK(want.size() > 8 && v.nNotes == want.size() && v.nNotes != first.size());
+	for (size_t i = 0; i < want.size() && i < v.nNotes; i++)
+		CHECK(v.notes[i].tick == want[i].tick && v.notes[i].pitch == want[i].pitch);
+	// A melodic clip shows its pitches from the scale; a track that isn't Euclid shows the clip's notes.
+	r.m.edit([](tart::State& s) {
+		s.clip[0][0].euclid.mode = tart::kEuclidMelodic;
+		lane(s.clip[0][0].euclid, tart::kEuclidRhythm, 8, 8);
+	});
+	v = r.view();
+	want = gen(v.s, v.euclid, 1152, tart::kBar);
+	CHECK(want.size() == 16 && v.nNotes == 16);
+	for (size_t i = 0; i < want.size() && i < v.nNotes; i++)
+		CHECK(v.notes[i].tick == want[i].tick && v.notes[i].pitch == want[i].pitch && v.notes[i].pitch >= 36 &&
+			  v.notes[i].pitch < 48);
+	r.m.edit([](tart::State& s) {
+		s.s.track[0].type = tart::Melodic, s.clip[0][0].nNotes = 1, s.clip[0][0].notes[0] = {0, 5, 60, 100};
+	});
+	v = r.view();
+	CHECK(v.nNotes == 1 && v.notes[0].pitch == 60);
+}
+
+TEST(sanitize_euclid) {
+	auto st = std::make_unique<tart::State>();
+	tart::Clip& c = st->clip[0][0];
+	c.length = tart::kBar;
+	tart::Euclid& e = c.euclid;
+	e.seed = 5000, e.mode = 7, e.octaves = 9, e.change = 200, e.grid = 9, e.spare = 3;
+	e.lane[0] = {0, 99, 99, 200, 0};
+	e.lane[1] = {99, 5, 5, 5, 200};
+	e.lane[tart::kEuclidRhythm] = {32, 32, 31, 100, 127};
+	st->clip[1][1].euclid.seed = 7, st->clip[1][1].euclid.lane[3].steps = 0; // an empty slot
+	st->s.track[0].type = tart::Euclidean, st->s.track[1].type = 4;
+	tart::sanitize(*st);
+	CHECK(e.seed == 999 && e.mode == 1 && e.octaves == 4 && e.change == 100 && e.grid == 7 && e.spare == 0);
+	CHECK(e.lane[0].steps == 1 && e.lane[0].pulses == 32 && e.lane[0].rotation == 31 && e.lane[0].probability == 100 &&
+		  e.lane[0].velocity == 1);
+	CHECK(e.lane[1].steps == 32 && e.lane[1].probability == 5 && e.lane[1].velocity == 127);
+	CHECK(e.lane[tart::kEuclidRhythm].steps == 32 && e.lane[tart::kEuclidRhythm].rotation == 31);
+	e.octaves = 0;
+	tart::sanitize(*st);
+	CHECK(e.octaves == 1);
+	CHECK(!std::memcmp(&st->clip[1][1].euclid, &static_cast<const tart::Euclid&>(tart::Euclid()), sizeof e));
+	CHECK(st->s.track[0].type == tart::Euclidean && st->s.track[1].type == tart::Melodic);
+}
+
+TEST(euclid_note_mode_inert) {
+	using namespace push2::cc;
+	SliceRig r;
+	r.m.edit([](tart::State& s) { s.s.track[0].type = tart::Euclidean; });
+	r.run_(2);
+	r.pad(0, 0, 100); // the pads, the octave, the layout, the pages and the scene buttons: nothing yet
+	r.pad(7, 0, 100), r.pad(7, 0, 0), r.pad(0, 5, 100), r.pad(0, 5, 0);
+	r.press(Quantize), r.pad(0, 0, 100), r.pad(0, 0, 0), r.press(Quantize, 0);
+	r.press(Delete), r.pad(1, 1, 100), r.pad(1, 1, 0), r.press(Delete, 0);
+	for (int b : {(int)OctaveUp, (int)OctaveDown, (int)Layout, (int)PageLeft, (int)PageRight, (int)Scene1, Scene1 - 3,
+				  Scene1 - 7})
+		r.click(b);
+	CHECK(r.f.track[0].gate[0] == 0);
+	auto st = r.state();
+	CHECK(st->s.track[0].octave == 3 && st->s.track[0].grid == 4 && st->s.ui.noteLayout == 0 &&
+		  st->s.ui.heldStep == -1);
+	CHECK(st->s.ui.page == 0 && st->s.ui.popup == tart::kNoPopup);
+	for (const auto& row : st->clip)
+		for (const tart::Clip& c : row)
+			CHECK(c.length == 0 && c.nNotes == 0);
+	r.in.leds = true;
+	r.step();
+	for (int row = 0; row < 8; row++)
+		for (int col = 0; col < 8; col++)
+			CHECK(r.want.note[push2::padNote(row, col)].color == 0);
+	for (int b : {(int)OctaveUp, (int)OctaveDown, (int)Layout, (int)PageLeft, (int)PageRight, (int)Scene1, Scene1 - 3,
+				  Scene1 - 7})
+		CHECK(r.want.cc[b].color == 0);
+	// The type is the track's, not the pads': a melodic track still plays them.
+	r.m.edit([](tart::State& s) { s.s.track[0].type = tart::Melodic; });
+	r.run_(2);
+	r.pad(0, 0, 100);
+	CHECK(r.f.track[0].gate[0] == 10);
 }
