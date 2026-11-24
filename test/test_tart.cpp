@@ -464,8 +464,8 @@ TEST(tart_machine_threads) {
 		ev[36] = dec({0x90, 1, 0});
 		ev[37] = dec({0xB0, push2::cc::Track1Above + 1, 127});
 		ev[38] = dec({0xB0, push2::cc::Track1Above + 1, 0});
-		ev[39] = dec({0xB0, push2::cc::Scene1 - 2, 127});
-		ev[40] = dec({0xB0, push2::cc::Scene1 - 2, 0});
+		ev[39] = dec({0xB0, push2::cc::Scene8 + 2, 127});
+		ev[40] = dec({0xB0, push2::cc::Scene8 + 2, 0});
 		ev[41] = dec({0xB0, push2::cc::Note, 127}); // a step pad held on track 2 on the Device screen: a turn makes a
 		ev[42] = dec({0xB0, push2::cc::Note, 0});   // lock, a DELETE + touch takes it off, DELETE + the pad again
 		ev[43] = dec({0xB0, push2::cc::Device, 127});
@@ -1050,7 +1050,7 @@ TEST(seq_controls) {
 	Rig r;
 	r.m.edit([](tart::State& st) { st.s.ui.fixedBars = 2; }); // new clips: 1 Bar
 	r.click(push2::cc::Layout);
-	r.click(push2::cc::Scene1 - 2); // 1/8: the third scene button from the top
+	r.click(push2::cc::Scene8 + 2); // 1/8: the third scene button from the bottom
 	CHECK(r.view().s.track[0].grid == 2);
 	r.tap(0, 3); // step 3 of 48 ticks
 	auto v = r.view();
@@ -1063,18 +1063,18 @@ TEST(seq_controls) {
 	CHECK(v.nNotes == 0 && v.s.ui.heldStep == -1);
 	r.click(push2::cc::PageRight); // a bar of 1/8 steps is 8 steps: one page
 	CHECK(r.view().s.ui.page == 0);
-	r.click(push2::cc::Scene1 - 7); // 1/32t: 8 ticks, 48 steps in the bar, 6 pages
+	r.click(push2::cc::Scene8 + 7); // 1/32t: 8 ticks, 48 steps in the bar, 6 pages
 	r.click(push2::cc::PageRight);
 	r.click(push2::cc::PageRight);
 	CHECK(r.view().s.ui.page == 2);
-	r.click(push2::cc::Scene1 - 4); // 1/16: 16 steps, 2 pages: the page is cut back
+	r.click(push2::cc::Scene8 + 4); // 1/16: 16 steps, 2 pages: the page is cut back
 	CHECK(r.view().s.ui.page == 1);
 	r.in.leds = true;
 	r.step();
 	auto led = [&](int row, int col) { return r.want.note[push2::padNote(row, col)].color; };
 	CHECK(led(0, 0) == push2::kRgbWhite && led(1, 0) == push2::kRgbDarkGray); // the root row, the others
-	CHECK(r.want.cc[push2::cc::Scene1 - 4].color == push2::kRgbWhite &&
-		  r.want.cc[push2::cc::Scene1].color == push2::kRgbDarkGray);
+	CHECK(r.want.cc[push2::cc::Scene8 + 4].color == push2::kRgbWhite &&
+		  r.want.cc[push2::cc::Scene8].color == push2::kRgbDarkGray);
 	CHECK(r.want.cc[push2::cc::PageLeft].color == push2::kWhiteDark && r.want.cc[push2::cc::PageRight].color == 0);
 	r.click(push2::cc::PageLeft);
 	r.tap(2, 1);
@@ -2035,14 +2035,14 @@ TEST(drum_steps_and_lanes) {
 	v = r.view();
 	CHECK(v.nNotes == 3 - 1 && v.s.ui.heldStep == -1);
 	// Step size: the scene buttons, as the melodic sequencer.
-	r.click(push2::cc::Scene1 - 2); // 1/8
+	r.click(push2::cc::Scene8 + 2); // 1/8
 	CHECK(r.view().s.track[0].grid == 2);
 	dtap(r, 1);
 	v = r.view();
 	CHECK(v.nNotes == 3 && v.notes[1].tick == 48 && v.notes[1].len == 48 && v.notes[1].pitch == 41);
 	// Pages: 4 Bars is 64 steps of 1/16.
 	r.m.edit([](tart::State& st) { st.s.ui.fixedBars = 4; });
-	r.click(push2::cc::Scene1 - 4);
+	r.click(push2::cc::Scene8 + 4);
 	r.click(push2::cc::Track1Below + 1);
 	drumTrack(r, 1);
 	dtap(r, 0);
@@ -2190,7 +2190,7 @@ TEST(drum_delete_lane_and_page) {
 TEST(drum_triplet_loop_pad) {
 	Rig r;
 	drumTrack(r);
-	r.click(push2::cc::Scene1 - 7); // 1/32t: 8 ticks, a page of 32 steps is 256 ticks
+	r.click(push2::cc::Scene8 + 7); // 1/32t: 8 ticks, a page of 32 steps is 256 ticks
 	CHECK(r.view().s.track[0].grid == 7);
 	dloop(r, 0), dloop(r, 0, 0); // 256 ticks round up to a bar
 	CHECK(r.view().length[0][0] == 384);
@@ -2255,7 +2255,7 @@ TEST(drum_leds) {
 	r.step();
 	CHECK(led(7, 3) == push2::kRgbWhite);
 	dstep(r, 3, 0);
-	CHECK(r.want.cc[push2::cc::Scene1 - 4].color == push2::kRgbWhite && r.want.cc[push2::cc::PageRight].color == 0);
+	CHECK(r.want.cc[push2::cc::Scene8 + 4].color == push2::kRgbWhite && r.want.cc[push2::cc::PageRight].color == 0);
 	// The playhead: green on its step and its loop pad (a bar of 1/16: step 1 from tick 24).
 	r.m.edit([](tart::State& st) { st.s.track[0].playing = 0; });
 	r.in.play = true;
@@ -5467,10 +5467,10 @@ TEST(euclid_first_edit_makes_clip) {
 	euclidEmpty(q);
 	q.click(Track1Above);
 	CHECK(q.state()->clip[0][0].length == 0);
-	q.click(Scene1 - 2);
+	q.click(Scene8 + 2);
 	CHECK(q.state()->clip[0][0].length == 2 * tart::kBar && settingsOf(q).grid == 2 &&
 		  q.state()->s.track[0].playing == 0);
-	q.click(Scene1 - 2); // the size it has: no step
+	q.click(Scene8 + 2); // the size it has: no step
 	q.click(Undo);
 	CHECK(q.state()->clip[0][0].length == 0 && q.state()->s.track[0].playing == tart::kNone);
 	// While the transport plays the launch waits for the launch quantization.
@@ -5600,6 +5600,29 @@ TEST(euclid_mode_buttons) {
 	CHECK(settingsOf(r).mode == tart::kEuclidDrum);
 }
 
+TEST(scene_buttons_match_labels) { // the top button reads 1/32t (Push2-map: CC 43), the bottom 1/4 (CC 36)
+	using namespace push2::cc;
+	Rig ses(false);
+	ses.click(Scene1 - 1); // Session mode: a scene button still launches (selects) its scene, scene 2 below scene 1
+	CHECK(ses.view().s.ui.scene == 1);
+	Rig r;
+	r.click(Layout);
+	r.click(Scene1);
+	CHECK(r.view().s.track[0].grid == 7);
+	r.click(Scene8);
+	CHECK(r.view().s.track[0].grid == 0);
+	r.click(Scene8 + 4); // 1/16
+	r.in.leds = true;
+	r.step();
+	CHECK(r.want.cc[40].color == push2::kRgbWhite && r.want.cc[Scene1].color == push2::kRgbDarkGray);
+	Rig q;
+	euclidEmpty(q);
+	q.click(Scene1);
+	CHECK(settingsOf(q).grid == 7);
+	q.click(Scene8);
+	CHECK(settingsOf(q).grid == 0);
+}
+
 TEST(euclid_grid_per_clip) {
 	using namespace push2::cc;
 	SliceRig r;
@@ -5608,13 +5631,13 @@ TEST(euclid_grid_per_clip) {
 		s.clip[0][1].length = tart::kBar, lane(s.clip[0][1].euclid, 0, 16, 16);
 		s.s.track[1].grid = 6, s.s.track[1].type = tart::Euclidean;
 	});
-	r.click(Scene1 - 2); // 1/8 on the selected clip
+	r.click(Scene8 + 2); // 1/8 on the selected clip
 	auto st = r.state();
 	CHECK(st->clip[0][0].euclid.grid == 2 && st->clip[0][1].euclid.grid == 4 && st->s.track[0].grid == 4);
 	r.in.leds = true;
 	r.step();
 	for (int i = 0; i < 8; i++)
-		CHECK(r.want.cc[Scene1 - i].color == (i == 2 ? push2::kRgbWhite : push2::kRgbDarkGray));
+		CHECK(r.want.cc[Scene8 + i].color == (i == 2 ? push2::kRgbWhite : push2::kRgbDarkGray));
 	auto v = rises(r, 96000); // E(16,16) at 1/8: a rise every 48 ticks
 	std::vector<int> want;
 	for (int t = 0; t < 384; t += 48)
@@ -5622,11 +5645,11 @@ TEST(euclid_grid_per_clip) {
 	CHECK(ticksOf(v, 0, 0) == want);
 	r.m.edit([](tart::State& s) { s.s.ui.scene = 1; });
 	r.step();
-	CHECK(r.want.cc[Scene1 - 4].color == push2::kRgbWhite && r.want.cc[Scene1 - 2].color == push2::kRgbDarkGray);
+	CHECK(r.want.cc[Scene8 + 4].color == push2::kRgbWhite && r.want.cc[Scene8 + 2].color == push2::kRgbDarkGray);
 	r.click(Undo); // one step, which the scene's selection doesn't matter to
 	CHECK(r.state()->clip[0][0].euclid.grid == 4);
 	// Duplicate copies the size to a track with another Track::grid, and leaves that grid alone.
-	r.click(Scene1 - 7);
+	r.click(Scene8 + 7);
 	r.m.edit([](tart::State& s) { s.s.ui.pads = tart::kSession; });
 	r.press(Duplicate);
 	slot(r, 0, 1, 100), slot(r, 0, 1, 0);
@@ -5714,7 +5737,7 @@ TEST(euclid_drum_leds) {
 	for (int b : {(int)PageLeft, (int)PageRight, (int)OctaveUp, (int)OctaveDown, (int)Layout})
 		CHECK(r.want.cc[b].color == 0);
 	for (int i = 0; i < 8; i++)
-		CHECK(r.want.cc[Scene1 - i].color == (i == 4 ? push2::kRgbWhite : push2::kRgbDarkGray));
+		CHECK(r.want.cc[Scene8 + i].color == (i == 4 ? push2::kRgbWhite : push2::kRgbDarkGray));
 	// A 16-step lane in the full colour; a rest, and the pad past STEPS (a 3-step lane).
 	r.m.edit([](tart::State& s) { s.s.track[0].lane = 0; });
 	r.step();
@@ -5902,7 +5925,7 @@ TEST(euclid_melodic_leds) {
 		for (int col = 0; col < 8; col++)
 			CHECK(padColor(r, row, col) == push2::kBlack);
 	for (int i = 0; i < 8; i++)
-		CHECK(r.want.cc[Scene1 - i].color == (i == 4 ? push2::kRgbWhite : push2::kRgbDarkGray));
+		CHECK(r.want.cc[Scene8 + i].color == (i == 4 ? push2::kRgbWhite : push2::kRgbDarkGray));
 	// Step 2 sounds the 41 (E(8,8): 45 45 41 ...), and the playhead has moved on.
 	ledsAt(r, 0), r.run_(24 * 2 * 250);
 	r.in.leds = true;
@@ -6754,7 +6777,7 @@ TEST(euclid_fuzz) {
 		} else if (k < 29) {                                // DRUM and MELODIC
 			w.click(Track1Above + (g.n(3) != 0)), kind = 4; // MELODIC more often than DRUM
 		} else if (k < 33) {                                // the step size
-			w.click(Scene1 - g.n(8)), kind = 5;
+			w.click(Scene8 + g.n(8)), kind = 5;
 		} else if (k < 43) {                                        // a pad: lane, keyboard or step
 			const int row = g.n(3) ? g.n(4) : g.n(8), col = g.n(8); // the keyboard rows more often
 			keys += euclid && s.ui.pads == tart::kNote && row < 4 && !s.ui.button[Delete] &&

@@ -26,8 +26,16 @@ constexpr int kNoteUnits[4] = {2, 8, 2, 1};
 // ponytail: raw encoder deltas per change of the Euclid screen's STEPS, PULSES, ROTATE, PROB, VEL, SEED, OCTAVES and
 // CHANGE, and SHIFT makes it 4 times as many; guesses, calibrate on the hardware.
 constexpr int kEuclidUnits[8] = {8, 8, 8, 2, 1, 4, 30, 2};
-// The ticks of a step by resolution (the scene buttons from the top): 1/4, 1/4t, 1/8, 1/8t, 1/16, 1/16t, 1/32, 1/32t.
+// The ticks of a step by resolution (the scene buttons from the bottom, as printed): 1/4, 1/4t, 1/8, 1/8t, 1/16, 1/16t,
+// 1/32, 1/32t.
 constexpr int kGrid[8] = {96, 64, 48, 32, 24, 16, 12, 8};
+/** The step size (an index of kGrid) of a scene button's CC, and the CC of a step size: the top button is 1/32t. */
+constexpr int sceneGrid(int cc) {
+	return cc - push2::cc::Scene8;
+}
+constexpr int gridScene(int g) {
+	return push2::cc::Scene8 + g;
+}
 // The steps of a drum track's page, and what one pad of its loop selector covers at a step size: a page, up to a bar.
 constexpr int kDrumSteps = 32;
 constexpr int loopTicks(int grid) {
@@ -1008,7 +1016,7 @@ void Machine::handle(State& st, const push2::Event& e) {
 			// code below); the scene buttons are the clip's step size, and this keeps the sequencer branch from
 			// setting Track::grid for it.
 			if (e.index >= push2::cc::Scene8 && e.index <= push2::cc::Scene1)
-				euclidGridButton(st, push2::cc::Scene1 - e.index);
+				euclidGridButton(st, sceneGrid(e.index));
 		} else if (drum && (e.index == push2::cc::OctaveUp || e.index == push2::cc::OctaveDown ||
 							e.index == push2::cc::Layout)) {
 			// drum pads have no octave and no sequencer layout
@@ -1024,7 +1032,7 @@ void Machine::handle(State& st, const push2::Event& e) {
 			if (e.index == push2::cc::PageLeft || e.index == push2::cc::PageRight)
 				ui.page = (uint8_t)std::min(std::max(ui.page + (e.index == push2::cc::PageRight ? 1 : -1), 0), last);
 			else if (e.index >= push2::cc::Scene8 && e.index <= push2::cc::Scene1) {
-				tr.grid = (uint8_t)(push2::cc::Scene1 - e.index);
+				tr.grid = (uint8_t)sceneGrid(e.index);
 				ui.page = (uint8_t)std::min<int>(
 					ui.page, lastPage(st.clip[ui.track][ui.scene], kGrid[tr.grid], pageSteps(tr, ui)));
 			}
@@ -1980,7 +1988,7 @@ static void sessionLeds(const State& st, push2::Leds& out) {
 /** The eight scene buttons as step sizes: `grid` white, the others dark gray. */
 static void gridLeds(int grid, push2::Leds& out) {
 	for (int i = 0; i < 8; i++)
-		out.cc[push2::cc::Scene1 - i] = {i == grid ? push2::kRgbWhite : push2::kRgbDarkGray, push2::kStatic};
+		out.cc[gridScene(i)] = {i == grid ? push2::kRgbWhite : push2::kRgbDarkGray, push2::kStatic};
 }
 
 /** The page buttons (lit where there is a page to go to) and the step sizes on the scene buttons, for both sequencers.
